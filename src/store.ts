@@ -12,8 +12,10 @@ import {
   DeckMeta,
   Fallback,
   HARD_BY_DEFAULT,
+  LedgerMeta,
   type Level,
   Presence,
+  RuleMeta,
   STRONGEST_ALTERNATIVE,
   TopicAlias,
   Verdict,
@@ -325,6 +327,40 @@ export class Store {
     return this.list("cards", id)
       .filter((f) => f.startsWith("fallback-"))
       .map((f) => parse(Fallback, JSON.parse(readFileSync(join(this.live, "cards", id, f), "utf8")), f));
+  }
+
+  // ---------------------------------------------------------------- ledger and rules
+
+  /** Record that a commit builds on a card (D15). Written by the post-commit hook. */
+  writeLedger(id: string, entry: { commit: string; branch?: string }, body: string): string {
+    this.requireInit();
+    if (!this.card(id)) throw new Error(`no card ${id}`);
+    const meta = parse(
+      LedgerMeta,
+      { type: "ledger", card: id, branch: entry.branch ?? this.repo.branch, commit: entry.commit, at: now() },
+      "the ledger entry",
+    );
+    this.writeOnce(join(this.live, "ledger", `${id}-${randomSuffix()}.md`), renderDoc(meta, body));
+    return id;
+  }
+
+  ledger(id: string): { meta: LedgerMeta; body: string }[] {
+    return this.list("ledger")
+      .filter((f) => f.startsWith(`${id}-`))
+      .map((f) => {
+        const { meta, body } = parseDoc(readFileSync(join(this.live, "ledger", f), "utf8"));
+        return { meta: parse(LedgerMeta, meta, `ledger/${f}`), body };
+      })
+      .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
+  }
+
+  rules(): { meta: RuleMeta; body: string }[] {
+    return this.list("rules")
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => {
+        const { meta, body } = parseDoc(readFileSync(join(this.live, "rules", f), "utf8"));
+        return { meta: parse(RuleMeta, meta, `rules/${f}`), body };
+      });
   }
 
   // ---------------------------------------------------------------- presence

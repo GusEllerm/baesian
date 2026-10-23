@@ -1,9 +1,13 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { CARD_TEMPLATE, claudeMdMissesAgents, writeAgentsBlock } from "./agents.js";
+import { stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
+import { describeReport, detectStaged, evaluate } from "./gate.js";
+import { installHooks, runHook } from "./hooks.js";
 import { notifyFiled } from "./notify.js";
+import { parseTrailers } from "./trailers.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
@@ -20,6 +24,15 @@ export interface Io {
   notify?: (card: Card) => void;
   /** Clock and sleep for `wait`, replaceable in tests. */
   waitClock?: Pick<WaitOptions, "now" | "sleep" | "pollMs">;
+  /** How hooks run Baesian when it isn't on PATH. Defaults to this process's node and script. */
+  hookFallback?: readonly string[];
+}
+
+/** The command line that re-runs this CLI, for hooks when `baesian` isn't on PATH (D48). */
+function selfCommand(): string[] {
+  const script = process.argv[1];
+  if (!script || !script.endsWith(".js")) return []; // running from source: rely on PATH
+  return [process.execPath, realpathSync(script)];
 }
 
 /**
@@ -97,7 +110,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("set up the live layer (.git/baesian/), the record (.baesian/) and the AGENTS.md instructions")
     .option("--vault <path>", "an Obsidian vault for the vault adapter, relative to the repo root")
     .option("--no-agents", "don't write the instructions block in AGENTS.md")
-    .action((opts: { vault?: string; agents: boolean }) => {
+    .option("--no-hooks", "don't install the git gate")
+    .action((opts: { vault?: string; agents: boolean; hooks: boolean }) => {
       const s = store();
       const created = s.init(opts.vault ? { vault: opts.vault } : {});
       if (created.length) {
@@ -105,6 +119,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         io.out(`record:      ${relative(s.repo.toplevel, s.record)}/  (commit this)`);
       } else {
         io.out("already set up");
+      }
+      if (opts.hooks) {
+        const r = installHooks(s, io.hookFallback ?? selfCommand());
+        const changed = Object.entries(r.files).filter(([, v]) => v !== "unchanged");
+        const where = relative(s.repo.toplevel, r.dir) || r.dir;
+        if (changed.length) io.out(`git gate:    ${changed.map(([k, v]) => `${k} ${v}`).join(", ")} in ${where}/`);
+        if (r.setHooksPath) io.out("             core.hooksPath set to .githooks (each clone runs `baesian init` once)");
+        if (!r.versioned) io.out(`note: ${where} isn't versioned, so other clones won't get the gate; CI still checks.`);
       }
       if (opts.agents) {
         const result = writeAgentsBlock(s.repo.toplevel);
@@ -272,6 +294,30 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .action(() => {
       const added = store().syncRecord();
       io.out(added.length ? `added to the record:\n${added.map((p) => `  ${p}`).join("\n")}` : "record is up to date");
+    });
+
+  program
+    .command("check")
+    .description("preview the commit gate on the staged changes: the decisions found, and what covers them")
+    .option("--message <file>", "check the trailers in this commit message too")
+    .option("--json", "print the report as JSON")
+    .action((opts: { message?: string; json?: boolean }) => {
+      const s = store();
+      const message = opts.message ? readFileSync(resolve(io.cwd, opts.message), "utf8") : "";
+      const report = evaluate(s, detectStaged(s, stagedSnapshot(s.repo.toplevel)), parseTrailers(message, s.repo.toplevel));
+      if (opts.json) return json(report);
+      if (!report.facts.length && report.ok) return io.out("no decisions detected in the staged changes");
+      for (const line of describeReport(report)) io.out(line.replace("commit blocked.", "this commit would be blocked."));
+      state.code = report.ok ? 0 : 1;
+    });
+
+  program
+    .command("hook", { hidden: true })
+    .description("run a git hook (called by the hooks `baesian init` installs)")
+    .argument("<name>", "pre-commit, commit-msg or post-commit")
+    .argument("[args...]", "the hook's arguments")
+    .action((name: string, args: string[]) => {
+      state.code = runHook(store(), name, args, io);
     });
 
   return program;

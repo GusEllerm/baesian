@@ -30,6 +30,7 @@ export const Fact = z.enum([
   "security", // touches security or privacy
   "money", // spends money
   "data-loss", // deletes or overwrites stored data
+  "infra", // changes CI, infrastructure or deployment (D53)
 ]);
 export type Fact = z.infer<typeof Fact>;
 
@@ -156,6 +157,8 @@ export const RuleMeta = z.strictObject({
   type: z.literal("rule"),
   id: RuleId,
   topic: Topic.optional(),
+  /** Gate fact IDs this rule answers, as globs (`dep:pytest-*`): the gate acks them automatically (D24). */
+  covers: z.array(z.string().min(1)).default([]),
   from_card: CardId.optional(),
   accepted_by: z.string().min(1),
   created: Timestamp,
@@ -205,6 +208,12 @@ export type Presence = z.infer<typeof Presence>;
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. */
 export const Config = z.strictObject({
   vault: z.string().optional(),
+  /** Globs for the schema detector; replace the defaults (D25). */
+  gate_schema: z.array(z.string().min(1)).optional(),
+  /** Globs for the CI, infra and deploy detector; replace the defaults. */
+  gate_infra: z.array(z.string().min(1)).optional(),
+  /** Paths the gate never looks at, added to the defaults. */
+  gate_ignore: z.array(z.string().min(1)).optional(),
 });
 export type Config = z.infer<typeof Config>;
 

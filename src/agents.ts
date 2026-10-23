@@ -14,9 +14,17 @@ Design decisions that are hard to undo go to a person as cards; you don't make t
 
 **File a card** (\`baesian template > card.md\`, fill it in, \`baesian file card.md\`) when a decision
 changes a schema or on-disk format; changes a public API, URL scheme or module boundary; adds a runtime
-dependency; is user-facing; publishes something; touches security or privacy; spends money; deletes or
-overwrites stored data; or would break something to reverse. Otherwise decide yourself and say why in
-the commit message. Every card states its strongest alternative. Reuse topics from \`baesian topics\`.
+dependency; changes CI, infrastructure or deployment; is user-facing; publishes something; touches
+security or privacy; spends money; deletes or overwrites stored data; or would break something to
+reverse. Otherwise decide yourself. Every card states its strongest alternative. Reuse topics from
+\`baesian topics\`.
+
+**The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
+deploy files) and blocks a commit until each one is covered. Either cite a card whose \`touches\`
+include it, \`Baesian-Card: <id>\`, or, for a two-way door, acknowledge it with a reason:
+\`Baesian-Ack: dep:httpx <why this is fine>\`. When it blocks, the gate prints the lines to paste.
+\`baesian check\` previews it before you commit. Trailers go at the end of the message, after a blank
+line.
 
 - \`level: provisional\` (the default): carry on with your proposal. \`blocking\`: run \`baesian wait <id>\`
   before building on it. \`hard\` (the default for publishing, security, money and data loss): never
@@ -27,7 +35,8 @@ the commit message. Every card states its strongest alternative. Reuse topics fr
 - If \`baesian file\` exits 3, the decision may already be open or decided: attach with
   \`baesian attach <id>\`, or follow the decision. File with \`--new\` only to argue against one, and set
   \`supersedes:\`.
-- Commits that build on a card carry the trailer \`Baesian-Card: <id>\`.
+- Commits that build on a card carry the trailer \`Baesian-Card: <id>\`. The gate blocks a commit that
+  builds on a rejected card, or on a hard card that isn't resolved yet.
 - Never record a verdict yourself: only a person answers, in the Baesian client.
 ${END}`;
 
@@ -64,7 +73,7 @@ title: ""            # the decision, as a question
 proposal: ""         # what you recommend
 alternatives: []     # the other options you considered
 # topic: area/subject   (reuse one from \`baesian topics\`)
-touches: []          # any of: schema, public-api, dependency, user-facing, publishes, security, money, data-loss
+touches: []          # any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss
 # level: blocking       (provisional by default; hard by default for publishes, security, money, data-loss)
 # depends_on: [B-xxxxx]
 # deck: storage-layer   (your branch's deck by default)

@@ -23,6 +23,7 @@ tags: [baesian, module]
 - **`Store.withdraw`** writes the card's single `Withdrawal`.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.
 - **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
+- **`Store.writeLedger`** records that a commit builds on a card (D15). The post-commit hook calls it, and **`Store.ledger`** lists a card's entries, oldest first. The gate's rework brief uses them.
 - **`Store.touchPresence`** writes the client's heartbeat atomically, and **`Store.presence`** reads it. A missing or unreadable file means "unknown", never an error.
 - **`Store.syncRecord`** copies verdicts and ledger entries for the cards the record already holds, plus everything in their card directories: revisions, withdrawals and fallbacks (D37).
 
@@ -38,7 +39,8 @@ All of these go through a private write-once helper that uses an exclusive creat
 - **`Store.canonicalTopic`** follows `TopicAlias` files. **`Store.topics`** lists the canonical topics in use.
 - **`Store.inbox`** returns verdicts on the branch's cards (filed or attached) that are newer than a per-branch cursor, and advances the cursor unless peeking.
 - **`Store.branchDeckId`** and **`Store.ensureBranchDeck`** give each branch its default deck.
+- **`Store.rules`** reads accepted rules. The gate uses their `covers` globs to acknowledge facts automatically.
 
 ## Not here yet
 
-The hooks and ledger writing (M3), and rules and aliases written by the client (M4). Waiting lives in `waitForVerdict` ([[src-cli]]).
+Rules and aliases written by the client (M4). Waiting lives in `waitForVerdict` ([[src-cli]]), and the hooks in `runHook` ([[src-gate]]).

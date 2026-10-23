@@ -3,7 +3,7 @@ type: session
 status: active
 authority: log
 livedocs: snapshot
-summary: "First session: designed Baesian with the user (D1–D51), created this vault and repo, chose the stack, and built M1 (the store and the core CLI) and M2 (wait, presence, notifications, AGENTS.md)."
+summary: "First session: designed Baesian with the user (D1–D57), created this vault and repo, chose the stack, and built M1 (the store and the core CLI), M2 (wait, presence, notifications, AGENTS.md) and M3a (the commit gate)."
 created: 2026-10-23
 tags: [baesian, session]
 ---
@@ -121,8 +121,16 @@ The user judged the plan ready for development.
 - **A security catch.** D40's `notify` command can't live in the committed config: it would run on every clone, and a push token would leak. It moved to the per-user config, which is added to P12 for the user to accept.
 - **The smoke test found a bug the unit tests couldn't.** Synchronous stdin reads fail with `EAGAIN` on slow pipes. Stdin is now read as a stream.
 
+## Development: M3a
+
+- **Decisions D52–D55:** the trailer formats; card coverage by `touches`; hooks as a marked block after the shebang; runtime-only dependencies, with smol-toml.
+- **Built:** the commit gate, with three detectors, trailers, coverage, the block on rejected and unresolved hard cards, verdict delivery, the ledger, `baesian check`, and hooks that coexist with livedocs. 99 tests, including real `git commit` runs through installed hooks ([[src-gate]]).
+- **Bug found by the integration test:** cards that `baesian file` wrote into the record were never staged. The fix stages the whole record in `pre-commit`.
+- **livedocs caught its own stale notes:** when the M3a code was staged, it flagged the CLI and store module notes, which needed real updates.
+- **live-docs-agent on signatures:** drift can't tell a signature change from a body change, and only sees symbols a doc is bound to. That made D25's premise wrong. The user chose a `livedocs signatures` command (D56), and dogfooding through `npm link` (D57).
+
 ## Next
 
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
-- M3: the git gate.
+- M3b: `baesian verify` for CI and the merge gate.
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.

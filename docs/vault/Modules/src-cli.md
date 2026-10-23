@@ -19,7 +19,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 
 | Command | Does |
 |---|---|
-| `init [--vault <path>] [--no-agents]` | sets up both layers and writes the AGENTS.md block |
+| `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]) |
 | `template` | prints a card draft. Unfilled, it fails validation |
 | `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards |
 | `revise <id> [path]` | the next revision of a returned card |
@@ -30,8 +30,10 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `list [--all] [--branch]`, `show <id>`, `topics` | read |
 | `inbox [--peek]` | new verdicts on this branch's cards |
 | `sync` | copies new verdicts and ledger entries into the record |
+| `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
+| `hook <name> [args…]` | hidden; what the installed git hooks call (`runHook`) |
 
-No command resolves a card (D32).
+No command resolves a card (D32). When `init` installs the hooks, it records how to rerun this CLI (`selfCommand`), for hooks run where `baesian` isn't on PATH (D48).
 
 ## Exit codes
 
@@ -65,4 +67,8 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints.
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints; its `touches` list includes `infra`. `AGENTS_BLOCK` covers four things:
+- when to file a card;
+- the commit gate: card or ack trailers, and `baesian check`;
+- `wait`'s exit codes;
+- that only a person resolves a card.

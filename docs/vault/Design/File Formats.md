@@ -56,7 +56,7 @@ Frontmatter (`CardMeta`):
 | `topic` | optional slash-separated key | `storage/run-metadata`; canonicalised through aliases (D38, D44) |
 | `deck` | deck ID | defaults to the branch deck, `branch-<branch>` (D29) |
 | `level` | `provisional` \| `blocking` \| `hard` | defaults to `hard` when `touches` includes `publishes`, `security`, `money` or `data-loss` (D42), otherwise `provisional` |
-| `touches` | list of facts | the D11 checklist: `schema`, `public-api`, `dependency`, `user-facing`, `publishes`, `security`, `money`, `data-loss` |
+| `touches` | list of facts | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
 | `modules_touched` | optional integer | |
 | `depends_on` | list of card IDs | rejecting one of them withdraws this card (D14) |
 | `supersedes` | optional card ID | for arguing against a resolved decision; that decision becomes `superseded` once this card resolves |
@@ -87,19 +87,26 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 - **Withdrawal** (`Withdrawal`): `card`, `reason`, `by`, `at`. One per card.
 - **Ledger entry** (`LedgerMeta`): `card`, `branch`, optional `commit`, `at`. The body names the symbols that depend on the decision, in backticks (D15).
 - **Deck** (`DeckMeta`): `id`, `title`, optional `branch` and `from` (the source document, relative to the repo), `context_notes` (vault wikilinks), `created`. The body is the briefing. Membership isn't stored: it's computed from the cards' `deck` fields, so a deck never needs editing.
-- **Rule** (`RuleMeta`): `id`, optional `topic` and `from_card`, `accepted_by`, `created`. The body is the rule.
+- **Rule** (`RuleMeta`): `id`, optional `topic`, `covers` (gate fact-ID globs such as `dep:pytest-*`, which the gate acknowledges automatically; D24), optional `from_card`, `accepted_by`, `created`. The body is the rule.
 - **Topic alias** (`TopicAlias`): `from`, `to`, `by`, `at`.
 - **Attachment** (`Attachment`): `card`, `agent`, `branch`, `worktree`, `at`. Live only: it matters for priority and inbox delivery, not for the record.
 - **Fallback** (`Fallback`): `card`, `revision`, `reason` (`timeout` or `away`), `agent`, `at`. Written when an agent proceeds on a blocking card without a verdict, so the client can show it. Never written for a hard card, which doesn't proceed.
 - **Presence** (`Presence`): `client`, `at`. The client rewrites it every 30 seconds, by writing a temporary file and renaming it, so readers never see half a file. `baesian wait` treats it as follows:
   - more than 90 seconds old (`PRESENCE_STALE_MS`): the reviewer is away;
   - missing: unknown, because the client has never run.
-- **Config** (`Config`): optional `vault`. It's committed, so it holds only what's shared by everyone working on the repo.
+- **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, and `gate_ignore` adds to them. It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;
   - a phone-push token would be in the repo.
 
   This is a change from the first draft, part of P12.
+
+## Commit trailers (D52)
+
+These aren't files, but they're part of the same public interface. They go in the commit message's final trailer block, parsed with git's own rules (`git interpret-trailers --parse`, in `parseTrailers`):
+
+- **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it.
+- **`Baesian-Ack: <fact-id> <reason>`** acknowledges a detected decision as a two-way door. The fact ID is the one the gate prints (`dep:httpx`, `schema:<path>`, `infra:<path>`, and later `api:<symbol>`). The reason is required.
 
 ## Open points for P12
 

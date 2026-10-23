@@ -1,0 +1,153 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { commitSnapshot, detectFacts, requirementName, stagedSnapshot } from "../src/facts.js";
+import { globToRegExp } from "../src/globs.js";
+import { cleanup, repo, sh } from "./helpers.js";
+
+afterEach(cleanup);
+
+function put(dir: string, path: string, text: string): void {
+  mkdirSync(dirname(join(dir, path)), { recursive: true });
+  writeFileSync(join(dir, path), text);
+}
+
+function stage(dir: string, files: Record<string, string>): void {
+  for (const [p, t] of Object.entries(files)) put(dir, p, t);
+  sh(dir, "add", "-A");
+}
+
+function commitFiles(dir: string, files: Record<string, string>, message = "c"): void {
+  stage(dir, files);
+  sh(dir, "commit", "-q", "-m", message);
+}
+
+const ids = (dir: string) => detectFacts(stagedSnapshot(dir)).facts.map((f) => f.id);
+
+const pkg = (deps: Record<string, string>, dev: Record<string, string> = {}) =>
+  JSON.stringify({ name: "x", dependencies: deps, devDependencies: dev }, null, 2);
+
+describe("globs", () => {
+  it("matches ** across directories and * within one", () => {
+    expect(globToRegExp("**/migrations/**").test("db/migrations/0001.sql")).toBe(true);
+    expect(globToRegExp("**/migrations/**").test("migrations/0001.sql")).toBe(true);
+    expect(globToRegExp("**/*.sql").test("a/b/c.sql")).toBe(true);
+    expect(globToRegExp("*.sql").test("a/c.sql")).toBe(false);
+    expect(globToRegExp(".github/workflows/**").test(".github/workflows/ci.yml")).toBe(true);
+    expect(globToRegExp("dep:pytest-*").test("dep:pytest-cov")).toBe(true);
+    expect(globToRegExp("dep:pytest-*").test("dep:pydantic")).toBe(false);
+  });
+});
+
+describe("dependencies (D55)", () => {
+  it("finds added and removed runtime dependencies in package.json, not dev ones or bumps", () => {
+    const { dir } = repo();
+    commitFiles(dir, { "package.json": pkg({ zod: "^4", yaml: "^2" }, { vitest: "^5" }) });
+    stage(dir, { "package.json": pkg({ zod: "^4.6", commander: "^15" }, { vitest: "^5", tsx: "^4" }) });
+    const facts = detectFacts(stagedSnapshot(dir)).facts;
+    expect(facts.map((f) => [f.id, f.detail])).toEqual([
+      ["dep:commander", "added to package.json"],
+      ["dep:yaml", "removed from package.json"],
+    ]);
+  });
+
+  it("treats every dependency of a new manifest as added, including in the first commit", () => {
+    const dir = repo().dir;
+    sh(dir, "update-ref", "-d", "HEAD"); // make it a repository with no commits again
+    stage(dir, { "web/package.json": pkg({ react: "^19" }) });
+    expect(ids(dir)).toEqual(["dep:react"]);
+  });
+
+  it("reads pyproject.toml: PEP 621, extras and Poetry, normalising names", () => {
+    const { dir } = repo();
+    commitFiles(dir, { "pyproject.toml": '[project]\nname = "x"\ndependencies = ["httpx>=0.27"]\n' });
+    stage(dir, {
+      "pyproject.toml": [
+        "[project]",
+        'name = "x"',
+        'dependencies = ["httpx>=0.28", "Pydantic_Core[email]~=2.0; python_version>\'3.9\'"]',
+        "[project.optional-dependencies]",
+        'cli = ["rich"]',
+        "[tool.poetry.dependencies]",
+        'python = "^3.12"',
+        'typer = "*"',
+        "[tool.poetry.group.dev.dependencies]",
+        'pytest = "*"',
+        "",
+      ].join("\n"),
+    });
+    expect(ids(dir)).toEqual(["dep:pydantic-core", "dep:rich", "dep:typer"]);
+  });
+
+  it("reads requirements files, skipping options, comments and dev files", () => {
+    const { dir } = repo();
+    stage(dir, {
+      "requirements.txt": "# runtime\nrequests==2.32  # http\n-r base.txt\n-e .\nnumpy\n",
+      "requirements-dev.txt": "pytest\n",
+    });
+    expect(ids(dir)).toEqual(["dep:numpy", "dep:requests"]);
+  });
+
+  it("warns instead of guessing when a manifest doesn't parse", () => {
+    const { dir } = repo();
+    stage(dir, { "package.json": "{ not json" });
+    const d = detectFacts(stagedSnapshot(dir));
+    expect(d.facts).toEqual([]);
+    expect(d.warnings[0]).toMatch(/couldn't parse the new version of package.json/);
+  });
+
+  it("parses requirement names", () => {
+    expect(requirementName("httpx[http2]>=0.27; python_version>'3.8'")).toBe("httpx");
+    expect(requirementName("Foo.Bar_baz==1")).toBe("foo-bar-baz");
+    expect(requirementName("  ")).toBeUndefined();
+  });
+});
+
+describe("schema and infra", () => {
+  it("flags migrations, SQL, workflows and deploy files, once each", () => {
+    const { dir } = repo();
+    stage(dir, {
+      "db/migrations/0003_runs.sql": "create table runs();",
+      ".github/workflows/ci.yml": "on: push",
+      "Dockerfile": "FROM node:22",
+      "src/app.ts": "export const x = 1;",
+    });
+    expect(ids(dir)).toEqual([
+      "infra:.github/workflows/ci.yml",
+      "infra:Dockerfile",
+      "schema:db/migrations/0003_runs.sql",
+    ]);
+  });
+
+  it("ignores node_modules and Baesian's own record", () => {
+    const { dir } = repo();
+    stage(dir, { "node_modules/x/package.json": pkg({ evil: "1" }), ".baesian/cards/x.sql": "x" });
+    expect(ids(dir)).toEqual([]);
+  });
+
+  it("uses configured paths instead of the defaults", () => {
+    const { dir } = repo();
+    stage(dir, { "db/changes/1.yml": "x", "deploy/prod.yml": "y", "db/x.sql": "z" });
+    const facts = detectFacts(stagedSnapshot(dir), { schema: ["db/changes/**"], infra: ["deploy/**"] }).facts;
+    expect(facts.map((f) => f.id)).toEqual(["infra:deploy/prod.yml", "schema:db/changes/1.yml"]);
+  });
+
+  it("reports deletions and renames", () => {
+    const { dir } = repo();
+    commitFiles(dir, { "migrations/1.sql": "a", "fly.toml": "app='x'" });
+    sh(dir, "mv", "fly.toml", "deploy-fly.toml");
+    sh(dir, "rm", "-q", "migrations/1.sql");
+    const facts = detectFacts(stagedSnapshot(dir)).facts;
+    expect(facts.map((f) => [f.id, f.detail])).toEqual([
+      ["infra:deploy-fly.toml", "renamed fly.toml → deploy-fly.toml"],
+      ["schema:migrations/1.sql", "deleted migrations/1.sql"],
+    ]);
+  });
+
+  it("works on a commit against its parent, for CI", () => {
+    const { dir } = repo();
+    commitFiles(dir, { "package.json": pkg({}) });
+    commitFiles(dir, { "package.json": pkg({ hono: "^4" }) });
+    expect(detectFacts(commitSnapshot(dir, "HEAD")).facts.map((f) => f.id)).toEqual(["dep:hono"]);
+  });
+});
