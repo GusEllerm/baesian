@@ -29,6 +29,7 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 | `src/cli.ts`, `src/bin.ts` | the CLI; `bin.ts` is the npm entry point ([[src-cli]]) |
 | `src/wait.ts`, `src/notify.ts`, `src/agents.ts` | waiting for verdicts; notifications; the AGENTS.md block and card template |
 | `src/facts.ts`, `src/trailers.ts`, `src/gate.ts`, `src/hooks.ts`, `src/globs.ts` | the commit gate ([[src-gate]]) |
+| `src/verify.ts` | `baesian verify`: CI and the merge gate ([[src-verify]]) |
 | `src/frontmatter.ts`, `src/git.ts`, `src/ids.ts`, `src/similarity.ts` | helpers |
 | `test/` | Vitest, against real temporary git repos and linked worktrees |
 
@@ -41,7 +42,7 @@ Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <c
 | **M1** | The store and the core CLI: both layers, the formats, IDs, computed status, the filing check (open cards and resolved decisions, topics, aliases), attach, withdraw, revise, decks, `list`, `show`, `inbox`, `sync` | **done** (2026-10-23), 40 tests |
 | **M2** | Waiting and notifying: `wait` (with levels, timeout and presence), fallbacks, OS notifications and the `notify` command, the `AGENTS.md` block written by `init`, `template`, `topics` | **done** (2026-10-23), 66 tests in total |
 | **M3a** | The commit gate: `pre-commit` (record), `commit-msg` (trailers, acks, coverage, the block on rejected and unresolved hard cards, verdict delivery), `post-commit` (ledger); detectors for dependencies, schema and infra; `baesian check`; hooks installed by `init` alongside livedocs | **done** (2026-10-23), 99 tests in total |
-| **M3b** | `baesian verify` for CI: every commit in a range checked against the record, the merge gate (resolved or deferred), conflict cards, record lag | next (D60) |
+| **M3b** | `baesian verify` for CI: every commit in a range checked against its own committed record, the merge gate (resolved or deferred), conflicting decisions and conflict cards, hints for a stale record ([[src-verify]]) | **done** (2026-10-23), 118 tests in total |
 | **M3c** | The exported-signature detector (`api:` facts): `livedocs signatures` (livedocs 0.2.1, D56), breaking changes only (D58), opt-in through `gate_api` (D59) | **done** (2026-10-23), 107 tests in total |
 | **M4** | The client: a local server (API plus live updates), the React app (desktop first, arrow-key and swipe gestures), decks, the response panel, rules, topic merging, conflict links, presence | |
 | **M5** | Harness adapters: the Claude Code plugin (skill, `SessionStart`, `ExitPlanMode`), Codex hooks | |
@@ -74,6 +75,12 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 
   Now the hook text is the same on every machine, and the fallback lives in `git config --local baesian.fallback`. The tests run with a private PATH holding only `node` and `git`, so a linked `baesian` can't hide a broken fallback.
 - **Drift can't detect signature changes** (live-docs-agent, 2026-10-23). Its fingerprint covers whole symbols, without a signature/body split, and only for symbols a doc is bound to. So D25's "use drift's fingerprints" can't work; D56 uses a new `livedocs signatures` command instead.
+
+## Notes from M3b
+
+- **Records are read straight from commits.** `git archive <rev> .baesian` is extracted to a temporary directory and opened read-only (`Store.overRecord`). CI needs only git and tar.
+- **On this repo's own history**, `baesian verify --base fdf603e` failed M3a (`02885f9`): it added the smol-toml dependency before the gate existed. Everything from the dogfood commit on passes, merge gate included.
+- **A test-only bug:** assigning `undefined` to `process.env.X` sets it to the string `"undefined"`.
 
 ## Notes from M2 (continued)
 

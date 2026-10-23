@@ -7,7 +7,9 @@ import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
 import { installHooks, runHook } from "./hooks.js";
 import { notifyFiled } from "./notify.js";
+import { openRepo } from "./git.js";
 import { parseTrailers } from "./trailers.js";
+import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
@@ -301,6 +303,30 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .action(() => {
       const added = store().syncRecord();
       io.out(added.length ? `added to the record:\n${added.map((p) => `  ${p}`).join("\n")}` : "record is up to date");
+    });
+
+  program
+    .command("verify")
+    .description("CI: check every commit since --base against its committed record; --merge adds the merge gate")
+    .option("--base <ref>", "the branch being merged into (default: origin/$GITHUB_BASE_REF in GitHub Actions)")
+    .option("--merge", "also require every cited card to be resolved or deferred, and no conflicting decisions")
+    .option("--file-conflicts", "file a conflict card for each conflict (local only: needs the live layer)")
+    .option("--json", "print the result as JSON")
+    .action((opts: { base?: string; merge?: boolean; fileConflicts?: boolean; json?: boolean }) => {
+      const base = opts.base ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : undefined);
+      if (!base) throw new Error("pass --base <ref>, e.g. --base origin/main");
+      const repo = openRepo(io.cwd);
+      const result = verify(repo, base, { merge: Boolean(opts.merge || opts.fileConflicts) });
+      if (opts.json) json(result);
+      else for (const line of describeVerify(result)) io.out(line);
+      if (opts.fileConflicts && result.merge?.conflicts.length) {
+        const s = store();
+        for (const card of fileConflicts(s, result.merge.conflicts)) {
+          notify(card);
+          io.out(`filed conflict card ${card.meta.id}: ${card.meta.title}`);
+        }
+      }
+      state.code = result.ok ? 0 : 1;
     });
 
   program

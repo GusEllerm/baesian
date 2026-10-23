@@ -31,6 +31,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `inbox [--peek]` | new verdicts on this branch's cards |
 | `sync` | copies new verdicts and ledger entries into the record |
 | `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
+| `verify [--base <ref>] [--merge] [--file-conflicts]` | CI: reruns the gate on every commit since the base, against its own committed record. `--merge` adds the merge gate and conflicting decisions ([[src-verify]]) |
 | `hook <name> [args…]` | hidden; what the installed git hooks call (`runHook`) |
 
 No command resolves a card (D32). When `init` installs the hooks, it records how to rerun this CLI (`selfCommand`), for hooks run where `baesian` isn't on PATH (D48). `selfCommand` resolves the script path first: under `npm link` or a global install, `argv[1]` is the bin symlink, not the `.js` file. Run from source, there is no fallback, so the hooks rely on PATH.

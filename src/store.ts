@@ -73,6 +73,11 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/** Compare decisions loosely: case and spacing don't make two answers different. */
+export function normalise(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function parse<T extends z.ZodType>(schema: T, value: unknown, what: string): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) throw new ValidationError(`${what} is not valid:\n${describeError(result.error)}`);
@@ -82,14 +87,28 @@ function parse<T extends z.ZodType>(schema: T, value: unknown, what: string): z.
 export class Store {
   readonly live: string;
   readonly record: string;
+  /** A read-only store over one directory, e.g. a commit's record in CI (M3b). */
+  readonly readOnly: boolean;
 
-  constructor(readonly repo: Repo) {
-    this.live = join(repo.commonDir, LIVE_DIR);
-    this.record = join(repo.toplevel, RECORD_DIR);
+  constructor(
+    readonly repo: Repo,
+    layers?: { dir: string },
+  ) {
+    this.live = layers ? layers.dir : join(repo.commonDir, LIVE_DIR);
+    this.record = layers ? layers.dir : join(repo.toplevel, RECORD_DIR);
+    this.readOnly = layers !== undefined;
   }
 
   static open(cwd?: string): Store {
     return new Store(openRepo(cwd));
+  }
+
+  /**
+   * Read a record as if it were the live layer. This is how CI sees cards and verdicts: it has no
+   * live layer, only what was committed (D34).
+   */
+  static overRecord(repo: Repo, dir: string): Store {
+    return new Store(repo, { dir });
   }
 
   // ---------------------------------------------------------------- layers
@@ -132,6 +151,7 @@ export class Store {
 
   /** Write a file that must never change (D34). Fails if it exists. */
   private writeOnce(path: string, text: string): void {
+    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text, { flag: "wx" });
   }
@@ -481,7 +501,14 @@ export class Store {
       if (rejectedAfter) return "withdrawn";
     }
     for (const other of this.cards()) {
-      if (other.meta.supersedes === id && !seen.has(other.meta.id) && this.status(other.meta.id, seen) === "resolved") {
+      if (seen.has(other.meta.id)) continue;
+      const supersedes = other.meta.supersedes === id;
+      // A resolved conflict card supersedes the decisions it names that it didn't choose (D35).
+      const lostConflict = other.meta.conflict_of?.includes(id) ?? false;
+      if (!supersedes && !lostConflict) continue;
+      if (this.status(other.meta.id, seen) !== "resolved") continue;
+      if (supersedes) return "superseded";
+      if (normalise(this.decision(other.meta.id) ?? "") !== normalise(this.answer(card) ?? "")) {
         return "superseded";
       }
     }
@@ -509,10 +536,18 @@ export class Store {
   decision(id: string): string | undefined {
     const card = this.card(id);
     if (!card || this.status(id) !== "resolved") return undefined;
-    const last = this.verdicts(id)
+    return this.answer(card);
+  }
+
+  /** What the latest verdict on the latest revision chose, without checking supersession (so `status` can use it). */
+  private answer(card: Card): string | undefined {
+    const last = this.verdicts(card.meta.id)
       .filter((v) => v.revision === card.meta.revision)
       .at(-1);
-    return last?.response === "accept" ? card.meta.proposal : last?.choice;
+    if (!last) return undefined;
+    if (last.response === "accept") return card.meta.proposal;
+    if (last.response === "alternative" || last.response === "correction") return last.choice;
+    return undefined;
   }
 
   // ---------------------------------------------------------------- topics

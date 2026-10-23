@@ -91,6 +91,9 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-23 `[agent decision]` M3b's per-commit check reads each commit's own record and config, not HEAD's. CI then repeats exactly what the local hook saw, and a later change to the gate's paths doesn't fail old commits retroactively.
+- 2026-10-23 `[agent decision]` At merge, a cited card that is **withdrawn or superseded** is a note, not a failure. A failure would permanently block any branch where an agent filed a card, cited it, then withdrew it, unless the history was rewritten. Rejected cards do fail.
+- 2026-10-23 `[agent decision]` A conflict card proposes the base branch's decision, with the branch's as the strongest alternative, and is blocking. Resolving it supersedes the decision it didn't choose (implementing D35).
 - 2026-10-23 `[agent decision]` This repo's gate counts `src/schema.ts` as a schema path (`gate_schema` in `.baesian/config.json`, with the defaults kept), and doesn't set `gate_api`.
   - **Why the schema detector:** `src/schema.ts` defines the on-disk formats, so any change to it is a format decision. The `api:` detector would miss those changes, because the formats are Zod constants without type annotations, and livedocs only counts annotated constants. The agent's earlier suggestion, offered when the user decided D59, to use `gate_api` for this was wrong.
   - **Why no `gate_api`:** Baesian is an app; its public interface is the CLI and the formats, not its TypeScript exports.

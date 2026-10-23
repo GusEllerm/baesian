@@ -11,7 +11,7 @@ tags: [baesian, module]
 
 # src/store.ts
 
-`Store` is the only code that touches Baesian's files. `Store.open` finds the repo with `openRepo`. The live layer is `LIVE_DIR` inside git's common directory, and the record is `RECORD_DIR` in the worktree ([[File Formats]]).
+`Store` is the only code that touches Baesian's files. `Store.overRecord` opens a read-only view of a committed record, which is how CI reads it ([[src-verify]]). `Store.open` finds the repo with `openRepo`. The live layer is `LIVE_DIR` inside git's common directory, and the record is `RECORD_DIR` in the worktree ([[File Formats]]).
 
 ## Writing
 
@@ -33,7 +33,7 @@ All of these go through a private write-once helper that uses an exclusive creat
 
 - **`Store.status`** is computed, in this order:
   1. withdrawn (by the agent, or because a `depends_on` parent was rejected);
-  2. superseded (a resolved card `supersedes` it);
+  2. superseded: a resolved card `supersedes` it, or a resolved conflict card names it in `conflict_of` and chose the other decision (D35);
   3. otherwise, the latest verdict on the latest revision: resolved, returned, rerouted or deferred; or open if there's none.
 - **`PENDING`** is the set of statuses that still need the reviewer. **`Store.decision`** gives what was decided for a resolved card.
 - **`Store.canonicalTopic`** follows `TopicAlias` files. **`Store.topics`** lists the canonical topics in use.

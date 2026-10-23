@@ -3,7 +3,7 @@ type: session
 status: active
 authority: log
 livedocs: snapshot
-summary: "First session: designed Baesian with the user (D1–D60), created this vault and repo, chose the stack, and built M1 (the store and the core CLI), M2 (wait, presence, notifications, AGENTS.md) M3a (the commit gate) and M3c (the api: detector)."
+summary: "First session: designed Baesian with the user (D1–D60), created this vault and repo, chose the stack, and built M1 (the store and the core CLI), M2 (wait, presence, notifications, AGENTS.md) M3a–M3c (the commit gate, `baesian verify`, the api: detector)."
 created: 2026-10-23
 tags: [baesian, session]
 ---
@@ -145,9 +145,14 @@ The user judged the plan ready for development.
 - **Built:** the `api:` detector, with 107 tests, including one against the real livedocs.
 - **A correction on this repo's config.** The agent had suggested `gate_api` for `src/schema.ts`, but Zod constants aren't API facts. So `src/schema.ts` went into `gate_schema` instead. The gate then blocked the very commit that changed `src/schema.ts`, which was acknowledged against P12.
 
+## Development: M3b
+
+- **Built:** `baesian verify`. It checks each commit against its own committed record, and with `--merge` applies the merge gate and reports conflicting decisions, which `--file-conflicts` turns into conflict cards. 118 tests ([[src-verify]]).
+- **On this repo's history,** it caught M3a's smol-toml dependency, added before the gate existed. The dogfood era passes.
+- **Agent decisions** (in [[Decision Log]]): each commit is judged by its own record; at merge, withdrawn and superseded cards are notes rather than failures; the defaults for conflict cards.
+
 ## Next
 
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
-- M3b: `baesian verify` for CI and the merge gate.
 
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.
