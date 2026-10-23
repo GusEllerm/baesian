@@ -70,6 +70,11 @@ The user asked for a read of `baesian.md` and a discussion of the design. Afterw
   - notifications come from the client, the OS, and a `notify` hook (D40);
   - presence is in v1 (D41);
   - a hard-blocking level (D42).
+- **D43–D46: the open questions from D37–D42.**
+  - **D43:** one vault note per decision and per rule, with the Decision Log as an Obsidian Bases query. This came from applying D34's immutable-file idea to the vault, and it supersedes D17 and D39.
+  - **D44:** topic-key drift is handled with near-match warnings and alias merging.
+  - **D45:** a "conflicts with…" link, plus measuring where contradictions are caught.
+  - **D46:** only hard cards need a verdict at commit. The agent found this one while writing up the others: D26 and D42 together would have stopped a provisional blocking card from ever being committed.
 
 All are in [[Decision Log]].
 
@@ -87,6 +92,7 @@ All are in [[Decision Log]].
   - Later the same day, live-docs-agent reported that **livedocs 0.2.0 is released** and is now the user's global install, from PyPI rather than the editable checkout.
   - 0.2.0 fixes the first-commit problem, the `survey` traceback, and `new-vault`, and supports TypeScript.
   - `livedocs verify` passes on this repo under 0.2.0.
+- **Obsidian Bases (checked 2026-10-23, obsidian-help docs via Context7):** a note can embed a live table with a `base` code block, filtered by folder (`file.inFolder(...)`) and properties. It isn't enabled in this vault's `.obsidian/core-plugins.json` yet.
 - **Git hook behaviour (tested on git 2.55, 2026-10-23):** a file staged by `pre-commit` lands in the commit; a file staged by `commit-msg` doesn't, and is left staged for the next commit. That is why D37 writes the record in `pre-commit`.
 - **livedocs decision D4 in live-docs** left decisions and specs to "a different system". Baesian fills that gap, which gives the pattern's framing: livedocs keeps `describes` notes true, and Baesian moves `specifies` notes from proposed to accepted.
 - **Three IDs per decision.** In personal-website, one decision carries three IDs (P3 → DC-01 → G6). One card ID with a changing status would remove that bookkeeping.

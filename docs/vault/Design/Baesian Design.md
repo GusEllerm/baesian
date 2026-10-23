@@ -14,7 +14,7 @@ tags: [baesian, design]
 *Swipe review for agent decisions. (Informally: Agent Tinder.)*
 
 > **Status (2026-10-23): v0.5.**
-> - Everything below is decided (D1–D42 in [[Decision Log]]) except the open questions.
+> - Everything below is decided (D1–D46 in [[Decision Log]]) except the open questions.
 > - Schemas, file names and trailer formats are illustrative. They are settled when the store is built (D33 step 1).
 > - The first target is coding agents; research agents come later (D2).
 
@@ -163,7 +163,9 @@ Each gesture has a different speed:
 - **Up** opens a panel and takes longer. That's fine, because the written responses are the most useful feedback.
 - **Down** is the escape hatch for a reviewer who doesn't feel informed enough to decide. It asks which of its two meanings applies, because the two route differently.
 
-Any response can also be marked **"make this a rule"** (D16; see Learning conventions).
+Two more actions work on any card, at any time:
+- **"Make this a rule"** can mark any response (D16; see Learning conventions).
+- **"Conflicts with…"** links two decisions and creates a conflict card (D45). It's how the reviewer reports a contradiction nothing flagged, so these late finds are counted too.
 
 ```json
 { "card": "B-7f3k", "revision": 1, "response": "question",
@@ -288,7 +290,7 @@ This is the livedocs pattern applied to decisions. The gate reports a fact ("thi
   - **CI, infra and deploy config:** workflow files, Dockerfiles, deploy config.
   - **Exported API signatures:** a public function's or class's signature changed. This uses drift's fingerprints when drift is installed, and is off without it (D8).
 - **Covered means (D24, D26)** the commit carries one of two trailers:
-  - `Baesian-Card: <id>` for a filed card. A filed card is enough, unless it's marked blocking, in which case it needs a verdict first;
+  - `Baesian-Card: <id>` for a filed card. A filed card is enough, unless it's **hard**, in which case it needs a verdict first; this is how the gate enforces "never proceed" (D46). A blocking card whose wait timed out, or found the reviewer away, is recorded on the card as provisional, so the filed card covers the commit. The merge gate still requires its verdict;
   - `Baesian-Ack: <fact> — <reason>`, an agent decision, logged like any two-way-door decision.
 - **Automatic acks:** benign changes, and changes an accepted rule already answers. For example, a rule saying "pytest plugins don't need a card" covers adding one.
 - **Verdict delivery (D30).** Every gate run prints the verdicts resolved since the last commit on this branch.
@@ -326,7 +328,7 @@ The most valuable output may be standing rules, not individual verdicts (D7). A 
 - **Two ways to propose a rule (D16):**
   - **The toggle.** Any response can be marked "make this a rule", for when the reviewer already knows the verdict is general.
   - **Convention cards.** Baesian mines verdict history and files "Make this a rule?" cards. It looks for the same kind of decision decided the same way twice, or a reviewer comment that states a rule.
-- **Rules apply at once.** An accepted rule takes effect immediately in every worktree, through the live layer (D34). It's also written to the record, and with the vault adapter, as a rule note on the default branch (D39).
+- **Rules apply at once.** An accepted rule takes effect immediately in every worktree, through the live layer (D34). It's also written to the record, and with the vault adapter, as its own rule note (D43).
 - **How rules are used:**
   - filing reads them, and doesn't file cards they already answer;
   - the gate acks changes they cover.
@@ -355,7 +357,10 @@ The two-layer store (D34, under Storage) handles that. On top of it:
   - **resolved decisions**, on `main` and in other branches' records.
 
   On a match with an open card, the agent attaches to it as a dependency. On a match with a resolved decision, the agent follows that decision or argues on the card. Most contradictions are caught here, before they're built. A card's priority counts the agents waiting on it.
-- **Topic keys (D38).** These are optional keys such as `time/format`, which the CLI autocompletes from the keys already in use. They make matching deterministic. The merge gate turns "same topic, different answer" into a conflict card. Contradictions that neither keys nor text matching catch are a residual miss class: measure them, and leave them to the later after-the-fact reviewer.
+- **Topic keys (D38, D44).** These are optional, free-form keys such as `time/format`, which the CLI autocompletes from the keys already in use. They make matching deterministic. The merge gate turns "same topic, different answer" into a conflict card. Drift is handled twice:
+  - **at filing,** `baesian file` warns on near-matches ("did you mean `time/format`?");
+  - **in the client,** the reviewer can merge two keys. Each merge is an immutable alias file, and all matching uses the canonical key.
+- **The semantic residual (D45).** Some contradictions neither keys nor text matching catch. Every conflict card records where it was caught: at filing, at merge, or late, through "conflicts with…". The late rate is the residual. It's reviewed after the first stretch of dogfooding, which decides when the after-the-fact reviewer gets built.
 - **No orchestrator is needed.** Any agent on any branch files for itself. Subagents are a harness concept (D27), so nothing relies on them.
 
 ## Storage and the vault adapter
@@ -369,12 +374,13 @@ The two-layer store (D34, under Storage) handles that. On top of it:
   ledger/B-7f3k-<ts>.md        # one immutable file per ledger entry
   decks/storage-layer.md
   rules/R-9c2a.md              # accepted rules, in force at once
+  topics/alias-<ts>.json       # topic-key merges made in the client (D44)
   presence.json                # the client's heartbeat (D41)
 
 .baesian/                      # RECORD: committed on the branch
   config.json                  # optional; with the adapter: { "vault": "docs/vault", ... }
   cards/  verdicts/  ledger/   # copies for the cards this branch's commits reference
-  rules/                       # accepted rules
+  rules/  topics/              # accepted rules; topic aliases
 ```
 
 - **The live layer** is what the client, `baesian wait` and every agent read and write. It's found with `git rev-parse --git-common-dir`, so all worktrees of a clone share it. Nothing in it is merged, and the client never writes into an agent's working tree.
@@ -392,11 +398,16 @@ Nothing outside these two directories is needed. A repo with no vault, no livedo
 `baesian init --vault docs/vault` records the vault in `.baesian/config.json`. The adapter then does the following:
 
 - **Reads routing rules and conventions** from the vault's `specifies` notes (by default the Working Agreement and Code Conventions) and its `Rules/` notes.
-- **Writes each accepted rule as its own note** (`Rules/R-9c2a ….md`), which the Working Agreement links to. It never edits hand-written prose (D39).
-- **Owns a marked block in the Decision Log** (D17). The adapter regenerates that block from the record, in three sections: accepted, proposed, and agent decisions. Hand-written rows outside the markers, such as decisions that never went through a card, are left alone. Existing vaults need no migration. The log is a `livedocs: snapshot` note, so it never blocks a commit.
-- **Writes only on the default branch (D39).** Generated Markdown written on two branches would conflict at merge, and GitHub's server-side merges ignore custom merge drivers. So:
-  - feature branches write only the immutable record files, which can't conflict;
-  - the vault's views are regenerated on the default branch, at its next commit or with `baesian sync`.
+- **Writes one note per item, never an aggregate (D43).** This applies the store's immutable-file approach (D34) to the vault. Each item note is written on whichever branch it belongs to:
+  - **each resolved decision** becomes a note in `Decisions/` (`B-7f3k Use SQLite for run metadata.md`);
+  - **each accepted rule** becomes a note in `Rules/`, which the Working Agreement links to.
+
+  The names are unique, and two branches adding the identical note merge cleanly, so nothing conflicts and nothing needs regenerating after a merge, even a GitHub one. The adapter never edits hand-written prose. Marking a decision superseded is the one edit to an existing note. It's rare, and two branches superseding the same decision at once is a real conflict worth seeing.
+- **The Decision Log embeds a query** instead of owning a generated block (D43, revising D17). An Obsidian Bases `base` code block, roughly `file.inFolder("Decisions")` shown as a table, renders the current decisions whenever the note is opened. Hand-written rows elsewhere in the log stay as they are, so existing vaults need no migration.
+  - Bases must be enabled in the vault: `baesian init --vault` turns it on in `.obsidian/core-plugins.json`.
+  - Outside Obsidian, the `Decisions/` folder is still a readable set of notes.
+  - Source: <https://github.com/obsidianmd/obsidian-help> ("Bases syntax", "Create a base"), checked 2026-10-23.
+- **Decision and rule notes are livedocs snapshots** (a `Decisions/*` and `Rules/*` snapshot glob), so they never create acks.
 - **Resolves links both ways.**
   - A deck's `context_notes` are vault wikilinks, and the client shows each linked note's `summary:` line.
   - Vault notes cite cards by ID, and the client links each ID to its card.
@@ -410,7 +421,7 @@ The personal-website and live-docs vaults already run this decision process by h
 | The agent writes decision cards (the Decision Card template) into the chat | The agent files cards with `baesian file`; you answer in the client |
 | The Working Agreement splits one-way doors (the human decides) from two-way doors (the agent decides) | The same split is the routing rule, read from the Working Agreement |
 | One decision carries three IDs: proposal P3, card DC-01, accepted G6 | One card ID; only the status changes |
-| Decision Log rows are added by hand | Baesian's block of the Decision Log is generated from the record |
+| Decision Log rows are added by hand | One note per decision; the Decision Log is a live query over them |
 | `[agent decision]` entries that the human may overturn | `Baesian-Ack` trailers, sampled as audit cards |
 | Blocking cards go out at once (at most four); the rest wait for the session end | Blocking cards notify at once; the rest wait in the queue, grouped by deck or branch |
 | The session summary lists open cards | The queue; verdicts reach the agent at its next commit, or sooner through an adapter |
@@ -453,14 +464,7 @@ The personal-website and live-docs vaults already run this decision process by h
 - **Deck boundaries:** when an agent should name a deck rather than use the branch default.
 - **Identity and trust:** whose verdict counts, how to weight reviewers, and how this relates to trust scoring.
 - **Reviewer disagreement:** two reviewers give different verdicts on the same card.
-- **Semantic contradictions:** incompatible decisions that neither topic keys nor text matching catch (D38). How common are they? Measure first; the after-the-fact reviewer is the planned answer.
-- **Views after GitHub merges:** a PR merged on GitHub runs no local hook. So the vault's views lag until the next commit on `main`, or a `baesian sync`. Is a CI job that commits the regenerated views worth it?
-- **Topic-key drift:** agents may coin near-duplicate keys (`time/format`, `timestamps/format`). Autocomplete helps; does the client also need a way to merge keys?
-- **Decision drift:** livedocs could flag when the code behind an accepted decision changes ("is B-7f3k still honoured?"). Two catches:
-  - It only works for notes in the vault.
-  - Dated notes already dominated its acks (P25 in live-docs).
-
-  Should the adapter write accepted decisions into the vault as bound notes, or only generate the log?
+- **Decision drift:** decisions are now vault notes (D43), so livedocs *could* bind them and flag when the code behind an accepted decision changes ("is B-7f3k still honoured?"). They're snapshots for now, because dated notes already dominated the livedocs acks (P25 in live-docs). Is binding some of them (hard decisions only, say) worth the acks?
 - **Phone access:** the client runs locally. Reaching it from a phone needs the LAN or a tunnel.
 - **Feedback loop:** whether verdicts should train routing and confidence calibration, and whether they could be a dataset in their own right.
 - **Science vs software:** research decisions (methods, assumptions, interpretations) probably need their own card types. A timestamped log of analysis decisions with expert sign-off is close to a pre-registration and audit trail. Deferred until after the coding-agent version (D2).
@@ -484,9 +488,9 @@ The order is decided (D33). The universal pieces come first, so you can dogfood 
 4. **Adapters:** the Claude Code plugin (skill, `SessionStart` and `ExitPlanMode` hooks) and Codex hooks.
 5. **The vault adapter:**
    - rules read from the Working Agreement and from rule notes;
-   - one note per accepted rule;
-   - the Decision Log block;
-   - all writes only on the default branch.
+   - one note per decision and per rule;
+   - the Decision Log's `base` query;
+   - Bases enabled, and snapshot globs for the new folders.
 6. **The MCP server,** as a view over the live layer.
 
 Then dogfood it (D21) on this repo and on personal-website, which already runs decision cards by hand, so there's a before and after. Track:
@@ -494,4 +498,5 @@ Then dogfood it (D21) on this repo and on personal-website, which already runs d
 - the overturn rate;
 - the need-more-context rate;
 - time per card;
-- cards per branch, and the autonomy horizon, over time.
+- cards per branch, and the autonomy horizon, over time;
+- where contradictions are caught (filing, merge, late), which decides when the after-the-fact reviewer is built (D45).

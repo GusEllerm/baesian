@@ -19,7 +19,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 - **Design stage; no code yet.** The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
 - **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions. No proposals are outstanding.
-- **Decided by the user** (D1–D42 in [[Decision Log]]):
+- **Decided by the user** (D1–D46 in [[Decision Log]]):
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
   - **routing:** from a checklist of impact and reversibility facts, not self-reported confidence; audit cards sample the agent's own decisions;
@@ -39,7 +39,11 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
     - conflicting proposals merged into one decision;
     - a filing check against open cards and resolved decisions;
     - topic keys;
-  - **rules:** a toggle at verdict time plus mined convention cards. Rules apply at once in every worktree, and the vault gets one note per rule, written only on the default branch;
+  - **rules:** a toggle at verdict time plus mined convention cards. Rules apply at once in every worktree;
+  - **vault:** one note per decision and per rule, written on any branch; the Decision Log embeds a Bases query over them;
+  - **topic keys:** free-form, with near-match warnings and alias merging in the client;
+  - **contradictions:** "conflicts with…" links in the client; each records where it was caught, and the late rate is reviewed after dogfooding;
+  - **gate levels:** only hard cards need a verdict at commit; at merge, every card must be resolved or deferred;
   - **v1 order:** store and CLI → git gate → client → harness adapters → vault adapter → MCP;
   - **dogfooding:** this repo and personal-website;
   - the [[Working Agreement]] is active.
