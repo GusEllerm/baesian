@@ -1,1 +1,201 @@
 version = 1
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
+target = "package.json"
+sig = "8442b77a15458302"
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
+target = "src/store.ts#Store"
+sig = "cb5a82668e2ca9ca"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = ".livedocs/config.json"
+sig = "b346b2b146c7c63e"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/ids.ts#newId"
+sig = "c4d124dfd65d66c4"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts"
+sig = "f18c22a465f81253"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Attachment"
+sig = "8cd2bc8c069e567b"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#CardDraft"
+sig = "79f31038eef522f1"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#CardMeta"
+sig = "dbd6aa838c64ce32"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Config"
+sig = "6c5ef597418d2316"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#DeckMeta"
+sig = "89b3db8a9999584a"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#LedgerMeta"
+sig = "d6e8093367422ed9"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#RuleMeta"
+sig = "7640f5adb5af08a1"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#TopicAlias"
+sig = "87870a84147726b5"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Verdict"
+sig = "163c3fbb06887586"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Withdrawal"
+sig = "ca239fcd9d31dbc6"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#FileResult"
+sig = "cdadf0bca76b9b2f"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#Match"
+sig = "1e7a84482a917483"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#Store"
+sig = "cb5a82668e2ca9ca"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "package.json"
+sig = "8442b77a15458302"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/bin.ts"
+sig = "2540e01ffa9d34c6"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/cli.ts"
+sig = "8b11f83c8ff69a4e"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/frontmatter.ts"
+sig = "16b26c4ae6af6f6f"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/git.ts"
+sig = "3c3b0303fe6f7fb4"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/ids.ts"
+sig = "409efb6ccccdd40f"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/schema.ts"
+sig = "f18c22a465f81253"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/similarity.ts"
+sig = "8f0fd8d62cebcf4b"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/store.ts"
+sig = "7625e04614885b0c"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/store.ts#Store"
+sig = "cb5a82668e2ca9ca"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "src/store.ts#Store"
+sig = "cb5a82668e2ca9ca"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/git.ts#openRepo"
+sig = "ab132edf47d8e7c4"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/schema.ts#Attachment"
+sig = "8cd2bc8c069e567b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/schema.ts#HARD_BY_DEFAULT"
+sig = "5185dc6ddb8ddd60"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/schema.ts#TopicAlias"
+sig = "87870a84147726b5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/schema.ts#Withdrawal"
+sig = "ca239fcd9d31dbc6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/similarity.ts#SIMILAR_TITLE"
+sig = "3fea88c79e5b6529"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#LIVE_DIR"
+sig = "e453a24fcffaddc0"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#PENDING"
+sig = "f120b530e5e178cc"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#PossibleDuplicate"
+sig = "cd910b37964e86aa"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#RECORD_DIR"
+sig = "a78a3d35f1b2d973"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#Store"
+sig = "cb5a82668e2ca9ca"

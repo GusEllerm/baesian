@@ -3,7 +3,7 @@ type: session
 status: active
 authority: log
 livedocs: snapshot
-summary: "First session: discussed the Baesian concept with the user, folded decks, fact-based routing and the response lifecycle into the design, moved storage to a standalone .baesian/, and created this vault."
+summary: "First session: designed Baesian with the user (D1–D51), created this vault and repo, chose the stack, and built M1 (the store and the core CLI)."
 created: 2026-10-23
 tags: [baesian, session]
 ---
@@ -97,7 +97,21 @@ All are in [[Decision Log]].
 - **livedocs decision D4 in live-docs** left decisions and specs to "a different system". Baesian fills that gap, which gives the pattern's framing: livedocs keeps `describes` notes true, and Baesian moves `specifies` notes from proposed to accepted.
 - **Three IDs per decision.** In personal-website, one decision carries three IDs (P3 → DC-01 → G6). One card ID with a changing status would remove that bookkeeping.
 
+## Development: M1
+
+The user judged the plan ready for development.
+- **Stack (D47–D51).** The agent's first suggestion was Python, to match livedocs. The user asked "what is the best language?" instead, and the analysis favoured TypeScript end to end. The deciding factors:
+  - the client needs a build step anyway;
+  - one schema is shared by the CLI, the server, the client and MCP;
+  - agents are fluent in it.
+- **File formats.** Implemented as proposal P12 ([[File Formats]]), for the user to review before 0.1.0, rather than decided field by field.
+- **M1 was built** ([[Implementation Plan]]): the store, the core CLI, and 40 tests against real temporary git repos and linked worktrees. A smoke test with the compiled binary covered filing, the duplicate check, attaching from a second worktree, and the on-disk layout.
+- **Bugs that came up:**
+  - requiring `.baesian/config.json` would have made every fresh worktree say "run init";
+  - two millisecond-resolution races, in the parent-rejection check and in verdict ordering. Both were fixed, and the suite was run repeatedly to confirm.
+
 ## Next
 
+- The user reviews P12 ([[File Formats]]), including where `source_worktree` should be an absolute path.
+- M2: `wait`, presence, notifications, and the `AGENTS.md` block.
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.
-- Next topic: D33 step 1. Put the card, verdict and ledger file formats to the user as decision cards.

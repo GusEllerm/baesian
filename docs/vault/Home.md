@@ -17,9 +17,11 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-23.*
 
-- **Design stage; no code yet.** The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
-- **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions. No proposals are outstanding.
-- **Decided by the user** (D1–D46 in [[Decision Log]]):
+- **Development has started. M1 is done:** the store and the core CLI, in TypeScript, with 40 passing tests ([[Implementation Plan]]). The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
+- **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions.
+- **Open for the user:** P12, the [[File Formats]] (accept or change them before 0.1.0).
+- **Decided by the user** (D1–D51 in [[Decision Log]]):
+  - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
   - **routing:** from a checklist of impact and reversibility facts, not self-reported confidence; audit cards sample the agent's own decisions;
@@ -49,7 +51,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - the [[Working Agreement]] is active.
 - **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
 - **To verify before building the Claude Code adapter:** that a `PostToolUse` hook with matcher `ExitPlanMode` fires, using `claude --debug` ([[Baesian Design#Decks from documents]]).
-- **Next:** D33 step 1, the store and the CLI. Start with the card, verdict and ledger file formats, as decision cards: they're Baesian's public interface ([[Working Agreement#Decision cards]]).
+- **Next:** M2: `wait` (levels, timeout, presence), notifications and the `notify` command, and the `AGENTS.md` block from `init`. Dogfooding on this repo starts after M3, the git gate.
 
 *Update this section at the end of every session.*
 
@@ -59,7 +61,8 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 2. [[Working Agreement]]: how to work here, and decision cards.
 3. [[Baesian Design]]: what is being built, and why.
 4. [[Decision Log]]: what is decided and what is only proposed.
-5. The newest note in `Sessions/`.
+5. [[Implementation Plan]]: the stack, the layout, and the milestones. Then [[File Formats]] and the `Modules/` notes for the code you'll touch.
+6. The newest note in `Sessions/`.
 
 Quick triage: `grep -rh --include='*.md' '^summary:' docs/vault/`
 

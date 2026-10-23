@@ -20,6 +20,11 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D51 | 2026-10-23 | Card IDs have five characters, with a check against the live layer and a retry on collision (`B-7f3kq`). The alphabet is Crockford base32, lowercase. **Revises D19's 4–6.** | decision cards, [[2026-10-23 Design Discussion]] |
+| D50 | 2026-10-23 | The client is React + Vite + Motion, built at release and shipped as static files served by the local server. Chosen for Motion's drag/swipe gestures with spring physics, the ecosystem, and agent fluency. Rejected: Svelte, Solid; no-build options. | same |
+| D49 | 2026-10-23 | Dependencies: small, vetted libraries are allowed (e.g. Zod for the schema, Commander for the CLI, `yaml` for frontmatter). Rejected: stdlib only. | same |
+| D48 | 2026-10-23 | Runtime: Node LTS, distributed with npm (`npm i -g baesian`). Hooks call `baesian` from PATH, with an init-time fallback path, as in the livedocs Hook PATH fix. Single-file binaries come later (Bun or Deno compile). Rejected: Bun, Deno as the runtime. | same |
+| D47 | 2026-10-23 | **TypeScript end to end.** The core (store, CLI, hooks, server, MCP) and the client share one language, and the schema is defined once. livedocs and drift integrate through their CLIs and files, so they stay in Python. Rejected: a Python core with a TS client (the user's question was "what is the best language?", not "match livedocs"); a Go core. | same |
 | D46 | 2026-10-23 | The commit gate requires a verdict only for **hard** cards. A blocking card whose wait timed out, or found the reviewer away, is recorded as provisional, and the filed card covers the commit; the merge gate still requires its verdict. Resolves an inconsistency between D26 and D42, which the agent found while writing up D43–D45. **Revises D26.** | decision cards, [[2026-10-23 Design Discussion]] |
 | D45 | 2026-10-23 | The semantic residual: a "conflicts with…" response in the client links two decisions and creates a conflict card. Every conflict card records where it was caught (at filing, at merge, or late). The late rate is reviewed after the first dogfooding stretch, which decides when the after-the-fact reviewer is built. Rejected: a fixed threshold now; an LLM check at merge (a judge in the loop). | same |
 | D44 | 2026-10-23 | Topic keys stay free-form. `baesian file` warns on near-matches, and the reviewer can merge keys in the client, stored as immutable alias files; matching uses the canonical key. Rejected: a controlled vocabulary; dropping keys. | same |
@@ -47,7 +52,7 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 | D22 | 2026-10-23 | The [[Working Agreement]] is this repo's baseline, as drafted. (was P10) | decision cards, [[2026-10-23 Design Discussion]] |
 | D21 | 2026-10-23 | Dogfood v1 on Baesian's own repo and on personal-website, which gives a before-and-after comparison with its hand-run decision cards. (was P9) | same |
 | D20 | 2026-10-23 | **Superseded by D33.** First-version order, as proposed: (1) schema and CLI; (2) hooks; (3) the swipe UI as a local stdlib server; (4) the plugin and card-filing skill; (5) the vault adapter; (6) the MCP server last, as a view over the files. (was P8) | same |
-| D19 | 2026-10-23 | Card IDs are short random strings with a prefix, such as `B-7f3k`, so parallel sessions and worktrees can't collide. Sequential numbers were rejected because they need a lock or renumbering at merge. | same |
+| D19 | 2026-10-23 | *(Length fixed at five characters by D51.)* Card IDs are short random strings with a prefix, such as `B-7f3k`, so parallel sessions and worktrees can't collide. Sequential numbers were rejected because they need a lock or renumbering at merge. | same |
 | D18 | 2026-10-23 | One card ID identifies a decision through its whole life, from proposal to acceptance. This replaces today's chain of three IDs (P → DC → G). (was part of P7) | same |
 | D17 | 2026-10-23 | **Superseded by D43** (the Decision Log embeds a query over per-decision notes, instead of a generated block). The vault adapter owns a marked block inside the existing Decision Log and regenerates it from cards and verdicts. Hand-written rows outside the markers are left alone. The adapter also reads routing rules from the Working Agreement and writes accepted conventions back. Alternatives rejected: a fully generated log; a separate generated note. (was part of P7) | same |
 | D16 | 2026-10-23 | Rules are proposed two ways: a "make this a rule" toggle on any response, and mined "Make this a rule?" cards when the same kind of decision is decided the same way repeatedly. (was P6, extended with the toggle) | same |
@@ -69,10 +74,9 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Proposed (agent, awaiting the user)
 
-None open.
-
 | ID | Date | Proposal | Where argued |
 |---|---|---|---|
+| P12 | 2026-10-23 | The file formats (card, verdict, ledger entry, deck, rule, topic alias, presence) are implemented as written in [[File Formats]]. The user accepts or changes them before the 0.1.0 release. Until then nothing depends on them, so they stay cheap to change. | [[File Formats]] |
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)

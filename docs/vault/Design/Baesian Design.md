@@ -15,7 +15,7 @@ tags: [baesian, design]
 
 > **Status (2026-10-23): v0.5.**
 > - Everything below is decided (D1–D46 in [[Decision Log]]) except the open questions.
-> - Schemas, file names and trailer formats are illustrative. They are settled when the store is built (D33 step 1).
+> - The examples below are illustrative. The exact formats are in [[File Formats]] (proposal P12); trailer formats are settled in M3.
 > - The first target is coding agents; research agents come later (D2).
 
 ## The idea

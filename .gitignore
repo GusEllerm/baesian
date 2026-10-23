@@ -3,3 +3,7 @@
 docs/vault/.obsidian/workspace.json
 docs/vault/.obsidian/workspace-mobile.json
 docs/vault/.trash/
+
+# Node
+node_modules/
+dist/
