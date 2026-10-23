@@ -68,6 +68,11 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 - **Tested with real commits.** `test/hooks.test.ts` installs the hooks into temporary repos and runs `git commit`. Because `baesian` isn't on PATH there, the hooks run the CLI from source through the fallback. A smoke test in a repo with real livedocs 0.2.0 confirmed the two gates share `.githooks/pre-commit`, with Baesian's block before livedocs' `exec`.
 - **The record has to be staged as a whole.** Staging only what the hook had just copied missed the cards `baesian file` had already written into the record.
 - **A blocked commit leaves the record staged.** `pre-commit` has already run by the time `commit-msg` blocks, so the record files stay staged for the next attempt. That's harmless.
+- **Dogfooding found two bugs in the first hour.** Both were in the hook setup, found by running `baesian init` in this repo after `npm link` (D57):
+  - `selfCommand` didn't resolve the npm bin symlink, so the hooks got no fallback;
+  - the fallback's absolute paths were written into the committed hooks.
+
+  Now the hook text is the same on every machine, and the fallback lives in `git config --local baesian.fallback`. The tests run with a private PATH holding only `node` and `git`, so a linked `baesian` can't hide a broken fallback.
 - **Drift can't detect signature changes** (live-docs-agent, 2026-10-23). Its fingerprint covers whole symbols, without a signature/body split, and only for symbols a doc is bound to. So D25's "use drift's fingerprints" can't work; D56 uses a new `livedocs signatures` command instead.
 
 ## Notes from M2 (continued)

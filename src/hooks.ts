@@ -16,15 +16,20 @@ export type HookName = (typeof HOOKS)[number];
 const BEGIN = "# >>> baesian >>>";
 const END = "# <<< baesian <<<";
 
+/** Per-clone git config key holding the command that runs Baesian when it isn't on PATH (D48). */
+export const FALLBACK_KEY = "baesian.fallback";
+
 function sq(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-/** The marked block for one hook. `fallback` is the command line used when `baesian` isn't on PATH (D48). */
-export function hookBlock(name: HookName, fallback: readonly string[]): string {
+/**
+ * The marked block for one hook. It's the same on every machine, because `.githooks/` is committed:
+ * the machine-specific fallback lives in the clone's own git config, never in the file.
+ */
+export function hookBlock(name: HookName): string {
   const args = name === "commit-msg" ? ` ${name} "$1"` : ` ${name}`;
-  const fb = fallback.map(sq).join(" ");
-  const fbFile = fallback.at(-1) ?? "";
+  const evalArgs = name === "commit-msg" ? ` ${name} \\"\\$1\\"` : ` ${name}`;
   // post-commit can't stop a commit; it only records the ledger, so a missing binary is skipped quietly.
   const missing =
     name === "post-commit"
@@ -35,12 +40,27 @@ export function hookBlock(name: HookName, fallback: readonly string[]): string {
     "# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.",
     "if command -v baesian >/dev/null 2>&1; then",
     `  baesian hook${args} || exit $?`,
-    ...(fallback.length ? [`elif [ -e ${sq(fbFile)} ]; then`, `  ${fb} hook${args} || exit $?`] : []),
+    `elif baesian_fallback="$(git config --get ${FALLBACK_KEY})" && [ -n "$baesian_fallback" ]; then`,
+    `  eval "$baesian_fallback hook${evalArgs}" || exit $?`,
     "else",
     missing,
     "fi",
     END,
   ].join("\n");
+}
+
+/** Record (or clear) this clone's fallback command. Local config: shared by its worktrees, never committed. */
+export function setFallback(store: Store, fallback: readonly string[]): void {
+  const top = store.repo.toplevel;
+  if (fallback.length) {
+    execFileSync("git", ["config", "--local", FALLBACK_KEY, fallback.map(sq).join(" ")], { cwd: top });
+  } else {
+    try {
+      execFileSync("git", ["config", "--local", "--unset", FALLBACK_KEY], { cwd: top, stdio: "ignore" });
+    } catch {
+      // wasn't set
+    }
+  }
 }
 
 /** Insert or refresh the block in one hook file. */
@@ -99,7 +119,8 @@ export function installHooks(store: Store, fallback: readonly string[]): Install
   }
   mkdirSync(dir, { recursive: true });
   const files = {} as InstallResult["files"];
-  for (const name of HOOKS) files[name] = writeHook(join(dir, name), hookBlock(name, fallback));
+  for (const name of HOOKS) files[name] = writeHook(join(dir, name), hookBlock(name));
+  setFallback(store, fallback);
   return { dir, versioned: !relative(top, dir).startsWith(".."), setHooksPath, files };
 }
 

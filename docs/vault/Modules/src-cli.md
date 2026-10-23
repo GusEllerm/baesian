@@ -33,7 +33,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
 | `hook <name> [args…]` | hidden; what the installed git hooks call (`runHook`) |
 
-No command resolves a card (D32). When `init` installs the hooks, it records how to rerun this CLI (`selfCommand`), for hooks run where `baesian` isn't on PATH (D48).
+No command resolves a card (D32). When `init` installs the hooks, it records how to rerun this CLI (`selfCommand`), for hooks run where `baesian` isn't on PATH (D48). `selfCommand` resolves the script path first: under `npm link` or a global install, `argv[1]` is the bin symlink, not the `.js` file. Run from source, there is no fallback, so the hooks rely on PATH.
 
 ## Exit codes
 

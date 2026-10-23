@@ -29,10 +29,17 @@ export interface Io {
 }
 
 /** The command line that re-runs this CLI, for hooks when `baesian` isn't on PATH (D48). */
-function selfCommand(): string[] {
-  const script = process.argv[1];
-  if (!script || !script.endsWith(".js")) return []; // running from source: rely on PATH
-  return [process.execPath, realpathSync(script)];
+export function selfCommand(argv1: string | undefined = process.argv[1]): string[] {
+  if (!argv1) return [];
+  // Resolve first: under `npm link` or a global install, argv[1] is the bin symlink (`…/bin/baesian`).
+  let script: string;
+  try {
+    script = realpathSync(argv1);
+  } catch {
+    return [];
+  }
+  if (!script.endsWith(".js")) return []; // running from source through tsx: rely on PATH
+  return [process.execPath, script];
 }
 
 /**

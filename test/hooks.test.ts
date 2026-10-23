@@ -1,18 +1,27 @@
-import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { main } from "../src/cli.js";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { main, selfCommand } from "../src/cli.js";
 import { hookBlock, writeHook } from "../src/hooks.js";
 import { BODY, REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
 
-// Hooks run the real CLI from source. `baesian` isn't on PATH, so they use the fallback (D48).
+// Hooks run the real CLI from source through the fallback (D48). PATH is a private directory holding
+// only node and git, so a `baesian` installed or `npm link`ed on this machine is never picked up: the
+// tests always exercise the source, not whatever build happens to be installed.
 const ROOT = process.cwd();
 const FALLBACK = [join(ROOT, "node_modules", ".bin", "tsx"), join(ROOT, "src", "bin.ts")];
-const PATH = [dirname(process.execPath), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
+const BIN_DIR = mkdtempSync(join(tmpdir(), "baesian-test-bin-"));
+for (const tool of ["node", "git"]) {
+  const real = tool === "node" ? process.execPath : execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+  symlinkSync(real, join(BIN_DIR, tool));
+}
+const PATH = [BIN_DIR, "/usr/bin", "/bin"].join(":");
 const ENV = { ...process.env, PATH, BAESIAN_OS_NOTIFY: "0", BAESIAN_CONFIG: "/nonexistent" };
+afterAll(() => rmSync(BIN_DIR, { recursive: true, force: true }));
 
 async function init(dir: string, fallback: readonly string[] = FALLBACK): Promise<string> {
   const out: string[] = [];
@@ -40,6 +49,18 @@ function put(dir: string, path: string, text: string): void {
 
 const pkg = (deps: Record<string, string>) => JSON.stringify({ name: "x", dependencies: deps }, null, 2);
 
+describe("the fallback command (D48)", () => {
+  it("resolves the bin symlink npm creates, so a linked or global install gets a fallback", () => {
+    const script = join(BIN_DIR, "bin.js");
+    writeFileSync(script, "");
+    const link = join(BIN_DIR, "baesian-link");
+    symlinkSync(script, link);
+    expect(selfCommand(link)).toEqual([process.execPath, realpathSync(script)]);
+    expect(selfCommand(join(ROOT, "src", "bin.ts"))).toEqual([]); // from source: PATH only
+    expect(selfCommand(join(BIN_DIR, "missing.js"))).toEqual([]);
+  });
+});
+
 describe("installing the gate (D54)", () => {
   it("creates versioned hooks and points git at them", async () => {
     const { dir } = repo();
@@ -54,13 +75,24 @@ describe("installing the gate (D54)", () => {
     const { dir } = repo();
     const path = join(dir, "pre-commit");
     writeFileSync(path, "#!/bin/sh\n# livedocs\nexec livedocs hook pre-commit\n");
-    expect(writeHook(path, hookBlock("pre-commit", FALLBACK))).toBe("inserted");
+    expect(writeHook(path, hookBlock("pre-commit"))).toBe("inserted");
     const text = readFileSync(path, "utf8");
     expect(text.indexOf("baesian hook pre-commit")).toBeLessThan(text.indexOf("exec livedocs"));
     expect(text.startsWith("#!/bin/sh\n# >>> baesian >>>")).toBe(true);
-    expect(writeHook(path, hookBlock("pre-commit", FALLBACK))).toBe("unchanged");
-    expect(writeHook(path, hookBlock("pre-commit", ["/other/node", "/other/bin.js"]))).toBe("updated");
+    expect(writeHook(path, hookBlock("pre-commit"))).toBe("unchanged");
+    writeFileSync(path, text.replace("Managed by", "Hand-edited, managed by"));
+    expect(writeHook(path, hookBlock("pre-commit"))).toBe("updated");
     expect(readFileSync(path, "utf8").match(/>>> baesian >>>/g)).toHaveLength(1);
+  });
+
+  it("keeps machine paths out of the committed hooks, in the clone's git config instead", async () => {
+    const { dir } = repo();
+    await init(dir);
+    const hooks = ["pre-commit", "commit-msg", "post-commit"].map((h) => readFileSync(join(dir, ".githooks", h), "utf8")).join("\n");
+    expect(hooks).not.toContain(ROOT);
+    expect(hooks).not.toContain(process.execPath);
+    const local = spawnSync("git", ["config", "--local", "--get", "baesian.fallback"], { cwd: dir, encoding: "utf8" });
+    expect(local.stdout).toContain(join(ROOT, "src", "bin.ts"));
   });
 });
 

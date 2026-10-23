@@ -1,4 +1,15 @@
 #!/bin/sh
+# >>> baesian >>>
+# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.
+if command -v baesian >/dev/null 2>&1; then
+  baesian hook pre-commit || exit $?
+elif baesian_fallback="$(git config --get baesian.fallback)" && [ -n "$baesian_fallback" ]; then
+  eval "$baesian_fallback hook pre-commit" || exit $?
+else
+  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2
+  exit 1
+fi
+# <<< baesian <<<
 # livedocs: block the commit while a staged code change leaves a vault note unreconciled (D11/D14).
 # Versioned in .githooks/; activated per clone with `git config core.hooksPath .githooks`
 # (livedocs init does this). Skipping with --no-verify is caught by the same check in CI.

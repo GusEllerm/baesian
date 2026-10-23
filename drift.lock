@@ -148,7 +148,12 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "a096919b2639196a"
+sig = "c5faee98c5ce47f1"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/cli.ts#selfCommand"
+sig = "8883755b1410374c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -177,13 +182,18 @@ sig = "3c3b0303fe6f7fb4"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/git.ts#git"
+sig = "4f2d438cb6cb55c4"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/globs.ts"
 sig = "e5beaf70231fed9f"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/hooks.ts"
-sig = "ed0bb63c654c6dbe"
+sig = "7ee8ce5f29d909bf"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -283,7 +293,7 @@ sig = "f752bc18083bb223"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#selfCommand"
-sig = "c532240cf810ad75"
+sig = "8883755b1410374c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -442,13 +452,18 @@ sig = "22920b622d7112c1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#FALLBACK_KEY"
+sig = "48be4cdec96dc473"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#hookBlock"
-sig = "9e92d3af957ca017"
+sig = "5443f535b3f7bcf8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#installHooks"
-sig = "99245846b4c629c1"
+sig = "f7dd811e90979b2f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -457,8 +472,18 @@ sig = "d75f1ae4f6ad0d96"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#setFallback"
+sig = "453252026840420b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#writeHook"
 sig = "a53cbbd51e5d623b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/store.ts#Store"
+sig = "5cc24684f2cbded0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

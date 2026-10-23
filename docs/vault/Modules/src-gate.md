@@ -52,7 +52,11 @@ Separately, it checks every cited card:
 - with no `core.hooksPath` and no real hooks in `.git/hooks`, it creates a versioned `.githooks/` and points git at it;
 - otherwise it installs in place.
 
-`writeHook` puts `hookBlock` right after the shebang, so it runs before livedocs' `exec`. The block calls `baesian` from PATH, or else a fallback recorded at init time. If neither exists it refuses to commit (except in `post-commit`, which can't stop a commit anyway).
+`writeHook` puts `hookBlock` right after the shebang, so it runs before livedocs' `exec`.
+
+The block is identical on every machine, because `.githooks/` is committed. It calls `baesian` from PATH. If `baesian` isn't there, it runs the command stored in the clone's own git config under `FALLBACK_KEY` (`baesian.fallback`), which `setFallback` writes at init time (D48). That config is local: shared by the clone's worktrees, never committed. If neither exists, the hook refuses to commit, except in `post-commit`, which can't stop a commit anyway.
+
+The first version embedded the fallback's absolute paths in the hook itself. That would have put one machine's paths in the repo, and made every other machine's `init` rewrite the committed hooks.
 
 `runHook` runs each hook:
 - **`pre-commit`** syncs the record and stages all of `.baesian/` (D37).
