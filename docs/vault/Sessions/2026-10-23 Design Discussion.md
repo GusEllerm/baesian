@@ -3,7 +3,7 @@ type: session
 status: active
 authority: log
 livedocs: snapshot
-summary: "First session: designed Baesian with the user (D1–D51), created this vault and repo, chose the stack, and built M1 (the store and the core CLI)."
+summary: "First session: designed Baesian with the user (D1–D51), created this vault and repo, chose the stack, and built M1 (the store and the core CLI) and M2 (wait, presence, notifications, AGENTS.md)."
 created: 2026-10-23
 tags: [baesian, session]
 ---
@@ -110,8 +110,19 @@ The user judged the plan ready for development.
   - requiring `.baesian/config.json` would have made every fresh worktree say "run init";
   - two millisecond-resolution races, in the parent-rejection check and in verdict ordering. Both were fixed, and the suite was run repeatedly to confirm.
 
+## Development: M2
+
+- **Built:**
+  - `wait`, with the three levels, the timeout, presence, fallbacks and exit codes 0, 4, 5 and 6;
+  - OS notifications and the `notify` command;
+  - the AGENTS.md block, written by `init`;
+  - `template` and `topics`.
+- 66 tests in total ([[Implementation Plan#Notes from M2]]).
+- **A security catch.** D40's `notify` command can't live in the committed config: it would run on every clone, and a push token would leak. It moved to the per-user config, which is added to P12 for the user to accept.
+- **The smoke test found a bug the unit tests couldn't.** Synchronous stdin reads fail with `EAGAIN` on slow pipes. Stdin is now read as a stream.
+
 ## Next
 
-- The user reviews P12 ([[File Formats]]), including where `source_worktree` should be an absolute path.
-- M2: `wait`, presence, notifications, and the `AGENTS.md` block.
+- The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
+- M3: the git gate.
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.

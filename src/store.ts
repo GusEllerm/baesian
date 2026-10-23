@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc, section } from "./frontmatter.js";
@@ -10,8 +10,10 @@ import {
   CardMeta,
   Config,
   DeckMeta,
+  Fallback,
   HARD_BY_DEFAULT,
   type Level,
+  Presence,
   STRONGEST_ALTERNATIVE,
   TopicAlias,
   Verdict,
@@ -303,6 +305,52 @@ export class Store {
     return 1 + this.attachments(id).length;
   }
 
+  /** Record that the agent proceeded on a blocking card without a verdict (D46). */
+  recordFallback(id: string, reason: Fallback["reason"], agent: string): Fallback {
+    this.requireInit();
+    const card = this.card(id);
+    if (!card) throw new Error(`no card ${id}`);
+    const f = parse(
+      Fallback,
+      { type: "fallback", card: id, revision: card.meta.revision, reason, agent, at: now() },
+      "the fallback",
+    );
+    const rel = join("cards", id, `fallback-${randomSuffix()}.json`);
+    this.writeOnce(join(this.live, rel), `${JSON.stringify(f, null, 2)}\n`);
+    this.toRecord(rel);
+    return f;
+  }
+
+  fallbacks(id: string): Fallback[] {
+    return this.list("cards", id)
+      .filter((f) => f.startsWith("fallback-"))
+      .map((f) => parse(Fallback, JSON.parse(readFileSync(join(this.live, "cards", id, f), "utf8")), f));
+  }
+
+  // ---------------------------------------------------------------- presence
+
+  /** The client's last heartbeat, if it has ever run (D41). */
+  presence(): Presence | undefined {
+    const path = join(this.live, "presence.json");
+    if (!existsSync(path)) return undefined;
+    try {
+      return parse(Presence, JSON.parse(readFileSync(path, "utf8")), "presence.json");
+    } catch {
+      return undefined; // a half-written or foreign file means "unknown", never a crash
+    }
+  }
+
+  /** The client's heartbeat. Written to a temporary file and renamed, so readers never see half a file. */
+  touchPresence(client: string, at: string = now()): Presence {
+    this.requireInit();
+    const p = parse(Presence, { type: "presence", client, at }, "presence");
+    const path = join(this.live, "presence.json");
+    const tmp = `${path}.${randomSuffix()}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(p)}\n`);
+    renameSync(tmp, path);
+    return p;
+  }
+
   // ---------------------------------------------------------------- decks
 
   deck(id: string): Deck | undefined {
@@ -492,12 +540,11 @@ export class Store {
     const held = existsSync(recordCards) ? readdirSync(recordCards) : [];
     const added: string[] = [];
     for (const id of held) {
-      for (const r of this.revisions(id)) {
-        const rel = join("cards", id, `r${r.meta.revision}.md`);
+      // Everything in the card's directory: revisions, a withdrawal, fallbacks.
+      for (const f of this.list("cards", id)) {
+        const rel = join("cards", id, f);
         if (this.toRecord(rel)) added.push(rel);
       }
-      const withdrawn = join("cards", id, "withdrawn.json");
-      if (existsSync(join(this.live, withdrawn)) && this.toRecord(withdrawn)) added.push(withdrawn);
       for (const kind of ["verdicts", "ledger"] as const) {
         for (const f of this.list(kind).filter((name) => name.startsWith(`${id}-`))) {
           const rel = join(kind, f);

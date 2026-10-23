@@ -183,12 +183,42 @@ export const Attachment = z.strictObject({
 });
 export type Attachment = z.infer<typeof Attachment>;
 
-/** `.baesian/config.json`. */
+/** A blocking card the agent proceeded on without a verdict (D46): `cards/<id>/fallback-<suffix>.json`. */
+export const Fallback = z.strictObject({
+  type: z.literal("fallback"),
+  card: CardId,
+  revision: z.number().int().min(1),
+  reason: z.enum(["timeout", "away"]),
+  agent: z.string().min(1),
+  at: Timestamp,
+});
+export type Fallback = z.infer<typeof Fallback>;
+
+/** The client's heartbeat, `presence.json` in the live layer (D41). Mutable; never in the record. */
+export const Presence = z.strictObject({
+  type: z.literal("presence"),
+  client: z.string().min(1),
+  at: Timestamp,
+});
+export type Presence = z.infer<typeof Presence>;
+
+/** `.baesian/config.json`: committed, shared by everyone working on the repo. */
 export const Config = z.strictObject({
   vault: z.string().optional(),
-  notify: z.string().optional(),
 });
 export type Config = z.infer<typeof Config>;
+
+/**
+ * `~/.config/baesian/config.json`: personal, never committed. Notification settings live here, not in
+ * the repo: a committed `notify` command would run on every clone, and push tokens would leak.
+ */
+export const UserConfig = z.strictObject({
+  /** A shell command run when a blocking or hard card is filed; it receives the card as JSON on stdin (D40). */
+  notify: z.string().optional(),
+  /** OS notifications for blocking and hard cards. Default true. */
+  os_notify: z.boolean().optional(),
+});
+export type UserConfig = z.infer<typeof UserConfig>;
 
 /** Format a Zod error for a person reading a terminal. */
 export function describeError(error: z.ZodError): string {

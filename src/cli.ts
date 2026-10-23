@@ -1,33 +1,62 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { Command, CommanderError } from "commander";
+import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { CARD_TEMPLATE, claudeMdMissesAgents, writeAgentsBlock } from "./agents.js";
 import { parseDoc } from "./frontmatter.js";
+import { notifyFiled } from "./notify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
 
-interface Io {
+export interface Io {
   out: (line: string) => void;
   err: (line: string) => void;
-  stdin: () => string;
+  stdin: () => string | Promise<string>;
   cwd: string;
+  /** Notify the reviewer about a filed card. Replaceable so tests never pop OS notifications. */
+  notify?: (card: Card) => void;
+  /** Clock and sleep for `wait`, replaceable in tests. */
+  waitClock?: Pick<WaitOptions, "now" | "sleep" | "pollMs">;
+}
+
+/**
+ * Read stdin as a stream. `readFileSync(0)` fails with EAGAIN when the pipe's writer hasn't written
+ * yet (`baesian template | baesian file`), so it can't be used here.
+ */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) throw new Error("no card given: pass a file, or pipe one in");
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 const defaultIo: Io = {
   out: (line) => process.stdout.write(`${line}\n`),
   err: (line) => process.stderr.write(`${line}\n`),
-  stdin: () => readFileSync(0, "utf8"),
+  stdin: readStdin,
   cwd: process.cwd(),
 };
+
+/** Set by a command that ends with a meaningful non-zero code, such as `wait`. */
+interface RunState {
+  code: number;
+}
+
+function seconds(value: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new InvalidArgumentError("expected a number of seconds");
+  return n;
+}
 
 function agentName(opt: string | undefined): string {
   return opt ?? process.env.BAESIAN_AGENT ?? "agent";
 }
 
-function readInput(path: string | undefined, io: Io): string {
-  return !path || path === "-" ? io.stdin() : readFileSync(resolve(io.cwd, path), "utf8");
+async function readInput(path: string | undefined, io: Io): Promise<string> {
+  return !path || path === "-" ? await io.stdin() : readFileSync(resolve(io.cwd, path), "utf8");
 }
 
 function cardLine(store: Store, card: Card): string {
@@ -43,7 +72,7 @@ function verdictLine(v: Verdict): string {
   return `${v.card} r${v.revision}  ${v.response}${what}${why}  (${v.reviewer}, ${v.at})`;
 }
 
-export function buildProgram(io: Io = defaultIo): Command {
+export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }): Command {
   const program = new Command()
     .name("baesian")
     .description("Swipe review for agent decisions. Agents file cards; a person answers them in the client.")
@@ -55,17 +84,67 @@ export function buildProgram(io: Io = defaultIo): Command {
 
   const store = () => Store.open(io.cwd);
   const json = (value: unknown) => io.out(JSON.stringify(value, null, 2));
+  const notify = (card: Card) => {
+    try {
+      (io.notify ?? notifyFiled)(card);
+    } catch (e) {
+      io.err(`notification failed (the card is filed): ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   program
     .command("init")
-    .description("set up the live layer (.git/baesian/) and the record (.baesian/) in this repository")
+    .description("set up the live layer (.git/baesian/), the record (.baesian/) and the AGENTS.md instructions")
     .option("--vault <path>", "an Obsidian vault for the vault adapter, relative to the repo root")
-    .action((opts: { vault?: string }) => {
+    .option("--no-agents", "don't write the instructions block in AGENTS.md")
+    .action((opts: { vault?: string; agents: boolean }) => {
       const s = store();
       const created = s.init(opts.vault ? { vault: opts.vault } : {});
-      if (!created.length) return io.out("already set up");
-      io.out(`live layer:  ${relative(s.repo.toplevel, s.live)}/  (shared by every worktree, not committed)`);
-      io.out(`record:      ${relative(s.repo.toplevel, s.record)}/  (commit this)`);
+      if (created.length) {
+        io.out(`live layer:  ${relative(s.repo.toplevel, s.live)}/  (shared by every worktree, not committed)`);
+        io.out(`record:      ${relative(s.repo.toplevel, s.record)}/  (commit this)`);
+      } else {
+        io.out("already set up");
+      }
+      if (opts.agents) {
+        const result = writeAgentsBlock(s.repo.toplevel);
+        if (result !== "unchanged") io.out(`AGENTS.md:   instructions ${result}`);
+        if (claudeMdMissesAgents(s.repo.toplevel)) {
+          io.out("note: CLAUDE.md doesn't import AGENTS.md. Add a line `@AGENTS.md` so Claude Code reads the instructions.");
+        }
+      }
+    });
+
+  program
+    .command("template")
+    .description("print a card draft to fill in")
+    .action(() => io.out(CARD_TEMPLATE.trimEnd()));
+
+  program
+    .command("topics")
+    .description("list the topics in use, to reuse rather than invent near-duplicates")
+    .action(() => {
+      const topics = [...store().topics()].sort();
+      io.out(topics.length ? topics.join("\n") : "no topics yet");
+    });
+
+  program
+    .command("wait")
+    .description("wait for the reviewer's verdict on a card; the exit code says what to do next")
+    .argument("<id>", "the card")
+    .option("--timeout <seconds>", "give up after this long", seconds, DEFAULT_TIMEOUT_MS / 1000)
+    .option("--no-presence", "wait the full timeout even if the client says the reviewer is away")
+    .option("--json", "print the outcome as JSON")
+    .action(async (id: string, opts: { timeout: number; presence: boolean; json?: boolean }) => {
+      const outcome = await waitForVerdict(store(), id, {
+        agent: agentName(program.opts().agent),
+        timeoutMs: opts.timeout * 1000,
+        usePresence: opts.presence,
+        ...io.waitClock,
+      });
+      if (opts.json) json(outcome);
+      else for (const line of describeOutcome(outcome)) io.out(line);
+      state.code = exitCodeFor(outcome);
     });
 
   program
@@ -74,14 +153,18 @@ export function buildProgram(io: Io = defaultIo): Command {
     .argument("[path]", "the card draft; '-' or omitted reads stdin")
     .option("--new", "file even if an open card or a resolved decision looks like the same decision")
     .option("--json", "print the filed card as JSON")
-    .action((path: string | undefined, opts: { new?: boolean; json?: boolean }) => {
-      const { meta, body } = parseDoc(readInput(path, io));
+    .action(async (path: string | undefined, opts: { new?: boolean; json?: boolean }) => {
+      const { meta, body } = parseDoc(await readInput(path, io));
       const result = store().fileCard(meta, body, { agent: agentName(program.opts().agent), force: opts.new ?? false });
+      notify(result.card);
       if (opts.json) return json(result);
-      io.out(`filed ${result.card.meta.id} (${result.card.meta.level}, deck ${result.card.meta.deck})`);
+      const { id, level, deck } = result.card.meta;
+      io.out(`filed ${id} (${level}, deck ${deck})`);
       if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42)`);
       if (result.nearTopics.length) io.out(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
-      io.out(`  add "Baesian-Card: ${result.card.meta.id}" to commits that build on it`);
+      if (level === "blocking") io.out(`  run \`baesian wait ${id}\` before building on it`);
+      if (level === "hard") io.out(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
+      io.out(`  add "Baesian-Card: ${id}" to commits that build on it`);
     });
 
   program
@@ -89,9 +172,10 @@ export function buildProgram(io: Io = defaultIo): Command {
     .description("file the next revision of a returned card: your reply to the reviewer")
     .argument("<id>", "the card")
     .argument("[path]", "the revised card; '-' or omitted reads stdin")
-    .action((id: string, path: string | undefined) => {
-      const { meta, body } = parseDoc(readInput(path, io));
+    .action(async (id: string, path: string | undefined) => {
+      const { meta, body } = parseDoc(await readInput(path, io));
       const result = store().reviseCard(id, meta, body, { agent: agentName(program.opts().agent) });
+      notify(result.card);
       io.out(`filed ${id} r${result.card.meta.revision}`);
     });
 
@@ -194,9 +278,10 @@ export function buildProgram(io: Io = defaultIo): Command {
 }
 
 export async function main(argv: string[] = process.argv, io: Io = defaultIo): Promise<number> {
+  const state: RunState = { code: 0 };
   try {
-    await buildProgram(io).parseAsync(argv);
-    return 0;
+    await buildProgram(io, state).parseAsync(argv);
+    return state.code;
   } catch (e) {
     // Commander has already printed its own message (usage errors, --help, --version).
     if (e instanceof CommanderError) return e.exitCode;

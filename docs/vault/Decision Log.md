@@ -76,7 +76,7 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Proposal | Where argued |
 |---|---|---|---|
-| P12 | 2026-10-23 | The file formats (card, verdict, ledger entry, deck, rule, topic alias, presence) are implemented as written in [[File Formats]]. The user accepts or changes them before the 0.1.0 release. Until then nothing depends on them, so they stay cheap to change. | [[File Formats]] |
+| P12 | 2026-10-23 | The file formats (card, verdict, ledger entry, deck, rule, topic alias, fallback, presence, the configs) are implemented as written in [[File Formats]]. The user accepts or changes them before the 0.1.0 release. Until then nothing depends on them, so they stay cheap to change. Includes one change made in M2: the `notify` command lives in the per-user config, never in the committed one (security). | [[File Formats]] |
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)

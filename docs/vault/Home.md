@@ -17,7 +17,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-23.*
 
-- **Development has started. M1 is done:** the store and the core CLI, in TypeScript, with 40 passing tests ([[Implementation Plan]]). The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
+- **Development is under way. M1 and M2 are done** ([[Implementation Plan]]), with 66 passing tests:
+  - **M1:** the store and the core CLI;
+  - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions. The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
 - **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions.
 - **Open for the user:** P12, the [[File Formats]] (accept or change them before 0.1.0).
 - **Decided by the user** (D1–D51 in [[Decision Log]]):
@@ -51,7 +53,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - the [[Working Agreement]] is active.
 - **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
 - **To verify before building the Claude Code adapter:** that a `PostToolUse` hook with matcher `ExitPlanMode` fires, using `claude --debug` ([[Baesian Design#Decks from documents]]).
-- **Next:** M2: `wait` (levels, timeout, presence), notifications and the `notify` command, and the `AGENTS.md` block from `init`. Dogfooding on this repo starts after M3, the git gate.
+- **Next:** M3, the git gate. Dogfooding on this repo starts once it's done.
 
 *Update this section at the end of every session.*
 

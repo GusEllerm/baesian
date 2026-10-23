@@ -7,8 +7,13 @@ sig = "8442b77a15458302"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
+target = "src/notify.ts#NotifyPayload"
+sig = "1440b4706ed0cd34"
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
 target = "src/store.ts#Store"
-sig = "cb5a82668e2ca9ca"
+sig = "0786dc7d690f9b89"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -22,8 +27,13 @@ sig = "c4d124dfd65d66c4"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "src/notify.ts#NotifyPayload"
+sig = "1440b4706ed0cd34"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts"
-sig = "f18c22a465f81253"
+sig = "9192c3353d7d72b2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -43,7 +53,7 @@ sig = "dbd6aa838c64ce32"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Config"
-sig = "6c5ef597418d2316"
+sig = "d911f687ed5e6cc1"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -52,8 +62,18 @@ sig = "89b3db8a9999584a"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Fallback"
+sig = "7429b3aed9ec1399"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#LedgerMeta"
 sig = "d6e8093367422ed9"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Presence"
+sig = "60da343dcb45d3e7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -64,6 +84,11 @@ sig = "7640f5adb5af08a1"
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#TopicAlias"
 sig = "87870a84147726b5"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#UserConfig"
+sig = "831b0fb14ecc7537"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -88,12 +113,22 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#Store"
-sig = "cb5a82668e2ca9ca"
+sig = "0786dc7d690f9b89"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/wait.ts#PRESENCE_STALE_MS"
+sig = "0406b42d0614950c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "package.json"
 sig = "8442b77a15458302"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/agents.ts"
+sig = "2083e466af540b81"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -103,7 +138,7 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "8b11f83c8ff69a4e"
+sig = "0b52749d1d93dde7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -122,8 +157,13 @@ sig = "409efb6ccccdd40f"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/notify.ts"
+sig = "5f77f13611dea7d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts"
-sig = "f18c22a465f81253"
+sig = "9192c3353d7d72b2"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -133,17 +173,127 @@ sig = "8f0fd8d62cebcf4b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/store.ts"
-sig = "7625e04614885b0c"
+sig = "6d5ace3b353d5cdd"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/store.ts#Store"
-sig = "cb5a82668e2ca9ca"
+sig = "0786dc7d690f9b89"
 
 [[bindings]]
-doc = "docs/vault/Home.md"
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/wait.ts"
+sig = "484600dcf7a9ee46"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#AGENTS_BLOCK"
+sig = "2c7a5669db5775af"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#BEGIN"
+sig = "77e1aaf4e49bee9b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#CARD_TEMPLATE"
+sig = "d3703d3749e3a18b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#END"
+sig = "f47c6ed30c7096b4"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#claudeMdMissesAgents"
+sig = "608f4e7cc92f467e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/agents.ts#writeAgentsBlock"
+sig = "5c66d40c0e654d12"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/bin.ts"
+sig = "2540e01ffa9d34c6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/cli.ts#EXIT_POSSIBLE_DUPLICATE"
+sig = "c5536d7543c333b1"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/cli.ts#Io"
+sig = "d06ac5314274d1f5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/cli.ts#buildProgram"
+sig = "19961547ed425f96"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/cli.ts#readStdin"
+sig = "f752bc18083bb223"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/notify.ts#notifyFiled"
+sig = "14ae8a7c312598a2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/notify.ts#shouldNotify"
+sig = "b243eab7a3d6865c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/notify.ts#userConfig"
+sig = "a5572f178a5a4725"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "src/store.ts#Store"
-sig = "cb5a82668e2ca9ca"
+sig = "0786dc7d690f9b89"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#DEFAULT_TIMEOUT_MS"
+sig = "75bdabe8f81d601e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#POLL_MS"
+sig = "44d602bfb0456151"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#PRESENCE_STALE_MS"
+sig = "0406b42d0614950c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#WAIT_EXIT"
+sig = "0c441d50d389dc29"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#describeOutcome"
+sig = "1b1651f15329e0f2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#exitCodeFor"
+sig = "e37e44fc3801979c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#waitForVerdict"
+sig = "e1958e4124acb443"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -198,4 +348,9 @@ sig = "a78a3d35f1b2d973"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/store.ts#Store"
-sig = "cb5a82668e2ca9ca"
+sig = "0786dc7d690f9b89"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/wait.ts#waitForVerdict"
+sig = "e1958e4124acb443"

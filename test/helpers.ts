@@ -5,7 +5,34 @@ import { join } from "node:path";
 import { renderDoc } from "../src/frontmatter.js";
 import { Store } from "../src/store.js";
 
+// Tests never pop OS notifications, and never read the developer's own ~/.config/baesian.
+process.env.BAESIAN_OS_NOTIFY = "0";
+process.env.BAESIAN_CONFIG = "/nonexistent/baesian-test-config.json";
+
 const made: string[] = [];
+
+/** A clock for `wait`: `sleep` advances time instantly, and runs `at(ms, fn)` hooks when their time comes. */
+export function fakeClock(start = Date.parse("2026-10-23T12:00:00.000Z")) {
+  let t = start;
+  const hooks: { at: number; fn: () => void; done: boolean }[] = [];
+  return {
+    now: () => t,
+    sleep: async (ms: number) => {
+      t += ms;
+      for (const h of hooks) {
+        if (!h.done && t >= h.at) {
+          h.done = true;
+          h.fn();
+        }
+      }
+    },
+    at(offsetMs: number, fn: () => void) {
+      hooks.push({ at: start + offsetMs, fn, done: false });
+    },
+    iso: (offsetMs = 0) => new Date(start + offsetMs).toISOString(),
+    elapsed: () => t - start,
+  };
+}
 
 export function sh(cwd: string, ...args: string[]): string {
   return execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@t", ...args], {

@@ -22,7 +22,9 @@ tags: [baesian, module]
 - **`Store.attach`** records an `Attachment`, and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
 - **`Store.withdraw`** writes the card's single `Withdrawal`.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.
-- **`Store.syncRecord`** copies verdicts, ledger entries and new revisions for the cards the record already holds (D37).
+- **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
+- **`Store.touchPresence`** writes the client's heartbeat atomically, and **`Store.presence`** reads it. A missing or unreadable file means "unknown", never an error.
+- **`Store.syncRecord`** copies verdicts and ledger entries for the cards the record already holds, plus everything in their card directories: revisions, withdrawals and fallbacks (D37).
 
 All of these go through a private write-once helper that uses an exclusive create. Nothing is ever edited in place.
 
@@ -39,4 +41,4 @@ All of these go through a private write-once helper that uses an exclusive creat
 
 ## Not here yet
 
-`wait` and presence (M2), the hooks and ledger writing (M3), and rules and aliases written by the client (M4).
+The hooks and ledger writing (M3), and rules and aliases written by the client (M4). Waiting lives in `waitForVerdict` ([[src-cli]]).
