@@ -17,7 +17,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-23.*
 
-- **Design stage; no code yet.** git is initialised on `main` with the livedocs gate. Nothing is committed, and there is no GitHub repo.
+- **Design stage; no code yet.** The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
 - **[[Baesian Design]] is at v0.4.** Everything in it is decided except its open questions. No proposals are outstanding.
 - **Decided by the user** (D1–D22 in [[Decision Log]]):
   - **scope:** coding agents first, research later;
@@ -33,7 +33,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - **v1 order:** schema and CLI → hooks → swipe UI → plugin → adapter → MCP;
   - **dogfooding:** this repo and personal-website;
   - the [[Working Agreement]] is active.
-- **Open for the user:** the first commit. On livedocs 0.1.4 it must be `git commit --no-verify`, because the gate blocks a repo's first commit (fixed for 0.2.0, which isn't released yet). Details are in [[2026-10-23 Design Discussion]].
+- **First commit made** (`fd64e0c`) with `--no-verify`: livedocs 0.1.4's gate can't run on a repo with no commits, which is fixed for 0.2.0. Every later commit goes through the gate. Details are in [[2026-10-23 Design Discussion]].
 - **livedocs:** the `new-vault` crash is fixed in live-docs `25297e0`. It was unreleased branch code reached through the editable install.
 - **Next:** where cards come from (the agent filing mid-task vs. hooks catching decision types), then the card schema (D20 step 1) as a decision card.
 

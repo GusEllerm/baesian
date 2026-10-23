@@ -49,6 +49,7 @@ None open.
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-23 `[agent decision]` The GitHub repo `GusEllerm/baesian` is **private**. The user asked for the remote without saying which visibility. Private matches vault-drift and personal-website, and it can be made public later, whereas publishing can't be undone.
 - 2026-10-23 `[agent decision]` The vault is at `docs/vault/`, the layout personal-website and memgate use, with a `Design/` folder. The design doc moved from `baesian.md` at the repo root to [[Baesian Design]], so the design lives in project memory.
 - 2026-10-23 `[agent decision]` The user's decisions get D-numbers and agent proposals get P-numbers, as in the live-docs vault.
 - 2026-10-23 `[agent decision]` `livedocs new-vault` crashed on a template bug, so the vault was scaffolded with a patched copy of livedocs in a scratch directory. The live-docs repo was not changed. See [[2026-10-23 Design Discussion#Findings worth remembering]].

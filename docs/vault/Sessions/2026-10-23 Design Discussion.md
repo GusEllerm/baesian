@@ -29,7 +29,10 @@ The user asked for a read of `baesian.md` and a discussion of the design. Afterw
   - decks, fact-based routing, the response lifecycle;
   - the assumption ledger and learning conventions;
   - for v0.3, the user's decision to keep cards in `.baesian/` (D8), with the vault integration as an adapter.
-- **Vault.** Ran `git init -b main`, then `livedocs new-vault docs/vault --name Baesian`. Added [[Home]], [[Working Agreement]], [[Decision Log]], the [[Decision Card]] template, and moved the design doc to [[Baesian Design]]. Nothing is committed.
+- **Vault.** Ran `git init -b main`, then `livedocs new-vault docs/vault --name Baesian`. Added [[Home]], [[Working Agreement]], [[Decision Log]], the [[Decision Card]] template, and moved the design doc to [[Baesian Design]].
+- **Commit and remote.** At the user's request:
+  - first commit `fd64e0c`, made with `--no-verify` (see below);
+  - created the GitHub repo `GusEllerm/baesian` with `gh` and pushed `main`. It is private, because the user didn't say and their other repos are private.
 
 ## Decisions
 
@@ -58,5 +61,4 @@ All are in [[Decision Log]].
 
 ## Next
 
-- First commit, when the user says so. It needs `git commit --no-verify` until livedocs 0.2.0.
 - Candidate next topic: where cards come from. Does the agent decide to file mid-task, or does a hook catch certain decision types (a new dependency, a schema change)?
