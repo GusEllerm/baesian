@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # baesian verify needs the base and every commit in the range
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # The commit gate, again, for every pushed commit: catches --no-verify and machines without the
+      # hooks (D24). Baesian isn't on npm yet, so this repo runs its own build.
+      - name: baesian verify (pushed commits)
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: node dist/bin.js verify --base "${{ github.event.before }}"
+
+      # Pull requests also get the merge gate: every cited card resolved or deferred (D31).
+      - name: baesian verify --merge (pull request)
+        if: github.event_name == 'pull_request'
+        run: node dist/bin.js verify --merge

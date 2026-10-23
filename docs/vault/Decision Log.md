@@ -20,6 +20,7 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D61 | 2026-10-23 | CI for this repo, in GitHub Actions (`.github/workflows/ci.yml`). It runs the typecheck, the tests and the build, then `baesian verify` on each push to `main` (every pushed commit) and on pull requests (with `--merge`). It uses Actions minutes on the private repo. Pushes to `main` skip the merge gate until the client (M4) can resolve cards. | user request, [[2026-10-23 Design Discussion]] |
 | D60 | 2026-10-23 | Build M3c (the `api:` detector) before M3b (`baesian verify`): with livedocs doing the parsing it's small, and it completes the commit gate before CI builds on it. | decision cards, [[2026-10-23 Design Discussion]] |
 | D59 | 2026-10-23 | The `api:` detector is opt-in. It's off until a repo lists its public modules in `gate_api` (globs) in `.baesian/config.json`: livedocs reports anything exported anywhere, and for an app most exports aren't public API. Rejected: every exported symbol. | same |
 | D58 | 2026-10-23 | Only breaking API changes count as `api:` facts: changed signatures and removed exports. New exports are additive, a two-way door. Rejected: counting additions too. | same |

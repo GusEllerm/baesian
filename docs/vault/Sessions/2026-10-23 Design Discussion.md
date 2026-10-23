@@ -151,8 +151,15 @@ The user judged the plan ready for development.
 - **On this repo's history,** it caught M3a's smol-toml dependency, added before the gate existed. The dogfood era passes.
 - **Agent decisions** (in [[Decision Log]]): each commit is judged by its own record; at merge, withdrawn and superseded cards are notes rather than failures; the defaults for conflict cards.
 
+## CI, and a pause
+
+- **CI added at the user's request (D61):** `.github/workflows/ci.yml`, using `actions/checkout` v7 and `actions/setup-node` v7 (the latest; inputs checked).
+- **This repo's gate flagged the workflow file** as `infra:.github/workflows/ci.yml`. It was acknowledged against D61, because the client that would let the user confirm a card doesn't exist yet.
+- **The user paused here.**
+
 ## Next
 
+- M4, the client, starting with decision cards: port and security, phone access, the visual direction.
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
 
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.
