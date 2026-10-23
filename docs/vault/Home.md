@@ -17,15 +17,17 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-23.*
 
-- **Development is under way. M1, M2 and M3a are done** ([[Implementation Plan]]), with 99 passing tests:
+- **Development is under way. M1, M2, M3a and M3c are done** ([[Implementation Plan]]), with 107 passing tests:
   - **M1:** the store and the core CLI;
   - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions;
-  - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs. The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
+  - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs;
+  - **M3c:** the `api:` detector, through `livedocs signatures`: breaking changes only, opt-in through `gate_api`.
+- **Repo:** `main`, with both the livedocs and the Baesian gate, pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
 - **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions.
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0);
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D57 in [[Decision Log]]):
+- **Decided by the user** (D1–D60 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
@@ -57,7 +59,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
 - **To verify before building the Claude Code adapter:** that a `PostToolUse` hook with matcher `ExitPlanMode` fires, using `claude --debug` ([[Baesian Design#Decks from documents]]).
 - **Dogfooding has started (D57):** `baesian` is on PATH via `npm link`, and this repo's commits go through its own gate.
-- **Next:** M3b, `baesian verify` for CI and the merge gate. M3c waits on `livedocs signatures`.
+- **Next:** M3b, `baesian verify` for CI and the merge gate.
 
 *Update this section at the end of every session.*
 

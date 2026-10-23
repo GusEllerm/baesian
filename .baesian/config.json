@@ -1,1 +1,10 @@
-{}
+{
+  "gate_schema": [
+    "**/migrations/**",
+    "**/*.sql",
+    "**/schema.prisma",
+    "**/*.schema.json",
+    "**/schema.graphql",
+    "src/schema.ts"
+  ]
+}

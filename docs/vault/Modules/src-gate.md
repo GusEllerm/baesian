@@ -25,6 +25,13 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 | `schema` | paths matching `DEFAULT_SCHEMA`, or `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL |
 | `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify |
 
+**`api:` facts (M3c; D56, D58, D59).** The detector is off unless `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
+- Only breaking changes count (`BREAKING`: a changed signature, or a removed export), and only in the listed modules. A new export is additive.
+- Each one becomes `api:<qualname>`.
+- If livedocs is missing or fails, that's a warning, never a block.
+
+What counts as a signature is livedocs' rule: parameters, defaults, return types and class heritage. For constants, only a declared type annotation counts. Zod schema constants therefore aren't API facts: in this repo, format changes are caught by listing `src/schema.ts` in `gate_schema`.
+
 `DEFAULT_IGNORE` (`node_modules`, `.baesian/`, vendor, fixtures) is never looked at. A rename counts when either the old or the new path is in scope. A manifest that doesn't parse produces a warning, not a guess. Globs come from `globToRegExp`.
 
 ## src/trailers.ts (D52)

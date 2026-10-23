@@ -41,8 +41,8 @@ Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <c
 | **M1** | The store and the core CLI: both layers, the formats, IDs, computed status, the filing check (open cards and resolved decisions, topics, aliases), attach, withdraw, revise, decks, `list`, `show`, `inbox`, `sync` | **done** (2026-10-23), 40 tests |
 | **M2** | Waiting and notifying: `wait` (with levels, timeout and presence), fallbacks, OS notifications and the `notify` command, the `AGENTS.md` block written by `init`, `template`, `topics` | **done** (2026-10-23), 66 tests in total |
 | **M3a** | The commit gate: `pre-commit` (record), `commit-msg` (trailers, acks, coverage, the block on rejected and unresolved hard cards, verdict delivery), `post-commit` (ledger); detectors for dependencies, schema and infra; `baesian check`; hooks installed by `init` alongside livedocs | **done** (2026-10-23), 99 tests in total |
-| **M3b** | `baesian verify` for CI: every commit in a range checked against the record, the merge gate (resolved or deferred), conflict cards, record lag | next |
-| **M3c** | The exported-signature detector (`api:` facts), calling `livedocs signatures` (D56) | waiting on live-docs-agent |
+| **M3b** | `baesian verify` for CI: every commit in a range checked against the record, the merge gate (resolved or deferred), conflict cards, record lag | next (D60) |
+| **M3c** | The exported-signature detector (`api:` facts): `livedocs signatures` (livedocs 0.2.1, D56), breaking changes only (D58), opt-in through `gate_api` (D59) | **done** (2026-10-23), 107 tests in total |
 | **M4** | The client: a local server (API plus live updates), the React app (desktop first, arrow-key and swipe gestures), decks, the response panel, rules, topic merging, conflict links, presence | |
 | **M5** | Harness adapters: the Claude Code plugin (skill, `SessionStart`, `ExitPlanMode`), Codex hooks | |
 | **M6** | The vault adapter: decision and rule notes, the Decision Log's `base` query | |

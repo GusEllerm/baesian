@@ -22,11 +22,51 @@ export interface Change {
   oldPath?: string;
 }
 
+/** One finding from `livedocs signatures --json` (livedocs 0.2.1). */
+export interface ApiChange {
+  path: string;
+  qualname: string;
+  kind: "signature" | "added" | "removed";
+  was: string | null;
+  now: string | null;
+}
+
+export interface ApiResult {
+  changes: ApiChange[];
+  /** Set when the API couldn't be checked; the gate prints it, and doesn't block on it. */
+  warning?: string;
+}
+
 /** Two versions of a tree, and the paths that differ between them. */
 export interface Snapshot {
   changes(): Change[];
   before(path: string): string | undefined;
   after(path: string): string | undefined;
+  /** Exported-signature changes between the two trees. Only called when `gate_api` is set. */
+  apiChanges?(): ApiResult;
+}
+
+/**
+ * Ask livedocs for exported-signature changes (D56). Baesian doesn't parse code itself: livedocs
+ * already has tested Python and TypeScript parsers. Without livedocs, the detector warns and is off.
+ */
+export function livedocsSignatures(cwd: string, args: string[]): ApiResult {
+  try {
+    const out = execFileSync("livedocs", ["signatures", ...args, "--json", "--repo", cwd], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 64 << 20,
+    });
+    return { changes: JSON.parse(out) as ApiChange[] };
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException & { stderr?: string };
+    if (err.code === "ENOENT") {
+      return { changes: [], warning: "gate_api is set, but livedocs isn't installed, so API changes weren't checked (uv tool install livedocs)" };
+    }
+    const why = (err.stderr ?? err.message ?? "").toString().trim().split("\n").at(-1);
+    return { changes: [], warning: `livedocs signatures failed, so API changes weren't checked: ${why}` };
+  }
 }
 
 /** git's empty tree: the "before" side of a repository's first commit. */
@@ -76,6 +116,7 @@ export function stagedSnapshot(cwd: string): Snapshot {
     changes: () => parseNameStatus(gitRaw(cwd, ["diff", "--cached", "--name-status", "-M", "-z", base])),
     before: (path) => (head ? show(cwd, `HEAD:${path}`) : undefined),
     after: (path) => show(cwd, `:${path}`),
+    apiChanges: () => livedocsSignatures(cwd, ["--cached"]),
   };
 }
 
@@ -87,6 +128,7 @@ export function commitSnapshot(cwd: string, commit: string): Snapshot {
       parseNameStatus(gitRaw(cwd, ["diff", "--name-status", "-M", "-z", parent ?? EMPTY_TREE, commit])),
     before: (path) => (parent ? show(cwd, `${parent}:${path}`) : undefined),
     after: (path) => show(cwd, `${commit}:${path}`),
+    apiChanges: () => livedocsSignatures(cwd, ["--rev", commit]),
   };
 }
 
@@ -121,8 +163,18 @@ export const DEFAULT_IGNORE = ["**/node_modules/**", ".baesian/**", "**/vendor/*
 export interface DetectOptions {
   schema?: readonly string[];
   infra?: readonly string[];
+  /** The public modules; the `api:` detector runs only when this is non-empty (D59). */
+  api?: readonly string[];
   /** Added to `DEFAULT_IGNORE`. */
   ignore?: readonly string[];
+}
+
+/** Breaking changes only (D58): a new export is additive, so it's a two-way door. */
+const BREAKING = new Set<ApiChange["kind"]>(["signature", "removed"]);
+
+function shorten(text: string, max = 90): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
 }
 
 export interface Detection {
@@ -243,6 +295,19 @@ export function detectFacts(snap: Snapshot, opts: DetectOptions = {}): Detection
     for (const f of dependencyFacts(snap, change, warnings)) add(f);
     if (either(isSchema)) add({ id: `schema:${change.path}`, kind: "schema", path: change.path, detail: what });
     if (either(isInfra)) add({ id: `infra:${change.path}`, kind: "infra", path: change.path, detail: what });
+  }
+  if (opts.api?.length && snap.apiChanges) {
+    const isApi = matcher(opts.api);
+    const result = snap.apiChanges();
+    if (result.warning) warnings.push(result.warning);
+    for (const c of result.changes) {
+      if (!BREAKING.has(c.kind) || !isApi(c.path) || ignored(c.path)) continue;
+      const detail =
+        c.kind === "removed"
+          ? `removed from ${c.path}`
+          : `signature changed in ${c.path}${c.now ? `: ${shorten(c.now)}` : ""}`;
+      add({ id: `api:${c.qualname}`, kind: "api", path: c.path, detail });
+    }
   }
   return { facts: [...facts.values()].sort((a, b) => a.id.localeCompare(b.id)), warnings };
 }

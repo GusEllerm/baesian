@@ -117,6 +117,7 @@ export function detectStaged(store: Store, snap: Snapshot) {
   return detectFacts(snap, {
     schema: c.gate_schema ?? DEFAULT_SCHEMA,
     infra: c.gate_infra ?? DEFAULT_INFRA,
+    api: c.gate_api ?? [],
     ignore: c.gate_ignore ?? [],
   });
 }

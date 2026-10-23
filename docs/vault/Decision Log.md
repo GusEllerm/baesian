@@ -20,6 +20,9 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D60 | 2026-10-23 | Build M3c (the `api:` detector) before M3b (`baesian verify`): with livedocs doing the parsing it's small, and it completes the commit gate before CI builds on it. | decision cards, [[2026-10-23 Design Discussion]] |
+| D59 | 2026-10-23 | The `api:` detector is opt-in. It's off until a repo lists its public modules in `gate_api` (globs) in `.baesian/config.json`: livedocs reports anything exported anywhere, and for an app most exports aren't public API. Rejected: every exported symbol. | same |
+| D58 | 2026-10-23 | Only breaking API changes count as `api:` facts: changed signatures and removed exports. New exports are additive, a two-way door. Rejected: counting additions too. | same |
 | D57 | 2026-10-23 | Dogfood now. `npm link` puts this checkout's `baesian` on PATH (rebuild with `npm run build` after changes), and `baesian init` installs the gate in this repo beside livedocs, so this repo's own commits go through Baesian. | decision cards, [[2026-10-23 Design Discussion]] |
 | D56 | 2026-10-23 | The exported-signature detector (`api:` facts, M3c) uses a new `livedocs signatures` command, which live-docs-agent is asked to add, reusing livedocs' Python and TypeScript parsers. Baesian calls it when livedocs is installed and turns the detector off otherwise. Rejected: parsing TypeScript inside Baesian (a large runtime dependency, and Python separately); leaving `api:` out of v1. (was P13) | same |
 | D55 | 2026-10-23 | The dependency detector counts **runtime** dependencies only: `package.json` (`dependencies`, `peerDependencies`, `optionalDependencies`), `pyproject.toml` (PEP 621 and Poetry), and `requirements*.txt`. Dev dependencies, version bumps and lockfile-only changes are benign. smol-toml (zero dependencies, BSD-3) is added to parse TOML. | decision cards, [[2026-10-23 Design Discussion]] |
@@ -88,6 +91,9 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-23 `[agent decision]` This repo's gate counts `src/schema.ts` as a schema path (`gate_schema` in `.baesian/config.json`, with the defaults kept), and doesn't set `gate_api`.
+  - **Why the schema detector:** `src/schema.ts` defines the on-disk formats, so any change to it is a format decision. The `api:` detector would miss those changes, because the formats are Zod constants without type annotations, and livedocs only counts annotated constants. The agent's earlier suggestion, offered when the user decided D59, to use `gate_api` for this was wrong.
+  - **Why no `gate_api`:** Baesian is an app; its public interface is the CLI and the formats, not its TypeScript exports.
 - 2026-10-23 `[agent decision]` The GitHub repo `GusEllerm/baesian` is **private**. The user asked for the remote without saying which visibility. Private matches vault-drift and personal-website, and it can be made public later, whereas publishing can't be undone.
 - 2026-10-23 `[agent decision]` The vault is at `docs/vault/`, the layout personal-website and memgate use, with a `Design/` folder. The design doc moved from `baesian.md` at the repo root to [[Baesian Design]], so the design lives in project memory.
 - 2026-10-23 `[agent decision]` The user's decisions get D-numbers and agent proposals get P-numbers, as in the live-docs vault.

@@ -3,7 +3,7 @@ type: session
 status: active
 authority: log
 livedocs: snapshot
-summary: "First session: designed Baesian with the user (D1–D57), created this vault and repo, chose the stack, and built M1 (the store and the core CLI), M2 (wait, presence, notifications, AGENTS.md) and M3a (the commit gate)."
+summary: "First session: designed Baesian with the user (D1–D60), created this vault and repo, chose the stack, and built M1 (the store and the core CLI), M2 (wait, presence, notifications, AGENTS.md) M3a (the commit gate) and M3c (the api: detector)."
 created: 2026-10-23
 tags: [baesian, session]
 ---
@@ -129,8 +129,25 @@ The user judged the plan ready for development.
 - **livedocs caught its own stale notes:** when the M3a code was staged, it flagged the CLI and store module notes, which needed real updates.
 - **live-docs-agent on signatures:** drift can't tell a signature change from a body change, and only sees symbols a doc is bound to. That made D25's premise wrong. The user chose a `livedocs signatures` command (D56), and dogfooding through `npm link` (D57).
 
+## Dogfooding starts (D57)
+
+- **Setup:** `npm link` put `baesian` on PATH, and `baesian init` here installed the gate in `.githooks/` beside livedocs and appended the AGENTS.md block.
+- **Two hook bugs found right away, both fixed** ([[Implementation Plan#Notes from M3a]]):
+  - no fallback under `npm link`;
+  - machine paths written into the committed hooks.
+- **`b2a5b21` is the first commit to pass Baesian's own gate.** `pre-commit` staged the record, livedocs stamped the updated notes, and there were no decisions to cover.
+- **Asked live-docs-agent** for `livedocs signatures --cached/--rev --json` (D56).
+
+## Development: M3c
+
+- **livedocs 0.2.1 shipped `livedocs signatures`,** the same day it was requested. Checked on this repo, it reports exactly the API changes of the last two commits.
+- **Decisions D58–D60:** only breaking changes count; the detector is opt-in through `gate_api`; M3c before M3b.
+- **Built:** the `api:` detector, with 107 tests, including one against the real livedocs.
+- **A correction on this repo's config.** The agent had suggested `gate_api` for `src/schema.ts`, but Zod constants aren't API facts. So `src/schema.ts` went into `gate_schema` instead. The gate then blocked the very commit that changed `src/schema.ts`, which was acknowledged against P12.
+
 ## Next
 
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
 - M3b: `baesian verify` for CI and the merge gate.
+
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.

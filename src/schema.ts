@@ -214,6 +214,11 @@ export const Config = z.strictObject({
   gate_infra: z.array(z.string().min(1)).optional(),
   /** Paths the gate never looks at, added to the defaults. */
   gate_ignore: z.array(z.string().min(1)).optional(),
+  /**
+   * The project's public modules, as globs. The `api:` detector is off until this is set (D59), and
+   * needs livedocs on PATH (`livedocs signatures`, D56).
+   */
+  gate_api: z.array(z.string().min(1)).optional(),
 });
 export type Config = z.infer<typeof Config>;
 

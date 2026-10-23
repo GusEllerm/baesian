@@ -17,6 +17,11 @@ sig = "5cc24684f2cbded0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = ".baesian/config.json"
+sig = "61bebe02a191a302"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = ".livedocs/config.json"
 sig = "b346b2b146c7c63e"
 
@@ -38,7 +43,7 @@ sig = "1440b4706ed0cd34"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts"
-sig = "1af9925ec18e7e64"
+sig = "0fda2b538c57b753"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -58,7 +63,7 @@ sig = "dbd6aa838c64ce32"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Config"
-sig = "86ec427e373ffbd1"
+sig = "f43f4c83b978a678"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -158,7 +163,7 @@ sig = "8883755b1410374c"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/facts.ts"
-sig = "6b1478afedb87549"
+sig = "4187cf6a9e2500a6"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -173,7 +178,7 @@ sig = "16b26c4ae6af6f6f"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/gate.ts"
-sig = "8d852f817c2b9725"
+sig = "e47e6219b6eb8aca"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -208,7 +213,7 @@ sig = "5f77f13611dea7d7"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts"
-sig = "1af9925ec18e7e64"
+sig = "0fda2b538c57b753"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -372,6 +377,11 @@ sig = "c11c6d8597a126ac"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "src/facts.ts#BREAKING"
+sig = "328fbccb7aa1937e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#DEFAULT_IGNORE"
 sig = "f06728516d47c8f2"
 
@@ -398,17 +408,22 @@ sig = "5f6741f609e9dbce"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#Snapshot"
-sig = "0ad952ae6d7744e6"
+sig = "c3726919df71acba"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#commitSnapshot"
-sig = "4cd01ef97eb0b241"
+sig = "978db6f05d34272b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#detectFacts"
-sig = "d01e42fa24a8577e"
+sig = "fa827cfb0638be97"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/facts.ts#livedocsSignatures"
+sig = "653b8fe20a70f687"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -418,7 +433,7 @@ sig = "64cbd547c337ddec"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#stagedSnapshot"
-sig = "130b7c697f421efa"
+sig = "64b240460cfbb713"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -433,7 +448,7 @@ sig = "bcc147cd2592e155"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/gate.ts#detectStaged"
-sig = "c67272a066344250"
+sig = "80a3c2b1ebaaefbc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -479,6 +494,11 @@ sig = "453252026840420b"
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#writeHook"
 sig = "a53cbbd51e5d623b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/schema.ts"
+sig = "0fda2b538c57b753"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

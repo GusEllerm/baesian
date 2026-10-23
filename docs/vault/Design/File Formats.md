@@ -94,7 +94,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 - **Presence** (`Presence`): `client`, `at`. The client rewrites it every 30 seconds, by writing a temporary file and renaming it, so readers never see half a file. `baesian wait` treats it as follows:
   - more than 90 seconds old (`PRESENCE_STALE_MS`): the reviewer is away;
   - missing: unknown, because the client has never run.
-- **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, and `gate_ignore` adds to them. It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
+- **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;
   - a phone-push token would be in the repo.
