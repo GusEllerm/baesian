@@ -42,6 +42,34 @@ The user asked for a read of `baesian.md` and a discussion of the design. Afterw
   - rules can also be proposed with a toggle at verdict time (D16);
   - the vault adapter owns a block in the existing Decision Log, rather than generating the whole log (D17).
 - **Card IDs.** One ID per decision (D18), a short random string with a prefix so parallel sessions can't collide (D19).
+- **D23–D26: where cards come from.**
+  - v1 sources: plan-time decks, mid-task filing, and a commit gate as the backstop. An after-the-fact reviewer comes later.
+  - The gate blocks until each detected decision is covered, by a card trailer or an agent-decision ack.
+  - It starts with four detectors, including exported signatures.
+  - A filed card counts as covered, except a blocking card.
+  - P11, the gate's build order, was proposed. It was later withdrawn and replaced by D33.
+- **D27–D36: harness independence and parallel agents.**
+  - **The user's challenge:** stateful phases such as plan mode aren't equivalent across harnesses. And in practice, planning and implementing are tightly coupled and iterative, though the user wants to move toward planning first, then long autonomous implementation.
+  - **Resolution:**
+    - git is the state machine, in three tiers (D27);
+    - plans are documents (D28);
+    - batching by deck or branch (D29);
+    - verdicts delivered through the gate (D30);
+    - a merge gate (D31).
+  - **The user's refinement:** don't answer inline in coupled mode; use the same client in both situations, for a consistent, polished feel. That became D32: only the client resolves, and blocking is the only difference between the modes.
+  - **New v1 order (D33).**
+  - **Multi-agent work, raised by the user:**
+    - a two-layer store: live in `.git/baesian/`, the record in `.baesian/`, immutable files (D34);
+    - conflicting proposals merged into one decision (D35);
+    - a duplicate check with attaching (D36).
+  - [[Baesian Design]] was rewritten as v0.5.
+- **D37–D42: the open questions from v0.5.**
+  - the record is written by the agent's own CLI actions plus `pre-commit`, with `baesian sync` as the fallback (D37);
+  - contradictions are caught at filing (resolved decisions are searched too), with topic keys and merge-gate conflict cards (D38);
+  - vault views are written only on the default branch, with one note per rule (D39, refining D17);
+  - notifications come from the client, the OS, and a `notify` hook (D40);
+  - presence is in v1 (D41);
+  - a hard-blocking level (D42).
 
 All are in [[Decision Log]].
 
@@ -55,10 +83,15 @@ All are in [[Decision Log]].
     - The global `livedocs` is an editable install of `~/Projects/live-docs`. That checkout was on its unreleased ts-support branch, so the bug was never in a release.
     - The fix is live-docs commit `25297e0`, with a test that runs `new_vault()`. The checkout is back on `main` (0.1.4).
     - The `survey` fix goes into the same release.
-- **The first commit needs `--no-verify` on livedocs 0.1.4.** The 0.1.4 pre-commit gate blocks a repository's first commit (`GitError: git diff --name-only HEAD`). This is fixed for 0.2.0, which isn't released yet. Make the first commit with `git commit --no-verify`. No note is stamped yet, so nothing is lost, and later commits go through the gate normally.
+- **The first commit needed `--no-verify` on livedocs 0.1.4.** The 0.1.4 pre-commit gate blocks a repository's first commit (`GitError: git diff --name-only HEAD`), so `fd64e0c` was made with `--no-verify`.
+  - Later the same day, live-docs-agent reported that **livedocs 0.2.0 is released** and is now the user's global install, from PyPI rather than the editable checkout.
+  - 0.2.0 fixes the first-commit problem, the `survey` traceback, and `new-vault`, and supports TypeScript.
+  - `livedocs verify` passes on this repo under 0.2.0.
+- **Git hook behaviour (tested on git 2.55, 2026-10-23):** a file staged by `pre-commit` lands in the commit; a file staged by `commit-msg` doesn't, and is left staged for the next commit. That is why D37 writes the record in `pre-commit`.
 - **livedocs decision D4 in live-docs** left decisions and specs to "a different system". Baesian fills that gap, which gives the pattern's framing: livedocs keeps `describes` notes true, and Baesian moves `specifies` notes from proposed to accepted.
 - **Three IDs per decision.** In personal-website, one decision carries three IDs (P3 → DC-01 → G6). One card ID with a changing status would remove that bookkeeping.
 
 ## Next
 
-- Candidate next topic: where cards come from. Does the agent decide to file mid-task, or does a hook catch certain decision types (a new dependency, a schema change)?
+- Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.
+- Next topic: D33 step 1. Put the card, verdict and ledger file formats to the user as decision cards.

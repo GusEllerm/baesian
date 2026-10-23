@@ -18,24 +18,34 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 *As of 2026-10-23.*
 
 - **Design stage; no code yet.** The repo is on `main` with the livedocs gate, and is pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian).
-- **[[Baesian Design]] is at v0.4.** Everything in it is decided except its open questions. No proposals are outstanding.
-- **Decided by the user** (D1–D22 in [[Decision Log]]):
+- **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions. No proposals are outstanding.
+- **Decided by the user** (D1–D42 in [[Decision Log]]):
+  - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
   - **routing:** from a checklist of impact and reversibility facts, not self-reported confidence; audit cards sample the agent's own decisions;
   - **cards:**
     - every card states the strongest alternative;
     - short random IDs (`B-7f3k`), one per decision for its whole life;
-    - decks with briefing cards; rejecting a card withdraws its dependents;
-  - **responses:** the gesture mapping and the five card states; an escape hatch and richer written feedback;
-  - **ledger:** commit trailers plus card notes;
-  - **rules:** a toggle at verdict time plus mined convention cards;
-  - **storage:** a standalone `.baesian/`, with a vault adapter that owns a block in the Decision Log;
-  - **v1 order:** schema and CLI → hooks → swipe UI → plugin → adapter → MCP;
+    - decks with briefings, one per branch by default; rejecting a card withdraws its dependents;
+  - **responses:** the gesture mapping and the card states; an escape hatch and richer written feedback;
+  - **one client:** only the client resolves, desktop first. Coupled and autonomous mode differ only in a card's level (provisional, blocking or hard) and in `baesian wait`. A presence heartbeat and notifications are in v1;
+  - **card sources:**
+    - decks built from documents (`deck --from`);
+    - filing mid-task;
+    - the git gate. `pre-commit` writes the record. `commit-msg` checks coverage with four detectors and the trailers, delivers verdicts, and blocks commits that build on rejected cards;
+  - **merge gate:** cards must be resolved or deferred before merge; the same topic answered differently becomes a conflict card;
+  - **parallel agents:**
+    - a two-layer store: live in `.git/baesian/`, the record in `.baesian/`, with immutable files;
+    - conflicting proposals merged into one decision;
+    - a filing check against open cards and resolved decisions;
+    - topic keys;
+  - **rules:** a toggle at verdict time plus mined convention cards. Rules apply at once in every worktree, and the vault gets one note per rule, written only on the default branch;
+  - **v1 order:** store and CLI → git gate → client → harness adapters → vault adapter → MCP;
   - **dogfooding:** this repo and personal-website;
   - the [[Working Agreement]] is active.
-- **First commit made** (`fd64e0c`) with `--no-verify`: livedocs 0.1.4's gate can't run on a repo with no commits, which is fixed for 0.2.0. Every later commit goes through the gate. Details are in [[2026-10-23 Design Discussion]].
-- **livedocs:** the `new-vault` crash is fixed in live-docs `25297e0`. It was unreleased branch code reached through the editable install.
-- **Next:** where cards come from (the agent filing mid-task vs. hooks catching decision types), then the card schema (D20 step 1) as a decision card.
+- **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
+- **To verify before building the Claude Code adapter:** that a `PostToolUse` hook with matcher `ExitPlanMode` fires, using `claude --debug` ([[Baesian Design#Decks from documents]]).
+- **Next:** D33 step 1, the store and the CLI. Start with the card, verdict and ledger file formats, as decision cards: they're Baesian's public interface ([[Working Agreement#Decision cards]]).
 
 *Update this section at the end of every session.*
 
