@@ -190,6 +190,8 @@ The **need-more-context rate** directly measures card quality. What reviewers as
 
 There is one client for every situation, so it feels consistent and polished (D32).
 
+What the client may show, and where each piece of it comes from, is in [[Client Data Contract]] (draft). Under D71 it shows only what Baesian can stand behind, and drops the rest.
+
 - **A local web app.** It's a stdlib server like the style vote, serving a responsive UI. **The desktop layout comes first**, because coupled mode is where the work is today. Arrow keys are the swipe gestures, and the full context and diff sit beside the card. The phone layout uses the same app.
 - **Coupled and autonomous differ only in whether the card is blocking:**
 
@@ -317,7 +319,7 @@ In non-blocking mode, the agent proceeds on its proposal while the card waits. T
 
 - **The ledger has two parts (D15):**
   - **Commit trailers.** Every commit that builds on a provisional decision carries `Baesian-Card: B-7f3k`. The git gate checks them.
-  - **Ledger entries.** These are small immutable files naming the symbols in backticks, which tell a rework brief what to revisit. The client shows them as the card's "Implemented in" section. When livedocs is installed, Baesian can reuse its mention resolution to turn the names into symbols. (*To check:* whether livedocs's resolver can be called on files outside the vault.)
+  - **Ledger entries.** These are small immutable files naming the symbols in backticks, which tell a rework brief what to revisit. The client shows them as the card's "Implemented in" section. (Whether the client shows commits at all is open: they count only commits that cite the card. See [[Client Data Contract#The hard parts]] and D71.) When livedocs is installed, Baesian can reuse its mention resolution to turn the names into symbols. (*To check:* whether livedocs's resolver can be called on files outside the vault.)
 - **Rising priority.** A card's priority rises as its ledger grows.
 - **Rework briefs.** When a verdict overturns a decision, Baesian turns the ledger into a rework brief listing the symbols and commits to revisit. It's delivered at the branch's next commit (D30), or sooner by an adapter.
 

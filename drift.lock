@@ -16,6 +16,66 @@ target = "src/store.ts#Store"
 sig = "26c7ca3e3f353a1c"
 
 [[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "design/explorations/round3/atlas.js#level"
+sig = "5e500011f99b3490"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/notify.ts#NotifyPayload"
+sig = "1440b4706ed0cd34"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#CardMeta"
+sig = "dbd6aa838c64ce32"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#DeckMeta"
+sig = "89b3db8a9999584a"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#Fallback"
+sig = "7429b3aed9ec1399"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#Presence"
+sig = "60da343dcb45d3e7"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#Response"
+sig = "1abb751fc09220ef"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#RuleMeta"
+sig = "7ba6fb135a12212e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/schema.ts#Verdict"
+sig = "163c3fbb06887586"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/similarity.ts#jaccard"
+sig = "dfbb76a367fb442c"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/similarity.ts#nearTopics"
+sig = "3ee3d53ddf719a25"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/store.ts#Store"
+sig = "26c7ca3e3f353a1c"
+
+[[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = ".baesian/config.json"
 sig = "61bebe02a191a302"

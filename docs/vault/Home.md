@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Entry point to the Baesian vault: what the project is, where it stands, what to read first, and where notes go."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 reviewed: 2026-10-23
 tags: [baesian, index]
 ---
@@ -15,7 +15,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-10-23.*
+*As of 2026-10-24.*
 
 - **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 118 passing tests:
   - **M1:** the store and the core CLI;
@@ -28,7 +28,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0);
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D61 in [[Decision Log]]):
+- **Decided by the user** (D1–D76 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
@@ -60,8 +60,23 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
 - **To verify before building the Claude Code adapter:** that a `PostToolUse` hook with matcher `ExitPlanMode` fires, using `claude --debug` ([[Baesian Design#Decks from documents]]).
 - **Dogfooding has started (D57):** `baesian` is on PATH via `npm link`, and this repo's commits go through its own gate.
-- **Paused here (2026-10-23), at the user's request,** after M3 and CI.
-- **Next:** M4, the client. That's the first time a person can answer cards: until then, cards can be filed and gated, but not resolved. Its decisions (port and security, phone access, visual direction) go to the user as cards first.
+- **M4 design is under way** ([[2026-10-23 Client Mockups]]). Round 1's three static mockups picked no winner, but set the direction (D65–D68). Round 2 is an interactive prototype at `design/explorations/round2/`: a four-way swipe and a context hierarchy. It's waiting for the user to try it.
+- **Research cycle done** ([[Contextualising Decisions]]): four lenses (theory, analogous tools, spatial and visual, overseeing AI agents). It gives principles, tensions, proposed changes to D12, D13, D40 and D65, and three extreme concepts for round 3.
+- **Round 3 was built** (`design/explorations/round3/`, D70): the Atlas, the one-cue card and the consequence preview, plus the oversight layer and card rarity ([[Card Rarity]]). The user found it hard to understand.
+- **Round 4** (`design/explorations/round4/`) came out of a loop of independent reviews and revisions, one fresh reviewer per round, with the reviews in `round4/reviews/`:
+  - the card is in the centre, with what it builds on to its left and what your answer changes to its right;
+  - it sits on a messy pile of the rest of its area (the user's idea);
+  - the queue is grouped by area, and the map opens on M or Space.
+
+  The user: "much better and getting closer to the vision".
+- **[[Client Data Contract]]** (draft) maps every element of round 4 to its source in the store, and records the hard backend problems. Under D71 (the user's rule), anything the client can't show reliably is dropped, starting with "commits built on this".
+- **The project map** went through its own loop of seven independent reviews overnight (2026-10-24), and the last judged it sufficient. Every area is a row, each piece of work a track, and what's connected to your card is lettered. Nothing moves. It holds up at about 150 decisions (`#scale`).
+- **Round 5** (`design/explorations/round5/`, 2026-10-24) is a subtractive pass for "understandable at a glance". It passed a screenshots-only glance review. The card fell from about 400 words to about 150. The project map gave way to the decision's neighbourhood, beside the card: "we don't want to build Linear". [[2026-10-23 Client Mockups#Round 5: glance first]].
+- **Research done: [[Minimal Card Content]]** (D72). Five strands reported on what a card minimally needs, framed by facets rather than decision types. The synthesis revises the core and the facets, and sets out a test of "enough" and a measurement plan. The user decided four of its implications: the trigger back on the card (D73), one shared crux (D74), three facets to trial (D75), and when the agent's pick shows (D76).
+- **Next:**
+  - the user's own five-second test of round 5 against round 4; then they confirm or overturn its departures and round 4's agent decisions ([[2026-10-23 Design Discussion#Round 4: independent review loops (2026-10-23 to 2026-10-24)]]);
+  - then the decision cards in [[Client Data Contract#Decisions this note needs]];
+  - then M4a.
 
 *Update this section at the end of every session.*
 

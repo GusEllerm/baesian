@@ -157,9 +157,86 @@ The user judged the plan ready for development.
 - **This repo's gate flagged the workflow file** as `infra:.github/workflows/ci.yml`. It was acknowledged against D61, because the client that would let the user confirm a card doesn't exist yet.
 - **The user paused here.**
 
+## M4 design: rounds 1 and 2
+
+- **D62–D64:** convention plus audit for "only the client resolves", with a hardened server; phone access through Tailscale in M4c; the visual direction by vote.
+- **Round 1:** three static mockups, built from the user's personal-website taste and voted on. No winner. The user wants Tinder-style four-way swipe mechanics, and context that enables understanding: a hierarchy of decision, feature and project.
+- **D65–D68:** the hierarchy drawn from structured data; required topics; hold-to-confirm on hard cards; one interactive prototype.
+- **Round 2,** with Motion 14.6. A headless self-test of the keys and the trackpad swipe found and fixed two bugs. The worse one: releasing the key that completed a hold also accepted the next card.
+- Details in [[2026-10-23 Client Mockups]].
+
+## Research cycle: contextualising decisions
+
+- **User feedback on round 2:** "closer". Use semantic names, not IDs (D69, applied). Then do deeper research, including extreme angles.
+- **Four research agents in parallel:** theory; analogous review and triage tools; spatial and visual orientation; overseeing AI agents.
+- **The synthesis** is [[Contextualising Decisions]], with the sources in [[Contextualising Decisions - Sources]]. Its headline:
+  - the spine is Furnas's minimum;
+  - choose context by value of information;
+  - lead with projection;
+  - the real failure mode is rubber-stamping, so tier friction;
+  - help the reviewer verify, don't persuade;
+  - typed relations, not one hierarchy.
+- **Three extreme concepts for round 3:** the Atlas, the one-cue card, consequence preview; plus an oversight layer.
+
+## Round 3
+
+- **The user chose everything (D70):** all three concepts, the whole oversight layer, and all four card-format changes.
+- **Mid-build, the user proposed trading-card rarity for consequence.** After a short search of the design language (Magic, Pokémon, Hearthstone, holo CSS) and the motivation research (Deci, Koestner & Ryan's 1999 meta-analysis), the agent wrote [[Card Rarity]]: rarity is the visual form of the friction tier, computed from facts, and treated as information, never as a reward.
+- **Built** in four modules. The headless self-test passes, and screenshots were reviewed and fixed: label collisions, the camera hiding the area, the thread's SVG size, overview legibility. See [[2026-10-23 Client Mockups#Round 3: the combined prototype]].
+
+## Round 4: independent review loops (2026-10-23 to 2026-10-24)
+
+- **The user found round 3 hard to understand** and asked for a loop of independent review, revision and redesign until a new reviewer judged the design sufficient. Each round, a fresh reviewer agent drove the prototype in real Chrome, answered comprehension questions cold, then judged against a written bar. Full record: [[2026-10-23 Client Mockups#Round 4: an independent review loop]].
+- **The card view took four reviews,** and the fourth judged it sufficient.
+  - **The layout:** the card in the centre, with "What this builds on" and "What your answer changes" either side.
+  - **Rarity** is explained in a sentence on every card.
+  - **Answering:** an answer bar with the tier's steps, the reveal and the hold inside the card, writing inside the card, and undo for 5 seconds.
+- **The user's idea:** a messy pile of the rest of the area under the card, which you move through. It's built, and the pile shows plain backs.
+- **The user's review:** "much better and getting closer to the vision". The backend is the hard part, which led to [[Client Data Contract]] and the user's rule, D71: drop what can't be shown reliably. Commits and "re-decided" were dropped from the consequence panel.
+- **The project map took seven more reviews overnight** (the user: "the project map however specifically needs work"). The seventh judged it sufficient. It's now areas as rows and each piece of work as a track, oldest to newest, with letters shared with the side panel. Edge bars name what's out of view. Nothing moves, measured at 0 px, at about 150 decisions as well.
+- **Agent decisions, for the user to overturn** (`[agent decision]`):
+  - the Atlas became a modal map, not the backdrop;
+  - its two zoom levels gave way to one stable level;
+  - foil only on the card's frame;
+  - the collector jargon was replaced by a sentence;
+  - preview-to-unlock was dropped: rare cards confirm with a second press and mythic cards are held;
+  - Space only opens the map;
+  - cards with a stopped agent jump the queue;
+  - practice cards arrive among real ones.
+
+## Round 5: glance first (2026-10-24)
+
+- **The user asked how robust round 4 was,** and said it still needed work to be understandable at a glance, and was "converging to a project management interface". The agent's assessment:
+  - the review loops were weaker evidence than "sufficient" suggests: same-model reviewers with code access, the agent's own bar, and an additive bias;
+  - the sample data is idealised;
+  - the code is prototype-grade.
+
+  Measured: round 4's card had about 400 words in 27 type styles.
+- **The user's decisions:** "We dont want to build linear etc." A subtractive pass judged by a glance test, and the map re-scoped to the decision's neighbourhood.
+- **Round 5** (`design/explorations/round5/`) passed the second screenshots-only glance review. The card is now about 150 words. The map is replaced by a "Connected decisions" column beside the card. Full record: [[2026-10-23 Client Mockups#Round 5: glance first]].
+
+- **The path (2026-10-24).** The user asked for the left column to show the traversal of decisions and their relationships. It's now a spine of your answered decisions, the current card (joined to the card) and what's next, with relationships hanging off the current node. It passed the second screenshots-only review. [[2026-10-23 Client Mockups#The path beside the card]].
+- **An open question from the user:** "How can we understand the minimal amount of information to make an informed decision within a project / research process context?" The agent's answer:
+  - **The working test:** an item belongs on a card only if it could change the choice, scaled by stakes and by what the reviewer already knows (value of information; recognition-primed decisions).
+  - **A candidate minimal set:** the question; the options and what each does; when each wins (the crux); the stakes; and, for hard-to-undo cards, what would show the pick is wrong. Research decisions likely add evidence strength and reversibility in the data.
+  - **How to measure it:** log what reviewers open; read "can't judge" responses; audit reversed decisions; run ablations using practice cards as ground truth; have agents state the crux.
+  - **Still to choose (the user):** a research cycle on it, or a measurement plan in [[Client Data Contract]].
+
+- **The minimal-card research (2026-10-24).**
+  - The user questioned decision types ("a definition game which is rigid and unobtainable"), which led to D72: facets, not types.
+  - Five strands then ran in parallel: decision relevance, what reviewers use, what agents report faithfully, research-process integrity, and an empirical pass over this vault's decisions using the session's own decision cards.
+  - The synthesis is in [[Minimal Card Content]].
+    - **Core:** the trigger comes back; the "if"s must hinge on one shared crux; each "then" carries its cost; what the agent did is shown first, as fact.
+    - **Facets:** the kept set is sharpened, and about fifteen candidates are gated by measurement.
+    - **"Enough":** a type-free test with a verifiability criterion.
+    - **Measurement:** a plan built around practice cards and over-reliance.
+  - Pronouns: the vault uses "they" for the owner.
+
 ## Next
 
-- M4, the client, starting with decision cards: port and security, phone access, the visual direction.
+- **The user's own five-second test of round 5** against round 4. Then they confirm or overturn the departures listed in [[2026-10-23 Client Mockups#Round 5: glance first]], and the round 4 agent decisions above.
+- **Then the decisions implied by [[Minimal Card Content]], and those in [[Client Data Contract#Decisions this note needs]],** including the P12 format changes.
+- **Then M4a.**
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
 
 - Before building the Claude Code adapter: confirm with `claude --debug` that a `PostToolUse` hook with matcher `ExitPlanMode` fires, and that `tool_response.plan` holds the plan.
