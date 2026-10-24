@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "directions": {
+    "provenance": {
+      "overall": 3,
+      "dims": {
+        "typography": 4,
+        "palette": 4,
+        "layout": 4,
+        "speed": 2,
+        "provenance": 2,
+        "polish": 3,
+        "motion": 3
+      },
+      "keep": [],
+      "notes": "I like the design of this. I think we need to think more about how to show the relationship between this decision, the feature / work, and the project. Something hierarchal perhaps -- but contextualising is not just having information, but presenting it in a way that enables understanding.  "
+    },
+    "notebook": {
+      "overall": 3,
+      "dims": {
+        "typography": 4,
+        "palette": 3,
+        "layout": 4,
+        "speed": 4,
+        "provenance": 4,
+        "polish": 4,
+        "motion": 4
+      },
+      "keep": [],
+      "notes": "The graph view on the left is very nice, and given the right kind of information could really help position what kind of decision is being made in this moment. I worry about the integration / information modelling we would need to be robust for this to be consistent and useful. \n\nThe list within the Contents needs work."
+    },
+    "signal": {
+      "overall": 2,
+      "dims": {
+        "typography": 2,
+        "palette": 3,
+        "layout": 2,
+        "speed": 2,
+        "provenance": 2,
+        "polish": 2,
+        "motion": 4
+      },
+      "keep": [],
+      "notes": "This one seems to be the worst. "
+    }
+  },
+  "ranking": [
+    "",
+    "",
+    ""
+  ],
+  "final": "",
+  "mix": "We will need more dev around these ideas before moving forward. ",
+  "notes": "Generally the signal page is what I mean by tinder, but it would need animations and swipe mechanics. We should be able to swipe in one of four directions (perhaps as a two finger gesture?) to determine the response. Animations should reinforce what is happening. ",
+  "sentAt": "2026-10-23T22:33:08.335Z"
+}

@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian: round 2 prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --desk: #D9D0DA;
+    --desk-deep: #CBC0CD;
+    --manila: #EBDBA9;
+    --manila-light: #F3E8C4;
+    --manila-edge: #D7C385;
+    --ink: #2E2343;
+    --ink-soft: #5E5170;
+    --thread: #8E3A5F;
+    --stamp: #2C3DA6;
+    --ochre: #9A7406;
+    --pass: #6E6680;
+    --ui: "Archivo", system-ui, sans-serif;
+    --prose: "Alegreya", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(120% 90% at 50% 0%, var(--desk) 0%, var(--desk-deep) 100%);
+    color: var(--ink); font: 400 15px/1.4 var(--ui); overflow: hidden;
+  }
+  :focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
+  button { font: inherit; color: inherit; }
+
+  /* ------------------------------------------------------------ bar */
+  .bar { height: 52px; display: flex; align-items: center; gap: 24px; padding: 0 28px; border-bottom: 1px solid #c2b5c4; }
+  .wordmark { font-weight: 800; font-stretch: 72%; font-size: 22px; }
+  .summary { font-stretch: 88%; color: var(--ink-soft); }
+  .summary b { color: var(--ink); font-weight: 650; }
+  .presence { margin-left: auto; display: flex; align-items: center; gap: 8px; font-stretch: 88%; color: var(--ink-soft); }
+  .presence i { width: 8px; height: 8px; border-radius: 50%; background: #3f8f5a; box-shadow: 0 0 0 3px #3f8f5a33; }
+
+  .layout { display: grid; grid-template-columns: 300px minmax(560px, 1fr) 380px; height: calc(100% - 52px); }
+
+  /* ------------------------------------------------------------ queue, grouped by work */
+  .queue { padding: 20px 16px 20px 24px; overflow: auto; }
+  .queue h2, .context h2 { font: 650 13px/1 var(--ui); font-stretch: 85%; color: var(--ink-soft); margin: 0 0 14px; }
+  .work { margin: 0 0 18px; }
+  .work-head { padding: 0 0 6px 10px; border-left: 3px solid var(--ink-soft); margin-bottom: 6px; }
+  .work-head .w { font: 600 14.5px/1.25 var(--prose); }
+  .work-head .b { font-stretch: 80%; font-size: 12.5px; color: var(--ink-soft); }
+  .item {
+    display: grid; grid-template-columns: 14px 1fr; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+    background: transparent; border: 0; padding: 7px 8px 7px 10px; border-radius: 3px;
+  }
+  .item:hover { background: #ffffff33; }
+  .item.current { background: var(--manila); }
+  .item .mk { width: 10px; height: 10px; margin-top: 4px; border-radius: 2px; box-shadow: inset 0 0 0 2px var(--ink-soft); }
+  .item .mk.hard { background: var(--thread); box-shadow: none; }
+  .item .mk.blocking { background: var(--ochre); box-shadow: none; }
+  .item .mk.audit { border-radius: 50%; }
+  .item .t { font: 400 14.5px/1.3 var(--prose); }
+  .item.done .t { color: var(--ink-soft); text-decoration: line-through 1.5px var(--ink-soft); }
+  .item.done .mk { background: var(--ink-soft); box-shadow: none; }
+
+  /* ------------------------------------------------------------ stage, edges, stack */
+  .stage { position: relative; overflow: hidden; display: grid; grid-template-rows: 1fr auto; touch-action: none; }
+  .edge {
+    position: absolute; display: flex; align-items: center; justify-content: center; gap: 8px; pointer-events: none;
+    font: 750 16px/1 var(--ui); font-stretch: 80%; color: #fff; opacity: 0; z-index: 4;
+    background: var(--c);
+  }
+  .edge.right { --c: var(--stamp); top: 0; bottom: 0; right: 0; width: 74px; writing-mode: vertical-rl; }
+  .edge.left { --c: var(--thread); top: 0; bottom: 0; left: 0; width: 74px; writing-mode: vertical-rl; transform: rotate(180deg); }
+  .edge.up { --c: var(--ink); top: 0; left: 0; right: 0; height: 58px; }
+  .edge.down { --c: var(--pass); bottom: 0; left: 0; right: 0; height: 58px; }
+  .edge kbd { font: 750 18px/1 var(--ui); writing-mode: horizontal-tb; }
+
+  .stack { position: relative; display: flex; align-items: center; justify-content: center; padding: 30px 90px 10px; }
+  .card {
+    position: absolute; width: min(640px, calc(100% - 180px)); background: var(--manila);
+    --notch: 44px;
+    clip-path: polygon(var(--notch) 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%, 0 var(--notch));
+    padding: 50px 44px 26px; user-select: none; cursor: grab;
+    transition: transform 380ms cubic-bezier(.2,.9,.25,1.05), filter 380ms;
+  }
+  .card::before { content: ""; position: absolute; top: 14px; left: 50%; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--desk); box-shadow: 0 0 0 4px var(--manila-edge); }
+  .card.p1 { transform: translateY(16px) scale(.955); filter: brightness(.93); z-index: 1; }
+  .card.p2 { transform: translateY(30px) scale(.91); filter: brightness(.86); z-index: 0; }
+  .card.p0 { z-index: 2; transition: none; }
+  .card.p0.dragging { cursor: grabbing; }
+  .card .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-stretch: 82%; color: var(--ink-soft); font-size: 14px; }
+  .card .head .id { font-weight: 700; font-stretch: 75%; color: var(--ink); font-size: 15px; }
+  .lvl { display: inline-block; font-stretch: 75%; font-weight: 700; font-size: 12px; padding: 1px 7px 2px; border-radius: 2px; }
+  .lvl.hard { background: var(--thread); color: #fbeef3; }
+  .lvl.blocking { background: var(--ochre); color: #fff8e2; }
+  .lvl.provisional, .lvl.audit { box-shadow: inset 0 0 0 1.5px var(--ink-soft); color: var(--ink-soft); }
+  .card h1 { font: 700 30px/1.14 var(--prose); margin: 10px 0 16px; max-width: 24ch; }
+  .choice { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--manila-edge); border-bottom: 1px solid var(--manila-edge); }
+  .choice > div { padding: 12px 16px 14px 0; }
+  .choice > div + div { padding-left: 16px; border-left: 1px solid var(--manila-edge); }
+  .choice h3 { margin: 0 0 4px; font: 650 13px/1.2 var(--ui); font-stretch: 82%; color: var(--ink-soft); }
+  .choice .big { margin: 0 0 4px; font: 700 18px/1.25 var(--prose); }
+  .choice p { margin: 0; font: 400 15.5px/1.4 var(--prose); }
+  .choice .alt p { font-style: italic; }
+  .more { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .more h3 { margin: 0 0 2px; font: 650 13px/1.2 var(--ui); font-stretch: 82%; color: var(--ink-soft); }
+  .more p { margin: 0; font: 400 15px/1.4 var(--prose); }
+
+  .impress {
+    position: absolute; top: 74px; right: 34px; pointer-events: none; z-index: 3;
+    font: 800 30px/1 var(--ui); font-stretch: 70%; color: var(--c, var(--stamp));
+    border: 4px solid currentColor; padding: 7px 14px; border-radius: 6px;
+    transform: rotate(-9deg); opacity: 0; mix-blend-mode: multiply;
+  }
+  .impress.left { right: auto; left: 34px; transform: rotate(8deg); }
+
+  .hold { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; z-index: 4; pointer-events: none; }
+  .hold.on { display: flex; }
+  .hold .ring { pointer-events: auto; display: grid; place-items: center; width: 132px; height: 132px; border-radius: 50%; background: #fffbea; border: 0; cursor: pointer; box-shadow: 0 0 0 6px #fffbea88; }
+  .hold svg { position: absolute; width: 132px; height: 132px; transform: rotate(-90deg); }
+  .hold circle { fill: none; stroke: var(--c, var(--stamp)); stroke-width: 7; stroke-dasharray: 389; stroke-dashoffset: 389; }
+  .hold .lbl { position: relative; font: 700 14px/1.2 var(--ui); font-stretch: 82%; text-align: center; padding: 0 16px; color: var(--ink); }
+
+  /* actions under the stack: the same four answers, for clicking, and as a legend */
+  .actions { display: flex; justify-content: center; gap: 10px; padding: 8px 90px 18px; flex-wrap: wrap; }
+  .act { display: flex; gap: 8px; align-items: center; background: transparent; cursor: pointer; border: 2px solid var(--c); color: var(--c); border-radius: 4px; padding: 8px 12px; font: 700 14px/1 var(--ui); font-stretch: 80%; }
+  .act kbd { font: 700 16px/1 var(--ui); }
+  .act.accept { --c: var(--stamp); } .act.reject { --c: var(--thread); } .act.answer { --c: var(--ink); } .act.pass { --c: var(--pass); }
+  .gesture-hint { width: 100%; text-align: center; font-stretch: 88%; font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+
+  /* sheets for ↑ and ↓, and the toast */
+  .sheet { position: absolute; left: 50%; bottom: 18px; width: min(640px, calc(100% - 180px)); transform: translate(-50%, calc(100% + 40px)); background: #fffbea; padding: 16px 20px 18px; z-index: 5; border-top: 4px solid var(--c, var(--ink)); transition: transform 260ms cubic-bezier(.2,.9,.25,1.05), visibility 0s 260ms; visibility: hidden; }
+  .sheet.open { transform: translate(-50%, 0); visibility: visible; transition: transform 260ms cubic-bezier(.2,.9,.25,1.05); }
+  .sheet h4 { margin: 0 0 10px; font: 700 15px/1.2 var(--ui); font-stretch: 85%; }
+  .sheet .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sheet .opts button { padding: 9px 12px; border: 1.5px solid var(--manila-edge); background: var(--manila-light); border-radius: 3px; cursor: pointer; font: 600 14px/1 var(--ui); font-stretch: 85%; }
+  .sheet .opts button[aria-pressed="true"] { border-color: var(--ink); background: var(--manila); }
+  .sheet textarea { width: 100%; margin-top: 10px; min-height: 58px; font: 16px/1.4 var(--prose); padding: 8px 10px; border: 1.5px solid var(--manila-edge); background: #fff; }
+  .sheet .row { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+  .sheet .send { padding: 9px 14px; background: var(--ink); color: #fff; border: 0; border-radius: 3px; font: 700 14px/1 var(--ui); font-stretch: 85%; cursor: pointer; }
+  .sheet .cancel { background: none; border: 0; color: var(--ink-soft); cursor: pointer; font-stretch: 85%; }
+
+  .toast { position: absolute; left: 50%; top: 16px; transform: translate(-50%, calc(-100% - 30px)); background: var(--ink); color: #f4eefa; padding: 10px 16px; border-radius: 4px; z-index: 6; font-stretch: 88%; transition: transform 240ms ease, visibility 0s 240ms; max-width: 80%; visibility: hidden; }
+  .toast.on { transform: translate(-50%, 0); visibility: visible; transition: transform 240ms ease; }
+  .toast .chips { display: inline-flex; gap: 6px; margin-left: 10px; }
+  .toast .chips button { background: #ffffff22; border: 0; color: #fff; padding: 4px 8px; border-radius: 3px; cursor: pointer; font: 600 13px/1 var(--ui); font-stretch: 85%; }
+
+  .empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; text-align: center; }
+  .empty.on { display: flex; }
+  .empty p { font: 500 22px/1.3 var(--prose); margin: 0; max-width: 30ch; }
+  .empty button { padding: 9px 14px; border: 2px solid var(--ink); background: transparent; border-radius: 4px; cursor: pointer; font: 700 14px/1 var(--ui); font-stretch: 85%; }
+
+  /* ------------------------------------------------------------ where this sits */
+  .context { padding: 20px 26px 20px 8px; overflow: auto; }
+  .gist { font: 400 16.5px/1.45 var(--prose); margin: 0 0 18px; padding: 12px 14px; background: #ffffff38; border-left: 3px solid var(--thread); }
+  .spine { list-style: none; margin: 0; padding: 0; position: relative; }
+  .spine::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 14px; width: 2px; background: var(--thread); opacity: .55; }
+  .level { position: relative; padding: 0 0 16px 28px; }
+  .level::before { content: ""; position: absolute; left: 1px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--desk); box-shadow: inset 0 0 0 2.5px var(--thread); }
+  .level.here::before { background: var(--thread); box-shadow: 0 0 0 4px #8e3a5f33; }
+  .level .k { font: 650 12.5px/1.2 var(--ui); font-stretch: 82%; color: var(--ink-soft); }
+  .level .h { font: 600 16px/1.3 var(--prose); margin: 2px 0 2px; }
+  .level .d { font: 400 14.5px/1.4 var(--prose); color: #3e3352; margin: 0; }
+  .marks { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+  .mark { display: inline-flex; gap: 5px; align-items: center; font: 500 12.5px/1.2 var(--ui); font-stretch: 85%; color: var(--ink-soft); }
+  .mark i { width: 9px; height: 9px; border-radius: 2px; box-shadow: inset 0 0 0 1.8px var(--ink-soft); }
+  .mark.settled i { background: var(--ink-soft); box-shadow: none; }
+  .mark.this { color: var(--ink); font-weight: 700; }
+  .mark.this i { background: var(--thread); box-shadow: 0 0 0 2px #8e3a5f44; }
+  .level ul { margin: 6px 0 0; padding-left: 16px; font: 400 14.5px/1.4 var(--prose); }
+  .sha { font-family: var(--ui); font-stretch: 75%; font-weight: 650; font-size: 13px; }
+
+  @media (max-width: 1180px) {
+    body { overflow: auto; }
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .stage { min-height: 760px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .sheet, .toast { transition: none; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="wordmark">Baesian</span>
+  <span class="summary" id="summary"></span>
+  <span class="presence"><i aria-hidden="true"></i>You're here, so blocking cards wait for you</span>
+</header>
+
+<div class="layout">
+  <nav class="queue" aria-label="Cards waiting, grouped by the work they belong to">
+    <h2>Waiting, by the work they belong to</h2>
+    <div id="queue"></div>
+  </nav>
+
+  <section class="stage" id="stage" aria-label="The card to answer">
+    <div class="edge right" aria-hidden="true"><kbd>→</kbd><span data-label="accept">Accept</span></div>
+    <div class="edge left" aria-hidden="true"><kbd>←</kbd><span data-label="reject">Reject</span></div>
+    <div class="edge up" aria-hidden="true"><kbd>↑</kbd>Answer in writing</div>
+    <div class="edge down" aria-hidden="true"><kbd>↓</kbd>Can't judge</div>
+    <div class="stack" id="stack"></div>
+    <div class="actions" role="group" aria-label="Answer">
+      <button class="act reject" data-dir="left"><kbd>←</kbd><span data-label="reject">Reject</span></button>
+      <button class="act accept" data-dir="right"><kbd>→</kbd><span data-label="accept">Accept</span></button>
+      <button class="act answer" data-dir="up"><kbd>↑</kbd>Answer in writing</button>
+      <button class="act pass" data-dir="down"><kbd>↓</kbd>Can't judge</button>
+      <p class="gesture-hint">Swipe the card with two fingers on the trackpad, drag it, or use the arrow keys. A hard card waits at the edge until you hold to confirm.</p>
+    </div>
+    <div class="hold" id="hold"><button class="ring" id="ring" aria-label="Hold to confirm"><svg viewBox="0 0 132 132" aria-hidden="true"><circle cx="66" cy="66" r="62"/></svg><span class="lbl" id="holdlbl"></span></button></div>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="false"></div>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="empty" id="empty"><p>Nothing needs you right now. Agents will notify you when they file a card.</p><button id="again">Start the prototype again</button></div>
+  </section>
+
+  <aside class="context" aria-label="Where this decision sits">
+    <h2>Where this decision sits</h2>
+    <p class="gist" id="gist"></p>
+    <ol class="spine" id="spine"></ol>
+  </aside>
+</div>
+
+<script type="module">
+import { animate } from "https://cdn.jsdelivr.net/npm/motion@14.6.0/+esm";
+
+// The self-test runs in headless Chrome, whose virtual clock doesn't produce animation frames:
+// drive frames with timers there, and take the reduced-motion path.
+const SELFTEST = location.hash === "#selftest";
+if (SELFTEST) window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 16);
+
+// ------------------------------------------------------------------ the data (all of it structured, D65)
+const PROJECT = { name: "baesian", settled: 41, rules: 6 };
+const AREAS = {
+  client: { name: "client", topics: [["client/server", "settled", "server"], ["client/security", "open", "security"], ["client/live-updates", "open", "live updates"], ["client/render", "audit", "render"]] },
+  time: { name: "time", topics: [["time/format", "conflict", "format"], ["time/zones", "settled", "zones"]] },
+  release: { name: "release", topics: [["release/packaging", "open", "packaging"], ["release/versioning", "settled", "versioning"]] },
+};
+const WORKS = {
+  "feat/m4-client": { title: "Build the local server the client talks to", agent: "claude-code", cards: [["B-r4tz9", "settled", "Serve with Node's http module"], ["B-h2wq8", "open", "Token in the URL fragment"], ["B-k7m2p", "open", "Live updates over SSE"]] },
+  "merge feat/m4-ui": { title: "Merge the client's views into main", agent: "codex", cards: [["B-v8nq3", "open", "Conflict on time/format"]] },
+  "feat/m4-ui": { title: "Build the client's views", agent: "codex", cards: [["B-q7r8s", "settled", "Store card times as epoch"], ["B-c5d1x", "open", "Ship the client in the package"], ["B-9fz6m", "audit", "Cache rendered Markdown"]] },
+};
+const CARDS = [
+  { id: "B-h2wq8", short: "Keep the access token in the URL fragment", level: "hard", topic: "client/security", area: "client", work: "feat/m4-client",
+    title: "Keep the client's access token in the URL fragment?",
+    proposal: ["In the URL fragment", "The page reads it, sends it as a header, then removes it from the address bar. A fragment never reaches the server's logs."],
+    alt: ["A cookie set on first visit", "Survives reloads without a token in the URL, but needs SameSite settings and a login step on each new browser."],
+    why: "The server's request check is being written now. An agent has stopped until you answer.",
+    cost: "Cheap today. Once bookmarks and Tailscale links use one form, changing it breaks them.",
+    depends: [["B-r4tz9", "Serve the client with Node's http module", "settled"]],
+    built: [], waiting: ["claude-code has stopped on feat/m4-client"] },
+  { id: "B-k7m2p", short: "Push live updates with server-sent events", level: "provisional", topic: "client/live-updates", area: "client", work: "feat/m4-client",
+    title: "Push live updates to the client with server-sent events?",
+    proposal: ["Server-sent events", "One-way is all that's needed, the browser reconnects by itself, and Node's http module serves them without a dependency."],
+    alt: ["WebSockets", "One connection could also carry your answers and the presence heartbeat, at the cost of a dependency or a hand-rolled frame parser."],
+    why: "The live view is being built on it now.",
+    cost: "Small today: one module. It grows with every view that subscribes to it.",
+    depends: [["B-r4tz9", "Serve the client with Node's http module", "settled"]],
+    built: [["3f9a1c2", "Add the live event stream"], ["8be04d7", "Subscribe the queue view"]], waiting: ["claude-code, building on it", "codex, attached from feat/m4-ui"] },
+  { id: "B-v8nq3", short: "Settle the time format conflict", level: "blocking", topic: "time/format", area: "time", work: "merge feat/m4-ui", kind: "conflict",
+    title: "Conflict on time/format: keep ISO 8601 strings or Unix epoch integers?",
+    proposal: ["ISO 8601 strings", "Already decided on main. Readable in the record, and sorts correctly as text."],
+    alt: ["Unix epoch integers", "Decided on feat/m4-ui: smaller, and the client's charts use them directly."],
+    why: "Merging feat/m4-ui into main waits on this.",
+    cost: "Whichever loses is superseded, and the work built on it gets a rework brief.",
+    depends: [["B-a1b2c", "Store times as ISO 8601 strings (main)", "settled"], ["B-q7r8s", "Store card times as epoch integers (feat/m4-ui)", "settled"]],
+    built: [["5d0e2aa", "Store card times as epoch integers"]], waiting: ["codex, whose merge is blocked"] },
+  { id: "B-c5d1x", short: "Ship the built client in the npm package", level: "provisional", topic: "release/packaging", area: "release", work: "feat/m4-ui",
+    title: "Ship the built client inside the npm package?",
+    proposal: ["Yes, as static files", "Build the client at release and ship it in dist/client, so `baesian serve` works offline."],
+    alt: ["Serve it from a CDN", "A smaller package, but the client then needs the network, and its version can drift from the CLI's."],
+    why: "The release script is next.",
+    cost: "Moderate: it changes what installs, and how `baesian serve` finds the files.",
+    depends: [], built: [["9a41f0c", "Copy the client build into dist/client"]], waiting: ["codex, building on it"] },
+  { id: "B-9fz6m", short: "Cache rendered Markdown in memory", level: "audit", topic: "client/render", area: "client", work: "feat/m4-ui", kind: "audit",
+    title: "Overturn? Cache rendered Markdown in memory",
+    proposal: ["Keep it", "An agent decided this alone as a two-way door: rendered card bodies stay in memory, and are cleared when a file changes."],
+    alt: ["Render every request", "Simpler, and fast enough below a few hundred cards."],
+    why: "A sample of the decisions agents make without a card, so you can check their judgement.",
+    cost: "Cheap either way: one function.",
+    depends: [], built: [["c18b77e", "Cache rendered bodies"]], waiting: ["nobody: it's already in the code"] },
+];
+
+const LABELS = { accept: "Accept", reject: "Reject" };
+const AUDIT_LABELS = { accept: "Let it stand", reject: "Overturn" };
+const answered = new Map(); // id -> verdict word
+let order = CARDS.map((c) => c.id);
+let currentIndex = 0;
+
+// ------------------------------------------------------------------ rendering
+const $ = (id) => document.getElementById(id);
+const byId = (id) => CARDS.find((c) => c.id === id);
+const pending = () => order.filter((id) => !answered.has(id));
+
+function cardHtml(c) {
+  const lvl = c.level === "audit" ? "Audit" : c.level[0].toUpperCase() + c.level.slice(1);
+  const altHead = c.kind === "conflict" ? "The other decision" : c.kind === "audit" ? "What it could be instead" : "Strongest alternative";
+  const propHead = c.kind === "conflict" ? "Keep main's decision" : c.kind === "audit" ? "What the agent did" : "Proposal";
+  return `
+    <div class="impress" data-impress></div>
+    <div class="head"><span class="lvl ${c.level}">${lvl}</span><span>${c.topic}</span></div>
+    <h1 title="Card ${c.id}, for the CLI and commit trailers">${c.title}</h1>
+    <div class="choice">
+      <div><h3>${propHead}</h3><p class="big">${c.proposal[0]}</p><p>${c.proposal[1]}</p></div>
+      <div class="alt"><h3>${altHead}</h3><p class="big">${c.alt[0]}</p><p>${c.alt[1]}</p></div>
+    </div>
+    <div class="more"><div><h3>Why now</h3><p>${c.why}</p></div><div><h3>Cost to reverse</h3><p>${c.cost}</p></div></div>`;
+}
+
+function renderStack() {
+  const stack = $("stack");
+  stack.innerHTML = "";
+  const ids = pending();
+  $("empty").classList.toggle("on", ids.length === 0);
+  const start = Math.max(0, ids.indexOf(order[currentIndex]));
+  const shown = ids.slice(start).concat(ids.slice(0, start)).slice(0, 3);
+  shown.reverse().forEach((id, i, arr) => {
+    const el = document.createElement("article");
+    el.className = `card p${arr.length - 1 - i}`;
+    el.dataset.id = id;
+    el.innerHTML = cardHtml(byId(id));
+    el.setAttribute("aria-label", byId(id).title);
+    stack.appendChild(el);
+  });
+  const top = stack.querySelector(".card.p0");
+  if (top) bindCard(top);
+  relabel();
+  renderQueue();
+  renderContext();
+  renderSummary();
+}
+
+function topCard() { return $("stack").querySelector(".card.p0"); }
+function topData() { const t = topCard(); return t && byId(t.dataset.id); }
+
+function relabel() {
+  const c = topData();
+  const labels = c && c.kind === "audit" ? AUDIT_LABELS : LABELS;
+  document.querySelectorAll("[data-label]").forEach((s) => { s.textContent = labels[s.dataset.label]; });
+}
+
+function renderSummary() {
+  const left = pending();
+  const hard = left.filter((id) => byId(id).level === "hard").length;
+  $("summary").innerHTML = left.length
+    ? `<b>${left.length} card${left.length === 1 ? "" : "s"} need you.</b> ${hard ? "One is hard: an agent has stopped until you answer it." : "None is hard."}`
+    : "<b>Nothing needs you.</b>";
+}
+
+function renderQueue() {
+  const q = $("queue");
+  q.innerHTML = "";
+  const current = topData();
+  for (const [branch, w] of Object.entries(WORKS)) {
+    const ids = CARDS.filter((c) => c.work === branch).map((c) => c.id);
+    if (!ids.length) continue;
+    const g = document.createElement("div");
+    g.className = "work";
+    const open = ids.filter((id) => !answered.has(id)).length;
+    g.innerHTML = `<div class="work-head"><div class="w">${w.title}</div><div class="b">${branch}, by ${w.agent}. ${open} of ${ids.length} waiting.</div></div>`;
+    for (const id of ids) {
+      const c = byId(id);
+      const b = document.createElement("button");
+      b.className = `item${current && current.id === id ? " current" : ""}${answered.has(id) ? " done" : ""}`;
+      b.innerHTML = `<span class="mk ${c.level}"></span><span class="t">${c.title}</span>`;
+      b.addEventListener("click", () => { if (!answered.has(id)) { currentIndex = order.indexOf(id); renderStack(); } });
+      g.appendChild(b);
+    }
+    q.appendChild(g);
+  }
+}
+
+function marks(list, thisId) {
+  return `<div class="marks">${list.map(([id, state, label]) => `<span class="mark ${id === thisId ? "this" : state === "settled" ? "settled" : ""}"><i></i>${label}</span>`).join("")}</div>`;
+}
+
+function renderContext() {
+  const c = topData();
+  if (!c) { $("gist").textContent = "Every card is answered."; $("spine").innerHTML = ""; return; }
+  const w = WORKS[c.work], a = AREAS[c.area];
+  const settledInWork = w.cards.filter(([, s]) => s === "settled").length;
+  const pos = w.cards.findIndex(([id]) => id === c.id) + 1;
+  const ord = ["first", "second", "third", "fourth", "fifth"][pos - 1] ?? `${pos}th`;
+  const deps = c.depends.length ? `It builds on ${c.depends.length === 1 ? "a settled decision" : `${c.depends.length} settled decisions`}. ` : "It doesn't depend on another decision. ";
+  const built = c.built.length ? `${c.built.length} commit${c.built.length === 1 ? " is" : "s are"} already built on it.` : "Nothing is built on it yet.";
+  $("gist").textContent = `The ${ord} of ${w.cards.length} decisions in the work "${w.title}", in the ${a.name} area. ${deps}${built}`;
+
+  const topicMarks = a.topics.map(([t, s, label]) => [t === c.topic ? c.id : t, s, label]);
+  $("spine").innerHTML = `
+    <li class="level"><div class="k">Project</div><div class="h">${PROJECT.name}</div><p class="d">${PROJECT.settled} decisions settled and ${PROJECT.rules} rules. ${pending().length} waiting for you.</p></li>
+    <li class="level"><div class="k">Area</div><div class="h">${a.name}</div><p class="d">${a.topics.length} topics; ${a.topics.filter(([, s]) => s === "settled").length} settled.</p>${marks(topicMarks, c.id)}</li>
+    <li class="level"><div class="k">Work</div><div class="h">${w.title}</div><p class="d">${c.work}, by ${w.agent}. ${settledInWork} of ${w.cards.length} decisions settled.</p>${marks(w.cards, c.id)}</li>
+    <li class="level here"><div class="k">This decision</div><div class="h" title="Card ${c.id}">${c.short}</div>
+      ${c.depends.length ? `<ul>${c.depends.map(([id, t]) => `<li title="Card ${id}">Builds on a settled decision: ${t[0].toLowerCase()}${t.slice(1)}</li>`).join("")}</ul>` : `<p class="d">No dependencies.</p>`}</li>
+    <li class="level"><div class="k">What it affects</div>
+      ${c.built.length ? `<ul>${c.built.map(([sha, t]) => `<li title="Commit ${sha}">Commit: ${t[0].toLowerCase()}${t.slice(1)}</li>`).join("")}</ul>` : `<p class="d">Nothing built on it yet.</p>`}
+      <ul>${c.waiting.map((x) => `<li>${x}</li>`).join("")}</ul></li>`;
+}
+
+// ------------------------------------------------------------------ gestures
+const THRESH_X = 150, THRESH_Y = 120, HOLD_MS = 900;
+const reduced = SELFTEST || matchMedia("(prefers-reduced-motion: reduce)").matches;
+const s = { x: 0, y: 0, dragging: false, samples: [], anims: [], locked: false, holding: null, wheelIdle: null, wheelCooldown: 0 };
+
+function dirOf(x, y) {
+  if (Math.abs(x) < 8 && Math.abs(y) < 8) return null;
+  return Math.abs(x) >= Math.abs(y) ? (x > 0 ? "right" : "left") : (y < 0 ? "up" : "down");
+}
+function progressOf(x, y) { return Math.min(1.25, Math.max(Math.abs(x) / THRESH_X, Math.abs(y) / THRESH_Y)); }
+const COLORS = { right: "var(--stamp)", left: "var(--thread)", up: "var(--ink)", down: "var(--pass)" };
+const VERB = { right: "accept", left: "reject", up: "answer", down: "pass" };
+
+function render() {
+  const el = topCard();
+  if (!el) return;
+  const rot = Math.max(-14, Math.min(14, s.x * 0.05));
+  el.style.transform = `translate(${s.x}px, ${s.y}px) rotate(${rot}deg)`;
+  const d = dirOf(s.x, s.y), p = progressOf(s.x, s.y);
+  document.querySelectorAll(".edge").forEach((e) => { e.style.opacity = e.classList.contains(d) ? Math.min(1, p) : 0; });
+  const imp = el.querySelector("[data-impress]");
+  if (d === "right" || d === "left") {
+    const c = topData();
+    imp.textContent = (c.kind === "audit" ? AUDIT_LABELS : LABELS)[VERB[d]];
+    imp.className = `impress${d === "left" ? " left" : ""}`;
+    imp.style.setProperty("--c", COLORS[d]);
+    imp.style.opacity = Math.min(1, Math.max(0, (p - 0.25) * 1.4));
+  } else {
+    imp.style.opacity = 0;
+  }
+}
+
+function stopAnims() { s.anims.forEach((a) => a.stop()); s.anims = []; }
+function springTo(x, y, vx = 0, vy = 0) {
+  stopAnims();
+  if (reduced) { s.x = x; s.y = y; render(); return Promise.resolve(); }
+  const ax = animate(s.x, x, { type: "spring", stiffness: 520, damping: 34, velocity: vx, onUpdate: (v) => { s.x = v; render(); } });
+  const ay = animate(s.y, y, { type: "spring", stiffness: 520, damping: 34, velocity: vy, onUpdate: (v) => { s.y = v; render(); } });
+  s.anims = [ax, ay];
+  return Promise.all([ax.finished, ay.finished]);
+}
+
+function velocity() {
+  const now = performance.now();
+  const recent = s.samples.filter((p) => now - p.t < 90);
+  if (recent.length < 2) return { vx: 0, vy: 0 };
+  const a = recent[0], b = recent[recent.length - 1], dt = Math.max(1, b.t - a.t);
+  return { vx: ((b.x - a.x) / dt) * 1000, vy: ((b.y - a.y) / dt) * 1000 };
+}
+function sample() { s.samples.push({ x: s.x, y: s.y, t: performance.now() }); if (s.samples.length > 12) s.samples.shift(); }
+
+function release() {
+  const { vx, vy } = velocity();
+  const d = dirOf(s.x, s.y);
+  const p = progressOf(s.x, s.y);
+  const flick = d && (Math.abs(d === "left" || d === "right" ? vx : vy) > 900) && p > 0.3;
+  s.dragging = false;
+  topCard()?.classList.remove("dragging");
+  if (d && (p >= 1 || flick)) return reach(d, vx, vy);
+  springTo(0, 0, vx, vy);
+}
+
+// The card has reached an edge: hard cards wait for a hold; answers and passes open their sheets.
+function reach(d, vx = 0, vy = 0, viaKey = false) {
+  const c = topData();
+  if (d === "up" || d === "down") { springTo(0, d === "up" ? -40 : 40); return openSheet(d); }
+  if (c.level === "hard") {
+    const ex = d === "right" ? THRESH_X * 1.05 : -THRESH_X * 1.05;
+    springTo(ex, 0, vx, vy);
+    return startHold(d, viaKey);
+  }
+  return commit(d, vx, vy);
+}
+
+async function commit(d, vx = 0, vy = 0) {
+  const c = topData();
+  if (!c) return;
+  s.locked = true;
+  endHold();
+  const W = innerWidth, H = innerHeight;
+  const target = { right: [W, s.y + vy * 0.1], left: [-W, s.y + vy * 0.1], up: [s.x, -H], down: [s.x, H] }[d];
+  stopAnims();
+  if (!reduced) {
+    const ax = animate(s.x, target[0], { duration: 0.34, ease: "easeIn", onUpdate: (v) => { s.x = v; render(); } });
+    const ay = animate(s.y, target[1], { duration: 0.34, ease: "easeIn", onUpdate: (v) => { s.y = v; render(); } });
+    await Promise.all([ax.finished, ay.finished]);
+  }
+  const labels = c.kind === "audit" ? AUDIT_LABELS : LABELS;
+  const word = d === "right" ? labels.accept : d === "left" ? labels.reject : d === "up" ? "Answered" : "Passed on";
+  answered.set(c.id, word);
+  s.x = 0; s.y = 0; s.samples = []; s.locked = false;
+  document.querySelectorAll(".edge").forEach((e) => (e.style.opacity = 0));
+  currentIndex = order.indexOf(pending()[0] ?? c.id);
+  closeSheet();
+  showToast(c, d, word);
+  renderStack();
+}
+
+// ------------------------------------------------------------------ hold to confirm (D67)
+let holdRaf = 0;
+function startHold(d, viaKey) {
+  const c = topData();
+  const ring = $("hold");
+  ring.classList.add("on");
+  ring.style.setProperty("--c", COLORS[d]);
+  const word = (c.kind === "audit" ? AUDIT_LABELS : LABELS)[VERB[d]];
+  $("holdlbl").textContent = `Hard card. Hold ${d === "right" ? "→" : "←"} or press here to ${word.toLowerCase()}`;
+  s.holding = { d, start: null, viaKey };
+  ring.querySelector("circle").style.strokeDashoffset = 389;
+  clearTimeout(s.holdGiveUp);
+  s.holdGiveUp = setTimeout(() => { if (s.holding && !s.holding.start) cancelHold(); }, 5000);
+}
+function beginHoldTimer() {
+  if (!s.holding || s.holding.start) return;
+  s.holding.start = performance.now();
+  const circle = $("hold").querySelector("circle");
+  const tick = () => {
+    if (!s.holding || !s.holding.start) return;
+    const p = Math.min(1, (performance.now() - s.holding.start) / HOLD_MS);
+    circle.style.strokeDashoffset = 389 * (1 - p);
+    // The key (or pointer) is still down when the hold completes: its release must not answer the next card.
+    if (p >= 1) { const d = s.holding.d; keyHeld = null; endHold(); commit(d); return; }
+    holdRaf = requestAnimationFrame(tick);
+  };
+  holdRaf = requestAnimationFrame(tick);
+}
+function stopHoldTimer() {
+  if (!s.holding || !s.holding.start) return;
+  cancelHold("Let go too soon: a hard card needs a full hold.");
+}
+function cancelHold(msg) {
+  endHold();
+  springTo(0, 0);
+  if (msg) flash(msg);
+}
+function endHold() {
+  cancelAnimationFrame(holdRaf);
+  clearTimeout(s.holdGiveUp);
+  s.holding = null;
+  $("hold").classList.remove("on");
+}
+const ringBtn = $("ring");
+ringBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); beginHoldTimer(); });
+ringBtn.addEventListener("pointerup", stopHoldTimer);
+ringBtn.addEventListener("pointerleave", () => s.holding?.start && stopHoldTimer());
+
+// ------------------------------------------------------------------ pointer drag (mouse, pen, touch)
+function bindCard(el) {
+  el.addEventListener("pointerdown", (e) => {
+    if (s.locked || s.holding || e.button !== 0) return;
+    stopAnims();
+    el.setPointerCapture(e.pointerId);
+    s.dragging = true; el.classList.add("dragging");
+    const ox = e.clientX - s.x, oy = e.clientY - s.y;
+    s.samples = [];
+    const move = (ev) => { s.x = ev.clientX - ox; s.y = ev.clientY - oy; sample(); render(); };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      // A hard card dragged past the edge and held still: the pointer itself is the hold.
+      const d = dirOf(s.x, s.y);
+      if (topData()?.level === "hard" && d && (d === "left" || d === "right") && progressOf(s.x, s.y) >= 1 && s.holding?.start) return stopHoldTimer();
+      release();
+    };
+    el.addEventListener("pointermove", (ev) => {
+      if (topData()?.level === "hard" && progressOf(s.x, s.y) >= 1 && !s.holding) {
+        const d = dirOf(s.x, s.y);
+        if (d === "left" || d === "right") { startHold(d, false); beginHoldTimer(); }
+      }
+    });
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  });
+}
+
+// ------------------------------------------------------------------ two-finger trackpad swipe
+// Wheel deltas move the card; the gesture ends when the events stop. macOS keeps sending momentum
+// events after the fingers lift, so a short cooldown follows each release.
+$("stage").addEventListener("wheel", (e) => {
+  if (e.ctrlKey) return; // pinch-zoom
+  e.preventDefault();
+  if (s.locked || s.holding || performance.now() < s.wheelCooldown || !topCard()) return;
+  if (!s.dragging) { stopAnims(); s.dragging = true; s.samples = []; }
+  s.x -= e.deltaX; s.y -= e.deltaY;
+  sample(); render();
+  clearTimeout(s.wheelIdle);
+  s.wheelIdle = setTimeout(() => { s.wheelCooldown = performance.now() + 650; release(); }, 110);
+}, { passive: false });
+
+// ------------------------------------------------------------------ keys
+const KEYS = { ArrowRight: "right", ArrowLeft: "left", ArrowUp: "up", ArrowDown: "down" };
+let keyHeld = null;
+addEventListener("keydown", (e) => {
+  if (e.target instanceof Element && e.target.closest("textarea, .sheet")) { if (e.key === "Escape") { closeSheet(); springTo(0, 0); } return; }
+  const d = KEYS[e.key];
+  if (e.key === "Escape") { if (s.holding) cancelHold(); closeSheet(); return; }
+  if (e.key === "j" || e.key === "k") { const ids = pending(); if (!ids.length) return; const i = ids.indexOf(topData().id); currentIndex = order.indexOf(ids[(i + (e.key === "j" ? 1 : ids.length - 1)) % ids.length]); renderStack(); return; }
+  if (!d || !topCard() || s.locked) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  keyHeld = d;
+  if (s.holding) { if (s.holding.d === d) beginHoldTimer(); return; }
+  // Lean toward the edge while the key is down.
+  const lean = { right: [THRESH_X * 0.6, 0], left: [-THRESH_X * 0.6, 0], up: [0, -THRESH_Y * 0.6], down: [0, THRESH_Y * 0.6] }[d];
+  springTo(lean[0], lean[1]);
+  if (topData().level === "hard" && (d === "left" || d === "right")) { reach(d, 0, 0, true); beginHoldTimer(); }
+});
+addEventListener("keyup", (e) => {
+  const d = KEYS[e.key];
+  if (!d || keyHeld !== d) return;
+  keyHeld = null;
+  if (s.holding) { if (s.holding.start) stopHoldTimer(); return; }
+  if (s.locked || !topCard() || $("sheet").classList.contains("open")) return;
+  reach(d);
+});
+
+document.querySelectorAll(".act").forEach((b) => b.addEventListener("click", () => {
+  const d = b.dataset.dir;
+  if (!topCard() || s.locked) return;
+  springTo(...({ right: [THRESH_X, 0], left: [-THRESH_X, 0], up: [0, -40], down: [0, 40] }[d])).then(() => reach(d));
+}));
+
+// ------------------------------------------------------------------ sheets, toast
+function openSheet(d) {
+  const c = topData();
+  const sh = $("sheet");
+  sh.style.setProperty("--c", COLORS[d]);
+  if (d === "up") {
+    sh.innerHTML = `<h4>Answer in writing</h4>
+      <div class="opts" id="opts"><button data-o="alt">Choose: ${c.alt[0]}</button><button data-o="ask">Ask: have you considered…</button><button data-o="fix">Write a correction</button><button data-o="no">Reject, with a reason</button></div>
+      <textarea id="txt" aria-label="Your answer" placeholder="Goes back to the agent with the card."></textarea>
+      <div class="row"><button class="send" id="send">Send to the agent</button><button class="cancel" id="cancel">Cancel (Esc)</button></div>`;
+  } else {
+    sh.innerHTML = `<h4>Why can't you judge it?</h4>
+      <div class="opts" id="opts"><button data-o="ctx">I need more context</button><button data-o="area">It's not my area</button></div>
+      <div class="row"><button class="send" id="send">Send</button><button class="cancel" id="cancel">Cancel (Esc)</button></div>`;
+  }
+  sh.querySelectorAll("#opts button").forEach((b) => b.addEventListener("click", () => {
+    sh.querySelectorAll("#opts button").forEach((x) => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    sh.querySelector("textarea")?.focus();
+  }));
+  $("send").addEventListener("click", () => commit(d));
+  $("cancel").addEventListener("click", () => { closeSheet(); springTo(0, 0); });
+  sh.classList.add("open");
+  sh.querySelector("#opts button")?.focus();
+}
+function closeSheet() { $("sheet").classList.remove("open"); }
+
+let toastTimer;
+function showToast(c, d, word) {
+  const t = $("toast");
+  const next = d === "right" && c.level !== "audit" ? `${c.waiting[0].split(",")[0].split(" ")[0]} can carry on.` : "";
+  t.innerHTML = `${word}: ${c.short[0].toLowerCase()}${c.short.slice(1)}. ${next}${d === "left" ? '<span class="chips"><button>Add a reason</button></span>' : ""}`;
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 3200);
+}
+function flash(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+$("again").addEventListener("click", () => { answered.clear(); currentIndex = 0; renderStack(); });
+renderStack();
+
+// ------------------------------------------------------------------ self-test (open with #selftest)
+// #peek-right shows the card mid-drag, for checking the design without a gesture.
+if (location.hash === "#peek-right") { currentIndex = 1; renderStack(); s.x = 118; s.y = -6; render(); }
+
+if (SELFTEST) {
+  const out = [];
+  const log = (m) => { out.push(m); console.log(`SELFTEST ${m}`); };
+  const key = (k, type) => document.body.dispatchEvent(new KeyboardEvent(type, { key: k, bubbles: true }));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  (async () => {
+    window.onerror = (m) => console.log(`SELFTEST error ${m}`);
+    log(`top: ${topData().id} (${topData().level})`);
+    key("ArrowRight", "keydown"); await wait(150); key("ArrowRight", "keyup"); await wait(600);
+    log(`hard card, tapped right: answered=${answered.has("B-h2wq8")} (expected false)`);
+    key("ArrowRight", "keydown"); await wait(1200); key("ArrowRight", "keyup"); await wait(700);
+    log(`hard card, held right: answered=${answered.get("B-h2wq8")} (expected Accept)`);
+    log(`top now: ${topData().id}`);
+    key("ArrowLeft", "keydown"); await wait(80); key("ArrowLeft", "keyup"); await wait(700);
+    log(`provisional card, tapped left: ${answered.get("B-k7m2p")} (expected Reject)`);
+    key("ArrowUp", "keydown"); await wait(80); key("ArrowUp", "keyup"); await wait(400);
+    log(`up opens the sheet: ${$("sheet").classList.contains("open")}`);
+    $("send").click(); await wait(700);
+    log(`sent answer for ${[...answered.keys()].at(-1)}: ${[...answered.values()].at(-1)} (expected Answered)`);
+    log(`top now: ${topData().id}; context gist: ${$("gist").textContent.slice(0, 60)}`);
+    key("j", "keydown"); await wait(50);
+    log(`j moves to: ${topData().id}`);
+    key("ArrowRight", "keydown"); await wait(80); key("ArrowRight", "keyup"); await wait(700);
+    log(`audit card label: ${answered.get("B-9fz6m") ?? answered.get("B-c5d1x")}`);
+    const wheel = async (dx, dy, n) => { for (let i = 0; i < n; i++) { $("stage").dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy, bubbles: true, cancelable: true })); await wait(12); } };
+    log(`left for the trackpad: ${topData()?.id}`);
+    await wheel(-12, 0, 5); await wait(900);
+    log(`small two-finger swipe right: answered=${answered.has("B-c5d1x")} (expected false), card back at x=${Math.round(s.x)}`);
+    await wheel(-24, 0, 10); await wait(900);
+    log(`full two-finger swipe right: ${answered.get("B-c5d1x")} (expected Accept); empty state shown: ${$("empty").classList.contains("on")}`);
+    const pre = document.createElement("pre"); pre.id = "selftest"; pre.textContent = out.join("\n"); document.body.appendChild(pre);
+  })();
+}
+</script>
+</body>
+</html>

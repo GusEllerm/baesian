@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian: choose the client's look</title>
+<style>
+  :root { --ink: #1d1f24; --soft: #5f6470; --rule: #dfe2e8; --bg: #f6f7f9; --pick: #2a3fb0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  :focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
+  header { padding: 18px 28px 10px; }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--soft); max-width: 90ch; }
+  .tabs { display: flex; gap: 6px; padding: 10px 28px 0; }
+  .tab { font: 600 14px/1 system-ui, sans-serif; padding: 10px 14px; border: 1px solid var(--rule); border-bottom: 0; background: #fff; cursor: pointer; border-radius: 4px 4px 0 0; color: var(--soft); }
+  .tab[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 3px 0 var(--pick); }
+  .view { display: grid; grid-template-columns: 1fr 380px; gap: 0; border-top: 1px solid var(--rule); background: #fff; min-height: calc(100vh - 150px); }
+  .frame { position: relative; border-right: 1px solid var(--rule); }
+  .frame iframe { width: 100%; height: calc(100vh - 150px); border: 0; display: block; }
+  .frame a { position: absolute; right: 12px; bottom: 12px; background: #fff; border: 1px solid var(--rule); padding: 6px 10px; border-radius: 3px; font-size: 13px; color: var(--ink); text-decoration: none; }
+  .ballot { padding: 18px 20px 28px; overflow: auto; height: calc(100vh - 150px); }
+  .ballot h2 { margin: 0 0 4px; font-size: 17px; }
+  .ballot .concept { margin: 0 0 14px; color: var(--soft); font-size: 14px; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+  .row label { font-size: 14px; }
+  .scale { display: flex; gap: 3px; }
+  .scale button { width: 28px; height: 28px; border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: 600 13px/1 system-ui, sans-serif; color: var(--soft); }
+  .scale button[aria-pressed="true"] { background: var(--pick); border-color: var(--pick); color: #fff; }
+  .overall { font-weight: 650; }
+  fieldset { border: 0; padding: 0; margin: 14px 0 0; }
+  legend { font-weight: 650; font-size: 14px; margin-bottom: 6px; }
+  .keep label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; padding: 2px 0; }
+  textarea { width: 100%; min-height: 70px; font: 14px/1.4 system-ui, sans-serif; padding: 8px; border: 1px solid var(--rule); border-radius: 3px; margin-top: 6px; }
+  .final { margin: 24px 28px 40px; padding: 18px 20px; background: #fff; border: 1px solid var(--rule); border-radius: 4px; max-width: 900px; }
+  .final h2 { margin: 0 0 10px; font-size: 17px; }
+  .final .grid { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 16px; align-items: center; justify-content: start; }
+  select { font: 14px system-ui, sans-serif; padding: 6px 8px; }
+  .submit { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
+  .submit button { font: 650 15px/1 system-ui, sans-serif; padding: 11px 16px; background: var(--pick); color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+  .status { color: var(--soft); font-size: 14px; }
+  @media (max-width: 1000px) { .view { grid-template-columns: 1fr; } .ballot { height: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Choose the client's look</h1>
+  <p>Three directions for the desktop card view, with the same cards in each. Click inside a mockup, then try the arrow keys: → accept, ← reject, ↑ answer in writing, ↓ can't judge. In Signal, hold an arrow to lean the card and let go to send it, and <kbd>i</kbd> toggles the sources. Your marks save as you go; send the ballot at the bottom when you're done.</p>
+</header>
+<div class="tabs" role="tablist" id="tabs"></div>
+<div class="view">
+  <div class="frame"><iframe id="frame" title="Mockup"></iframe><a id="open" target="_blank" rel="noopener">Open full screen</a></div>
+  <form class="ballot" id="ballot" aria-live="polite"></form>
+</div>
+<section class="final" aria-labelledby="final-h">
+  <h2 id="final-h">Your choice</h2>
+  <div class="grid" id="ranking"></div>
+  <fieldset><legend>Anything to combine from the others?</legend><textarea id="mix" placeholder="E.g. Signal's answer frame with Provenance's threads."></textarea></fieldset>
+  <fieldset><legend>Other notes</legend><textarea id="notes"></textarea></fieldset>
+  <div class="submit"><button type="button" id="send">Send ballot</button><span class="status" id="status"></span></div>
+</section>
+<script src="vote.js"></script>
+</body>
+</html>

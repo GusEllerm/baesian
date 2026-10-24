@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian — Signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wdth,wght@0,75..100,400..700;1,75..100,400..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --white: #FFFFFF;
+    --ink: #16181D;
+    --ink-soft: #5B606B;
+    --rule: #E3E5EA;
+    --accept: #0B7A64;
+    --reject: #A8231C;
+    --answer: #3A49C2;
+    --pass: #858B95;
+    --band: 62px;
+    --font: "Instrument Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--white); color: var(--ink); font: 400 16px/1.45 var(--font); overflow: hidden; }
+  :focus-visible { outline: 2px solid var(--answer); outline-offset: 3px; }
+
+  /* the frame of answers: each edge of the screen is one */
+  .frame { position: fixed; inset: 0; display: grid;
+    grid-template-columns: var(--band) 1fr var(--band); grid-template-rows: var(--band) 1fr var(--band); }
+  .band {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    font: 600 15px/1 var(--font); font-stretch: 85%; color: var(--c); border: 0; cursor: pointer;
+    background: color-mix(in srgb, var(--c) var(--mix, 8%), white);
+    transition: background 120ms linear, color 120ms linear;
+  }
+  .band kbd { font: 700 19px/1 var(--font); }
+  .band.hot { --mix: 100%; color: var(--white); }
+  .band.top { grid-column: 1 / 4; grid-row: 1; --c: var(--answer); }
+  .band.bottom { grid-column: 1 / 4; grid-row: 3; --c: var(--pass); }
+  .band.left { grid-column: 1; grid-row: 2; --c: var(--reject); flex-direction: column; }
+  .band.right { grid-column: 3; grid-row: 2; --c: var(--accept); flex-direction: column; }
+  .band .vl { writing-mode: vertical-rl; }
+  .band.left .vl { transform: rotate(180deg); }
+
+  .inside { grid-column: 2; grid-row: 2; display: grid; grid-template-columns: 236px 1fr 300px; min-height: 0; }
+
+  /* queue rail */
+  .rail { padding: 26px 20px; border-right: 1px solid var(--rule); overflow: auto; }
+  .brand { font: 700 22px/1 var(--font); font-stretch: 75%; margin: 0 0 4px; }
+  .count { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
+  .rail ol { list-style: none; margin: 0; padding: 0; }
+  .rail li { margin: 0 0 4px; }
+  .item { display: grid; grid-template-columns: 10px 1fr; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 9px 8px; font: inherit; color: inherit; cursor: pointer; border-radius: 3px; }
+  .item:hover { background: #F4F5F7; }
+  .item .lv { width: 10px; height: 10px; margin-top: 5px; background: var(--ink-soft); }
+  .item .lv.hard { background: var(--reject); }
+  .item .lv.blocking { background: var(--answer); }
+  .item .lv.provisional { background: transparent; box-shadow: inset 0 0 0 2px var(--ink-soft); }
+  .item .lv.audit { background: transparent; box-shadow: inset 0 0 0 2px var(--pass); border-radius: 50%; }
+  .item .t { font-size: 14.5px; line-height: 1.3; font-stretch: 92%; }
+  .item.current { background: #F1F2F5; box-shadow: inset 3px 0 0 var(--ink); }
+  .rail { display: flex; flex-direction: column; }
+  .here { margin-top: auto; padding-top: 22px; font-size: 13px; color: var(--ink-soft); display: flex; gap: 7px; align-items: center; }
+  .here i { width: 8px; height: 8px; border-radius: 50%; background: var(--accept); }
+
+  /* the card */
+  .stage { display: flex; align-items: center; justify-content: center; padding: 28px 36px; overflow: hidden; }
+  .card {
+    width: min(760px, 100%); border-top: 6px solid var(--ink); padding: 22px 0 8px;
+    transition: transform 140ms ease-out;
+    will-change: transform;
+  }
+  .card.lean-right { transform: translateX(26px) rotate(2.2deg); }
+  .card.lean-left { transform: translateX(-26px) rotate(-2.2deg); }
+  .card.lean-up { transform: translateY(-20px); }
+  .card.lean-down { transform: translateY(20px); }
+  .card.go-right { transition: transform 260ms cubic-bezier(.5,0,.8,.3), opacity 260ms; transform: translateX(110%) rotate(9deg); opacity: 0; }
+  .card.go-left { transition: transform 260ms cubic-bezier(.5,0,.8,.3), opacity 260ms; transform: translateX(-110%) rotate(-9deg); opacity: 0; }
+  .card.arrive { animation: arrive 260ms ease-out; }
+  @keyframes arrive { from { transform: scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .meta { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; font-size: 14px; color: var(--ink-soft); }
+  .meta .id { font-weight: 700; color: var(--ink); font-stretch: 80%; font-size: 15px; }
+  .meta .level { font-weight: 700; color: var(--ink); }
+  .card h1 { font: 700 58px/0.98 var(--font); font-stretch: 75%; letter-spacing: -0.012em; margin: 14px 0 26px; max-width: 16ch; }
+
+  .choice { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .choice > div { padding: 16px 20px 18px 0; }
+  .choice > div + div { padding-left: 20px; border-left: 1px solid var(--rule); }
+  .choice h2 { margin: 0 0 6px; font: 600 14px/1.2 var(--font); color: var(--ink-soft); }
+  .choice .big { font: 600 22px/1.2 var(--font); font-stretch: 85%; margin: 0 0 6px; }
+  .choice p { margin: 0; font-size: 15.5px; line-height: 1.45; color: #2b2f37; max-width: 46ch; }
+
+  .facts { display: flex; gap: 22px; flex-wrap: wrap; margin: 16px 0 0; font-size: 14.5px; }
+  .facts span b { font-weight: 650; }
+  .hint { margin: 18px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+  .hint kbd { font: 700 13px/1 var(--font); border: 1.5px solid var(--rule); border-radius: 3px; padding: 2px 6px; color: var(--ink); }
+
+  .panel { display: none; margin-top: 18px; padding: 14px 16px; background: color-mix(in srgb, var(--answer) 6%, white); border-left: 3px solid var(--answer); }
+  .panel.pass { background: color-mix(in srgb, var(--pass) 9%, white); border-left-color: var(--pass); }
+  .panel.open { display: block; }
+  .panel h3 { margin: 0 0 10px; font: 600 15px/1.2 var(--font); }
+  .panel .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .panel button { font: 600 14px/1 var(--font); font-stretch: 90%; padding: 9px 12px; border: 1.5px solid var(--rule); background: var(--white); border-radius: 3px; cursor: pointer; color: var(--ink); }
+  .panel textarea { width: 100%; margin-top: 10px; min-height: 64px; font: 15.5px/1.45 var(--font); border: 1.5px solid var(--rule); padding: 8px 10px; }
+
+  /* provenance drawer */
+  .drawer { border-left: 1px solid var(--rule); padding: 26px 22px; overflow: auto; }
+  .drawer h2 { margin: 0 0 18px; font: 700 15px/1.2 var(--font); }
+  .drawer h2 kbd { font: 700 12px/1 var(--font); border: 1.5px solid var(--rule); border-radius: 3px; padding: 2px 6px; margin-left: 6px; color: var(--ink-soft); }
+  .src { margin: 0 0 18px; padding-left: 12px; border-left: 3px solid var(--rule); }
+  .src h3 { margin: 0 0 4px; font: 600 13.5px/1.3 var(--font); color: var(--ink-soft); }
+  .src p, .src li { margin: 0; font-size: 14.5px; line-height: 1.4; }
+  .src ul { margin: 0; padding-left: 16px; }
+  .src.dep { border-left-color: var(--accept); }
+  .src.built { border-left-color: var(--ink); }
+  .src .sha { font-weight: 700; font-stretch: 80%; }
+  .src pre { margin: 6px 0 0; font: 12.5px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: #2b2f37; }
+  .drawer.closed { display: none; }
+
+  @media (max-width: 1150px) {
+    .inside { grid-template-columns: 1fr; overflow: auto; }
+    .rail, .drawer { border: 0; }
+    .card h1 { font-size: 44px; }
+    .choice { grid-template-columns: 1fr; }
+    .choice > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); }
+    .here { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .card.go-right, .card.go-left { transition: none; }
+    .card.arrive { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <button class="band top" data-act="answer"><kbd>↑</kbd>Answer in writing</button>
+  <button class="band left" data-act="reject"><kbd>←</kbd><span class="vl">Reject</span></button>
+
+  <div class="inside">
+    <nav class="rail" aria-label="Cards waiting">
+      <p class="brand">Baesian</p>
+      <p class="count">5 need you. 1 is hard.</p>
+      <ol>
+        <li><button class="item"><span class="lv hard" title="Hard"></span><span class="t">Keep the client's access token in the URL fragment?</span></button></li>
+        <li><button class="item current" aria-current="true"><span class="lv provisional" title="Provisional"></span><span class="t">Push live updates to the client with server-sent events?</span></button></li>
+        <li><button class="item"><span class="lv blocking" title="Blocking"></span><span class="t">Conflict on time/format: ISO 8601 strings or Unix epoch integers?</span></button></li>
+        <li><button class="item"><span class="lv provisional" title="Provisional"></span><span class="t">Ship the built client inside the npm package?</span></button></li>
+        <li><button class="item"><span class="lv audit" title="Audit"></span><span class="t">Overturn? Cache rendered Markdown in memory</span></button></li>
+      </ol>
+      <p class="here"><i aria-hidden="true"></i>You're here, so blocking cards wait for you</p>
+    </nav>
+
+    <div class="stage">
+      <article class="card" id="card" aria-labelledby="q">
+        <div class="meta"><span class="id">B-k7m2p</span><span class="level">Provisional</span><span>client/live-updates</span><span>filed by claude-code on feat/m4-client</span></div>
+        <h1 id="q">Push live updates to the client with server‑sent events?</h1>
+        <div class="choice">
+          <div>
+            <h2>Proposal</h2>
+            <p class="big">Server-sent events</p>
+            <p>One-way is all that's needed, the browser reconnects by itself, and Node's http module serves them without a dependency.</p>
+          </div>
+          <div>
+            <h2>Strongest alternative</h2>
+            <p class="big">WebSockets</p>
+            <p>One connection could also carry your answers and the presence heartbeat, at the cost of a dependency or a hand-rolled frame parser.</p>
+          </div>
+        </div>
+        <div class="facts">
+          <span><b>Touches</b> the public API</span>
+          <span><b>2 agents</b> building on it</span>
+          <span><b>Cost to reverse</b> small today, growing</span>
+        </div>
+        <p class="hint">Hold an arrow to lean the card toward an answer; let go to send it. <kbd>i</kbd> shows or hides where it comes from.</p>
+        <div class="panel" id="panel-answer">
+          <h3>Answer in writing</h3>
+          <div class="opts"><button>Use WebSockets instead</button><button>Poll every 2 seconds instead</button><button>Ask: have you considered…</button><button>Write a correction</button></div>
+          <textarea aria-label="Your answer" placeholder="Your answer goes back to the agent with the card."></textarea>
+        </div>
+        <div class="panel pass" id="panel-pass">
+          <h3>Why can't you judge it?</h3>
+          <div class="opts"><button>I need more context</button><button>It's not my area</button></div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="drawer" id="drawer" aria-label="Where this card comes from">
+      <h2>Where it comes from<kbd>i</kbd></h2>
+      <div class="src"><h3>Context</h3><p>The client has to update when an agent files or revises a card. Updates only flow from the server to the browser.</p></div>
+      <div class="src dep"><h3>Depends on B-r4tz9, accepted</h3><p>Serve the client with Node's http module, no framework.</p></div>
+      <div class="src built"><h3>Built on it so far</h3><ul><li><span class="sha">3f9a1c2</span> Add the live event stream</li><li><span class="sha">8be04d7</span> Subscribe the queue view</li></ul></div>
+      <div class="src"><h3>Evidence: src/live.ts</h3><pre>+ res.writeHead(200, { "content-type": "text/event-stream" });</pre></div>
+      <div class="src"><h3>Deck: client-server</h3><p>A local server bound to 127.0.0.1, a token in the URL, no runtime dependencies beyond the core.</p></div>
+      <div class="src"><h3>Waiting on your answer</h3><p>claude-code on feat/m4-client, codex on feat/m4-ui.</p></div>
+    </aside>
+  </div>
+
+  <button class="band right" data-act="accept"><kbd>→</kbd><span class="vl">Accept</span></button>
+  <button class="band bottom" data-act="pass"><kbd>↓</kbd>Can't judge</button>
+</div>
+
+<script>
+  const card = document.getElementById("card");
+  const bands = { accept: ".band.right", reject: ".band.left", answer: ".band.top", pass: ".band.bottom" };
+  const lean = { accept: "lean-right", reject: "lean-left", answer: "lean-up", pass: "lean-down" };
+  const keys = { ArrowRight: "accept", ArrowLeft: "reject", ArrowUp: "answer", ArrowDown: "pass" };
+  let held = null;
+
+  function hot(act, on) { document.querySelector(bands[act]).classList.toggle("hot", on); }
+  function send(act) {
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+    card.classList.remove(...Object.values(lean));
+    hot(act, false);
+    if (act === "answer" || act === "pass") { document.getElementById(`panel-${act}`).classList.add("open"); return; }
+    card.classList.add(act === "accept" ? "go-right" : "go-left");
+    setTimeout(() => { card.className = "card arrive"; }, 300);
+  }
+  addEventListener("keydown", (e) => {
+    if (e.target.tagName === "TEXTAREA") return;
+    if (e.key === "i") document.getElementById("drawer").classList.toggle("closed");
+    if (e.key === "Escape") document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+    const act = keys[e.key];
+    if (!act) return;
+    e.preventDefault();
+    if (held === act) return;
+    held = act;
+    card.classList.remove(...Object.values(lean));
+    card.classList.add(lean[act]);
+    hot(act, true);
+  });
+  addEventListener("keyup", (e) => {
+    const act = keys[e.key];
+    if (act && held === act) { held = null; send(act); }
+  });
+  document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => send(b.dataset.act)));
+</script>
+</body>
+</html>

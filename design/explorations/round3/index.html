@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian: round 3 prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="atlas"></div>
+<svg id="thread" aria-hidden="true"><path id="thread-path"/><circle id="thread-end" r="3.5"/></svg>
+
+<header class="bar">
+  <span class="wordmark">Baesian</span>
+  <span class="summary" id="summary"></span>
+  <div class="tools">
+    <button class="tool" id="practice" aria-pressed="false" title="Occasionally show a practice card: a past decision with the option you rejected as the proposal. Revealed right after you answer.">Practice cards: off</button>
+    <button class="tool" id="calib" aria-expanded="false">Your calibration</button>
+    <span class="presence"><i aria-hidden="true"></i>You're here</span>
+  </div>
+</header>
+
+<div class="edge-cue left" id="cue-left" aria-hidden="true"></div>
+<div class="edge-cue right" id="cue-right" aria-hidden="true"></div>
+
+<main class="stage" id="stage" aria-label="The card to answer">
+  <article class="card" id="card" tabindex="0"></article>
+</main>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="false"></div>
+<aside class="mirror" id="mirror" aria-label="Your calibration"></aside>
+<div class="toast" id="toast" role="status"></div>
+<div class="practice-reveal" id="practice-reveal" role="dialog"></div>
+<div class="empty" id="empty"><p>Nothing needs you right now. Agents will tell you when they file a card.</p><button id="again">Start the prototype again</button></div>
+
+<footer class="dock">
+  <span class="label">Next up</span>
+  <span id="chips"></span>
+  <span class="hint"><kbd>←</kbd> <kbd>→</kbd> or two-finger swipe to answer; <kbd>↑</kbd> write; <kbd>↓</kbd> can't judge. Hold <kbd>Space</kbd> for more map; <kbd>j</kbd> <kbd>k</kbd> move.</span>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

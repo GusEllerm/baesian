@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian — Provenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --desk: #D9D0DA;
+    --desk-deep: #CCC1CE;
+    --manila: #EBDBA9;
+    --manila-edge: #D9C589;
+    --ink: #2E2343;
+    --ink-soft: #5E5170;
+    --thread: #8E3A5F;
+    --stamp: #2C3DA6;
+    --ochre: #9A7406;
+    --ui: "Archivo", system-ui, sans-serif;
+    --prose: "Alegreya", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(120% 90% at 50% 10%, var(--desk) 0%, var(--desk-deep) 100%);
+    color: var(--ink);
+    font-family: var(--ui);
+    font-size: 15px;
+    line-height: 1.4;
+    overflow: hidden;
+  }
+  :focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
+
+  /* ---------------------------------------------------------------- top bar */
+  .bar {
+    height: 52px; display: flex; align-items: center; gap: 24px;
+    padding: 0 28px; border-bottom: 1px solid #c3b6c5;
+  }
+  .wordmark { font-weight: 800; font-stretch: 72%; font-size: 22px; letter-spacing: 0.01em; }
+  .bar .summary { font-stretch: 88%; color: var(--ink-soft); }
+  .bar .summary strong { color: var(--ink); font-weight: 650; }
+  .presence { margin-left: auto; display: flex; align-items: center; gap: 8px; font-stretch: 88%; color: var(--ink-soft); }
+  .presence i { width: 8px; height: 8px; border-radius: 50%; background: #3f8f5a; box-shadow: 0 0 0 3px #3f8f5a33; }
+
+  /* ---------------------------------------------------------------- layout */
+  main {
+    position: relative;
+    display: grid;
+    grid-template-columns: 270px minmax(520px, 1fr) 310px;
+    height: calc(100% - 52px);
+  }
+  #threads { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+
+  /* ---------------------------------------------------------------- queue */
+  .queue { padding: 22px 18px 22px 26px; overflow: auto; }
+  .queue h2, .sources h2 {
+    font: 600 13px/1 var(--ui); font-stretch: 85%; color: var(--ink-soft);
+    margin: 0 0 14px; letter-spacing: 0.01em;
+  }
+  .peg { position: relative; margin: 0 0 14px; }
+  .mini {
+    width: 100%; text-align: left; border: 0; cursor: pointer; color: inherit;
+    background: var(--manila);
+    clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%, 0 16px);
+    padding: 22px 14px 12px;
+    font: inherit;
+    transform: rotate(var(--tilt, 0deg));
+    transition: transform 160ms ease;
+  }
+  .peg:nth-child(odd) .mini { --tilt: -0.8deg; }
+  .peg:nth-child(even) .mini { --tilt: 0.6deg; }
+  .mini::before {
+    content: ""; position: absolute; top: 7px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px;
+    border-radius: 50%; background: var(--desk); box-shadow: 0 0 0 2.5px var(--manila-edge);
+  }
+  .mini .id { font-stretch: 75%; font-weight: 650; font-size: 13px; }
+  .mini .t { font-family: var(--prose); font-size: 15.5px; line-height: 1.25; margin: 3px 0 6px; }
+  .mini .m { font-stretch: 82%; font-size: 12.5px; color: var(--ink-soft); }
+  .mini.selected { --tilt: 0deg; background: #F3E6BC; outline: 2px solid var(--thread); outline-offset: -2px; }
+  .lvl { display: inline-block; font-stretch: 75%; font-weight: 700; font-size: 12px; padding: 1px 7px 2px; margin-right: 6px; border-radius: 2px; }
+  .lvl.hard { background: var(--thread); color: #fbeef3; }
+  .lvl.blocking { background: var(--ochre); color: #fff8e2; }
+  .lvl.provisional { box-shadow: inset 0 0 0 1.5px var(--ink-soft); color: var(--ink-soft); }
+  .lvl.audit { box-shadow: inset 0 0 0 1.5px var(--ink-soft); color: var(--ink-soft); font-style: italic; }
+
+  /* ---------------------------------------------------------------- the hanging tag */
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 24px 24px; overflow: auto; }
+  .string { width: 1.5px; height: 46px; background: #6d5d7d; flex: none; }
+  .tag {
+    --notch: 54px;
+    position: relative; width: min(690px, 100%);
+    background: var(--manila);
+    clip-path: polygon(var(--notch) 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%, 0 var(--notch));
+    padding: 62px 52px 30px;
+    transform-origin: 50% 0;
+  }
+  .tag::before { /* the punched hole and its reinforcement ring */
+    content: ""; position: absolute; top: 16px; left: 50%; width: 20px; height: 20px; margin-left: -10px;
+    border-radius: 50%; background: var(--desk); box-shadow: 0 0 0 5px var(--manila-edge);
+  }
+  .tag .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-stretch: 82%; color: var(--ink-soft); }
+  .tag .head .id { font-weight: 700; color: var(--ink); font-stretch: 75%; font-size: 15px; }
+  .tag h1 {
+    font: 700 31px/1.15 var(--prose); margin: 10px 0 14px; letter-spacing: -0.005em; max-width: 26ch;
+  }
+  .proposal { font: 500 19px/1.35 var(--prose); margin: 0 0 18px; }
+  .proposal b { font-family: var(--ui); font-stretch: 82%; font-weight: 650; font-size: 14px; color: var(--ink-soft); margin-right: 8px; }
+  .facts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .fact { font-stretch: 80%; font-size: 12.5px; padding: 2px 8px; border: 1.5px dashed #b9a467; border-radius: 2px; }
+  section.line { display: grid; grid-template-columns: 148px 1fr; gap: 14px; padding: 9px 0; border-top: 1px solid #d7c48a; }
+  section.line h3 { margin: 0; font: 650 13.5px/1.5 var(--ui); font-stretch: 82%; color: var(--ink-soft); }
+  section.line p { margin: 0; font: 400 16.5px/1.5 var(--prose); max-width: 62ch; }
+  section.line.alt p { font-style: italic; }
+  .anchor { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--thread); margin-left: 6px; vertical-align: middle; }
+
+  /* ---------------------------------------------------------------- stamps */
+  .stamps { display: grid; grid-template-columns: repeat(4, auto); gap: 14px; margin-top: 22px; }
+  .stampbtn {
+    font: 700 15px/1 var(--ui); font-stretch: 78%; color: var(--stamp); background: transparent; cursor: pointer;
+    border: 2.5px solid var(--stamp); border-radius: 4px; padding: 10px 14px 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: inset 0 0 0 1.5px var(--desk), inset 0 0 0 3px var(--stamp);
+  }
+  .stampbtn kbd { font: 700 17px/1 var(--ui); }
+  .stampbtn.reject { color: var(--thread); border-color: var(--thread); box-shadow: inset 0 0 0 1.5px var(--desk), inset 0 0 0 3px var(--thread); }
+  .stampbtn.pass { color: var(--ink-soft); border-color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--desk), inset 0 0 0 3px var(--ink-soft); }
+  .stampbtn:hover { background: #ffffff33; }
+
+  .impress {
+    position: absolute; top: 120px; right: 46px; z-index: 2; pointer-events: none;
+    font: 800 34px/1 var(--ui); font-stretch: 70%; color: var(--stamp);
+    border: 4px solid currentColor; padding: 8px 16px; border-radius: 6px; letter-spacing: 0.02em;
+    transform: rotate(-9deg) scale(1.7); opacity: 0;
+    mix-blend-mode: multiply;
+  }
+  .impress.reject { color: var(--thread); }
+  .impress.pass { color: var(--ink-soft); }
+  .impress.on { animation: thump 260ms cubic-bezier(.2,.9,.3,1.2) forwards; }
+  @keyframes thump { to { transform: rotate(-9deg) scale(1); opacity: 0.92; } }
+  .tag.away { animation: swing 520ms 380ms cubic-bezier(.5,0,.75,0) forwards; }
+  .tag.away.left { animation-name: swingLeft; }
+  @keyframes swing { to { transform: translateX(70vw) rotate(24deg); opacity: 0; } }
+  @keyframes swingLeft { to { transform: translateX(-70vw) rotate(-24deg); opacity: 0; } }
+  .tag.drop { animation: drop 420ms cubic-bezier(.2,.9,.25,1.15); }
+  @keyframes drop { from { transform: translateY(-40px) rotate(-3deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .panel {
+    width: min(690px, 100%); margin-top: 14px; background: #f6efd6; padding: 16px 20px; display: none;
+    border-left: 4px solid var(--stamp);
+  }
+  .panel.open { display: block; }
+  .panel h4 { margin: 0 0 10px; font: 650 14px/1.3 var(--ui); font-stretch: 85%; }
+  .panel .opts { display: flex; gap: 10px; flex-wrap: wrap; }
+  .panel button { font: 600 14px/1 var(--ui); font-stretch: 85%; padding: 9px 12px; border: 1.5px solid var(--ink-soft); background: transparent; border-radius: 3px; color: var(--ink); cursor: pointer; }
+  .panel textarea { width: 100%; margin-top: 12px; min-height: 64px; font: 16px/1.4 var(--prose); padding: 8px 10px; border: 1.5px solid var(--manila-edge); background: #fffbea; }
+
+  /* ---------------------------------------------------------------- sources */
+  .sources { padding: 22px 26px 22px 12px; overflow: auto; }
+  .slip {
+    position: relative; background: #F4EBCB; padding: 14px 14px 12px; margin: 0 0 16px;
+    transform: rotate(var(--tilt, 0deg));
+  }
+  .slip:nth-of-type(odd) { --tilt: 0.7deg; }
+  .slip:nth-of-type(even) { --tilt: -0.6deg; }
+  .slip::before { /* the pin */
+    content: ""; position: absolute; top: -5px; left: 18px; width: 11px; height: 11px; border-radius: 50%;
+    background: var(--thread); box-shadow: 0 2px 0 #5a2440;
+  }
+  .slip h3 { margin: 0 0 6px; font: 650 13.5px/1.3 var(--ui); font-stretch: 82%; color: var(--ink-soft); }
+  .slip p, .slip li { margin: 0; font: 400 15px/1.4 var(--prose); }
+  .slip ul { margin: 0; padding-left: 16px; }
+  .slip .sha { font-family: var(--ui); font-stretch: 75%; font-weight: 650; font-size: 13px; }
+  .slip .ok { color: #2f6b45; font-family: var(--ui); font-stretch: 82%; font-weight: 650; font-size: 13px; }
+  .slip pre { margin: 6px 0 0; font: 12.5px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: #3d3350; }
+  .slip pre .add { color: #2f6b45; }
+
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    main { grid-template-columns: 1fr; height: auto; }
+    #threads { display: none; }
+    .stamps { grid-template-columns: repeat(2, auto); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tag.away, .tag.drop, .impress.on { animation-duration: 1ms; animation-delay: 0ms; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="wordmark">Baesian</span>
+  <span class="summary"><strong>5 cards need you.</strong> One is hard: an agent has stopped until you answer it.</span>
+  <span class="presence"><i aria-hidden="true"></i>You're here, so blocking cards wait for you</span>
+</header>
+
+<main>
+  <svg id="threads" aria-hidden="true"></svg>
+
+  <nav class="queue" aria-label="Cards waiting">
+    <h2>Waiting, most urgent first</h2>
+    <div class="peg"><button class="mini"><span class="id">B-h2wq8</span><div class="t">Keep the client's access token in the URL fragment?</div><div class="m"><span class="lvl hard">Hard</span>security, an agent has stopped</div></button></div>
+    <div class="peg"><button class="mini selected" aria-current="true"><span class="id">B-k7m2p</span><div class="t">Push live updates to the client with server-sent events?</div><div class="m"><span class="lvl provisional">Provisional</span>2 agents building on it</div></button></div>
+    <div class="peg"><button class="mini"><span class="id">B-v8nq3</span><div class="t">Conflict on time/format: ISO 8601 strings or Unix epoch integers?</div><div class="m"><span class="lvl blocking">Blocking</span>caught at merge</div></button></div>
+    <div class="peg"><button class="mini"><span class="id">B-c5d1x</span><div class="t">Ship the built client inside the npm package?</div><div class="m"><span class="lvl provisional">Provisional</span>release</div></button></div>
+    <div class="peg"><button class="mini"><span class="id">B-9fz6m</span><div class="t">Overturn? Cache rendered Markdown in memory</div><div class="m"><span class="lvl audit">Audit</span>an agent decided this alone</div></button></div>
+  </nav>
+
+  <div class="stage">
+    <div class="string" aria-hidden="true"></div>
+    <article class="tag" id="tag" aria-labelledby="q">
+      <div class="impress" id="impress">Accepted</div>
+      <div class="head">
+        <span class="id" data-thread="depends">B-k7m2p</span>
+        <span class="lvl provisional">Provisional</span>
+        <span>client/live-updates, in the client-server deck</span>
+      </div>
+      <h1 id="q">Push live updates to the client with server-sent events?</h1>
+      <p class="proposal"><b>Proposal</b>Server-sent events from the local server</p>
+      <div class="facts"><span class="fact">touches the public API</span><span class="fact" data-thread="waiting">2 agents building on it</span></div>
+      <section class="line" data-thread="briefing"><h3>Context</h3><p>The client has to update when an agent files or revises a card. Updates only flow from the server to the browser; your answers go back as ordinary requests.</p></section>
+      <section class="line" data-thread="evidence"><h3>Recommendation</h3><p>Server-sent events: one-way is all that's needed, the browser reconnects by itself, and Node's http module serves them without a dependency.</p></section>
+      <section class="line alt"><h3>Strongest alternative</h3><p>WebSockets. One connection could also carry your answers and the presence heartbeat, at the cost of a dependency or a hand-rolled frame parser.</p></section>
+      <section class="line"><h3>Why now</h3><p>The live view is being built on it now.</p></section>
+      <section class="line" data-thread="ledger"><h3>Cost to reverse</h3><p>Small today: one module. It grows with every view that subscribes to it.</p></section>
+    </article>
+
+    <div class="stamps" role="group" aria-label="Answer">
+      <button class="stampbtn reject" data-act="reject"><kbd>←</kbd>Reject</button>
+      <button class="stampbtn" data-act="accept"><kbd>→</kbd>Accept</button>
+      <button class="stampbtn" data-act="answer"><kbd>↑</kbd>Answer in writing</button>
+      <button class="stampbtn pass" data-act="pass"><kbd>↓</kbd>Can't judge</button>
+    </div>
+
+    <div class="panel" id="panel-answer">
+      <h4>Answer in writing</h4>
+      <div class="opts"><button>Use WebSockets instead</button><button>Poll every 2 seconds instead</button><button>Ask: have you considered…</button><button>Write a correction</button></div>
+      <textarea aria-label="Your answer" placeholder="Your answer goes back to the agent with the card."></textarea>
+    </div>
+    <div class="panel" id="panel-pass">
+      <h4>Why can't you judge it?</h4>
+      <div class="opts"><button>I need more context</button><button>It's not my area</button></div>
+    </div>
+  </div>
+
+  <aside class="sources" aria-label="Where this card comes from">
+    <h2>Where it comes from</h2>
+    <div class="slip" id="s-depends"><h3>Depends on B-r4tz9</h3><p>Serve the client with Node's http module, no framework. <span class="ok">Accepted</span></p></div>
+    <div class="slip" id="s-waiting"><h3>Waiting on your answer</h3><ul><li>claude-code, on feat/m4-client</li><li>codex, on feat/m4-ui</li></ul></div>
+    <div class="slip" id="s-briefing"><h3>Deck briefing: client-server</h3><p>A local server the client talks to. Bound to 127.0.0.1, a token in the URL, no runtime dependencies beyond the core.</p></div>
+    <div class="slip" id="s-evidence"><h3>Evidence: src/live.ts</h3><pre><span class="add">+ res.writeHead(200, { "content-type": "text/event-stream" });</span>
+<span class="add">+ store.watch((e) => res.write(`data: ${json(e)}\n\n`));</span></pre></div>
+    <div class="slip" id="s-ledger"><h3>Built on it so far</h3><ul><li><span class="sha">3f9a1c2</span> Add the live event stream</li><li><span class="sha">8be04d7</span> Subscribe the queue view</li></ul></div>
+  </aside>
+</main>
+
+<script>
+  // Threads: from a line of the card to the source pinned beside it.
+  const svg = document.getElementById("threads");
+  const main = document.querySelector("main");
+  function draw() {
+    const box = main.getBoundingClientRect();
+    svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+    svg.innerHTML = "";
+    document.querySelectorAll("[data-thread]").forEach((from) => {
+      const to = document.getElementById(`s-${from.dataset.thread}`);
+      if (!to) return;
+      const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+      const tag = document.getElementById("tag").getBoundingClientRect();
+      const x1 = tag.right - box.left - 18, y1 = a.top - box.top + Math.min(a.height / 2, 14);
+      const x2 = b.left - box.left + 6, y2 = b.top - box.top + 18;
+      const sag = 26 + Math.abs(x2 - x1) * 0.12;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M${x1},${y1} C${x1 + 60},${y1 + sag} ${x2 - 60},${y2 + sag} ${x2},${y2}`);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "#8E3A5F");
+      path.setAttribute("stroke-width", "1.6");
+      path.setAttribute("stroke-linecap", "round");
+      svg.appendChild(path);
+      for (const [cx, cy] of [[x1, y1], [x2, y2]]) {
+        const knot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        knot.setAttribute("cx", cx); knot.setAttribute("cy", cy); knot.setAttribute("r", 3.2);
+        knot.setAttribute("fill", "#8E3A5F");
+        svg.appendChild(knot);
+      }
+    });
+  }
+  document.fonts.ready.then(draw);
+  addEventListener("resize", draw);
+
+  // Answering: stamp, swing away, next tag drops in. (A mockup: the same card comes back.)
+  const tag = document.getElementById("tag"), impress = document.getElementById("impress");
+  const words = { accept: "Accepted", reject: "Rejected" };
+  let busy = false;
+  function answer(act) {
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+    if (act === "answer" || act === "pass") {
+      document.getElementById(`panel-${act}`).classList.add("open");
+      return;
+    }
+    if (busy) return;
+    busy = true;
+    impress.textContent = words[act];
+    impress.className = `impress ${act === "reject" ? "reject" : ""}`;
+    void impress.offsetWidth;
+    impress.classList.add("on");
+    svg.style.opacity = 0;
+    tag.classList.add("away");
+    if (act === "reject") tag.classList.add("left");
+    setTimeout(() => {
+      tag.className = "tag drop";
+      impress.className = "impress";
+      svg.style.opacity = 1;
+      draw();
+      busy = false;
+    }, 1000);
+  }
+  document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => answer(b.dataset.act)));
+  addEventListener("keydown", (e) => {
+    const map = { ArrowRight: "accept", ArrowLeft: "reject", ArrowUp: "answer", ArrowDown: "pass" };
+    if (e.target.tagName === "TEXTAREA") return;
+    if (map[e.key]) { e.preventDefault(); answer(map[e.key]); }
+    if (e.key === "Escape") document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+  });
+</script>
+</body>
+</html>

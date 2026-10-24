@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian: round 4 prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <span class="wordmark">Baesian</span>
+    <p class="summary" id="summary" aria-live="polite"></p>
+  <nav class="tools">
+    <button class="tool" id="open-map" aria-controls="map" title="Open the project map. Holding Space shows it for as long as you hold.">Project map <kbd>M</kbd></button>
+    <button class="tool" id="practice" aria-pressed="false" title="Now and then, show a practice card: a past decision with the option you rejected as the proposal. It's revealed as soon as you answer.">Practice cards: off</button>
+    <button class="tool" id="calib" aria-expanded="false" aria-controls="mirror">Your calibration</button>
+    <span class="presence" title="While this window is open, agents that need an answer wait for you instead of carrying on."><i aria-hidden="true"></i>Agents can see you're here</span>
+  </nav>
+</header>
+
+<div class="toast" id="toast" role="status"></div>
+
+<main class="desk">
+  <aside class="rel up" id="up" aria-label="What this decision builds on"></aside>
+  <section class="stage" id="stage" aria-label="The card to answer">
+    <div class="deck" id="deck">
+      <div class="pile" id="pile" aria-hidden="true"></div>
+      <article class="card" id="card" tabindex="-1"></article>
+    </div>
+    <p class="pile-count" id="pile-count"></p>
+    <div class="empty" id="empty">
+      <p class="big" id="empty-title">All caught up.</p><p id="empty-recap"></p><p>Agents will tell you when they file a card.</p>
+      <button id="again">Start the prototype again</button>
+    </div>
+  </section>
+  <aside class="rel down" id="down" aria-label="What is built on this decision"></aside>
+</main>
+
+<footer class="dock">
+  <span class="dock-label">Your queue</span>
+  <div class="queue" id="queue"></div>
+  <span class="nav-keys"><span><kbd>j</kbd> <kbd>k</kbd> move between cards</span><span>Hold <kbd>Space</kbd> to look at the map</span></span>
+</footer>
+
+<section class="map" id="map" aria-label="Project map" role="dialog" tabindex="-1" hidden>
+  <header class="map-bar">
+    <p class="map-title"><b>Project map.</b> <span id="map-caption"></span></p>
+    <button class="map-close" id="map-close">Back to the card <kbd>Esc</kbd></button>
+  </header>
+  <p class="map-edge up" id="map-less" hidden></p>
+  <div class="map-body" id="map-body"></div>
+  <p class="map-edge down" id="map-more" hidden></p>
+  <div class="map-foot" id="map-foot"></div>
+  <p class="legend" id="legend"></p>
+  <div class="map-tip" id="map-tip" role="tooltip"></div>
+</section>
+
+<aside class="mirror" id="mirror" aria-label="Your calibration"></aside>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

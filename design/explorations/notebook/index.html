@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian — Notebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FAFBFE;
+    --grid: #D3DCF3;
+    --grid-strong: #B9C7EC;
+    --ink: #2337A8;
+    --graphite: #34363E;
+    --graphite-soft: #6A6E7C;
+    --highlight: #F1E66B;
+    --magenta: #B8235A;
+    --cover: #E5E9F4;
+    --serif: "Alegreya", Georgia, serif;
+    --sans: "Alegreya Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--cover); color: var(--graphite); font: 400 16px/1.45 var(--sans); overflow: hidden; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+  .pad { height: 100%; padding: 18px 22px; display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+
+  /* the pad's title block */
+  .titleblock { display: grid; grid-template-columns: auto 1fr auto auto; border: 1.5px solid var(--grid-strong); background: var(--paper); }
+  .titleblock > div { padding: 8px 14px; border-right: 1.5px solid var(--grid-strong); }
+  .titleblock > div:last-child { border-right: 0; }
+  .titleblock small { display: block; font-size: 12.5px; color: var(--graphite-soft); }
+  .titleblock .name { font: 700 21px/1.1 var(--sans); color: var(--ink); }
+  .titleblock .val { font-size: 15px; }
+  .here { display: flex; align-items: center; gap: 7px; }
+  .here i { width: 8px; height: 8px; border-radius: 50%; background: #2f8a55; }
+
+  /* the spread */
+  .spread { display: grid; grid-template-columns: minmax(300px, 34%) 22px 1fr; min-height: 0; }
+  .page {
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    overflow: auto;
+    min-height: 0;
+  }
+  .gutter { background: linear-gradient(90deg, #c8d0e6, #eef1f9 45%, #eef1f9 55%, #c8d0e6); }
+
+  /* left page: contents, in priority order */
+  .contents { padding: 22px 26px; }
+  .contents h2 { font: 700 15px/22px var(--sans); color: var(--ink); margin: 0 0 22px; }
+  .contents ol { list-style: none; margin: 0; padding: 0; }
+  .contents li { margin: 0 0 22px; }
+  .entry-link {
+    display: grid; grid-template-columns: 30px 1fr; gap: 6px; width: 100%; text-align: left;
+    background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+  }
+  .entry-link .n { font: 700 18px/22px var(--serif); color: var(--ink); }
+  .entry-link .t { font: 400 17px/22px var(--serif); }
+  .entry-link .m { grid-column: 2; font-size: 14px; line-height: 22px; color: var(--graphite-soft); }
+  .entry-link.current .t {
+    background: linear-gradient(transparent 52%, var(--highlight) 52%, var(--highlight) 92%, transparent 92%);
+  }
+  .hard { color: var(--magenta); font-weight: 700; text-decoration: underline 2px; text-underline-offset: 3px; }
+  .blocking { color: var(--graphite); font-weight: 700; }
+  .contents .keys { margin-top: 30px; font-size: 14px; line-height: 22px; color: var(--graphite-soft); }
+  .contents .keys kbd { font: 700 14px/1 var(--sans); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 3px; padding: 1px 5px; margin-right: 4px; background: var(--paper); }
+
+  /* right page: the entry, with the graph of the work in the margin */
+  .entrypage { display: grid; grid-template-columns: 188px 1fr; position: relative; --grid: #E3E9F8; }
+  .margin { border-right: 2px solid var(--ink); position: relative; }
+  .margin svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .entry { padding: 22px 40px 30px 30px; max-width: 780px; }
+  .filed { font-size: 14px; line-height: 22px; color: var(--graphite-soft); margin: 0; }
+  .filed b { color: var(--ink); font-weight: 700; }
+  .entry h1 { font: 700 31px/44px var(--serif); color: var(--graphite); margin: 0 0 22px; max-width: 26ch; }
+  .proposed { font: 500 19px/22px var(--serif); margin: 0 0 22px; }
+  .proposed .run, .entry p .run { font: 700 15px/22px var(--sans); color: var(--ink); margin-right: 6px; }
+  .entry p { font: 400 17px/22px var(--serif); margin: 0 0 22px; max-width: 64ch; }
+  .entry p.alt { font-style: italic; }
+  .entry p.alt .run { font-style: normal; }
+  .marginalia { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 0 0 22px; }
+  .marginalia div { font-size: 14px; line-height: 22px; border-top: 1.5px solid var(--grid-strong); padding-top: 4px; }
+  .marginalia b { display: block; color: var(--ink); font-weight: 700; }
+
+  .answers { display: flex; gap: 12px; flex-wrap: wrap; }
+  .key {
+    display: flex; align-items: center; gap: 10px; font: 700 15px/1 var(--sans); color: var(--ink); cursor: pointer;
+    background: var(--paper); border: 1.5px solid var(--ink); border-radius: 4px; padding: 9px 13px;
+    box-shadow: 0 2px 0 var(--ink);
+  }
+  .key:active { transform: translateY(2px); box-shadow: none; }
+  .key kbd { font: 700 17px/1 var(--sans); }
+  .key.reject { color: var(--magenta); border-color: var(--magenta); box-shadow: 0 2px 0 var(--magenta); }
+  .key.pass { color: var(--graphite-soft); border-color: var(--graphite-soft); box-shadow: 0 2px 0 var(--graphite-soft); }
+
+  .panel { display: none; margin-top: 22px; padding: 10px 14px 14px; border-left: 3px solid var(--ink); background: #ffffffcc; max-width: 64ch; }
+  .panel.open { display: block; }
+  .panel h4 { margin: 0 0 8px; font: 700 15px/22px var(--sans); color: var(--ink); }
+  .panel .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .panel button { font: 500 15px/1 var(--sans); padding: 8px 11px; border: 1.5px solid var(--grid-strong); background: var(--paper); border-radius: 3px; cursor: pointer; color: var(--graphite); }
+  .panel textarea { width: 100%; margin-top: 10px; min-height: 66px; font: 17px/22px var(--serif); border: 1.5px solid var(--grid-strong); background: var(--paper); padding: 6px 8px; }
+
+  /* the graph */
+  .edge { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+  .edge.dash { stroke-dasharray: 3 4; }
+  .node { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
+  .node.done { fill: var(--ink); }
+  .node.current { stroke-width: 2.6; }
+  .tick { fill: var(--ink); }
+  .glabel { font: 500 12.5px/1 var(--sans); fill: var(--graphite); }
+  .glabel.id { font-weight: 700; fill: var(--ink); }
+  .check { fill: none; stroke: var(--paper); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 60; stroke-dashoffset: 60; }
+  .strike { stroke: var(--magenta); stroke-width: 2.4; stroke-dasharray: 80; stroke-dashoffset: 80; }
+  .draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: ink 900ms ease-out forwards; animation-delay: var(--delay, 0ms); }
+  @keyframes ink { to { stroke-dashoffset: 0; } }
+  .inked { animation: fill 300ms ease-out forwards; }
+  @keyframes fill { to { fill: var(--ink); } }
+  .check.on, .strike.on { animation: ink 320ms 200ms ease-out forwards; }
+
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    .spread { grid-template-columns: 1fr; }
+    .gutter { display: none; }
+    .entrypage { grid-template-columns: 140px 1fr; }
+    .marginalia { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .draw, .check.on, .strike.on, .inked { animation-duration: 1ms; animation-delay: 0ms; }
+  }
+</style>
+</head>
+<body>
+<div class="pad">
+  <header class="titleblock">
+    <div><span class="name">Baesian</span></div>
+    <div><small>Project</small><span class="val">baesian, decisions waiting for review</span></div>
+    <div><small>Date</small><span class="val">23 Oct 2026</span></div>
+    <div><small>Reviewer</small><span class="val here"><i aria-hidden="true"></i>Gus, at the desk</span></div>
+  </header>
+
+  <div class="spread">
+    <nav class="page contents" aria-label="Cards waiting, in priority order">
+      <h2>Contents: 5 decisions need you</h2>
+      <ol>
+        <li><button class="entry-link"><span class="n">1</span><span class="t">Keep the client's access token in the URL fragment?</span><span class="m"><span class="hard">hard</span>, security; an agent has stopped</span></button></li>
+        <li><button class="entry-link current" aria-current="true"><span class="n">2</span><span class="t">Push live updates to the client with server-sent events?</span><span class="m">provisional; 2 agents building on it</span></button></li>
+        <li><button class="entry-link"><span class="n">3</span><span class="t">Conflict on time/format: ISO 8601 strings or Unix epoch integers?</span><span class="m"><span class="blocking">blocking</span>; caught at merge</span></button></li>
+        <li><button class="entry-link"><span class="n">4</span><span class="t">Ship the built client inside the npm package?</span><span class="m">provisional; release</span></button></li>
+        <li><button class="entry-link"><span class="n">5</span><span class="t">Overturn? Cache rendered Markdown in memory</span><span class="m">audit: an agent decided this alone</span></button></li>
+      </ol>
+      <div class="keys"><kbd>→</kbd>accept <kbd>←</kbd>reject <kbd>↑</kbd>write an answer <kbd>↓</kbd>can't judge <kbd>j</kbd><kbd>k</kbd>move through the list</div>
+    </nav>
+
+    <div class="gutter" aria-hidden="true"></div>
+
+    <div class="page entrypage">
+      <div class="margin" aria-label="How this decision connects to the rest of the work">
+        <svg id="graph" viewBox="0 0 188 520" preserveAspectRatio="xMidYMin meet" role="img" aria-label="B-r4tz9, accepted, leads to B-k7m2p, which two commits build on; codex is waiting on it too.">
+          <path class="edge draw" style="--len:120;--delay:0ms" d="M48 60 C48 110, 48 120, 48 168"/>
+          <path class="edge draw" style="--len:140;--delay:350ms" d="M48 196 C48 240, 92 250, 92 290"/>
+          <path class="edge draw" style="--len:180;--delay:500ms" d="M48 196 C48 270, 48 320, 48 362"/>
+          <path class="edge dash draw" style="--len:110;--delay:700ms" d="M114 128 C100 150, 78 160, 62 172"/>
+          <circle class="node done" cx="48" cy="46" r="13"/>
+          <text class="glabel id" x="68" y="44">B-r4tz9</text>
+          <text class="glabel" x="68" y="59">accepted</text>
+          <circle class="node current" id="cur" cx="48" cy="182" r="14"/>
+          <path class="check" id="check" d="M41 182 l5 5 l10 -11"/>
+          <path class="strike" id="strike" d="M32 198 l32 -32"/>
+          <text class="glabel id" x="70" y="178">B-k7m2p</text>
+          <text class="glabel" x="70" y="193">this entry</text>
+          <rect class="tick" x="86" y="290" width="12" height="12"/>
+          <text class="glabel id" x="104" y="300">3f9a1c2</text>
+          <rect class="tick" x="42" y="362" width="12" height="12"/>
+          <text class="glabel id" x="60" y="372">8be04d7</text>
+          <text class="glabel" x="60" y="387">built on it</text>
+          <text class="glabel" x="120" y="114">codex</text>
+          <text class="glabel" x="120" y="129">waiting</text>
+        </svg>
+      </div>
+
+      <article class="entry" aria-labelledby="q">
+        <p class="filed">Filed 23 Oct, 14:02 by <b>claude-code</b> on feat/m4-client. Deck client-server, topic client/live-updates.</p>
+        <h1 id="q">Push live updates to the client with server-sent events?</h1>
+        <p class="proposed"><span class="run">Proposed.</span>Server-sent events from the local server.</p>
+        <p><span class="run">Context.</span>The client has to update when an agent files or revises a card. Updates only flow from the server to the browser; your answers go back as ordinary requests.</p>
+        <p><span class="run">Recommendation.</span>Server-sent events: one-way is all that's needed, the browser reconnects by itself, and Node's http module serves them without a dependency.</p>
+        <p class="alt"><span class="run">Strongest alternative.</span>WebSockets. One connection could also carry your answers and the presence heartbeat, at the cost of a dependency or a hand-rolled frame parser.</p>
+        <p><span class="run">Cost to reverse.</span>Small today: one module, src/live.ts. It grows with every view that subscribes to it. The agent is building on it now.</p>
+        <div class="marginalia">
+          <div><b>Depends on</b>B-r4tz9: serve the client with Node's http module, no framework. Accepted.</div>
+          <div><b>Built on it</b>3f9a1c2 Add the live event stream; 8be04d7 Subscribe the queue view.</div>
+          <div><b>Touches</b>the public API. Waiting: claude-code and codex.</div>
+        </div>
+        <div class="answers" role="group" aria-label="Answer">
+          <button class="key" data-act="accept"><kbd>→</kbd>Accept</button>
+          <button class="key reject" data-act="reject"><kbd>←</kbd>Reject</button>
+          <button class="key" data-act="answer"><kbd>↑</kbd>Write an answer</button>
+          <button class="key pass" data-act="pass"><kbd>↓</kbd>Can't judge</button>
+        </div>
+        <div class="panel" id="panel-answer">
+          <h4>Write an answer</h4>
+          <div class="opts"><button>Use WebSockets instead</button><button>Poll every 2 seconds instead</button><button>Ask: have you considered…</button><button>Write a correction</button></div>
+          <textarea aria-label="Your answer" placeholder="Your answer goes back to the agent with the card."></textarea>
+        </div>
+        <div class="panel" id="panel-pass">
+          <h4>Why can't you judge it?</h4>
+          <div class="opts"><button>I need more context</button><button>It's not my area</button></div>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<script>
+  const cur = document.getElementById("cur"), check = document.getElementById("check"), strike = document.getElementById("strike");
+  function reset() {
+    cur.classList.remove("inked"); check.classList.remove("on"); strike.classList.remove("on");
+    cur.style.fill = "";
+  }
+  function answer(act) {
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+    if (act === "answer" || act === "pass") { document.getElementById(`panel-${act}`).classList.add("open"); return; }
+    reset(); void cur.getBBox();
+    if (act === "accept") { cur.classList.add("inked"); check.classList.add("on"); }
+    if (act === "reject") { strike.classList.add("on"); }
+    setTimeout(reset, 1800);
+  }
+  document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => answer(b.dataset.act)));
+  addEventListener("keydown", (e) => {
+    if (e.target.tagName === "TEXTAREA") return;
+    const map = { ArrowRight: "accept", ArrowLeft: "reject", ArrowUp: "answer", ArrowDown: "pass" };
+    if (map[e.key]) { e.preventDefault(); answer(map[e.key]); }
+    if (e.key === "Escape") document.querySelectorAll(".panel").forEach((p) => p.classList.remove("open"));
+  });
+</script>
+</body>
+</html>
