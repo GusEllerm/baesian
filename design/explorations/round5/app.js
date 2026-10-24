@@ -8,6 +8,9 @@ import { AREAS, CALIBRATION_BASELINE, CARDS, DECISIONS, RARITY, STATE_WORDS, are
 
 // The self-test drives the page with synthetic events; it runs without animation.
 const SELFTEST = location.hash === "#selftest";
+// The dry run (#dryrun) saves each answer, once it's sent, through the local server to design/dryrun/.
+const DRYRUN = location.hash === "#dryrun";
+const reasoningOpened = new Set();
 const reduced = SELFTEST || matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const $ = (id) => document.getElementById(id);
@@ -34,10 +37,12 @@ let shownAt = 0;
 let sides = { left: "alternative", right: "proposal" };
 let reveal = null; // { d, kind } while the reveal is showing
 let showWhy = false; // the agent's reasoning, opened on request
+const firstChoice = new Map(); // decision id -> the option chosen before the agent's pick was ever shown (D88)
 
 const cardFor = (id) => CARDS.find((c) => c.decision === id);
 const rarityName = (c) => RAR.get(c.decision).rarity;
-const humanFirst = (c) => RAR.get(c.decision).tier === "high"; // rare and mythic
+// The agent's pick waits until you've chosen, on every card (D86). An audit card's option is what the agent did: a fact.
+const humanFirst = (c) => c.kind !== "audit";
 const needsHold = (c) => rarityName(c) === "mythic"; // hard cards are held to confirm (D67)
 const areaIdOf = (id) => areaOf(byDecision(id)).id;
 
@@ -68,19 +73,21 @@ function arrivals() {
   const fresh = CARDS.filter((c) => c.arrives != null && !arrived.has(c.decision) && realAnswers() >= c.arrives);
   fresh.forEach((c) => { arrived.add(c.decision); freshIds.add(c.decision); });
   const moreToCome = CARDS.some((c) => c.arrives != null && !arrived.has(c.decision));
-  if (practiceOn && !practiceArrived && (fresh.length || !moreToCome)) { practiceArrived = true; fresh.push(CARDS.find((c) => c.practice)); }
+  const practice = CARDS.find((c) => c.practice);
+  if (practice && practiceOn && !practiceArrived && (fresh.length || !moreToCome)) { practiceArrived = true; fresh.push(practice); }
   if (!fresh.length) return "";
   const areas = [...new Set(fresh.map((c) => areaOf(byDecision(c.decision)).name))];
   return ` ${fresh.length === 1 ? "A new card" : `${NUMBER[fresh.length] ?? fresh.length} new cards`} arrived.`;
 }
 
 function hash(t) { let h = 7; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
-/** Human-first cards put the options on sides that vary from card to card, so position can't hint at the agent's pick. */
-const HF = CARDS.filter(humanFirst).map((c) => c.decision);
+/** The options' sides are shuffled once a session, card by card, so position can't hint at the agent's pick (D86). */
+const SALT = SELFTEST ? "" : String(Math.random());
 function sidesFor(c) {
   if (!humanFirst(c)) return { left: "alternative", right: "proposal" };
-  return HF.indexOf(c.decision) % 2 === 0 ? { left: "proposal", right: "alternative" } : { left: "alternative", right: "proposal" };
+  return hash(`${SALT}${c.decision}`) % 2 === 0 ? { left: "proposal", right: "alternative" } : { left: "alternative", right: "proposal" };
 }
+const sideOf = (kind) => Object.keys(sides).find((k) => sides[k] === kind);
 
 // ------------------------------------------------------------------ the card
 /** The stakes in a few words: how hard it is to undo, then what it touches or what rests on it. Never the tier name. */
@@ -139,15 +146,25 @@ function footHtml(c) {
     </div>`;
 }
 
+/**
+ * The reveal: the agent's pick and the case it wrote at filing, before it knew your answer. When you disagree, a
+ * one-line reason is optional (D87), and you can switch to its pick; both choices are recorded (D88).
+ */
 function revealHtml(c) {
   const { d, kind } = reveal, same = kind === "proposal";
+  const switched = same && firstChoice.get(c.decision) !== kind; // you first chose otherwise, then took the agent's pick
   const confirm = needsHold(c)
     ? `<button class="hold" id="hold"><span class="fill" id="hold-fill"></span><span>Hold <kbd>${ARROW[d]}</kbd> or click and hold to confirm</span></button>`
-    : `<button class="confirm" id="confirm">Confirm <kbd>${ARROW[d]}</kbd></button>`;
+    : `<button class="confirm" id="confirm">Confirm “${c[kind].name}” <kbd>${ARROW[d]}</kbd></button>`;
+  const said = switched ? `You switched to <b>${c[kind].name}</b>, ${c.agent}'s pick.`
+    : `You chose <b>${c[kind].name}</b>. ${c.agent} ${same ? "picked the same." : `picked <b>${c.proposal.name}</b>.`}`;
+  const why = same ? "" : `<label class="why-line"><span class="lbl">Why? <span class="soft">Optional. It goes to ${c.agent} with your answer, and ${c.agent} may reply once, with a new fact or a check.</span></span>
+        <input id="why" type="text" autocomplete="off" spellcheck="true" placeholder="One line"></label>`;
   return `<div class="panel-in" style="--c: var(--ink)">
-      <p class="verdict">You chose <b>${c[kind].name}</b>. ${c.agent} ${same ? "picked the same." : `picked <b>${c.proposal.name}</b>.`}</p>
+      <p class="verdict">${said}</p>
       <div class="reasoning">${caseHtml(c)}</div>
-      ${confirm}
+      ${why}
+      <div class="reveal-row">${confirm}${same ? "" : `<button class="switch" id="switch">Switch to ${c.agent}'s pick</button>`}</div>
       <p class="small">Esc goes back to the choice.</p>
     </div>`;
 }
@@ -164,7 +181,7 @@ function writeHtml(c) {
 }
 
 function describe(c, a) {
-  if (a.verdict === "proposal" || a.verdict === "alternative") return `You chose ${c[a.verdict].name}.`;
+  if (a.verdict === "proposal" || a.verdict === "alternative") return `You chose ${c[a.verdict].name}.${a.first && a.first !== a.verdict ? ` You switched to it after reading ${c.agent}'s case.` : ""}${a.why ? ` Your reason: “${a.why}”` : ""}`;
   if (a.verdict === "answer") return `You wrote${a.reason ? ` (${a.reason.toLowerCase()})` : ""}: “${a.text || "no text"}”.`;
   return `You said you can't judge it${a.reason ? `: ${a.reason.toLowerCase()}` : ""}.`;
 }
@@ -188,7 +205,7 @@ function renderCard() {
   const c = current, card = $("card");
   const R = RAR.get(c.decision), r = RARITY[R.rarity];
   if (mode === "live") sides = sidesFor(c);
-  card.className = `card rarity-${R.rarity}`;
+  card.className = `card rarity-${R.rarity} mode-${mode}`;
   card.style.transform = "";
   card.style.setProperty("--pl", 0);
   card.style.setProperty("--pr", 0);
@@ -207,6 +224,8 @@ function renderCard() {
   const d = byDecision(c.decision);
   $("crumbs").innerHTML = `${areaOf(d).name} › <b>${workOf(d).title}</b>`;
   wireCard();
+  // On a short screen the reveal's buttons can fall below the fold: bring them into view.
+  if (mode === "reveal") requestAnimationFrame(() => card.querySelector(".reveal-row")?.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" }));
 }
 
 // ------------------------------------------------------------------ the path: the decisions you're walking through
@@ -562,7 +581,7 @@ function wireCard() {
     b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); reach(b.dataset.side); } });
   });
   card.querySelectorAll(".foot [data-dir]").forEach((b) => b.addEventListener("click", () => reach(b.dataset.dir)));
-  $("why-btn")?.addEventListener("click", () => { showWhy = !showWhy; renderCard(); render(); });
+  $("why-btn")?.addEventListener("click", () => { showWhy = !showWhy; if (showWhy) reasoningOpened.add(current.decision); renderCard(); render(); });
   if (mode === "reveal") {
     const hold = $("hold");
     if (hold) {
@@ -570,7 +589,9 @@ function wireCard() {
       hold.addEventListener("pointerup", stopHold);
       hold.addEventListener("pointerleave", stopHold);
     }
-    $("confirm")?.addEventListener("click", () => commit(reveal.kind, reveal.d));
+    $("confirm")?.addEventListener("click", () => commit(reveal.kind, reveal.d, { why: whyText() }));
+    $("why")?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !needsHold(current)) { e.preventDefault(); commit(reveal.kind, reveal.d, { why: whyText() }); } });
+    $("switch")?.addEventListener("click", () => { reveal = { kind: "proposal", d: sideOf("proposal") }; renderCard(); });
   }
   if (mode === "write" || mode === "pass") {
     let reason = "";
@@ -603,7 +624,11 @@ $("stage").addEventListener("wheel", (e) => {
 
 // ------------------------------------------------------------------ reveal, then confirm (human-first); mythic is held (D67)
 let holdStart = 0, holdRaf = 0, keyHeld = null;
-function openReveal(d, kind) { reveal = { d, kind }; mode = "reveal"; renderCard(); }
+function openReveal(d, kind) {
+  if (!firstChoice.has(current.decision)) firstChoice.set(current.decision, kind);
+  reveal = { d, kind }; mode = "reveal"; renderCard();
+}
+const whyText = () => $("why")?.value.trim() || undefined;
 function beginHold() {
   if (mode !== "reveal" || holdStart || !$("hold")) return;
   holdStart = performance.now();
@@ -611,7 +636,7 @@ function beginHold() {
     if (!holdStart) return;
     const p = Math.min(1, (performance.now() - holdStart) / HOLD_MS);
     $("hold-fill").style.width = `${p * 100}%`;
-    if (p >= 1) { holdStart = 0; keyHeld = null; commit(reveal.kind, reveal.d); return; }
+    if (p >= 1) { holdStart = 0; keyHeld = null; commit(reveal.kind, reveal.d, { why: whyText() }); return; }
     holdRaf = requestAnimationFrame(step);
   };
   holdRaf = requestAnimationFrame(step);
@@ -630,9 +655,30 @@ let sendTimer = 0, lastSent = null;
 function finalizeSend() {
   if (!lastSent) return;
   clearTimeout(sendTimer);
-  const a = answered.get(lastSent.id); if (a) a.sent = true;
+  const a = answered.get(lastSent.id); if (a) { a.sent = true; saveVerdict(lastSent.id, a); }
   lastSent = null;
 }
+/** In the dry run, what you answered, as the verdict Baesian would record, plus how you got there. */
+function saveVerdict(id, a) {
+  if (!DRYRUN) return;
+  const c = cardFor(id);
+  const record = {
+    card: id, question: c.question,
+    response: { proposal: "accept", alternative: "alternative", answer: a.reason === "Reject, with a reason" ? "reject" : a.reason === "Ask a question" ? "question" : "correction", pass: a.reason === "It's outside my expertise" ? "not_my_area" : "need_context" }[a.verdict],
+    chose: a.verdict === "proposal" || a.verdict === "alternative" ? c[a.verdict].name : null,
+    crux_answer: a.verdict === "proposal" || a.verdict === "alternative" ? c.crux[a.verdict] : null,
+    crux: c.crux.q,
+    agents_pick: c.proposal.name, pick_hidden_until_chosen: humanFirst(c), agreed: a.verdict === "proposal",
+    first_choice: a.first ? c[a.first].name : null, switched_after_reveal: Boolean(a.first && a.first !== a.verdict),
+    reason: a.reason || null, comment: a.text || a.why || null,
+    seconds_on_card: Math.round(a.dwell / 100) / 10, opened_reasoning: reasoningOpened.has(id),
+    reviewer: "the user", client: "round5 dry run", at: new Date().toISOString(),
+  };
+  const body = JSON.stringify(record);
+  if (!navigator.sendBeacon?.("/api/dryrun", new Blob([body], { type: "application/json" }))) fetch("/api/dryrun", { method: "POST", body, keepalive: true });
+}
+// An answer still inside its undo window is sent if the page closes (the undo decision is open; this is the proposal).
+addEventListener("pagehide", () => finalizeSend());
 function scheduleSend(c, news = "") {
   lastSent = { id: c.decision };
   const a = answered.get(c.decision);
@@ -659,7 +705,7 @@ async function commit(kind, d, extra = {}) {
   finalizeSend();
   const side = d === "left" || d === "right" ? d : null;
   const caught = c.practice ? (kind === "alternative" ? true : kind === "proposal" ? false : null) : undefined;
-  answered.set(c.decision, { verdict: kind, side, rarity: rarityName(c), dwell: performance.now() - shownAt, practice: Boolean(c.practice), caught, text: extra.text, reason: extra.reason, sent: false });
+  answered.set(c.decision, { verdict: kind, side, rarity: rarityName(c), dwell: performance.now() - shownAt, practice: Boolean(c.practice), caught, text: extra.text, reason: extra.reason, why: extra.why, first: firstChoice.get(c.decision), sent: false });
   const card = $("card");
   const chosenEl = card.querySelector(`.opt[data-kind="${kind}"] h2`);
   pendingFly = chosenEl && (kind === "proposal" || kind === "alternative") ? { id: c.decision, rect: chosenEl.getBoundingClientRect(), text: c[kind].name } : null;
@@ -756,6 +802,16 @@ function openReview(id) {
   $("card").style.display = ""; $("card").style.opacity = 1; $("empty").classList.remove("on"); $("crumbs").style.visibility = "";
 }
 function recap() {
+  if (DRYRUN && answered.size) return `${dryRecap()} Your answers are saved in design/dryrun/.`;
+  if (DRYRUN) return "Every decision in the dry run has an answer. They're saved in design/dryrun/.";
+  return plainRecap();
+}
+function dryRecap() {
+  const rows = [...answered.values()];
+  const agreed = rows.filter((a) => a.verdict === "proposal").length;
+  return `You answered ${plural(rows.length, "card")}, and agreed with claude-code on ${agreed}.`;
+}
+function plainRecap() {
   const rows = [...answered.values()].filter((a) => !a.practice);
   const n = (v) => rows.filter((a) => a.verdict === v).length;
   const parts = [[n("proposal"), "took the agent's pick"], [n("alternative"), "chose the alternative"], [n("answer"), "wrote an answer"], [n("pass"), "couldn't judge"]].filter(([k]) => k).map(([k, t]) => `${k} ${t}`);
@@ -789,7 +845,7 @@ addEventListener("keydown", (e) => {
   keyHeld = d;
   if (mode === "reveal") {
     if (reveal.d !== d) return;
-    if (needsHold(current)) beginHold(); else { keyHeld = null; commit(reveal.kind, reveal.d); }
+    if (needsHold(current)) beginHold(); else { keyHeld = null; commit(reveal.kind, reveal.d, { why: whyText() }); }
     return;
   }
   if (mode !== "live") return;
@@ -866,7 +922,7 @@ $("calib").addEventListener("click", () => togglePanel("mirror"));
 $("keys-btn").addEventListener("click", () => togglePanel("keys"));
 function renderKeys() {
   $("keys").innerHTML = `<h4>Keyboard shortcuts</h4><dl>
-    <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Choose an option. Hold to lean first; on mythic cards, hold to confirm.</dd>
+    <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Choose an option, then press it again to confirm, once you've seen the agent's pick; on mythic cards, hold to confirm. Hold to lean first.</dd>
     <dt><kbd>↑</kbd></dt><dd>Write an answer</dd><dt><kbd>↓</kbd></dt><dd>Say you can't judge it</dd>
     <dt><kbd>j</kbd><kbd>k</kbd></dt><dd>Next or previous card</dd><dt><kbd>Z</kbd></dt><dd>Undo, for 5 seconds</dd>
     <dt><kbd>Esc</kbd></dt><dd>Back one step</dd><dt><kbd>?</kbd></dt><dd>These shortcuts</dd></dl>
@@ -890,11 +946,11 @@ function renderMirror() {
     <p class="both">Both directions count: one accept was later reversed (over-reliance), and you overturned ${CALIBRATION_BASELINE.heldUp} decisions that held up (under-reliance).</p>`;
 }
 
-$("again").addEventListener("click", () => { answered.clear(); next(); });
+$("again").addEventListener("click", () => { answered.clear(); firstChoice.clear(); next(); });
 
 // ------------------------------------------------------------------ start
-current = cardFor(pending()[0]);
-showCard();
+if (DRYRUN) $("dry-tag").hidden = false;
+if (pending().length) { current = cardFor(pending()[0]); showCard(); } else { $("again").hidden = DRYRUN; next(); }
 requestAnimationFrame(tick);
 
 // ------------------------------------------------------------------ self-test (#selftest)
@@ -953,24 +1009,34 @@ if (SELFTEST) {
     log(`14b the path holds the two answers, oldest first: ${[...$("hood").querySelectorAll(".row.past")].map((r) => r.dataset.id).join() === [...answered.keys()].join()} (expected true)`);
     log(`15 the next card didn't arrive leaning: ${s.x === 0 && Number($("card").style.getPropertyValue("--pr") || 0) === 0} (expected true)`);
     const third = current.decision;
-    log(`16 third card: ${byDecision(third).short} (${rarityName(current)}); its pick labelled: ${Boolean($("card").querySelector(".pickof"))} (expected true)`);
+    log(`16 third card: ${byDecision(third).short} (${rarityName(current)}); its pick hidden too: ${current.kind === "audit" || !$("card").querySelector(".pickof")} (expected true)`);
     await tap("ArrowUp");
     log(`17 write opens in the card, focused: ${mode === "write" && document.activeElement === $("txt")} (expected true)`);
     key("k", "keydown", $("txt")); await wait(150);
     log(`18 typing k doesn't switch cards: ${current.decision === third} (expected true)`);
     key("Escape", "keydown"); await wait(150);
-    $("why-btn").click(); await wait(50);
-    log(`19 the agent's reasoning opens on request: ${Boolean($("reasoning"))} (expected true)`);
+    log(`19 no reasoning link before you choose: ${current.kind === "audit" || !$("why-btn")} (expected true)`);
+    const rightKind = sides.right;
     await answer("right");
-    log(`20 third answered: ${answered.get(third)?.verdict} (expected proposal)`);
-    await answer("right");
+    log(`20 third answered: ${answered.get(third)?.verdict} (expected ${rightKind})`);
+    const fourth = current.decision;
+    if (current.kind === "audit") { await answer("right"); log("20b skipped: an audit card"); } else {
+      await wait(waitLeft() + 150);
+      await tap(sideOf("alternative") === "left" ? "ArrowLeft" : "ArrowRight", 120);
+      log(`20b disagreeing asks why, optionally, and offers the agent's pick: ${mode === "reveal" && Boolean($("why")) && Boolean($("switch"))} (expected true)`);
+      $("switch").click(); await wait(50);
+      log(`20c switching says so: ${/You switched to/.test(text()) && !$("why")} (expected true)`);
+      if ($("hold")) { const k = reveal.d === "left" ? "ArrowLeft" : "ArrowRight"; key(k, "keydown"); await wait(HOLD_MS + 200); key(k, "keyup"); } else $("confirm").click();
+      await wait(400);
+      log(`20d both choices recorded: ${answered.get(fourth)?.first === "alternative" && answered.get(fourth)?.verdict === "proposal"} (expected true)`);
+    }
     $("practice").click(); await wait(100);
     const pid = CARDS.find((c) => c.practice).decision;
     log(`21 practice card waits to arrive: ${!queue().includes(pid)} (expected true)`);
     await answer("right"); await wait(100);
     log(`22 then arrives in the queue: ${queue().includes(pid)} (expected true)`);
     await next(pid);
-    await answer("right");
+    await answer(sideOf("proposal"));
     log(`23 practice result shown in the card: ${mode === "practice" && answered.get(pid)?.caught === false} (expected true)`);
     key("Enter", "keydown"); await wait(150);
     log(`24 Enter continues: ${mode === "live" || !current} (expected true)`);

@@ -1,0 +1,16 @@
+{
+  "card": "C-practice",
+  "question": "How should practice cards be made, and where should they be kept?",
+  "response": "accept",
+  "chose": "Built from past cards",
+  "crux_answer": "If they will",
+  "agents_pick": "Built from past cards",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 7.7,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:54:59.543Z"
+}

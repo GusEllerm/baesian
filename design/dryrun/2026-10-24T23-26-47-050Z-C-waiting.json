@@ -1,0 +1,20 @@
+{
+  "card": "C-waiting",
+  "question": "Should the client check that a stopped agent is still waiting?",
+  "response": "accept",
+  "chose": "A waiting marker with a heartbeat",
+  "crux_answer": "If they do",
+  "crux": "Do agents get killed mid-wait (a session closed, a crash) often enough that a stale “stopped” would mislead you?",
+  "agents_pick": "A waiting marker with a heartbeat",
+  "pick_hidden_until_chosen": true,
+  "agreed": true,
+  "first_choice": "A waiting marker with a heartbeat",
+  "switched_after_reveal": false,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 69.4,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T23:26:47.046Z"
+}

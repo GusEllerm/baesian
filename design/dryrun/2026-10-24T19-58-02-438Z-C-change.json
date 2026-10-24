@@ -1,0 +1,16 @@
+{
+  "card": "C-change",
+  "question": "If you change an answer after the agent has acted on it, what should the agent get?",
+  "response": "accept",
+  "chose": "A rework brief",
+  "crux_answer": "If it can't reliably",
+  "agents_pick": "A rework brief",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 105,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:58:02.436Z"
+}

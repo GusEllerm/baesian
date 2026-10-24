@@ -239,6 +239,7 @@ Strength of the evidence:
 - **D74:** one shared crux, checked at filing.
 - **D75:** trial "unchecked premise", "turns on your preferences" and "the agent already acted".
 - **D76:** the agent's pick stays hidden until you choose on high-stakes cards, and is measured.
+- **D86–D89** (after the dry run, which changed the user's mind): the pick is hidden on every card until you choose. A disagreement gets an optional reason, and you can switch after the reveal, with both choices recorded. The agent may reply once, with facts.
 
 ### Open questions
 

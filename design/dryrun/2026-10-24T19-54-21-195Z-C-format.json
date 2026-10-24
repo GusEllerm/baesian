@@ -1,0 +1,16 @@
+{
+  "card": "C-format",
+  "question": "Which card fields should filing require?",
+  "response": "alternative",
+  "chose": "Every field, on every card",
+  "crux_answer": "For routine ones too",
+  "agents_pick": "The core, plus what each facet asks",
+  "agreed": false,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 2.7,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:54:21.189Z"
+}

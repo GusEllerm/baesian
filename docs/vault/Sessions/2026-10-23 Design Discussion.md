@@ -232,10 +232,32 @@ The user judged the plan ready for development.
     - **Measurement:** a plan built around practice cards and over-reliance.
   - Pronouns: the vault uses "they" for the owner.
 
+- **The dry run (2026-10-24).** The user answered the ten open decisions from [[Client Data Contract]] as real cards in round 5 (`#dryrun`). Answers were saved to `design/dryrun/`.
+  - **Nine decided (D77–D85):**
+    - filing requires the core, plus what each facet asks;
+    - commits are left out of the client;
+    - agents cite rules;
+    - choosing the alternative returns dependents;
+    - a changed answer brings a rework brief;
+    - the undo stays (revising D67);
+    - practice cards are built from past cards;
+    - Node's file watching with a rescan;
+    - "see it run" gets its own response.
+  - **Three of them rest on unverified premises** (D81, D83, D84). Their checks come first.
+  - **The waiting-marker card came back as "I need more context".** Its case had been wrong: it blamed timeouts, which `baesian wait` already records. The revised card is queued at the same URL.
+  - **Before handing over,** the agent removed decision IDs from the cards' text (D69).
+  - **The agent's reading of D82, for the user to confirm:** the hold on hard cards stands, and the undo follows it.
+  - What it showed about the cards: [[2026-10-23 Client Mockups#The dry run: real decisions in round 5 (2026-10-24)]].
+- **Decide first, on every card (D86–D89).** The dry run changed the user's mind: the agent's pick is now hidden on every card until you choose, revising D76.
+  - A disagreement gets an optional one-line reason, and you can switch to the agent's pick after the reveal; both choices are recorded.
+  - The agent may reply once, with a new fact or a check, because models cave to pushback (Sharma 2023).
+  - Built into round 5. The revised waiting-marker card is the first one to be answered this way.
+- **The waiting marker is decided (D90),** with the pick hidden; the user chose it before the reveal. All ten decisions in [[Client Data Contract]] are now made.
+
 ## Next
 
 - **The user's own five-second test of round 5** against round 4. Then they confirm or overturn the departures listed in [[2026-10-23 Client Mockups#Round 5: glance first]], and the round 4 agent decisions above.
-- **Then the decisions implied by [[Minimal Card Content]], and those in [[Client Data Contract#Decisions this note needs]],** including the P12 format changes.
+- **The premise checks** for D84 (file watching, first in M4a), D83 (a blind test of practice cards) and D81 (rework briefs against the files actually changed).
 - **Then M4a.**
 - The user reviews P12 ([[File Formats]]). That includes whether `source_worktree` should be an absolute path, and the move of `notify` to the user config.
 

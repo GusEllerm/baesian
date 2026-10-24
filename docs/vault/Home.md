@@ -28,7 +28,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0);
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D76 in [[Decision Log]]):
+- **Decided by the user** (D1–D90 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
@@ -73,10 +73,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **The project map** went through its own loop of seven independent reviews overnight (2026-10-24), and the last judged it sufficient. Every area is a row, each piece of work a track, and what's connected to your card is lettered. Nothing moves. It holds up at about 150 decisions (`#scale`).
 - **Round 5** (`design/explorations/round5/`, 2026-10-24) is a subtractive pass for "understandable at a glance". It passed a screenshots-only glance review. The card fell from about 400 words to about 150. The project map gave way to the decision's neighbourhood, beside the card: "we don't want to build Linear". [[2026-10-23 Client Mockups#Round 5: glance first]].
 - **Research done: [[Minimal Card Content]]** (D72). Five strands reported on what a card minimally needs, framed by facets rather than decision types. The synthesis revises the core and the facets, and sets out a test of "enough" and a measurement plan. The user decided four of its implications: the trigger back on the card (D73), one shared crux (D74), three facets to trial (D75), and when the agent's pick shows (D76).
+- **The dry run (2026-10-24):** the user answered the Client Data Contract's ten open decisions as real cards in round 5 (`#dryrun`). Nine were decided (D77–D85), including the required card fields, commits left out of the client, and the undo kept (revising D67). Three rest on premises that are checked first. The waiting-marker card came back as "I need more context". Revised with the missing fact, it was decided in one pass (D90), so all ten are made. The dry run changed the user's mind about the agent's pick: it's now hidden on every card until you choose. A disagreement gets an optional reason, you can switch after the reveal, and the agent may reply once, with facts (D86–D89, built into round 5). [[2026-10-23 Client Mockups#The dry run: real decisions in round 5 (2026-10-24)]].
 - **Next:**
-  - the user's own five-second test of round 5 against round 4; then they confirm or overturn its departures and round 4's agent decisions ([[2026-10-23 Design Discussion#Round 4: independent review loops (2026-10-23 to 2026-10-24)]]);
-  - then the decision cards in [[Client Data Contract#Decisions this note needs]];
-  - then M4a.
+  - the user confirms or overturns round 5's departures and round 4's agent decisions ([[2026-10-23 Design Discussion#Round 4: independent review loops (2026-10-23 to 2026-10-24)]]);
+  - then M4a, starting with the premise checks: the file-watching test (D84) first.
 
 *Update this section at the end of every session.*
 

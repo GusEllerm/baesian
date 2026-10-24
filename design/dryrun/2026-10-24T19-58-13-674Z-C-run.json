@@ -1,0 +1,16 @@
+{
+  "card": "C-run",
+  "question": "When you say you need to see it run, what should the agent get?",
+  "response": "accept",
+  "chose": "A new response: see it run",
+  "crux_answer": "If they will",
+  "agents_pick": "A new response: see it run",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 11,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:58:13.669Z"
+}

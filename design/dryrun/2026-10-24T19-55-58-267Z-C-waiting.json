@@ -1,0 +1,16 @@
+{
+  "card": "C-waiting",
+  "question": "Should “agent stopped” be checked, or taken from the card?",
+  "response": "need_context",
+  "chose": null,
+  "crux_answer": null,
+  "agents_pick": "A waiting marker with a heartbeat",
+  "agreed": false,
+  "reason": "I need more context",
+  "comment": null,
+  "seconds_on_card": 58.5,
+  "opened_reasoning": true,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:55:58.265Z"
+}

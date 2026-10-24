@@ -1,0 +1,16 @@
+{
+  "card": "C-format",
+  "question": "Which card fields should filing require?",
+  "response": "accept",
+  "chose": "The core, plus what each facet asks",
+  "crux_answer": "Only for consequential ones",
+  "agents_pick": "The core, plus what each facet asks",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 2.9,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:54:39.347Z"
+}

@@ -1,0 +1,16 @@
+{
+  "card": "C-watch",
+  "question": "How should the local server notice new cards and verdicts?",
+  "response": "accept",
+  "chose": "Node's file watching",
+  "crux_answer": "If it does",
+  "agents_pick": "Node's file watching",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 12.1,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:54:51.651Z"
+}

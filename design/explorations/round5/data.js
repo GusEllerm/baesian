@@ -278,3 +278,10 @@ export function filingProblems(card) {
   if (card.proposal?.name && card.proposal.name === card.alternative?.name) out.push("the two options are the same");
   return out;
 }
+
+// ------------------------------------------------------------------ #dryrun: real open decisions, to answer for real
+// The open decisions from the Client Data Contract replace the sample cards (dryrun.js).
+if (typeof location !== "undefined" && location.hash === "#dryrun") {
+  const d = await import("./dryrun.js");
+  for (const [mine, theirs] of [[AREAS, d.AREAS], [WORKS, d.WORKS], [DECISIONS, d.DECISIONS], [CARDS, d.CARDS]]) mine.splice(0, mine.length, ...theirs);
+}

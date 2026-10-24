@@ -297,3 +297,34 @@ After the fixes the check reports nothing at either size. The only overlaps left
 - **The "Before you choose" cue is folded into the crux.**
 - **`filingProblems()` in `data.js` is the type-free filing check.** It checks for a trigger, two real options with what each does, and a crux whose two answers differ. The self-test runs it on every card, and on a planted card whose crux doesn't discriminate.
 - **About 190 words on the first card,** against 150 before: the trigger and the crux are the additions the evidence supports.
+
+## The dry run: real decisions in round 5 (2026-10-24)
+
+The user had found round 5 good, and asked to answer the remaining decisions in [[Client Data Contract#Decisions this note needs]] as cards in it.
+
+**The setup.**
+- `design/explorations/round5/#dryrun` loads the ten open decisions as cards from claude-code, with the settled decisions they build on as context.
+- Each answer is saved once its 5-second undo has passed, or when the page closes. The local server writes each one to `design/dryrun/`, one file per answer, never overwritten.
+- Each record keeps the response, the option, the crux answer, the agent's pick, the time on the card and whether the reasoning was opened.
+
+**The outcome.** Nine decisions (D77–D85). The waiting-marker card came back as "I need more context", and was revised.
+
+**What it showed about the cards:**
+- **About 6½ minutes for ten cards.** The median was 31 seconds a card, and the range 8 to 105. The longest was changing an answer after the agent has acted, the card whose own premise undercut its pick.
+- **The user agreed with the agent's pick on all nine, and the pick was visible on every card.** No card reached rare, so the hidden pick of D76 never applied. The dry run can't tell good picks from anchoring. Practice cards on which the agent is wrong are the planned measure (D76).
+- **"Can't judge" caught a bad card.** The waiting-marker card's case was wrong: it blamed harness timeouts, but a timeout is already recorded as a fallback. It also lacked the deciding fact: only an agent killed mid-wait leaves "stopped" showing. The user spent a minute on it, opened the reasoning, and asked for context. That is the signal the measurement plan in [[Minimal Card Content]] counts on.
+- **The reasoning was opened on three cards of ten:** the waiting marker, the commits and the rules.
+- **Changing an answer was used.** The user reopened the card-format card from the path twice, about 3 seconds each time, and came back to their first answer.
+- **Three picks rest on unverified premises** (D81, D83, D84). The premise facet left each as a check owed before building, not a silent assumption.
+- **The saved crux answer is unreadable on its own** ("If it does"). A real verdict points to the card's revision, so the question can be recovered. A record meant for reading should carry the question too.
+
+**After the dry run: decide first, on every card (D86–D89).** The user: "The experience changed an opinion I had." Round 5 now:
+- hides the agent's pick, its case and the reasoning link on every card until you choose; audit cards are the exception, since what the agent did is a fact;
+- shuffles the options' sides per card, with a new shuffle each session; it had alternated them, which can be learned;
+- when you disagree, shows the agent's pick and its case, with an optional one-line "Why?", a confirm, and "Switch to claude-code's pick";
+- records the choice made before the reveal, so going back with Esc and choosing again counts as a switch; the dry-run record gains `first_choice`, `switched_after_reveal` and the crux question;
+- hides each option's "then" in the reveal, and scrolls the buttons into view, so they fit at 1280 × 720.
+
+The self-test passes. A walk through both cases (disagree with a reason; disagree, then switch) produced correct records.
+
+**The revised card (D90).** The user answered it with the pick hidden, in 69 seconds. They chose the waiting marker before the reveal, agreeing with the agent without seeing its pick. The loop worked end to end: "can't judge", then a revised card with the missing fact, then a decision in one pass. With that, all ten of the Client Data Contract's decisions are made, and the dry run's queue is empty.

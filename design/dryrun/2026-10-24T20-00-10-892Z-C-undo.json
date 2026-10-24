@@ -1,0 +1,16 @@
+{
+  "card": "C-undo",
+  "question": "Should answers have a 5-second undo?",
+  "response": "accept",
+  "chose": "Keep the undo",
+  "crux_answer": "If catching a slip",
+  "agents_pick": "Keep the undo",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 35.9,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T20:00:10.889Z"
+}

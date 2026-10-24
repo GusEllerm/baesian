@@ -1,0 +1,16 @@
+{
+  "card": "C-alt",
+  "question": "When you choose the alternative, what happens to the cards built on the proposal?",
+  "response": "accept",
+  "chose": "Return them, with a brief",
+  "crux_answer": "If they usually don't",
+  "agents_pick": "Return them, with a brief",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 18.7,
+  "opened_reasoning": false,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:56:17.177Z"
+}

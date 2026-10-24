@@ -1,0 +1,16 @@
+{
+  "card": "C-rules",
+  "question": "How should the client find the rules that bear on a card?",
+  "response": "accept",
+  "chose": "Agents cite the rule",
+  "crux_answer": "If it isn't",
+  "agents_pick": "Agents cite the rule",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 31.9,
+  "opened_reasoning": true,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:59:34.789Z"
+}

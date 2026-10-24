@@ -41,6 +41,8 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 /* ------------------------------------------------------------ header: what needs you, and a menu for the rest */
 .bar { display: flex; align-items: center; gap: 20px; padding: 0 28px; }
 .wordmark { font: 800 22px/1 var(--ui); font-stretch: 72%; }
+.dry-tag { margin-left: -10px; padding: 2px 8px 3px; border-radius: 4px; background: var(--ink); color: #fff; font: var(--t-small); font-weight: 700; font-stretch: 88%; }
+.dry-tag[hidden] { display: none; }
 .summary { font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); }
 .summary b { color: var(--ink); }
 .presence { margin-left: auto; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px #3f8f5a33; cursor: help; }
@@ -156,6 +158,14 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .hold .fill { position: absolute; inset: 0; width: 0; background: var(--c); opacity: .34; }
 .hold > span:not(.fill) { position: relative; display: inline-flex; gap: 8px; align-items: center; }
 .hold kbd { color: var(--c); border-color: currentColor; }
+/* when you disagree: an optional reason, and the choice to take the agent's pick (D87, D88) */
+.why-line { display: flex; flex-direction: column; gap: 5px; }
+.why-line .lbl { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
+.why-line .soft { font-weight: 400; color: var(--ink-soft); }
+.why-line input { width: 100%; font: var(--t-body); font-size: 16px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
+.reveal-row { display: flex; gap: 10px; }
+.reveal-row > .hold, .reveal-row > .confirm { flex: 1; }
+.switch { height: 46px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--face-light); color: var(--ink); cursor: pointer; font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; }
 .chips { display: flex; gap: 7px; flex-wrap: wrap; }
 .chips button { padding: 7px 11px; border: 1.5px solid var(--line); background: var(--face-light); border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
 .chips button[aria-pressed="true"] { border-color: var(--ink); background: #fff; }
@@ -269,3 +279,8 @@ button.row:hover, button.row:focus-visible { background: #ffffff70; }
 }
 @media (max-width: 1320px) { .desk { column-gap: 28px; } }
 @media (prefers-reduced-motion: reduce) { .card { --px: .5 !important; --py: .5 !important; } .toast { transition: none; } }
+
+/* In the reveal you've read the options already: their names stay, with your choice and the agent's pick marked,
+   so the reason and the buttons fit on the screen. */
+.card.mode-reveal .opt .then { display: none; }
+.card.mode-reveal .opt { min-height: 0; }

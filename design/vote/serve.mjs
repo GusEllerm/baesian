@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Local server for the client mockup vote (D64). Serves design/ at http://127.0.0.1:8418/vote/ and
-// saves each ballot POSTed to /api/vote as design/votes/ballot-<timestamp>.json. Node stdlib only;
-// binds to localhost. Throwaway design tooling: nothing in src/ imports it.
+// Local server for the client mockups (D64). Serves design/ at http://127.0.0.1:8418/, saves each ballot
+// POSTed to /api/vote as design/votes/ballot-<timestamp>.json, and each dry-run verdict POSTed to /api/dryrun
+// as design/dryrun/<timestamp>-<card>.json, write-once. Node stdlib only; binds to localhost. Throwaway design
+// tooling: nothing in src/ imports it.
 //
 //   node design/vote/serve.mjs [port]
 
@@ -12,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const VOTES = join(ROOT, "votes");
+const DRYRUN = join(ROOT, "dryrun");
 const PORT = Number(process.argv[2] ?? 8418);
 const MAX_BALLOT = 1_000_000;
 const TYPES = {
@@ -50,10 +52,33 @@ async function saveBallot(req, res) {
   send(res, 200, JSON.stringify({ saved: `design/votes/${name}` }), "application/json");
 }
 
+async function readJson(req, res, limit) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) { send(res, 413, "Too large"); return null; }
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { send(res, 400, "Not valid JSON"); return null; }
+}
+
+async function saveVerdict(req, res) {
+  const verdict = await readJson(req, res, 100_000);
+  if (!verdict) return;
+  const card = String(verdict.card ?? "unknown").replace(/[^A-Za-z0-9-]/g, "");
+  await mkdir(DRYRUN, { recursive: true });
+  const name = `${new Date().toISOString().replace(/[:.]/g, "-")}-${card}.json`;
+  await writeFile(join(DRYRUN, name), `${JSON.stringify(verdict, null, 2)}\n`, { flag: "wx" });
+  console.log(`saved dryrun/${name}`);
+  send(res, 200, JSON.stringify({ saved: `design/dryrun/${name}` }), "application/json");
+}
+
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   if (req.method === "POST" && url.pathname === "/api/vote") return saveBallot(req, res);
-  if (req.method !== "GET") return send(res, 405, "Only GET, and POST to /api/vote");
+  if (req.method === "POST" && url.pathname === "/api/dryrun") return saveVerdict(req, res);
+  if (req.method !== "GET") return send(res, 405, "Only GET, and POST to /api/vote or /api/dryrun");
   let path = normalize(decodeURIComponent(url.pathname));
   if (path.endsWith(sep) || path.endsWith("/")) path += "index.html";
   const file = join(ROOT, path);

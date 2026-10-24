@@ -1,0 +1,16 @@
+{
+  "card": "C-commits",
+  "question": "Should the client show the commits built on a decision?",
+  "response": "accept",
+  "chose": "Leave commits out of M4a",
+  "crux_answer": "If they don't",
+  "agents_pick": "Leave commits out of M4a",
+  "agreed": true,
+  "reason": null,
+  "comment": null,
+  "seconds_on_card": 48.7,
+  "opened_reasoning": true,
+  "reviewer": "the user",
+  "client": "round5 dry run",
+  "at": "2026-10-24T19:59:02.631Z"
+}
