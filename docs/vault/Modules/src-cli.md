@@ -56,7 +56,7 @@ No command resolves a card (D32). When `init` installs the hooks, it records how
 - `DEFAULT_TIMEOUT_MS` passes (9 minutes, under Claude Code's 10-minute command limit);
 - the client's heartbeat is older than `PRESENCE_STALE_MS`.
 
-With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads. The clock and the sleep can be injected, so the tests run without real time passing.
+While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` and removed when it returns, however it returns (D90). With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed (D80, D81). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. The clock and the sleep can be injected, so the tests run without real time passing.
 
 ## src/notify.ts
 

@@ -12,7 +12,7 @@ import { parseTrailers } from "./trailers.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
-import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
+import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
@@ -296,6 +296,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (decision) io.out(`decided: ${decision}`);
       io.out("");
       for (const line of cardDetails(card.meta)) io.out(line);
+      for (const w of s.waitingOn(id)) io.out(`  ${w.marker.agent} ${w.stale ? `stopped waiting (last seen ${w.marker.at})` : `is waiting, since ${w.marker.since}`}`);
+      for (const b of s.briefs(id)) for (const line of describeBrief(b)) io.out(line);
       if (card.body.trim()) io.out(`\n${card.body.trimEnd()}`);
       if (verdicts.length) {
         io.out("\nverdicts:");
@@ -309,10 +311,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--peek", "don't mark them as seen")
     .option("--json", "print as JSON")
     .action((opts: { peek?: boolean; json?: boolean }) => {
-      const verdicts = store().inbox({ advance: !opts.peek });
-      if (opts.json) return json(verdicts);
-      if (!verdicts.length) return io.out("no new verdicts");
-      for (const v of verdicts) io.out(verdictLine(v));
+      const items = store().inbox({ advance: !opts.peek });
+      if (opts.json) return json(items);
+      if (!items.length) return io.out("no new verdicts");
+      for (const item of items) {
+        // A dependent returned by its parent's verdict (D80) is listed under its own ID.
+        io.out(item.verdict.card === item.card ? verdictLine(item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
+        if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
+      }
     });
 
   program

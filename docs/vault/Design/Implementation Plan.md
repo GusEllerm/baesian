@@ -55,7 +55,7 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 **M4's order (D91).** The client's design is signed off, with round 5 (`design/explorations/round5/`) as the spec and [[Client Data Contract]] as its data. The backend comes first:
 1. the file-watching test, D84's premise (**done**);
 2. the P12 format changes in the store (D62, D66, D73–D75, D77, D79, D85, D88, D90, D92–D95), and filing rejects unknown `depends_on` IDs (**done**);
-3. the store's new behaviour: choosing the alternative returns dependents (D80), a changed answer brings a rework brief (D81), and `baesian wait` keeps a heartbeat (D90);
+3. the store's new behaviour: choosing the alternative returns dependents (D80), a changed answer brings a rework brief (D81), and `baesian wait` keeps a heartbeat (D90) (**done**);
 4. the local server: watching the live layer, the API and live updates;
 5. the React client, porting round 5.
 
@@ -115,3 +115,8 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
   - **The waiting marker's schema (`Waiting`) is defined.** `baesian wait` starts writing it in step 3.
   - **The CLI:** `baesian show` prints the card as the client shows it, and `baesian file` prints notes. The template lists the required fields to fill in, with the optional ones commented out.
   - **This repo's `AGENTS.md` block** now says every card states its crux.
+- **Step 3, the store's behaviour (2026-10-24): done, with 141 tests passing.** The tests are in `test/m4-behaviour.test.ts`; the agent's readings of the decisions are in the [[Decision Log]] (agent decisions).
+  - **D80:** `Store.status` returns a dependent whose parent went the other way.
+  - **D81:** `Store.briefs` gives what an agent should be told beyond the verdict: a parent decided otherwise, or an answer changed, with the commits that cite the card.
+  - **Delivery:** `Store.inbox` returns `InboxItem`s, with dependents returned by a parent listed under their own ID. `baesian wait`, `inbox` and `show` print the briefs (`describeBrief`).
+  - **D90:** `waitForVerdict` keeps a marker through `Store.startWaiting`, and `Store.waitingOn` says whether each one is stale.

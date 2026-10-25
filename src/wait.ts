@@ -1,5 +1,5 @@
 import type { Level, Verdict } from "./schema.js";
-import type { Status, Store } from "./store.js";
+import { type Brief, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
 
 /** The client beats every 30 s; three missed beats means the reviewer has stepped away (D41). */
 export const PRESENCE_STALE_MS = 90_000;
@@ -20,8 +20,8 @@ export const WAIT_EXIT = {
 } as const;
 
 export type WaitOutcome =
-  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined }
-  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined }
+  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[] }
+  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[] }
   | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean };
 
 export interface WaitOptions {
@@ -50,42 +50,54 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
   const card = store.card(id);
   if (!card) throw new Error(`no card ${id}`);
 
-  let reason: "timeout" | "away";
-  for (;;) {
-    const status = store.status(id);
-    const latest = store.card(id)!;
-    const verdict = store
-      .verdicts(id)
-      .filter((v) => v.revision === latest.meta.revision)
-      .at(-1);
-    if (status === "resolved") return { kind: "resolved", id, decision: store.decision(id)!, verdict };
-    if (status !== "open" && status !== "rerouted") {
-      return { kind: "answered", id, status, level: latest.meta.level, verdict };
-    }
-    if (opts.usePresence !== false) {
-      const p = store.presence();
-      // No heartbeat at all means the client has never run: unknown, so keep waiting. A stale one means away.
-      if (p && now() - Date.parse(p.at) > PRESENCE_STALE_MS) {
-        reason = "away";
+  // The waiting marker (D90): while it's fresh, "stopped for you" is true. It's removed when this returns;
+  // an agent killed mid-wait leaves it behind, and it goes stale.
+  const marker = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+  let beat = now();
+  try {
+    let reason: "timeout" | "away";
+    for (;;) {
+      const status = store.status(id);
+      const latest = store.card(id)!;
+      const verdict = store
+        .verdicts(id)
+        .filter((v) => v.revision === latest.meta.revision)
+        .at(-1);
+      if (status === "resolved") return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id) };
+      if (status !== "open" && status !== "rerouted") {
+        return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id) };
+      }
+      if (opts.usePresence !== false) {
+        const p = store.presence();
+        // No heartbeat at all means the client has never run: unknown, so keep waiting. A stale one means away.
+        if (p && now() - Date.parse(p.at) > PRESENCE_STALE_MS) {
+          reason = "away";
+          break;
+        }
+      }
+      const left = deadline - now();
+      if (left <= 0) {
+        reason = "timeout";
         break;
       }
+      await sleep(Math.min(pollMs, left));
+      if (now() - beat >= WAITING_BEAT_MS) {
+        beat = now();
+        marker.refresh(new Date(beat).toISOString());
+      }
     }
-    const left = deadline - now();
-    if (left <= 0) {
-      reason = "timeout";
-      break;
-    }
-    await sleep(Math.min(pollMs, left));
-  }
 
-  const level = store.card(id)!.meta.level;
-  const proceed = level !== "hard";
-  let recorded = false;
-  if (level === "blocking") {
-    store.recordFallback(id, reason, opts.agent);
-    recorded = true;
+    const level = store.card(id)!.meta.level;
+    const proceed = level !== "hard";
+    let recorded = false;
+    if (level === "blocking") {
+      store.recordFallback(id, reason, opts.agent);
+      recorded = true;
+    }
+    return { kind: "no-verdict", id, reason, level, proceed, recorded };
+  } finally {
+    marker.stop();
   }
-  return { kind: "no-verdict", id, reason, level, proceed, recorded };
 }
 
 export function exitCodeFor(outcome: WaitOutcome): number {
@@ -95,16 +107,36 @@ export function exitCodeFor(outcome: WaitOutcome): number {
 }
 
 /** What the agent should read: what happened, and what to do next. */
+/** A brief in the words an agent reads: what changed, and what to do about it (D80, D81). */
+export function describeBrief(b: Brief): string[] {
+  if (b.kind === "parent-decided-otherwise") {
+    return [
+      `  ${b.parent} ("${b.parentTitle}"), which ${b.card} builds on, was decided the other way: "${b.decided}", not "${b.assumed}".`,
+      `  Re-propose ${b.card} on that basis with \`baesian revise ${b.card} <card.md>\`, or withdraw it.`,
+    ];
+  }
+  const now = b.now !== undefined ? `"${b.now}"` : `not a go-ahead (${b.response})`;
+  const commits = b.commits.length
+    ? `  Commits that cite ${b.card}, built on the old answer: ${b.commits.map((c) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`).join(", ")}. Rework them to match. Only commits that cite the card are listed: check for other work built on it.`
+    : `  No commit cites ${b.card} yet; check for work built on the old answer all the same.`;
+  return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits];
+}
+
 export function describeOutcome(o: WaitOutcome): string[] {
   const comment = (v: Verdict | undefined) => (v?.comment ? [`  reviewer: ${v.comment}`] : []);
+  const briefs = o.kind === "no-verdict" ? [] : o.briefs.flatMap(describeBrief);
   switch (o.kind) {
     case "resolved":
-      return [`${o.id} resolved: ${o.decision}`, ...comment(o.verdict), "Proceed with that decision."];
+      return [`${o.id} resolved: ${o.decision}`, ...comment(o.verdict), ...briefs, "Proceed with that decision."];
     case "answered":
+      if (o.status === "returned" && o.briefs.some((b) => b.kind === "parent-decided-otherwise")) {
+        return [`${o.id} returned: what it builds on was decided the other way.`, ...briefs];
+      }
       if (o.status === "returned") {
         return [
           `${o.id} returned (${o.verdict?.response ?? "reject"}).`,
           ...comment(o.verdict),
+          ...briefs,
           `Reply with \`baesian revise ${o.id} <card.md>\`, or withdraw it with \`baesian withdraw ${o.id} --reason …\`.`,
         ];
       }

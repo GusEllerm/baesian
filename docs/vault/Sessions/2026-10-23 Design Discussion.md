@@ -261,6 +261,10 @@ The user judged the plan ready for development.
 - **M4 step 2: the format.**
   - **The draft:** the agent drafted the card and verdict fields in [[File Formats]] from D62–D90. The user settled its four open points: the body becomes optional context (D92); one alternative, with `also_considered` (D93); a fixed crux on conflict cards (D94); `reverse` required (D95).
   - **The code:** the schema, the filing rules, the reference check, `see_it_run`, `first_choice`, `client`, the waiting marker's schema, conflict cards, the template, `show`, and the AGENTS.md block. 127 tests pass, and a card was filed end to end with the CLI.
+- **M4 step 3: the store's behaviour.**
+  - **What it does:** choosing the alternative returns dependents (D80); a changed answer comes with a brief listing the commits that cite the card (D81); `baesian wait` keeps a waiting marker (D90). Briefs are computed, like status, and reach agents through `wait`, `inbox` and `show`.
+  - **Tests:** 141 pass, and a brief was rendered end to end. The agent's readings of the decisions are logged as agent decisions.
+  - **Testing:** the user asked for valid ways of testing the system, perhaps like hpc-bridge's scenario framework. A subagent surveyed that framework read-only: real agents in Docker jails against a fake cluster, a simulated user, deterministic trace and world graders, and sweeps with pass rates.
 
 ## Next
 

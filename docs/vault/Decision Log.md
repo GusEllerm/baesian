@@ -128,6 +128,14 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-24 `[agent decision]` M4 step 3's readings of D80, D81 and D90:
+  - **D80 covers the reviewer's own answer** (`correction`) as well as the alternative: neither is the proposal the dependents assumed.
+  - **A dependent isn't returned** if it was revised, or answered by the reviewer, after the parent's verdict: the new answer was already taken into account. Status is computed, so if the parent's answer changes back, the dependent reopens.
+  - **Briefs are computed from the records, like status, and never stored.** Until now, D35's "rework brief" existed only as wording in messages.
+  - **D81's brief comes with any change of answer after a resolving one,** including a change to a rejection. It lists every ledger entry from before the change, worded as a lower bound. With no commits, it still says the answer changed.
+  - **The waiting marker is removed however `wait` returns:** a verdict, a timeout, or the reviewer away. If the process is killed, the marker is left to go stale, since a killed wait is the case D90 exists for.
+  - **The commit gate's delivery of verdicts doesn't carry briefs yet;** `wait`, `inbox` and `show` do.
+
 - 2026-10-23 `[agent decision]` M3b's per-commit check reads each commit's own record and config, not HEAD's. CI then repeats exactly what the local hook saw, and a later change to the gate's paths doesn't fail old commits retroactively.
 - 2026-10-23 `[agent decision]` At merge, a cited card that is **withdrawn or superseded** is a note, not a failure. A failure would permanently block any branch where an agent filed a card, cited it, then withdrew it, unless the history was rewritten. Rejected cards do fail.
 - 2026-10-23 `[agent decision]` A conflict card proposes the base branch's decision, with the branch's as the strongest alternative, and is blocking. Resolving it supersedes the decision it didn't choose (implementing D35).

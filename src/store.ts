@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc } from "./frontmatter.js";
@@ -18,6 +18,7 @@ import {
   RuleMeta,
   TopicAlias,
   Verdict,
+  Waiting,
   Withdrawal,
   filingProblems,
   filingWarnings,
@@ -30,7 +31,7 @@ export const LIVE_DIR = "baesian";
 /** The record layer, committed on the branch (D34). */
 export const RECORD_DIR = ".baesian";
 
-const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments"] as const;
+const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
 
 export type Status = "open" | "returned" | "rerouted" | "deferred" | "resolved" | "withdrawn" | "superseded";
 
@@ -52,6 +53,30 @@ export interface Match {
   status: Status;
   by: "topic" | "title";
 }
+
+/**
+ * What an agent is told along with a verdict, computed from the records like status (D71): never stored.
+ * - `parent-decided-otherwise` (D80): a card this one builds on was decided against the proposal it assumed,
+ *   so this card is returned.
+ * - `answer-changed` (D81): the answer on this card changed after an earlier one resolved it. `commits` are
+ *   the ledger's entries before the change: only commits that cite the card, so a lower bound.
+ */
+export type Brief =
+  | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; assumed: string; decided: string; at: string }
+  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: { commit?: string; branch: string }[]; at: string };
+
+/** One thing for an agent in `baesian inbox`: a verdict, and the brief that goes with it. */
+export interface InboxItem {
+  /** The card the agent filed. */
+  card: string;
+  /** The verdict: on this card, or, for a returned dependent, on the card it builds on. */
+  verdict: Verdict;
+  brief?: Brief;
+}
+
+/** A waiting marker counts as gone after three missed beats, as presence does (D41, D90). */
+export const WAITING_BEAT_MS = 30_000;
+export const WAITING_STALE_MS = 90_000;
 
 export interface FileResult {
   card: Card;
@@ -527,9 +552,9 @@ export class Store {
         return "superseded";
       }
     }
-    const last = this.verdicts(id)
-      .filter((v) => v.revision === card.meta.revision)
-      .at(-1);
+    // Choosing the alternative returns the cards built on the proposal (D80).
+    if (this.parentReturns(card).length) return "returned";
+    const last = this.latestVerdict(card);
     if (!last) return "open";
     switch (last.response) {
       case "accept":
@@ -548,6 +573,54 @@ export class Store {
     }
   }
 
+  /** The latest verdict on a card's latest revision. */
+  private latestVerdict(card: Card): Verdict | undefined {
+    return this.verdicts(card.meta.id)
+      .filter((v) => v.revision === card.meta.revision)
+      .at(-1);
+  }
+
+  /**
+   * The cards `card` builds on whose latest verdict chose something other than their proposal (D80), after
+   * this card's latest revision and its own latest verdict. A verdict given after the parent's, or a revision
+   * filed after it, means the agent or the reviewer has already taken the new answer into account.
+   */
+  private parentReturns(card: Card): Brief[] {
+    const own = this.latestVerdict(card)?.at ?? "";
+    const since = own > card.meta.created ? own : card.meta.created;
+    const out: Brief[] = [];
+    for (const parentId of card.meta.depends_on) {
+      const parent = this.card(parentId);
+      const pv = parent && this.latestVerdict(parent);
+      if (!parent || !pv || (pv.response !== "alternative" && pv.response !== "correction") || pv.at < since) continue;
+      out.push({ kind: "parent-decided-otherwise", card: card.meta.id, parent: parentId, parentTitle: parent.meta.title, assumed: parent.meta.proposal, decided: pv.choice!, at: pv.at });
+    }
+    return out;
+  }
+
+  /** The answer on `card` changed after an earlier verdict resolved it (D81). */
+  private answerChange(card: Card): Brief | undefined {
+    const vs = this.verdicts(card.meta.id).filter((v) => v.revision === card.meta.revision);
+    const last = vs.at(-1);
+    const answerOf = (v: Verdict) => (v.response === "accept" ? card.meta.proposal : v.response === "alternative" || v.response === "correction" ? v.choice : undefined);
+    const earlier = vs.slice(0, -1).reverse().find((v) => answerOf(v) !== undefined);
+    if (!last || !earlier) return undefined;
+    const was = answerOf(earlier)!, now = answerOf(last);
+    if (now !== undefined && normalise(now) === normalise(was)) return undefined;
+    const commits = this.ledger(card.meta.id)
+      .filter((e) => e.meta.at < last.at)
+      .map((e) => ({ ...(e.meta.commit ? { commit: e.meta.commit } : {}), branch: e.meta.branch }));
+    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits, at: last.at };
+  }
+
+  /** What an agent should be told about a card now, beyond its verdict (D80, D81). */
+  briefs(id: string): Brief[] {
+    const card = this.card(id);
+    if (!card) throw new Error(`no card ${id}`);
+    const change = this.answerChange(card);
+    return [...this.parentReturns(card), ...(change ? [change] : [])];
+  }
+
   /** What was decided, for a resolved card. */
   decision(id: string): string | undefined {
     const card = this.card(id);
@@ -557,9 +630,7 @@ export class Store {
 
   /** What the latest verdict on the latest revision chose, without checking supersession (so `status` can use it). */
   private answer(card: Card): string | undefined {
-    const last = this.verdicts(card.meta.id)
-      .filter((v) => v.revision === card.meta.revision)
-      .at(-1);
+    const last = this.latestVerdict(card);
     if (!last) return undefined;
     if (last.response === "accept") return card.meta.proposal;
     if (last.response === "alternative" || last.response === "correction") return last.choice;
@@ -600,19 +671,58 @@ export class Store {
   }
 
   /** Verdicts on this branch's cards newer than its inbox cursor. The cursor is local state, not a record. */
-  inbox(opts: { advance: boolean }): Verdict[] {
+  inbox(opts: { advance: boolean }): InboxItem[] {
     this.requireInit();
     const cursorPath = join(this.live, "cursors", `${slug(this.repo.branch)}.json`);
     const since: string = existsSync(cursorPath) ? JSON.parse(readFileSync(cursorPath, "utf8")).at : "";
-    const fresh = this.branchCards()
-      .flatMap((c) => this.verdicts(c.meta.id))
-      .filter((v) => v.at > since)
-      .sort((a, b) => a.at.localeCompare(b.at));
-    if (opts.advance && fresh.length > 0) {
-      mkdirSync(dirname(cursorPath), { recursive: true });
-      writeFileSync(cursorPath, `${JSON.stringify({ at: fresh.at(-1)!.at })}\n`);
+    const items: InboxItem[] = [];
+    for (const c of this.branchCards()) {
+      const change = this.answerChange(c);
+      for (const v of this.verdicts(c.meta.id)) {
+        if (v.at > since) items.push({ card: c.meta.id, verdict: v, ...(change && change.at === v.at ? { brief: change } : {}) });
+      }
+      // A dependent returned by its parent's verdict (D80): the verdict is the parent's.
+      for (const b of this.parentReturns(c)) {
+        const pv = b.kind === "parent-decided-otherwise" ? this.verdicts(b.parent).find((v) => v.at === b.at) : undefined;
+        if (pv && b.at > since) items.push({ card: c.meta.id, verdict: pv, brief: b });
+      }
     }
-    return fresh;
+    items.sort((a, b) => a.verdict.at.localeCompare(b.verdict.at));
+    if (opts.advance && items.length > 0) {
+      mkdirSync(dirname(cursorPath), { recursive: true });
+      writeFileSync(cursorPath, `${JSON.stringify({ at: items.at(-1)!.verdict.at })}\n`);
+    }
+    return items;
+  }
+
+  // ---------------------------------------------------------------- waiting (D90)
+
+  /**
+   * Mark an agent as waiting on a card. `baesian wait` refreshes the marker every `WAITING_BEAT_MS` and stops
+   * it when it returns. An agent killed mid-wait leaves its marker behind, to go stale.
+   */
+  startWaiting(id: string, agent: string, at: string = now()): { refresh(at?: string): void; stop(): void } {
+    this.requireInit();
+    const card = this.card(id);
+    if (!card) throw new Error(`no card ${id}`);
+    const path = join(this.live, "waiting", `${id}-${randomSuffix()}.json`);
+    mkdirSync(dirname(path), { recursive: true });
+    const write = (beat: string) => {
+      const w = parse(Waiting, { type: "waiting", card: id, revision: card.meta.revision, agent, since: at, at: beat }, "the waiting marker");
+      const tmp = `${path}.${randomSuffix()}.tmp`;
+      writeFileSync(tmp, `${JSON.stringify(w)}\n`);
+      renameSync(tmp, path);
+    };
+    write(at);
+    return { refresh: (beat = now()) => write(beat), stop: () => rmSync(path, { force: true }) };
+  }
+
+  /** The agents waiting on a card, and whether each has gone quiet: stopped waiting without returning (D90). */
+  waitingOn(id: string, nowMs: number = Date.now()): { marker: Waiting; stale: boolean }[] {
+    return this.list("waiting")
+      .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
+      .map((f) => parse(Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), f))
+      .map((marker) => ({ marker, stale: nowMs - Date.parse(marker.at) > WAITING_STALE_MS }));
   }
 
   // ---------------------------------------------------------------- record
