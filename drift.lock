@@ -376,6 +376,11 @@ target = "src/wait.ts#waitForVerdict"
 sig = "47956afd26ad4005"
 
 [[bindings]]
+doc = "docs/vault/Home.md"
+target = "docs/handoffs/scenario-harness-extraction.md"
+sig = "b1eb0b02d47f0297"
+
+[[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "design/explorations/round4/map.js#show"
 sig = "77f21c726a34fd5c"

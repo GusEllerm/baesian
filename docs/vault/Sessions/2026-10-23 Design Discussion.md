@@ -265,6 +265,12 @@ The user judged the plan ready for development.
   - **What it does:** choosing the alternative returns dependents (D80); a changed answer comes with a brief listing the commits that cite the card (D81); `baesian wait` keeps a waiting marker (D90). Briefs are computed, like status, and reach agents through `wait`, `inbox` and `show`.
   - **Tests:** 141 pass, and a brief was rendered end to end. The agent's readings of the decisions are logged as agent decisions.
   - **Testing:** the user asked for valid ways of testing the system, perhaps like hpc-bridge's scenario framework. A subagent surveyed that framework read-only: real agents in Docker jails against a fake cluster, a simulated user, deterministic trace and world graders, and sweeps with pass rates.
+  - **The agent's critique:**
+    - Baesian doesn't extract decisions; agents do, so a run measures the model, the harness and the instructions together.
+    - There's no ground truth for "what it should have filed": use planted forks, deterministic facts and the user's labels.
+    - An LLM reviewer bot can drive the protocol but can't judge cards, so its policy should be scripted over structured fields.
+  - **The user's decision:** extract hpc-bridge's pattern into a general tool, as a separate project handed to another agent. Baesian goes on with implementation, plus ordinary tests per step, until the tool is ready.
+  - **The handoff plan** is `docs/handoffs/scenario-harness-extraction.md`, outside the vault. It's based on a second, module-level survey of hpc-bridge's harness, and covers what exists, both consumers' needs, the hardest couplings, validity principles, milestones with acceptance tests, and the decisions for the user.
 
 ## Next
 
