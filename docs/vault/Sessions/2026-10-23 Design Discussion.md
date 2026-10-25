@@ -194,7 +194,7 @@ The user judged the plan ready for development.
 - **The user's idea:** a messy pile of the rest of the area under the card, which you move through. It's built, and the pile shows plain backs.
 - **The user's review:** "much better and getting closer to the vision". The backend is the hard part, which led to [[Client Data Contract]] and the user's rule, D71: drop what can't be shown reliably. Commits and "re-decided" were dropped from the consequence panel.
 - **The project map took seven more reviews overnight** (the user: "the project map however specifically needs work"). The seventh judged it sufficient. It's now areas as rows and each piece of work as a track, oldest to newest, with letters shared with the side panel. Edge bars name what's out of view. Nothing moves, measured at 0 px, at about 150 decisions as well.
-- **Agent decisions, for the user to overturn** (`[agent decision]`):
+- **Agent decisions** (`[agent decision]`). *Settled in D91: the map's are moot, and the user accepted the rest.*
   - the Atlas became a modal map, not the backdrop;
   - its two zoom levels gave way to one stable level;
   - foil only on the card's frame;
@@ -253,6 +253,14 @@ The user judged the plan ready for development.
   - The agent may reply once, with a new fact or a check, because models cave to pushback (Sharma 2023).
   - Built into round 5. The revised waiting-marker card is the first one to be answered this way.
 - **The waiting marker is decided (D90),** with the pick hidden; the user chose it before the reveal. All ten decisions in [[Client Data Contract]] are now made.
+- **Front-end v1 signed off (D91).** The user asked whether open questions of fact should become records, linked from the decisions that rest on them. The agent's view was that, with one real case, it would over-complicate things. The user agreed, and chose to move to the backend instead. They signed off round 5's departures, the live round 4 agent decisions, two trials from D70, and the agent's readings of D82 and D90. M4 starts with the file-watching test.
+- **M4 step 1: D84's premise holds.** `test/premises/watch.mjs` wrote 40,000 files the way the store does, across four scenarios, on macOS and on Linux (Docker). The watcher missed none. Its limits are recorded in [[Implementation Plan#Notes from M4]]: Linux's per-folder watch limit, network and synced folders, and startup.
+- **The user's cluster.** The user is building a cluster of Sparks for persistent agents, and wants Baesian deployed there eventually. Network drives would break watching. The agent recorded the wider issue, that everything assumes one machine, and three possible shapes, as an open question in [[Baesian Design#Open questions]]. The server will get polling as a mode of its own in the meantime.
+  - **The user's lean:** one Baesian host per repo, as the easiest; not yet a decision.
+  - **On persistence:** a persistent agent may be a grown context in which new shells start, so persistent agents can have multi-session behaviour. That fits the design as it is: `source_agent` names the agent, and new shells read the inbox. One gap: the inbox cursor is kept per branch.
+- **M4 step 2: the format.**
+  - **The draft:** the agent drafted the card and verdict fields in [[File Formats]] from D62–D90. The user settled its four open points: the body becomes optional context (D92); one alternative, with `also_considered` (D93); a fixed crux on conflict cards (D94); `reverse` required (D95).
+  - **The code:** the schema, the filing rules, the reference check, `see_it_run`, `first_choice`, `client`, the waiting marker's schema, conflict cards, the template, `show`, and the AGENTS.md block. 127 tests pass, and a card was filed end to end with the CLI.
 
 ## Next
 

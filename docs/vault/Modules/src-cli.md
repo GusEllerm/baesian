@@ -21,13 +21,13 @@ All output goes through an `Io` object, and Commander's own output and exits are
 |---|---|
 | `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]) |
 | `template` | prints a card draft. Unfilled, it fails validation |
-| `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards |
+| `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards, and prints notes on long fields |
 | `revise <id> [path]` | the next revision of a returned card |
 | `attach <id>` | waits on an existing card instead of filing a duplicate |
 | `withdraw <id> --reason` | withdraws your own card |
 | `deck <id> --title [--from] [--note]` | creates a deck; its body is the briefing |
 | `wait <id> [--timeout s] [--no-presence]` | waits for a verdict; the exit code says what to do |
-| `list [--all] [--branch]`, `show <id>`, `topics` | read |
+| `list [--all] [--branch]`, `show <id>`, `topics` | read. `show` prints the card as the client shows it: the question, the trigger, the stakes, the crux and the two options, then any context |
 | `inbox [--peek]` | new verdicts on this branch's cards |
 | `sync` | copies new verdicts and ledger entries into the record |
 | `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
@@ -68,8 +68,8 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints; its `touches` list includes `infra`. `AGENTS_BLOCK` covers four things:
-- when to file a card;
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `AGENTS_BLOCK` covers four things:
+- when to file a card, and that every card states its strongest alternative and its crux;
 - the commit gate: card or ack trailers, and `baesian check`;
 - `wait`'s exit codes;
 - that only a person resolves a card.

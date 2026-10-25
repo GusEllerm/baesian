@@ -22,6 +22,7 @@ export function userConfig(path: string = userConfigPath()): UserConfig {
 export interface NotifyPayload {
   id: string;
   title: string;
+  question: string;
   level: string;
   proposal: string;
   deck: string;
@@ -30,7 +31,7 @@ export interface NotifyPayload {
 
 export function payloadFor(card: Card): NotifyPayload {
   const m = card.meta;
-  return { id: m.id, title: m.title, level: m.level, proposal: m.proposal, deck: m.deck, branch: m.source_branch };
+  return { id: m.id, title: m.title, question: m.question, level: m.level, proposal: m.proposal, deck: m.deck, branch: m.source_branch };
 }
 
 /** Only cards that make an agent wait interrupt the reviewer (D40). */
@@ -60,7 +61,7 @@ function fire(command: string, args: string[], input?: string, env?: NodeJS.Proc
 
 function osNotification(p: NotifyPayload): void {
   const title = `Baesian: ${p.level} card ${p.id}`;
-  const message = p.title;
+  const message = p.question;
   if (process.platform === "darwin") {
     // Text goes in as arguments, never interpolated into the script.
     fire("osascript", [

@@ -44,7 +44,7 @@ That is the same view the local `commit-msg` hook had, so CI repeats the local c
 - the base's card is already superseded;
 - a resolved conflict card names both.
 
-`fileConflicts` files a conflict card. It's local only, because it needs the live layer: `baesian verify --merge --file-conflicts`. The card is blocking, its proposal is the base's decision, and its strongest alternative is the branch's. When the reviewer resolves it, `Store.status` marks the decision that wasn't chosen as superseded, and the conflict stops being reported.
+`fileConflicts` files a conflict card. It's local only, because it needs the live layer: `baesian verify --merge --file-conflicts`. The card is blocking, its proposal is the base's decision, and its strongest alternative is the branch's. Baesian writes it with no model, so its crux is a fixed one (D94): "Was the newer decision made with context the older one lacked?" Each option's `_breaks` names the decision it would replace. When the reviewer resolves it, `Store.status` marks the decision that wasn't chosen as superseded, and the conflict stops being reported.
 
 ## In GitHub Actions
 

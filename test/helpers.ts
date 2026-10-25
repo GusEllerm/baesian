@@ -65,25 +65,25 @@ export function cleanup(): void {
   for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });
 }
 
-export const BODY = [
-  "## Context",
-  "Postgres is available but adds an ops dependency.",
-  "",
-  "## Recommendation",
-  "SQLite in WAL mode.",
-  "",
-  "## Strongest alternative",
-  "Parquet files: the analysis step is all columnar scans.",
-  "",
-].join("\n");
+/** A card's body is optional context (D92). */
+export const BODY = ["Postgres is available but adds an ops dependency.", ""].join("\n");
 
 export function draft(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    title: "Use SQLite for the run-metadata store?",
-    proposal: "SQLite (WAL mode)",
-    alternatives: ["Postgres", "Parquet files"],
+    title: "The run-metadata store",
+    question: "Which store should hold run metadata?",
+    doing: "writing the run-metadata layer",
     topic: "storage/run-metadata",
     touches: ["schema", "dependency"],
+    reverse: "moderate",
+    proposal: "SQLite (WAL mode)",
+    proposal_then: "runs are recorded in one file next to the repo",
+    alternative: "Postgres",
+    alternative_then: "runs go to a database server that has to be running",
+    also_considered: ["Parquet files"],
+    crux: "Will more than one machine write runs at once?",
+    crux_proposal: "If not",
+    crux_alternative: "If so",
     ...overrides,
   };
 }
@@ -92,4 +92,4 @@ export function draftFile(overrides: Record<string, unknown> = {}, body = BODY):
   return renderDoc(draft(overrides), body);
 }
 
-export const REVIEWER = { reviewer: "gus" };
+export const REVIEWER = { reviewer: "gus", client: "test" };

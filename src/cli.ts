@@ -88,6 +88,21 @@ function cardLine(store: Store, card: Card): string {
   return `${m.id}  ${status.padEnd(10)} ${m.level.padEnd(11)} ${m.title}${topic}  (${m.source_branch}, deck ${m.deck})`;
 }
 
+/** The card itself, as the client shows it: the question, the two options and the crux. */
+function cardDetails(m: Card["meta"]): string[] {
+  const undo = { cheap: "easy", moderate: "costly", "one-way": "hard" }[m.reverse];
+  const out = [m.question, `  ${m.source_agent} is ${m.doing}.`, `  stakes: ${undo} to undo${m.touches.length ? `; touches ${m.touches.join(", ")}` : ""}`, ""];
+  out.push(`  it turns on: ${m.crux}${m.crux_preference ? " (a preference)" : ""}`);
+  if (m.crux_fact) out.push(`  fact: ${m.crux_fact}`);
+  out.push(`  ${m.crux_proposal} → ${m.proposal} (the agent's pick): then ${m.proposal_then}`);
+  out.push(`  ${m.crux_alternative} → ${m.alternative}: then ${m.alternative_then}`);
+  if (m.premise) out.push(`  unverified: "${m[m.premise_option!]}" ${m.premise} (check: ${m.premise_check})`);
+  if (m.acted) out.push(`  already built, for "${m[m.acted_option!]}": ${m.acted}`);
+  const why = [m.rationale, m.wrong_if ? `Wrong if ${m.wrong_if} (check: ${m.check}).` : undefined].filter(Boolean);
+  if (why.length) out.push(`  the agent's case: ${why.join(" ")}`);
+  return out;
+}
+
 function verdictLine(v: Verdict): string {
   const what = v.choice ? `: ${v.choice}` : "";
   const why = v.comment ? ` — ${v.comment}` : "";
@@ -193,6 +208,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       io.out(`filed ${id} (${level}, deck ${deck})`);
       if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42)`);
       if (result.nearTopics.length) io.out(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
+      for (const w of result.warnings) io.out(`  note: ${w}`);
       if (level === "blocking") io.out(`  run \`baesian wait ${id}\` before building on it`);
       if (level === "hard") io.out(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
       io.out(`  add "Baesian-Card: ${id}" to commits that build on it`);
@@ -208,6 +224,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const result = store().reviseCard(id, meta, body, { agent: agentName(program.opts().agent) });
       notify(result.card);
       io.out(`filed ${id} r${result.card.meta.revision}`);
+      for (const w of result.warnings) io.out(`  note: ${w}`);
     });
 
   program
@@ -278,7 +295,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const decision = s.decision(id);
       if (decision) io.out(`decided: ${decision}`);
       io.out("");
-      io.out(card.body.trimEnd());
+      for (const line of cardDetails(card.meta)) io.out(line);
+      if (card.body.trim()) io.out(`\n${card.body.trimEnd()}`);
       if (verdicts.length) {
         io.out("\nverdicts:");
         for (const v of verdicts) io.out(`  ${verdictLine(v)}`);

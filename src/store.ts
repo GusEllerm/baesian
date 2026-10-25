@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { z } from "zod";
-import { parseDoc, renderDoc, section } from "./frontmatter.js";
+import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Repo, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
 import {
@@ -16,10 +16,11 @@ import {
   type Level,
   Presence,
   RuleMeta,
-  STRONGEST_ALTERNATIVE,
   TopicAlias,
   Verdict,
   Withdrawal,
+  filingProblems,
+  filingWarnings,
   describeError,
 } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
@@ -58,6 +59,8 @@ export interface FileResult {
   nearTopics: string[];
   /** Set when the level was raised to `hard` by the card's facts (D42). */
   hardBecause?: string[];
+  /** Advice on fields that file anyway, such as long ones. */
+  warnings: string[];
 }
 
 export class ValidationError extends Error {}
@@ -196,14 +199,14 @@ export class Store {
       .filter((c): c is Card => c !== undefined);
   }
 
-  /** Validate and normalise a draft, without writing anything. */
-  private prepare(draft: unknown, body: string): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[] } {
+  /**
+   * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
+   * strongest alternative is a field now, and the filing rules check it (D12, D77).
+   */
+  private prepare(draft: unknown): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
     const parsed = parse(CardDraft, draft, "the card");
-    if (!section(body, STRONGEST_ALTERNATIVE)) {
-      throw new ValidationError(
-        `the card has no "## ${STRONGEST_ALTERNATIVE}" section. Every card states the best case for another option, or says there is no credible one (D12).`,
-      );
-    }
+    const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
+    if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
     let hardBecause: string[] | undefined;
     const hardFacts = parsed.touches.filter((f) => HARD_BY_DEFAULT.has(f));
     let level: Level = parsed.level ?? "provisional";
@@ -218,7 +221,19 @@ export class Store {
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
     }
-    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}) };
+    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed) };
+  }
+
+  /** Cards and rules a draft names that don't exist. */
+  private unknownRefs(d: CardDraft): string[] {
+    const rules = new Set(this.rules().map((r) => r.meta.id));
+    const missing = (ids: string[]) => ids.filter((id) => (id.startsWith("R-") ? !rules.has(id) : !this.card(id)));
+    const out: string[] = [];
+    for (const [field, ids] of [["depends_on", d.depends_on], ["rules", d.rules], ["proposal_breaks", d.proposal_breaks], ["alternative_breaks", d.alternative_breaks]] as const) {
+      const gone = missing([...ids]);
+      if (gone.length) out.push(`${field} names ${gone.join(", ")}, which ${gone.length === 1 ? "doesn't" : "don't"} exist`);
+    }
+    return out;
   }
 
   /** Cards that may already answer `draft` (D36, D38): same topic, or a similar title. */
@@ -242,14 +257,14 @@ export class Store {
    */
   fileCard(draft: unknown, body: string, opts: { agent: string; force?: boolean }): FileResult {
     this.requireInit();
-    const prep = this.prepare(draft, body);
+    const prep = this.prepare(draft);
     if (!opts.force) {
       const matches = this.matches(prep.draft);
       if (matches.length > 0) throw new PossibleDuplicate(matches);
     }
     const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
     const card = this.writeRevision(id, 1, prep.draft, body, opts.agent);
-    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}) };
+    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }
 
   /** File the next revision of a returned card: the agent's reply to a verdict. */
@@ -259,9 +274,9 @@ export class Store {
     if (!latest) throw new Error(`no card ${id}`);
     const status = this.status(id);
     if (status !== "returned") throw new Error(`${id} is ${status}; only a returned card takes a new revision`);
-    const prep = this.prepare(draft, body);
+    const prep = this.prepare(draft);
     const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
-    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}) };
+    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }
 
   private writeRevision(id: string, revision: number, draft: CardDraft, body: string, agent: string): Card {
@@ -524,6 +539,7 @@ export class Store {
       case "reject":
       case "question":
       case "need_context":
+      case "see_it_run":
         return "returned";
       case "not_my_area":
         return "rerouted";

@@ -35,8 +35,8 @@ Design decisions that are hard to undo go to a person as cards; you don't make t
 changes a schema or on-disk format; changes a public API, URL scheme or module boundary; adds a runtime
 dependency; changes CI, infrastructure or deployment; is user-facing; publishes something; touches
 security or privacy; spends money; deletes or overwrites stored data; or would break something to
-reverse. Otherwise decide yourself. Every card states its strongest alternative. Reuse topics from
-`baesian topics`.
+reverse. Otherwise decide yourself. Every card states its strongest alternative, and the one question
+the choice turns on (the crux). Reuse topics from `baesian topics`.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose `touches`

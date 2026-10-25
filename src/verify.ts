@@ -233,29 +233,32 @@ export function fileConflicts(store: Store, conflicts: Conflict[]): Card[] {
       .cards()
       .some((k) => k.meta.conflict_of?.includes(c.base.id) && k.meta.conflict_of.includes(c.branch.id));
     if (exists) continue;
+    // Baesian writes this card itself, with no model (D65), so its crux is a fixed one (D94).
     const draft = {
-      title: `Conflict on ${c.topic}: keep "${c.base.decision}" or "${c.branch.decision}"?`,
-      proposal: c.base.decision,
-      alternatives: [c.branch.decision],
+      title: `Two answers on ${c.topic}`,
+      question: `Which answer on \`${c.topic}\` should the project keep?`,
+      doing: `merging ${store.repo.branch}, which answers \`${c.topic}\` differently from the base branch`,
       topic: c.topic,
       level: "blocking",
+      reverse: "moderate",
+      proposal: c.base.decision,
+      proposal_then: "it stays; this branch's work built on the other answer gets a rework brief",
+      alternative: c.branch.decision,
+      alternative_then: "it replaces the base branch's decision; work built on that one gets a rework brief",
+      crux: "Was the newer decision made with context the older one lacked?",
+      crux_proposal: "If it wasn't",
+      crux_alternative: "If it was",
+      proposal_breaks: [c.branch.id],
+      alternative_breaks: [c.base.id],
       conflict_of: [c.base.id, c.branch.id],
       caught_at: "merge",
     };
     const body = [
-      "## Context",
       `Two decisions answer \`${c.topic}\` differently:`,
       `- ${c.base.id}, already on the base branch: ${c.base.decision}`,
       `- ${c.branch.id}, on this branch: ${c.branch.decision}`,
       "",
-      "## Recommendation",
-      `Keep the decision already on the base branch (${c.base.id}), unless this branch's reason is stronger.`,
-      "",
-      "## Strongest alternative",
-      `${c.branch.decision} (${c.branch.id}): the newer decision, made with this branch's context.`,
-      "",
-      "## Needed from the reviewer",
-      "Pick one. The other becomes superseded, and the branch that built on it gets a rework brief.",
+      "Whichever you don't keep becomes superseded, and the work built on it gets a rework brief.",
       "",
     ].join("\n");
     filed.push(store.fileCard(draft, body, { agent: "baesian", force: true }).card);

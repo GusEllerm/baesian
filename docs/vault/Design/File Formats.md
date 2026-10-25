@@ -2,9 +2,9 @@
 type: design
 status: draft
 authority: specifies
-summary: "Baesian's file formats (proposal P12): card revisions, verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments and config; where each lives, and which are immutable. Defined in src/schema.ts."
+summary: "Baesian's file formats (proposal P12): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 reviewed: 2026-10-23
 tags: [baesian, design, formats]
 ---
@@ -17,7 +17,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 
 ## Rules that apply to every file
 
-- **Immutable.** Every file except the config files, the inbox cursors and the presence heartbeat is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
+- **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat and the waiting markers is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
 - **Flat.** Frontmatter and JSON have no nested objects. Lists of strings are fine. Empty lists and unset fields are left out when writing.
 - **IDs.** Cards are `B-` plus five Crockford base32 characters (`B-7f3kq`), and rules are `R-` plus five. The alphabet is lowercase and has no `i`, `l`, `o` or `u` (D51). A new ID is checked against the live layer and retried on collision (`newId`).
 - **Two layers (D34).** Everything is written to the live layer, `.git/baesian/`. The record, `.baesian/` in the worktree, receives copies of the files for the cards the branch filed or attached to (D37).
@@ -37,6 +37,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
 | `cursors/<branch>.json` | — | yes (mutable) | no | `baesian inbox` |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
+| `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `config.json` | `Config` | no | yes (mutable) | `baesian init` |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
 
@@ -44,30 +45,59 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 
 A card is a directory of revisions. Each revision is a whole card: the agent's reply to a returned card is a new revision, not an edit.
 
+The fields below come from the decisions about card content (D66, D73–D79, D92–D95). Frontmatter stays flat, so the crux and the facets are prefixed keys rather than nested objects.
+
 Frontmatter (`CardMeta`):
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `card` | |
-| `id`, `revision` | card ID, integer ≥ 1 | filled in by Baesian |
-| `title` | string | the decision, as a question |
-| `proposal` | string | what the agent recommends |
-| `alternatives` | list | the other options considered |
-| `topic` | optional slash-separated key | `storage/run-metadata`; canonicalised through aliases (D38, D44) |
-| `deck` | deck ID | defaults to the branch deck, `branch-<branch>` (D29) |
-| `level` | `provisional` \| `blocking` \| `hard` | defaults to `hard` when `touches` includes `publishes`, `security`, `money` or `data-loss` (D42), otherwise `provisional` |
-| `touches` | list of facts | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
-| `modules_touched` | optional integer | |
-| `depends_on` | list of card IDs | rejecting one of them withdraws this card (D14) |
-| `supersedes` | optional card ID | for arguing against a resolved decision; that decision becomes `superseded` once this card resolves |
-| `conflict_of`, `caught_at` | optional | conflict cards only: the decisions in conflict, and where it was caught (`filing`, `merge`, `late`; D45) |
-| `confidence` | optional 0–1 | recorded, not used for routing (D3) |
-| `domain`, `evidence` | lists | routing tags; links |
-| `source_agent`, `source_branch`, `source_worktree`, `created` | | filled in by Baesian |
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | `card` | | |
+| `id`, `revision` | card ID, integer ≥ 1 | | filled in by Baesian |
+| `title` | string | yes | a neutral short name, not a question ("Where the access token lives"). A settled decision is shown as its title plus its outcome |
+| `question` | string | yes | the decision, as a neutral question |
+| `doing` | string | yes | one short line, in the agent's voice, on what it was doing when the decision came up (D73) |
+| `topic` | slash-separated key | yes (D66) | `storage/run-metadata`; canonicalised through aliases (D38, D44) |
+| `deck` | deck ID | | defaults to the branch deck, `branch-<branch>` (D29) |
+| `level` | `provisional` \| `blocking` \| `hard` | | defaults to `hard` when `touches` includes `publishes`, `security`, `money` or `data-loss` (D42), otherwise `provisional` |
+| `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
+| `reverse` | `cheap` \| `moderate` \| `one-way` | yes (D95) | how costly the decision is to undo. It decides the stakes line and feeds rarity |
+| `proposal`, `proposal_then` | strings | yes | the agent's pick, named in a few words, and what happens if it's chosen |
+| `alternative`, `alternative_then` | strings | yes | the strongest alternative (D12, D93), and what happens if it's chosen |
+| `also_considered` | list | | other options the agent considered, by name; not shown on the card (D93) |
+| `crux` | string | yes | the one question the choice turns on (D74) |
+| `crux_proposal`, `crux_alternative` | strings | yes | the answer that leads to each option ("If it does", "If it doesn't") |
+| `crux_preference` | boolean | | the crux is about what the reviewer values, not a fact |
+| `crux_fact` | string | | a fact that bears on the crux |
+| `rationale` | string | | why the agent picks the proposal (D77) |
+| `wrong_if`, `check` | strings | when a facet asks | what would show the pick is wrong, and where to look. Required when `reverse` is `one-way`, when `touches` includes `security`, or when `premise` is set (D77) |
+| `premise`, `premise_option`, `premise_check` | string; `proposal` or `alternative`; string | all or none | a claim an option rests on that nobody has checked, which option, and the check (D75) |
+| `acted`, `acted_option` | string; `proposal` or `alternative` | both or neither | what the agent has already built, and for which option (D75) |
+| `serves` | string | | the criterion the agent's pick serves, for a preference crux (D75) |
+| `rules` | list of rule IDs | | the rules the card bears on (D79) |
+| `proposal_breaks`, `alternative_breaks` | lists of card or rule IDs | | the decisions or rules each option would replace or break, as the agent declares them; the client's path lights them |
+| `modules_touched` | optional integer | | |
+| `depends_on` | list of card IDs | | rejecting one of them withdraws this card (D14) |
+| `supersedes` | optional card ID | | for arguing against a resolved decision; that decision becomes `superseded` once this card resolves |
+| `conflict_of`, `caught_at` | optional | | conflict cards only: the decisions in conflict, and where it was caught (`filing`, `merge`, `late`; D45) |
+| `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
+| `domain`, `evidence` | lists | | routing tags; links |
+| `source_agent`, `source_branch`, `source_worktree`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness |
 
-Body: Markdown sections, in the shape of the Decision Card template: Context, Recommendation, **Strongest alternative** (required, D12), Why now, Cost to reverse, Needed from the reviewer. Only the strongest alternative is checked.
+**Body:** optional Markdown context, shown with the agent's reasoning (D92). Nothing in it is checked.
 
 What an agent writes is a **draft** (`CardDraft`): the same frontmatter without the fields Baesian fills in. `deck` and `level` are optional.
+
+**Filing** (`filingProblems()`, and the store's reference check) rejects:
+- a missing required field;
+- options that aren't really two: `proposal` and `alternative` the same, ignoring case and spacing;
+- a crux that doesn't discriminate: `crux_proposal` and `crux_alternative` the same (D74);
+- `wrong_if` or `check` missing when a facet asks for them (D77);
+- a facet with only some of its fields (D75);
+- IDs in `depends_on`, `rules` or the `_breaks` lists that don't exist.
+
+**Warnings** (`filingWarnings()`): no length limit has been measured yet, so long fields file anyway, with a note. The limits are 60 characters for the title and option names, 160 for the question, crux and `doing`, and 240 for a `then`.
+
+**Conflict cards** are filed by Baesian itself, with no model (D65). They carry a fixed crux (D94): "Was the newer decision made with context the older one lacked?" "If it wasn't" keeps the base branch's decision; "if it was" keeps the branch's. Each option's `_breaks` names the decision it would replace.
 
 ## Verdict
 
@@ -76,11 +106,12 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 | Field | Notes |
 |---|---|
 | `card`, `revision` | a verdict on an old revision is rejected as stale |
-| `response` | `accept`, `alternative`, `correction` → resolved; `reject`, `question`, `need_context` → returned; `not_my_area` → rerouted; `defer` → deferred |
+| `response` | `accept`, `alternative`, `correction` → resolved; `reject`, `question`, `need_context`, `see_it_run` → returned; `not_my_area` → rerouted; `defer` → deferred. `see_it_run` (D85) asks the agent for a demo, a screenshot or a running preview |
 | `choice` | required for `alternative` and `correction` |
-| `comment` | required for `question` and `defer` |
+| `comment` | required for `question` and `defer`. A disagreement's optional reason (D87) goes here |
+| `first_choice` | optional: `proposal` or `alternative`, the option chosen before the agent's pick was shown (D86, D88) |
 | `make_rule` | the "make this a rule" toggle (D16) |
-| `reviewer`, `at` | `at` is strictly increasing per card, so the latest verdict is unambiguous |
+| `reviewer`, `client`, `at` | `client` names the client that wrote it (D62). `at` is strictly increasing per card, so the latest verdict is unambiguous |
 
 ## The others
 
@@ -94,6 +125,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 - **Presence** (`Presence`): `client`, `at`. The client rewrites it every 30 seconds, by writing a temporary file and renaming it, so readers never see half a file. `baesian wait` treats it as follows:
   - more than 90 seconds old (`PRESENCE_STALE_MS`): the reviewer is away;
   - missing: unknown, because the client has never run.
+- **Waiting marker** (`Waiting`, D90): `card`, `revision`, `agent`, `since`, `at`. `baesian wait` writes it when it starts, rewrites it every 30 seconds (with a temporary file and a rename, as presence does), and removes it when it returns. A marker more than 90 seconds old means the agent stopped waiting: the card says so, and drops back to its place in the queue. Several agents can wait on one card, each with its own marker. *Defined in M4 step 2; `baesian wait` writes it from step 3.*
 - **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;

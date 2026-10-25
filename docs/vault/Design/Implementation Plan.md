@@ -32,6 +32,7 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 | `src/verify.ts` | `baesian verify`: CI and the merge gate ([[src-verify]]) |
 | `src/frontmatter.ts`, `src/git.ts`, `src/ids.ts`, `src/similarity.ts` | helpers |
 | `test/` | Vitest, against real temporary git repos and linked worktrees |
+| `test/premises/` | checks of decisions' premises, run by hand (`watch.mjs`, for D84) |
 
 Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <command>` (from source, via tsx).
 
@@ -50,6 +51,13 @@ Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <c
 | **M7** | The MCP server | |
 
 Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts are all live (D21).
+
+**M4's order (D91).** The client's design is signed off, with round 5 (`design/explorations/round5/`) as the spec and [[Client Data Contract]] as its data. The backend comes first:
+1. the file-watching test, D84's premise (**done**);
+2. the P12 format changes in the store (D62, D66, D73–D75, D77, D79, D85, D88, D90, D92–D95), and filing rejects unknown `depends_on` IDs (**done**);
+3. the store's new behaviour: choosing the alternative returns dependents (D80), a changed answer brings a rework brief (D81), and `baesian wait` keeps a heartbeat (D90);
+4. the local server: watching the live layer, the API and live updates;
+5. the React client, porting round 5.
 
 ## Notes from M1
 
@@ -85,3 +93,25 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 ## Notes from M2 (continued)
 
 - **Tests never notify for real.** `test/helpers.ts` sets `BAESIAN_OS_NOTIFY=0` and points `BAESIAN_CONFIG` at a missing file. CLI tests also inject a notify stub. The macOS AppleScript was checked with `osacompile`, not by showing a notification.
+
+## Notes from M4
+
+- **The file-watching check (D84's premise), 2026-10-24: it holds.** `test/premises/watch.mjs` is a check to run by hand, not part of the suite.
+  - **What it does:** four writer processes create files the way the store does (`mkdir -p`, then an exclusive create) in bursts, while one recursive `fs.watch` records every path it hears. There are four scenarios of 1,000 files each, with five trials apiece:
+    - flat files into an existing folder;
+    - a new folder per card, with two files written straight into it;
+    - new folders three levels deep;
+    - rewrites of existing files.
+  - **The result:** no misses and no null filenames, on macOS (arm64, Node 22.22, FSEvents) and on Linux (Docker's arm64 VM, Node 22.23, inotify). On macOS the last event came within about 50 ms of the last write; on Linux, during the writes.
+  - **Its limits:**
+    - **The Linux run had a very high watch limit** (`max_user_watches` 1,048,576). Node's recursive watching on Linux takes one inotify watch per folder, and every card has its own folder, so a host with the old default of 8,192 would run out at about 8,000 cards. What Node does at the limit wasn't tested. The server should treat a watcher error as a cue to fall back to the rescan.
+    - **Not tested:** network filesystems, Docker bind mounts, or synced folders such as iCloud and Dropbox. Node's docs call watching unreliable there.
+    - **A 500 ms warm-up** came before the writes. The server should scan once after it starts watching, to catch anything written before the watcher was ready.
+
+    The 30-second rescan of D84 covers all three.
+- **Step 2, the format (2026-10-24): done, with 127 tests passing.** The card and verdict fields are those in [[File Formats]]. The user settled the draft's four open points: D92 (the body is optional context), D93 (one alternative), D94 (a fixed crux on conflict cards) and D95 (`reverse` required).
+  - **Filing:** `filingProblems()` holds the rules that span fields, and the store checks references. `filingWarnings()` notes long fields without rejecting them, since no limit has been measured.
+  - **Conflict cards** are written by `fileConflicts`, with the fixed crux and each option's `_breaks`.
+  - **The waiting marker's schema (`Waiting`) is defined.** `baesian wait` starts writing it in step 3.
+  - **The CLI:** `baesian show` prints the card as the client shows it, and `baesian file` prints notes. The template lists the required fields to fill in, with the optional ones commented out.
+  - **This repo's `AGENTS.md` block** now says every card states its crux.

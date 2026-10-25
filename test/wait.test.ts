@@ -38,7 +38,7 @@ describe("wait", () => {
     const { store, id } = filed("blocking");
     const clock = fakeClock();
     store.addVerdict({ card: id, revision: 1, response: "not_my_area", ...REVIEWER });
-    clock.at(60_000, () => store.addVerdict({ card: id, revision: 1, response: "accept", reviewer: "ana" }));
+    clock.at(60_000, () => store.addVerdict({ card: id, revision: 1, response: "accept", reviewer: "ana", client: "test" }));
     const o = await waitForVerdict(store, id, { ...AGENT, ...clock, timeoutMs: 5 * MIN });
     expect(o.kind).toBe("resolved");
   });

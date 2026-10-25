@@ -125,10 +125,10 @@ describe("cli: M2 commands", () => {
   it("prints a template that refuses to file until it is filled in", async () => {
     const { dir } = repo();
     const t = await run(dir, ["template"]);
-    expect(parseDoc(t.out).body).toContain("## Strongest alternative");
+    expect(Object.keys(parseDoc(t.out).meta)).toEqual(expect.arrayContaining(["question", "doing", "alternative", "crux", "reverse"]));
     const filed = await run(dir, ["file"], t.out);
     expect(filed.code).toBe(1);
-    expect(filed.err).toMatch(/title|proposal/);
+    expect(filed.err).toMatch(/title|question/);
   });
 
   it("notifies for a blocking card and tells the agent to wait", async () => {

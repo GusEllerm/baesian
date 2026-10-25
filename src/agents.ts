@@ -16,8 +16,8 @@ Design decisions that are hard to undo go to a person as cards; you don't make t
 changes a schema or on-disk format; changes a public API, URL scheme or module boundary; adds a runtime
 dependency; changes CI, infrastructure or deployment; is user-facing; publishes something; touches
 security or privacy; spends money; deletes or overwrites stored data; or would break something to
-reverse. Otherwise decide yourself. Every card states its strongest alternative. Reuse topics from
-\`baesian topics\`.
+reverse. Otherwise decide yourself. Every card states its strongest alternative, and the one question
+the choice turns on (the crux). Reuse topics from \`baesian topics\`.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose \`touches\`
@@ -69,25 +69,37 @@ export function claudeMdMissesAgents(toplevel: string): boolean {
 }
 
 export const CARD_TEMPLATE = `---
-title: ""            # the decision, as a question
-proposal: ""         # what you recommend
-alternatives: []     # the other options you considered
-# topic: area/subject   (reuse one from \`baesian topics\`)
-touches: []          # any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss
-# level: blocking       (provisional by default; hard by default for publishes, security, money, data-loss)
+title: ""              # a neutral short name: "Where the access token lives"
+question: ""           # the decision, as a neutral question
+doing: ""              # what you were doing when it came up: "writing the server's file watcher"
+topic: ""              # area/subject; reuse one from \`baesian topics\`
+touches: []            # any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss
+reverse: ""            # how costly it is to undo: cheap, moderate or one-way
+proposal: ""           # your pick, in a few words
+proposal_then: ""      # what happens if it's chosen
+alternative: ""        # the strongest alternative, in a few words
+alternative_then: ""   # what happens if it's chosen
+crux: ""               # the one question the choice turns on
+crux_proposal: ""      # the answer that leads to your pick: "If it does"
+crux_alternative: ""   # the answer that leads to the alternative: "If it doesn't"
+# crux_preference: true    (the crux is about what the reviewer values, not a fact)
+# crux_fact: ""            (a fact that bears on the crux)
+# rationale: ""            (why you pick the proposal)
+# wrong_if: ""             (what would show your pick is wrong: required if reverse is one-way,
+# check: ""                 touches includes security, or a premise is set; check says where to look)
+# premise: ""              (a claim an option rests on that nobody has checked,
+# premise_option: proposal  which option rests on it,
+# premise_check: ""         and how to check it)
+# acted: ""                (what you've already built for one option,
+# acted_option: proposal    and which)
+# serves: ""               (the criterion your pick serves, when the crux is a preference)
+# also_considered: []      (other options, by name)
+# rules: [R-xxxxx]         (rules this decision bears on)
+# proposal_breaks: []      (decisions or rules your pick would replace or break)
+# alternative_breaks: []
+# level: blocking          (provisional by default; hard by default for publishes, security, money, data-loss)
 # depends_on: [B-xxxxx]
-# deck: storage-layer   (your branch's deck by default)
+# deck: storage-layer      (your branch's deck by default)
+# Below the closing line, optionally: the context behind the decision, for a reviewer who wants more.
 ---
-
-## Context
-
-## Recommendation
-
-## Strongest alternative
-
-## Why now
-
-## Cost to reverse
-
-## Needed from the reviewer
 `;

@@ -141,6 +141,14 @@ describe("conflicting decisions (D35, D38)", () => {
     const first = verify(repo, "main", { merge: true });
     const [card] = fileConflicts(store, first.merge!.conflicts);
     expect(card?.meta).toMatchObject({ level: "blocking", conflict_of: [onMain, onBranch], caught_at: "merge", proposal: "ISO 8601 strings" });
+    // Baesian writes it with no model, so the crux is the fixed one (D94); each option names the decision it replaces.
+    expect(card?.meta).toMatchObject({
+      alternative: "Unix epoch integers",
+      crux: "Was the newer decision made with context the older one lacked?",
+      crux_proposal: "If it wasn't",
+      proposal_breaks: [onBranch],
+      alternative_breaks: [onMain],
+    });
     expect(fileConflicts(store, first.merge!.conflicts)).toEqual([]); // not twice
 
     // The reviewer keeps main's decision: the branch's card is superseded.

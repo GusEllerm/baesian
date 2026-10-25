@@ -468,6 +468,23 @@ The personal-website and live-docs vaults already run this decision process by h
 - **Reviewer disagreement:** two reviewers give different verdicts on the same card.
 - **Decision drift:** decisions are now vault notes (D43), so livedocs *could* bind them and flag when the code behind an accepted decision changes ("is B-7f3k still honoured?"). They're snapshots for now, because dated notes already dominated the livedocs acks (P25 in live-docs). Is binding some of them (hard decisions only, say) worth the acks?
 - **Phone access:** the client runs locally. Reaching it from a phone needs the LAN or a tunnel.
+- **Several machines (2026-10-24):** the user is building a cluster of Sparks for persistent agents, and wants Baesian deployed there eventually.
+  - **Everything today assumes one machine:** the live layer is in one clone's git directory (D34), the server watches it locally (D84), and the client is on 127.0.0.1 (D63). Agents with their own clones on other machines share nothing until merge, so the filing check and conflict detection only meet at the merge gate.
+  - **Three possible shapes:**
+    - **Shared network storage:** one clone, with every agent's worktree on it. The server has to poll, since inotify doesn't report writes made by other machines. Exclusive create needs NFSv3 or later. Heartbeats (D41, D90) need synced clocks.
+    - **One Baesian host per repo:** agents elsewhere file and wait through its API. It's consistent, and it makes "only the client resolves" enforceable (D62), but it's a network service whose security has to be settled.
+    - **Git as the transport:** the live layer is pushed and fetched between clones; its write-once files merge without conflicts. There's no new service, but it's only eventually consistent.
+  - **The user's lean (2026-10-24), not yet a decision:** one Baesian host per repo, as the easiest. The live layer then stays on one machine, so local watching works as tested, as long as agents on other machines go through the server's API rather than a mounted share.
+  - **Persistent agents, in the user's current thinking:** possibly a grown context in which new shells (agents) start, so a persistent agent can span many sessions. The design already fits this:
+    - `source_agent` is free text, so it can name the persistent agent rather than the harness;
+    - a new shell picks up verdicts through `baesian inbox`;
+    - D90's marker belongs to the shell that's waiting;
+    - the "next session" of D81 and D90 is the next shell.
+
+    One gap: the inbox cursor is kept per branch, so if two shells of one agent share a branch, the first to read the inbox takes its verdicts.
+  - **To settle,** as a decision card, once the cluster's storage, networking and agents are clearer. Meanwhile:
+    - M4's server makes polling a mode of its own beside watching;
+    - its API is shaped around the store's operations, so agents' commands could later go through it.
 - **Feedback loop:** whether verdicts should train routing and confidence calibration, and whether they could be a dataset in their own right.
 - **Science vs software:** research decisions (methods, assumptions, interpretations) probably need their own card types. A timestamped log of analysis decisions with expert sign-off is close to a pre-registration and audit trail. Deferred until after the coding-agent version (D2).
 

@@ -49,9 +49,62 @@ describe("filing", () => {
     expect(store.status(card.meta.id)).toBe("open");
   });
 
-  it("requires the strongest alternative (D12)", () => {
+  it("requires the strongest alternative, as a field (D12, D92)", () => {
     const { store } = repo();
-    expect(() => store.fileCard(draft(), "## Recommendation\nSQLite.\n", AGENT)).toThrow(ValidationError);
+    expect(() => store.fileCard(draft({ alternative: undefined }), BODY, AGENT)).toThrow(ValidationError);
+    expect(() => store.fileCard(draft({ alternative_then: undefined }), BODY, AGENT)).toThrow(ValidationError);
+  });
+
+  it("files a card with no body: the body is optional context (D92)", () => {
+    const { store } = repo();
+    expect(store.fileCard(draft(), "", AGENT).card.body.trim()).toBe("");
+  });
+
+  it("requires the core: question, trigger, topic, reversibility and the crux (D66, D73, D74, D77, D95)", () => {
+    const { store } = repo();
+    for (const field of ["question", "doing", "topic", "reverse", "crux", "crux_proposal", "crux_alternative"]) {
+      expect(() => store.fileCard(draft({ [field]: undefined }), BODY, AGENT), field).toThrow(ValidationError);
+    }
+  });
+
+  it("rejects two options that are really one, and a crux that doesn't decide between them (D74)", () => {
+    const { store } = repo();
+    expect(() => store.fileCard(draft({ alternative: "sqlite  (WAL MODE)" }), BODY, AGENT)).toThrow(/two real options/);
+    expect(() => store.fileCard(draft({ crux_alternative: "if not" }), BODY, AGENT)).toThrow(/doesn't decide/);
+  });
+
+  it("asks for wrong_if and check when a facet does (D77)", () => {
+    const { store } = repo();
+    const premise = { premise: "assumes one writer", premise_option: "proposal", premise_check: "count writers in CI" };
+    for (const facet of [{ reverse: "one-way" }, { touches: ["security"] }, premise]) {
+      expect(() => store.fileCard(draft(facet), BODY, AGENT)).toThrow(/wrong_if and check are required/);
+      const ok = store.fileCard(draft({ ...facet, wrong_if: "two machines write runs", check: "the CI matrix" }), BODY, { ...AGENT, force: true });
+      expect(ok.card.meta.wrong_if).toBe("two machines write runs");
+    }
+  });
+
+  it("wants all of a facet's fields or none (D75)", () => {
+    const { store } = repo();
+    const half = { premise: "assumes one writer", wrong_if: "x", check: "y" };
+    expect(() => store.fileCard(draft(half), BODY, AGENT)).toThrow(/premise .* facet needs all of its fields/);
+    expect(() => store.fileCard(draft({ acted: "wrote the migration" }), BODY, AGENT)).toThrow(/acted .* facet/);
+  });
+
+  it("rejects references to cards and rules that don't exist", () => {
+    const { store } = repo();
+    expect(() => store.fileCard(draft({ depends_on: ["B-zzzzz"] }), BODY, AGENT)).toThrow(/depends_on names B-zzzzz/);
+    expect(() => store.fileCard(draft({ rules: ["R-zzzzz"] }), BODY, AGENT)).toThrow(/rules names R-zzzzz/);
+    expect(() => store.fileCard(draft({ alternative_breaks: ["B-zzzzz"] }), BODY, AGENT)).toThrow(/alternative_breaks/);
+    const first = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const ok = store.fileCard(draft({ topic: "storage/other", title: "Another store", depends_on: [first], proposal_breaks: [first] }), BODY, AGENT);
+    expect(ok.card.meta.depends_on).toEqual([first]);
+  });
+
+  it("warns about long fields, and files anyway", () => {
+    const { store } = repo();
+    const r = store.fileCard(draft({ proposal: "SQLite in write-ahead-log mode with a nightly backup to the shared drive" }), BODY, AGENT);
+    expect(r.warnings.join()).toMatch(/proposal is \d+ characters/);
+    expect(store.fileCard(draft({ topic: "storage/other", title: "Another store" }), BODY, AGENT).warnings).toEqual([]);
   });
 
   it("validates the draft", () => {
@@ -92,10 +145,10 @@ describe("the filing check (D36, D38)", () => {
     }
   });
 
-  it("stops a similar title without a topic", () => {
+  it("stops a similar title under another topic", () => {
     const { store } = repo();
-    store.fileCard(draft({ topic: undefined }), BODY, AGENT);
-    expect(() => store.fileCard(draft({ topic: undefined, title: "SQLite for run metadata store?" }), BODY, AGENT)).toThrow(
+    store.fileCard(draft(), BODY, AGENT);
+    expect(() => store.fileCard(draft({ topic: "storage/runs", title: "The store for run metadata" }), BODY, AGENT)).toThrow(
       PossibleDuplicate,
     );
   });
@@ -130,6 +183,25 @@ describe("the filing check (D36, D38)", () => {
   });
 });
 
+describe("verdicts", () => {
+  it("returns a card on \"I need to see it run\" (D85)", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    store.addVerdict({ card: id, revision: 1, response: "see_it_run", ...REVIEWER });
+    expect(store.status(id)).toBe("returned");
+  });
+
+  it("records which client wrote it, and the choice made before the agent's pick showed (D62, D88)", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    expect(() => store.addVerdict({ card: id, revision: 1, response: "accept", reviewer: "gus" } as never)).toThrow(/client/);
+    const v = store.addVerdict({ card: id, revision: 1, response: "accept", first_choice: "alternative", ...REVIEWER });
+    expect(store.verdicts(id)).toEqual([v]);
+    expect(v).toMatchObject({ client: "test", first_choice: "alternative" });
+    expect(store.decision(id)).toBe("SQLite (WAL mode)");
+  });
+});
+
 describe("status (computed, never stored)", () => {
   it("resolves on accept, an alternative or a correction", () => {
     const { store } = repo();
@@ -144,7 +216,7 @@ describe("status (computed, never stored)", () => {
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
     store.addVerdict({ card: id, revision: 1, response: "reject", comment: "Not a good idea.", ...REVIEWER });
     expect(store.status(id)).toBe("returned");
-    const r2 = store.reviseCard(id, draft({ proposal: "Postgres" }), BODY, AGENT);
+    const r2 = store.reviseCard(id, draft({ proposal: "Postgres", alternative: "SQLite (WAL mode)" }), BODY, AGENT);
     expect(r2.card.meta.revision).toBe(2);
     expect(store.status(id)).toBe("open");
     expect(() => store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER })).toThrow(/stale/);
@@ -184,7 +256,7 @@ describe("status (computed, never stored)", () => {
     const { store } = repo();
     const old = store.fileCard(draft(), BODY, AGENT).card.meta.id;
     store.addVerdict({ card: old, revision: 1, response: "accept", ...REVIEWER });
-    const next = store.fileCard(draft({ proposal: "Postgres", supersedes: old }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const next = store.fileCard(draft({ proposal: "Postgres", alternative: "SQLite (WAL mode)", supersedes: old }), BODY, { ...AGENT, force: true }).card.meta.id;
     expect(store.status(old)).toBe("resolved");
     store.addVerdict({ card: next, revision: 1, response: "accept", ...REVIEWER });
     expect(store.status(old)).toBe("superseded");
@@ -214,7 +286,7 @@ describe("parallel worktrees (D34)", () => {
     const id = main.store.fileCard(draft(), BODY, AGENT).card.meta.id;
     const feat = worktree(main.dir, "feat/other");
     expect(feat.store.live).toBe(main.store.live);
-    expect(feat.store.card(id)?.meta.title).toBe("Use SQLite for the run-metadata store?");
+    expect(feat.store.card(id)?.meta.title).toBe("The run-metadata store");
     expect(existsSync(join(feat.store.record, "cards", id))).toBe(false);
 
     // The other worktree's agent asks the same question: it should attach, not duplicate.

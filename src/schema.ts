@@ -39,18 +39,64 @@ export const HARD_BY_DEFAULT: ReadonlySet<Fact> = new Set(["publishes", "securit
 
 export const CaughtAt = z.enum(["filing", "merge", "late"]);
 
+/** Which of a card's two options something refers to. */
+export const OptionKind = z.enum(["proposal", "alternative"]);
+export type OptionKind = z.infer<typeof OptionKind>;
+
+/** How costly a decision is to undo (D95). It decides the card's stakes line and feeds rarity. */
+export const Reverse = z.enum(["cheap", "moderate", "one-way"]);
+
+/** A decision or a rule, for the decisions an option would replace or break. */
+export const DecisionRef = z.union([CardId, RuleId]);
+
+const Text = z.string().min(1);
+
 /** Frontmatter of one card revision: `cards/<id>/r<revision>.md`. */
 export const CardMeta = z.strictObject({
   type: z.literal("card"),
   id: CardId,
   revision: z.number().int().min(1),
-  title: z.string().min(1),
-  proposal: z.string().min(1),
-  alternatives: z.array(z.string().min(1)).default([]),
-  topic: Topic.optional(),
+  /** A neutral short name, not a question: "Where the access token lives". */
+  title: Text,
+  /** The decision, as a neutral question. */
+  question: Text,
+  /** What the agent was doing when the decision came up, in its own voice (D73). */
+  doing: Text,
+  topic: Topic,
   deck: DeckId,
   level: Level,
   touches: z.array(Fact).default([]),
+  reverse: Reverse,
+  // The two options (D93): the agent's pick and the strongest alternative, each with what it would do.
+  proposal: Text,
+  proposal_then: Text,
+  alternative: Text,
+  alternative_then: Text,
+  /** Other options the agent considered, by name. Not shown on the card. */
+  also_considered: z.array(Text).default([]),
+  // The crux (D74): the one question the choice turns on, and the answer that leads to each option.
+  crux: Text,
+  crux_proposal: Text,
+  crux_alternative: Text,
+  /** The crux is about what the reviewer values, not a fact. */
+  crux_preference: z.boolean().optional(),
+  crux_fact: Text.optional(),
+  // The agent's case (D77): the rationale is optional; "wrong if" and its check are required when a facet asks.
+  rationale: Text.optional(),
+  wrong_if: Text.optional(),
+  check: Text.optional(),
+  // The trial facets (D75).
+  premise: Text.optional(),
+  premise_option: OptionKind.optional(),
+  premise_check: Text.optional(),
+  acted: Text.optional(),
+  acted_option: OptionKind.optional(),
+  serves: Text.optional(),
+  /** Rules the card bears on (D79). */
+  rules: z.array(RuleId).default([]),
+  /** The decisions or rules each option would replace or break, as the agent declares them. */
+  proposal_breaks: z.array(DecisionRef).default([]),
+  alternative_breaks: z.array(DecisionRef).default([]),
   modules_touched: z.number().int().min(0).optional(),
   depends_on: z.array(CardId).default([]),
   supersedes: CardId.optional(),
@@ -82,8 +128,43 @@ export const CardDraft = CardMeta.omit({
 });
 export type CardDraft = z.infer<typeof CardDraft>;
 
-/** The body section every card must have (D12). */
-export const STRONGEST_ALTERNATIVE = "Strongest alternative";
+/** Why a well-formed draft still can't be filed (D74, D77): the rules that span fields. */
+export function filingProblems(d: CardDraft): string[] {
+  const out: string[] = [];
+  if (same(d.proposal, d.alternative)) out.push("the proposal and the alternative are the same option: a card needs two real options");
+  if (same(d.crux_proposal, d.crux_alternative)) {
+    out.push("crux_proposal and crux_alternative give the same answer, so the crux doesn't decide between the options (D74)");
+  }
+  const asks = [
+    ...(d.reverse === "one-way" ? ["it's one-way"] : []),
+    ...(d.touches.includes("security") ? ["it touches security"] : []),
+    ...(d.premise ? ["it rests on an unchecked premise"] : []),
+  ];
+  if (asks.length && !(d.wrong_if && d.check)) {
+    out.push(`wrong_if and check are required because ${asks.join(" and ")} (D77): say what would show the pick is wrong, and where to look`);
+  }
+  const partial = (name: string, fields: (string | undefined)[]) => {
+    const set = fields.filter((f) => f !== undefined).length;
+    if (set > 0 && set < fields.length) out.push(`the ${name} facet needs all of its fields (D75)`);
+  };
+  partial("premise (premise, premise_option, premise_check)", [d.premise, d.premise_option, d.premise_check]);
+  partial("acted (acted, acted_option)", [d.acted, d.acted_option]);
+  return out;
+}
+
+/** Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn. */
+export function filingWarnings(d: CardDraft): string[] {
+  const long: [string, string | undefined, number][] = [
+    ["title", d.title, 60], ["proposal", d.proposal, 60], ["alternative", d.alternative, 60],
+    ["question", d.question, 160], ["crux", d.crux, 160], ["doing", d.doing, 160],
+    ["proposal_then", d.proposal_then, 240], ["alternative_then", d.alternative_then, 240],
+  ];
+  return long
+    .filter(([, v, max]) => v !== undefined && v.length > max)
+    .map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`);
+}
+
+const same = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, " ").trim() === b.toLowerCase().replace(/\s+/g, " ").trim();
 
 export const Response = z.enum([
   "accept", // resolves
@@ -92,6 +173,7 @@ export const Response = z.enum([
   "reject", // returns: the agent re-proposes or withdraws
   "question", // returns: "have you considered X?"
   "need_context", // returns: re-file with what was missing
+  "see_it_run", // returns: come back with a demo, a screenshot or a running preview (D85)
   "not_my_area", // reroutes
   "defer", // deferred, with a reason (D31)
 ]);
@@ -106,8 +188,12 @@ export const Verdict = z
     response: Response,
     choice: z.string().min(1).optional(),
     comment: z.string().min(1).optional(),
+    /** The option chosen before the agent's pick was shown (D86, D88). */
+    first_choice: OptionKind.optional(),
     make_rule: z.boolean().optional(),
     reviewer: z.string().min(1),
+    /** Which client wrote the verdict (D62). */
+    client: z.string().min(1),
     at: Timestamp,
   })
   .superRefine((v, ctx) => {
@@ -204,6 +290,20 @@ export const Presence = z.strictObject({
   at: Timestamp,
 });
 export type Presence = z.infer<typeof Presence>;
+
+/**
+ * An agent waiting on a card, `waiting/<id>-<suffix>.json` in the live layer (D90). Mutable: `baesian wait`
+ * rewrites it while it waits and removes it when it returns. Once it's stale, the agent stopped waiting.
+ */
+export const Waiting = z.strictObject({
+  type: z.literal("waiting"),
+  card: CardId,
+  revision: z.number().int().min(1),
+  agent: z.string().min(1),
+  since: Timestamp,
+  at: Timestamp,
+});
+export type Waiting = z.infer<typeof Waiting>;
 
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. */
 export const Config = z.strictObject({
