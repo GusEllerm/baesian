@@ -29,7 +29,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `wait <id> [--timeout s] [--no-presence]` | waits for a verdict; the exit code says what to do |
 | `list [--all] [--branch]`, `show <id>`, `topics` | read. `show` prints the card as the client shows it: the question, the trigger, the stakes, the crux and the two options, then any context |
 | `inbox [--peek]` | new verdicts on this branch's cards |
-| `serve [--port <n>] [--no-open] [--poll]` | serves the client on 127.0.0.1 and opens it ([[src-server]]). If this repo's server is already running, it prints its address and opens that instead |
+| `serve [--port <n>] [--no-open] [--poll]` | serves the client on 127.0.0.1 and opens it ([[src-server]]), on the last server's port when it's free (D103). If this repo's server is already running, it prints its address and opens that instead |
 | `sync` | copies new verdicts and ledger entries into the record |
 | `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
 | `verify [--base <ref>] [--merge] [--file-conflicts]` | CI: reruns the gate on every commit since the base, against its own committed record. `--merge` adds the merge gate and conflicting decisions ([[src-verify]]) |

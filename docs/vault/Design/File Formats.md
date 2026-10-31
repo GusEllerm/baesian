@@ -39,6 +39,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
+| `port.json` | `LastPort` | yes (mutable) | no | `baesian serve`, kept after it stops (D103) |
 | `config.json` | `Config` | no | yes (mutable) | `baesian init` |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
 
@@ -128,6 +129,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
   - missing: unknown, because the client has never run.
 - **Waiting marker** (`Waiting`, D90): `card`, `revision`, `agent`, `since`, `at`. `baesian wait` writes it when it starts, and rewrites it every 30 seconds (with a temporary file and a rename, as presence does). A run that ends with exit 7 (D101) leaves it for the next run to pick up; any other ending removes it. `since` is when the wait first began, across runs. A marker more than 90 seconds old means the agent stopped waiting: the card says so, and drops back to its place in the queue. Several agents can wait on one card, each with its own marker. `baesian wait` writes it from M4 step 3.
 - **Server file** (`ServerInfo`, D97): `pid`, `port`, `token`, `started`. `baesian serve` writes it atomically, readable only by the user, and removes it when it stops. The token is new on every start. Another `serve` uses it to find a running server, and ignores it if that process has gone or doesn't answer.
+- **Last port** (`LastPort`, D103): `port`. The port the last server listened on, kept after it stops so the next one can start on the same address, and the browser keeps what it stored for that address. No secret. An unreadable file is ignored, and a port in use falls back to one the system picks.
 - **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;

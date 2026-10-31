@@ -30,6 +30,7 @@ Provenance: drafted by the agent on 2026-10-24 for M4 step 4 (D91), from earlier
 - **It runs in the foreground.** Ctrl-C stops it and removes the server file.
 - **It opens the browser** (`open` on macOS, `xdg-open` on Linux) unless `--no-open`.
 - **`--poll` checks every second instead of watching,** for a live layer on shared storage.
+- **It starts on the port the last server used, if it's free** (D103), and otherwise on one the system picks. `--port` chooses one. The address then stays the same across restarts except for its token, so the browser keeps what it stores for the client, and its permission to notify.
 
 ## Security (D62)
 
@@ -68,7 +69,10 @@ Provenance: drafted by the agent on 2026-10-24 for M4 step 4 (D91), from earlier
 - **Its life:** removed when the server stops. One whose process has gone is replaced.
 - **A P12 addition.**
 
+`.git/baesian/port.json`: `type: port`, `port` (D103). The port the last server listened on, kept after it stops, so the next one can start on the same address. It holds no secret. `serve` writes it when it starts on a different port than before, unless given `--port`. Also a P12 addition.
+
 ## Decided by the user
 
 - **D96: the API is a snapshot plus change events,** as above. Rejected: endpoints per resource with incremental events.
 - **D97: a new token and a system-chosen port for each `serve`.** Stable addresses wait for M4c. Rejected: a token and port kept per repo.
+- **D103 revises D97's port:** the last server's port when it's free, so the browser keeps the client's own data across restarts. The token is still new each time.

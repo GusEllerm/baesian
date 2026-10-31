@@ -65,7 +65,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
   - the 5-second undo, held in the client and sent when it closes or the page goes (D82).
 - **Presence:** a heartbeat (`POST /api/presence`) every 30 seconds while the tab is open (D41).
 - **Notifications:** a browser notification when a blocking or hard card arrives (D40). Permission is asked on a click, never on load.
-- **What the client keeps itself,** in the browser's storage: time spent on each card, which cards you've already seen (for the "new" tag), and whether to notify you. A browser keeps storage per address, and the address includes the port, which changes on every `serve` (D97). So all of it lasts only while one server runs, and notification permission is asked again after a restart. That's open with the user (see 5e below).
+- **What the client keeps itself,** in the browser's storage: time spent on each card, which cards you've already seen (for the "new" tag), and whether to notify you. A browser keeps storage per address, and the address includes the port, so `serve` starts on the last server's port when it's free (D103): what the client keeps, and notification permission, survive a restart.
 - **Not in step 5: practice cards (D83).** They're built from resolved cards, and there are none yet. They come after dogfooding has produced some, with a small design of their own.
 
 ## How it's tested

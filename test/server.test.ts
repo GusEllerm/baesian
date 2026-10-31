@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -112,6 +112,37 @@ describe("security (D62, D97)", () => {
     const { store } = repo();
     writeFileSync(join(store.live, "server.json"), JSON.stringify({ type: "server", pid: 2 ** 22 - 1, port: 1, token: "x".repeat(43), started: new Date().toISOString() }));
     expect(await findRunningServer(store)).toBeUndefined();
+  });
+});
+
+describe("the address (D97, D103)", () => {
+  const remembered = (store: { live: string }) => JSON.parse(readFileSync(join(store.live, "port.json"), "utf8"));
+
+  it("starts on the port the last server used, so the browser keeps what it stored, with a new token", async () => {
+    const { store } = repo();
+    const first = await serve(store);
+    await servers.pop()!.close();
+    const second = await serve(store);
+    expect(second.port).toBe(first.port);
+    expect(second.token).not.toBe(first.token);
+    expect(remembered(store)).toEqual({ type: "port", port: first.port });
+  });
+
+  it("takes a port the system picks when the last one is in use, and remembers that one", async () => {
+    const { store } = repo();
+    const first = await serve(store);
+    const second = await serve(store, { writeServerFile: false });
+    expect(second.port).not.toBe(first.port);
+    expect(remembered(store)).toEqual({ type: "port", port: second.port });
+  });
+
+  it("neither reads nor writes the record when given a port, or told not to reuse it", async () => {
+    const { store } = repo();
+    await serve(store, { reusePort: false });
+    expect(existsSync(join(store.live, "port.json"))).toBe(false);
+    writeFileSync(join(store.live, "port.json"), JSON.stringify({ type: "port", port: 1 }));
+    const s = await serve(store, { reusePort: false });
+    expect(s.port).not.toBe(1);
   });
 });
 

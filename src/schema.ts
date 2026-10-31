@@ -322,6 +322,17 @@ export const ServerInfo = z.strictObject({
 });
 export type ServerInfo = z.infer<typeof ServerInfo>;
 
+/**
+ * The port the last server listened on, `port.json` in the live layer (D103). It outlives the server, so the next
+ * one starts on the same address when it can, and the browser keeps what it stores for that address: the client's
+ * own data, and permission to notify. Not a secret: the token is still new each time (D97).
+ */
+export const LastPort = z.strictObject({
+  type: z.literal("port"),
+  port: z.number().int().min(1).max(65535),
+});
+export type LastPort = z.infer<typeof LastPort>;
+
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. */
 export const Config = z.strictObject({
   vault: z.string().optional(),

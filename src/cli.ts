@@ -340,7 +340,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   program
     .command("serve")
     .description("serve the client on 127.0.0.1 and open it; one server per repo")
-    .option("--port <n>", "listen on this port (by default the system picks one)", port)
+    .option("--port <n>", "listen on this port (by default the last server's, if it's free, or one the system picks)", port)
     .option("--no-open", "don't open the browser")
     .option("--poll", "check the live layer every second instead of watching it, for shared storage")
     .action(async (opts: { port?: number; open: boolean; poll?: boolean }) => {

@@ -11,7 +11,7 @@ tags: [baesian, module]
 
 # src/server.ts
 
-The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127.0.0.1, at a port the system picks unless one is given. It returns a `RunningServer`: its port, its token, the address to open (`serverUrl`), and `close`. `baesian serve` ([[src-cli]]) wraps it.
+The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127.0.0.1. Unless it's given a port, it starts on the one the last server used (`port.json`, `LastPort` in `src/schema.ts`), and if that's taken, on one the system picks (D103). It records the port it got, unless `reusePort` is false. It returns a `RunningServer`: its port, its token, the address to open (`serverUrl`), and `close`. `baesian serve` ([[src-cli]]) wraps it.
 
 ## Signing in (D62, D97)
 

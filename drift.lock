@@ -258,7 +258,7 @@ sig = "8929eb93dd817ba6"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/schema.ts"
-sig = "3f9b00c180947809"
+sig = "e47dcc32bac580bd"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -393,7 +393,7 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts"
-sig = "3f9b00c180947809"
+sig = "e47dcc32bac580bd"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -424,6 +424,11 @@ sig = "89b3db8a9999584a"
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Fallback"
 sig = "7429b3aed9ec1399"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#LastPort"
+sig = "df04e600f15840d8"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -483,7 +488,7 @@ sig = "89ba8850dc646aa5"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/server.ts#ServerOptions"
-sig = "00a266efead32500"
+sig = "33af486b2b7bc62a"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -548,7 +553,7 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "3eceb7507836f06b"
+sig = "4742592d67b06c0c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -608,7 +613,7 @@ sig = "05b55556cc78786b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts"
-sig = "3f9b00c180947809"
+sig = "e47dcc32bac580bd"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -628,12 +633,12 @@ sig = "89ba8850dc646aa5"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts"
-sig = "4387baea8ab256fe"
+sig = "abad2ce083625b6c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts#startServer"
-sig = "7e2bf9854733268c"
+sig = "c22e0f79b29b6544"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -723,7 +728,7 @@ sig = "85f5c3e6b5f14213"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "src/server.ts#ServerOptions"
-sig = "00a266efead32500"
+sig = "33af486b2b7bc62a"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -813,7 +818,7 @@ sig = "80c2badc8746c2d6"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "b9b51b18c8ebbe10"
+sig = "471caa6edbe34dbc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1043,7 +1048,7 @@ sig = "a53cbbd51e5d623b"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/schema.ts"
-sig = "3f9b00c180947809"
+sig = "e47dcc32bac580bd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -1118,7 +1123,12 @@ sig = "dc0e03d3acfe3ad1"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/schema.ts"
-sig = "3f9b00c180947809"
+sig = "e47dcc32bac580bd"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/schema.ts#LastPort"
+sig = "df04e600f15840d8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -1133,7 +1143,7 @@ sig = "85f5c3e6b5f14213"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#ServerOptions"
-sig = "00a266efead32500"
+sig = "33af486b2b7bc62a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -1168,7 +1178,7 @@ sig = "f245dca9d8e4fb3b"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#startServer"
-sig = "7e2bf9854733268c"
+sig = "c22e0f79b29b6544"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

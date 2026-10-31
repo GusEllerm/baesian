@@ -6,18 +6,24 @@ import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApiCard, ApiState, ApiVerdictInput } from "./api.js";
-import { ServerInfo } from "./schema.js";
+import { LastPort, ServerInfo } from "./schema.js";
 import { type Store, ValidationError } from "./store.js";
 
 // The local server (M4 step 4): the client's API over the live layer. docs/vault/Design/Local Server.md is
 // the design. Node's own HTTP server (D49), bound to 127.0.0.1 (D63), hardened as D62 says: a token traded
-// for a cookie, Host checks, no CORS, JSON-only writes. A new token and port each time it starts (D97).
+// for a cookie, Host checks, no CORS, JSON-only writes. A new token each time it starts (D97), on the last
+// server's port when it's free (D103).
 
 export type WatchMode = "events" | "poll";
 
 export interface ServerOptions {
-  /** 0, the default, lets the system pick (D97). */
+  /**
+   * A port to listen on. Without one, the server starts on the port the last one used, if it's free, and
+   * otherwise on one the system picks (D97, D103).
+   */
   port?: number;
+  /** Start on the last server's port, and remember this one (D103). Default true; not used when `port` is given. */
+  reusePort?: boolean;
   /** Check the live layer on a timer instead of watching it: for shared storage. */
   poll?: boolean;
   /** Who the verdicts are from. Defaults to git's `user.name`. */
@@ -52,7 +58,7 @@ export interface RunningServer {
 const cookieName = (port: number) => `baesian-${port}`;
 const MAX_BODY = 64 * 1024;
 /** The live layer's own bookkeeping, which never changes what the client shows. */
-const IGNORED = (rel: string) => rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel.startsWith(`cursors${sep}`) || rel.startsWith("cursors/");
+const IGNORED = (rel: string) => rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel === "port.json" || rel.startsWith(`cursors${sep}`) || rel.startsWith("cursors/");
 
 /** Who answers in the client: git's `user.name`, or the account name. */
 export function reviewerName(toplevel: string): string {
@@ -83,6 +89,15 @@ export async function findRunningServer(store: Store): Promise<ServerInfo | unde
   try {
     const r = await fetch(`http://127.0.0.1:${info.port}/api/health`, { headers: { authorization: `Bearer ${info.token}` }, signal: AbortSignal.timeout(1000) });
     return r.ok ? info : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The port the last server used, if it's on record and readable (D103). */
+function lastPort(path: string): number | undefined {
+  try {
+    return LastPort.parse(JSON.parse(readFileSync(path, "utf8"))).port;
   } catch {
     return undefined;
   }
@@ -384,12 +399,37 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(opts.port ?? 0, "127.0.0.1", () => resolve());
-  });
+  const listen = (p: number) =>
+    new Promise<void>((resolve, reject) => {
+      const failed = (e: Error) => {
+        server.off("listening", listening);
+        reject(e);
+      };
+      const listening = () => {
+        server.off("error", failed);
+        resolve();
+      };
+      server.once("error", failed);
+      server.once("listening", listening);
+      server.listen(p, "127.0.0.1");
+    });
+  // The same address as last time keeps what the browser stored for it (D103). If that port is taken, any will do.
+  const reuse = opts.port === undefined && opts.reusePort !== false;
+  const portPath = join(store.live, "port.json");
+  const last = reuse ? lastPort(portPath) : undefined;
+  try {
+    await listen(opts.port ?? last ?? 0);
+  } catch (e) {
+    if (last === undefined || (e as { code?: string }).code !== "EADDRINUSE") throw e;
+    await listen(0);
+  }
   const address = server.address();
   port = typeof address === "object" && address ? address.port : 0;
+  if (reuse && port !== last) {
+    const tmp = `${portPath}.${randomBytes(4).toString("hex")}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(LastPort.parse({ type: "port", port }))}\n`);
+    renameSync(tmp, portPath);
+  }
 
   const infoPath = join(store.live, "server.json");
   const keepAlive = setInterval(() => {

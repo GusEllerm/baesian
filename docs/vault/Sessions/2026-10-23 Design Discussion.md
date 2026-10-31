@@ -330,6 +330,8 @@ The user judged the plan ready for development.
   - **The screenshots led to three fixes:** a "1.4 s" that wrapped its "s", time spent reworded as one line per stakes level, and clearer put-aside rows.
   - **A bug found on the way and fixed:** the sign-in cookie had one name for every server. Browsers don't keep cookies apart by port, so two projects served at once signed each other out, and each sent its token to the other. A browser test reproduced it before the fix.
   - **A question for the user:** each `serve` takes a new port (D97), and a browser keeps storage and notification permission per address. So everything the client keeps itself is lost on a restart, and notifications have to be allowed again. The agent put the decision to them as a card.
+- **5e committed** (`95703e2`), with the cookie fix, at the user's go-ahead.
+- **D103, decided and built.** The user chose the agent's recommendation: `serve` starts on the last server's port when it's free, kept in `port.json` in the live layer, with a new token every time. Three server tests cover it: the same port again, a fallback when it's taken, and `--port` or `reusePort: false` leaving the record alone. 196 tests pass.
 
 ## Next
 
