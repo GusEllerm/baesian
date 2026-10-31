@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AGENTS_BLOCK, BEGIN, CARD_TEMPLATE, END, claudeMdMissesAgents, writeAgentsBlock } from "../src/agents.js";
+import { AGENTS_BLOCK, BEGIN, CARD_TEMPLATE, END, agentName, claudeMdMissesAgents, writeAgentsBlock } from "../src/agents.js";
 import { main } from "../src/cli.js";
 import { parseDoc } from "../src/frontmatter.js";
 import { notifyFiled, shouldNotify, userConfig } from "../src/notify.js";
@@ -168,3 +168,20 @@ describe("cli: M2 commands", () => {
   });
 });
 
+
+describe("an agent's name (D102)", () => {
+  it("comes from --agent, then BAESIAN_AGENT, then the harness, then \"agent\"", () => {
+    const claude = { AI_AGENT: "claude-code_2-1-314_agent", CLAUDE_CODE_ENTRYPOINT: "cli" };
+    expect(agentName("codex", { ...claude, BAESIAN_AGENT: "spark-research" })).toBe("codex");
+    expect(agentName(undefined, { ...claude, BAESIAN_AGENT: "spark-research" })).toBe("spark-research");
+    expect(agentName(undefined, claude)).toBe("claude-code");
+    expect(agentName(undefined, { CLAUDE_CODE_ENTRYPOINT: "cli" })).toBe("claude-code");
+    expect(agentName(undefined, { BAESIAN_AGENT: "  " })).toBe("agent");
+    expect(agentName(undefined, {})).toBe("agent");
+  });
+
+  it("is in the instructions, with the new exit code (D101)", () => {
+    expect(AGENTS_BLOCK).toContain("BAESIAN_AGENT");
+    expect(AGENTS_BLOCK).toMatch(/7 while\s+the reviewer is still there/);
+  });
+});

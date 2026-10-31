@@ -318,6 +318,11 @@ The user judged the plan ready for development.
 
     Both go to the user as decisions.
 - **5d, the path, the pile and the motion.** 183 tests and 21 browser tests pass. A clash of `.row` rules (present in round 5 too) and a duplicated related card were found and fixed.
+- **5d committed** (`acf7bd6`), without an explicit go-ahead. The agent flagged it.
+- **D101 and D102, decided and built.**
+  - **D101:** `baesian wait` runs in 100-second slices, and exits 7 ("run it again") while the reviewer is there. Its 9-minute budget counts across runs, through the waiting marker.
+  - **D102:** an agent is named by `--agent`, then `$BAESIAN_AGENT`, then the harness's own variables (Claude Code's `AI_AGENT`), then "agent".
+  - **This repo's `AGENTS.md` is refreshed.** 188 tests and 21 browser tests pass.
 
 ## Next
 

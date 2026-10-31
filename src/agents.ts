@@ -31,7 +31,9 @@ line.
   proceed without a verdict.
 - \`baesian wait <id>\` exits 0 when resolved (use the decision); 4 when answered otherwise (returned:
   read the comment, then \`baesian revise <id>\` or \`baesian withdraw <id>\`); 5 with no verdict yet
-  (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop).
+  (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop); 7 while
+  the reviewer is still there (run \`baesian wait <id>\` again). Each run lasts at most 100 seconds.
+- If you're a long-lived agent, set \`BAESIAN_AGENT\` to your name; otherwise your harness's name is used.
 - If \`baesian file\` exits 3, the decision may already be open or decided: attach with
   \`baesian attach <id>\`, or follow the decision. File with \`--new\` only to argue against one, and set
   \`supersedes:\`.
@@ -39,6 +41,23 @@ line.
   builds on a rejected card, or on a hard card that isn't resolved yet.
 - Never record a verdict yourself: only a person answers, in the Baesian client.
 ${END}`;
+
+/**
+ * Who is running a command (D102): `--agent`, then `$BAESIAN_AGENT` (a long-lived agent's own name), then the
+ * name the harness gives itself, then "agent".
+ */
+export function agentName(opt: string | undefined, env: NodeJS.ProcessEnv = process.env): string {
+  return opt ?? (env.BAESIAN_AGENT?.trim() || undefined) ?? harnessName(env) ?? "agent";
+}
+
+/** The harness's own name, from the variables it sets for the commands it runs. */
+export function harnessName(env: NodeJS.ProcessEnv): string | undefined {
+  // Claude Code sets AI_AGENT to "<name>_<version>_<role>", for example "claude-code_2-1-314_agent".
+  const ai = env.AI_AGENT?.trim();
+  if (ai) return ai.split("_")[0] || undefined;
+  if (env.CLAUDE_CODE_ENTRYPOINT || env.CLAUDECODE) return "claude-code";
+  return undefined;
+}
 
 export type BlockResult = "created" | "appended" | "updated" | "unchanged";
 

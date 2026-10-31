@@ -201,7 +201,7 @@ What the client may show, and where each piece of it comes from, is in [[Client 
   | Agent | Runs `baesian wait B-7f3k` and pauses | Proceeds provisionally, recording what it builds in the ledger |
   | You | Get a notification and answer in the client beside your terminal | Work through the queue later, on your phone |
 
-- **`baesian wait` works in any harness.** It's a shell command that blocks until a verdict arrives, with a timeout, because harness commands have time limits (10 minutes in Claude Code). It returns early with "reviewer away" if the client's heartbeat is stale (D41). What the agent does next depends on the card's level (D42):
+- **`baesian wait` works in any harness.** It's a shell command that blocks until a verdict arrives. Harness commands have time limits (Claude Code's default is 2 minutes), so each run lasts at most 100 seconds. While the reviewer is there, a run that ends exits 7, and the agent runs it again, up to a 9-minute budget in all (D101). It returns early with "reviewer away" if the client's heartbeat is stale (D41). What the agent does next depends on the card's level (D42):
   - **blocking:** it waits again, or falls back to its proposal and proceeds provisionally;
   - **hard:** it never proceeds without a verdict. It parks that task and does other work, or stops.
 

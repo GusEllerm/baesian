@@ -128,3 +128,7 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
   - **The server:** `startServer`, wrapped by `baesian serve`, signs the browser in and serves the snapshot, change events, verdicts and presence. The details are in [[src-server]].
   - **The store:** `Store.view` reads the live layer once per snapshot, and reports bad files instead of failing.
   - **The tests** run real servers, with real processes writing while they run. The four-writer test found a race: two agents filing their first cards on one branch at once both tried to create the branch deck. `Store.ensureBranchDeck` now takes a lost race as success.
+- **Interoperability (2026-10-31): D101 and D102, built.** The user asked how Baesian works across models and harnesses, and two gaps turned up.
+  - **The wait (D101):** `waitForVerdict` assumed Claude Code's *maximum* command limit, not its 2-minute default. It now runs in 100-second slices (`SLICE_MS`, `--slice`) and exits 7 while the reviewer is there. The 9-minute budget counts across runs, through the waiting marker, which `Store.startWaiting` picks up again.
+  - **The name (D102):** agents were all named "agent". `agentName` now falls back to the harness's own name (`harnessName`).
+  - **This repo's `AGENTS.md` block is refreshed.** 188 tests and 21 browser tests pass.

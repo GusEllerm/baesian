@@ -731,23 +731,36 @@ export class Store {
   // ---------------------------------------------------------------- waiting (D90)
 
   /**
-   * Mark an agent as waiting on a card. `baesian wait` refreshes the marker every `WAITING_BEAT_MS` and stops
-   * it when it returns. An agent killed mid-wait leaves its marker behind, to go stale.
+   * Mark an agent as waiting on a card (D90). `baesian wait` refreshes the marker every `WAITING_BEAT_MS`, and stops
+   * it when the wait ends. A wait that runs in short slices (D101) picks up its own fresh marker again, so `since`
+   * is when it first started waiting. An agent killed mid-wait leaves its marker behind, to go stale.
    */
-  startWaiting(id: string, agent: string, at: string = now()): { refresh(at?: string): void; stop(): void } {
+  startWaiting(id: string, agent: string, at: string = now()): { since: string; refresh(at?: string): void; stop(): void } {
     this.requireInit();
     const card = this.card(id);
     if (!card) throw new Error(`no card ${id}`);
-    const path = join(this.live, "waiting", `${id}-${randomSuffix()}.json`);
+    const atMs = Date.parse(at);
+    const mine = this.list("waiting")
+      .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
+      .flatMap((f) => {
+        try {
+          return [{ f, w: parse(Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), f) }];
+        } catch {
+          return [];
+        }
+      })
+      .find(({ w }) => w.agent === agent && w.revision === card.meta.revision && atMs - Date.parse(w.at) <= WAITING_STALE_MS);
+    const path = join(this.live, "waiting", mine ? mine.f : `${id}-${randomSuffix()}.json`);
+    const since = mine ? mine.w.since : at;
     mkdirSync(dirname(path), { recursive: true });
     const write = (beat: string) => {
-      const w = parse(Waiting, { type: "waiting", card: id, revision: card.meta.revision, agent, since: at, at: beat }, "the waiting marker");
+      const w = parse(Waiting, { type: "waiting", card: id, revision: card.meta.revision, agent, since, at: beat }, "the waiting marker");
       const tmp = `${path}.${randomSuffix()}.tmp`;
       writeFileSync(tmp, `${JSON.stringify(w)}\n`);
       renameSync(tmp, path);
     };
     write(at);
-    return { refresh: (beat = now()) => write(beat), stop: () => rmSync(path, { force: true }) };
+    return { since, refresh: (beat = now()) => write(beat), stop: () => rmSync(path, { force: true }) };
   }
 
   /** The agents waiting on a card, and whether each has gone quiet: stopped waiting without returning (D90). */

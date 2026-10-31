@@ -47,17 +47,19 @@ No command resolves a card (D32). When `init` installs the hooks, it records how
 | 4 | `wait`: answered but not a go-ahead (returned, deferred, withdrawn, superseded) |
 | 5 | `wait`: no verdict yet; proceed provisionally |
 | 6 | `wait`: no verdict on a hard card; don't proceed |
+| 7 | `wait`: no verdict yet, and the reviewer is still there; run it again (D101) |
 
-`WAIT_EXIT` holds codes 4–6. `AGENTS_BLOCK` lists them for agents, and a test keeps the two in step.
+`WAIT_EXIT` holds codes 4–7. `AGENTS_BLOCK` lists them for agents, and a test keeps the two in step.
 
 ## src/wait.ts
 
-`waitForVerdict` polls the store every `POLL_MS` until one of three things happens:
+`waitForVerdict` runs in short slices (D101), so a run fits inside any harness's command limit (Claude Code's default is 2 minutes). It polls the store every `POLL_MS` until one of four things happens:
 - the card leaves `open` or `rerouted`;
-- `DEFAULT_TIMEOUT_MS` passes (9 minutes, under Claude Code's 10-minute command limit);
-- the client's heartbeat is older than `PRESENCE_STALE_MS`.
+- the client's heartbeat is older than `PRESENCE_STALE_MS`, so the reviewer is away;
+- the wait's budget, `DEFAULT_TIMEOUT_MS` (9 minutes), is spent. It counts from the card's first run;
+- the run's slice, `SLICE_MS` (100 seconds), is over. The run then returns `again`, exit 7, and the agent runs `baesian wait` again.
 
-While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` and removed when it returns, however it returns (D90). With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed (D80, D81). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. The clock and the sleep can be injected, so the tests run without real time passing.
+While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` (D90). A run that ends with `again` keeps its marker, and the next run picks it up, which is how the budget knows when the wait began. Any other ending removes it. With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed (D80, D81). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. The clock and the sleep can be injected, so the tests run without real time passing.
 
 ## src/notify.ts
 
@@ -69,7 +71,7 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `AGENTS_BLOCK` covers four things:
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`), then `agent`. `AGENTS_BLOCK` covers four things:
 - when to file a card, and that every card states its strongest alternative and its crux;
 - the commit gate: card or ack trailers, and `baesian check`;
 - `wait`'s exit codes;

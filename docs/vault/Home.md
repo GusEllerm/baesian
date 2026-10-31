@@ -17,7 +17,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-24.*
 
-- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 183 passing tests, plus 21 browser tests, after M4's steps 2 to 5d:
+- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 188 passing tests, plus 21 browser tests, after M4's steps 2 to 5d, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
   - **M1:** the store and the core CLI;
   - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions;
   - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs;
@@ -28,7 +28,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0);
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D100 in [[Decision Log]]):
+- **Decided by the user** (D1–D102 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;

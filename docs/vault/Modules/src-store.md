@@ -27,7 +27,7 @@ tags: [baesian, module]
 - **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
 - **`Store.writeLedger`** records that a commit builds on a card (D15). The post-commit hook calls it, and **`Store.ledger`** lists a card's entries, oldest first. A changed answer's brief lists them (D81).
 - **`Store.touchPresence`** writes the client's heartbeat atomically, and **`Store.presence`** reads it. A missing or unreadable file means "unknown", never an error.
-- **`Store.startWaiting`** writes an agent's waiting marker (D90), with a temporary file and a rename, and returns a handle to refresh it and to stop, which removes it. **`Store.waitingOn`** lists a card's markers, each stale once it's older than `WAITING_STALE_MS` (90 seconds, as presence). The markers are mutable, like presence; everything else is written once.
+- **`Store.startWaiting`** writes an agent's waiting marker (D90), with a temporary file and a rename, and returns its `since` and a handle to refresh it and to stop, which removes it. If the same agent already has a fresh marker on the card, from an earlier run of a sliced wait (D101), it picks that one up again, keeping its `since`. **`Store.waitingOn`** lists a card's markers, each stale once it's older than `WAITING_STALE_MS` (90 seconds, as presence). The markers are mutable, like presence; everything else is written once.
 - **`Store.syncRecord`** copies verdicts and ledger entries for the cards the record already holds, plus everything in their card directories: revisions, withdrawals and fallbacks (D37).
 
 All of these go through a private write-once helper that uses an exclusive create. Nothing is ever edited in place.

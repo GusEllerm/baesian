@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
-import { CARD_TEMPLATE, claudeMdMissesAgents, writeAgentsBlock } from "./agents.js";
+import { CARD_TEMPLATE, agentName, claudeMdMissesAgents, writeAgentsBlock } from "./agents.js";
 import { stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
@@ -14,7 +14,7 @@ import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
-import { DEFAULT_TIMEOUT_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
+import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
@@ -91,10 +91,6 @@ function openInBrowser(url: string): void {
   }
 }
 
-function agentName(opt: string | undefined): string {
-  return opt ?? process.env.BAESIAN_AGENT ?? "agent";
-}
-
 async function readInput(path: string | undefined, io: Io): Promise<string> {
   return !path || path === "-" ? await io.stdin() : readFileSync(resolve(io.cwd, path), "utf8");
 }
@@ -131,7 +127,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   const program = new Command()
     .name("baesian")
     .description("Swipe review for agent decisions. Agents file cards; a person answers them in the client.")
-    .option("--agent <name>", "who is filing (default: $BAESIAN_AGENT, or 'agent')")
+    .option("--agent <name>", "who is running this (default: $BAESIAN_AGENT, else the harness's own name, else 'agent'; D102)")
     .showHelpAfterError()
     // Throw instead of calling process.exit, and write through io; subcommands inherit both.
     .exitOverride()
@@ -196,13 +192,15 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .command("wait")
     .description("wait for the reviewer's verdict on a card; the exit code says what to do next")
     .argument("<id>", "the card")
-    .option("--timeout <seconds>", "give up after this long", seconds, DEFAULT_TIMEOUT_MS / 1000)
+    .option("--timeout <seconds>", "how long to wait in all, across runs, before falling back", seconds, DEFAULT_TIMEOUT_MS / 1000)
+    .option("--slice <seconds>", "how long this run lasts before it exits 7 to be run again (D101)", seconds, SLICE_MS / 1000)
     .option("--no-presence", "wait the full timeout even if the client says the reviewer is away")
     .option("--json", "print the outcome as JSON")
-    .action(async (id: string, opts: { timeout: number; presence: boolean; json?: boolean }) => {
+    .action(async (id: string, opts: { timeout: number; slice: number; presence: boolean; json?: boolean }) => {
       const outcome = await waitForVerdict(store(), id, {
         agent: agentName(program.opts().agent),
         timeoutMs: opts.timeout * 1000,
+        sliceMs: opts.slice * 1000,
         usePresence: opts.presence,
         ...io.waitClock,
       });

@@ -3,8 +3,14 @@ import { type Brief, type Status, type Store, WAITING_BEAT_MS } from "./store.js
 
 /** The client beats every 30 s; three missed beats means the reviewer has stepped away (D41). */
 export const PRESENCE_STALE_MS = 90_000;
-/** Under Claude Code's 10-minute limit on a shell command; the agent can simply wait again. */
+/** How long a wait lasts in all, across its runs, before the agent falls back (D42, D46). */
 export const DEFAULT_TIMEOUT_MS = 9 * 60_000;
+/**
+ * How long one run of `baesian wait` lasts (D101): under every harness's command limit we know of, including
+ * Claude Code's default of 2 minutes. While the reviewer is there, a run that ends exits 7, and the agent runs it
+ * again.
+ */
+export const SLICE_MS = 100_000;
 export const POLL_MS = 1_000;
 
 /** `baesian wait` exit codes. The agent-facing instructions in AGENTS.md list them too. */
@@ -17,16 +23,23 @@ export const WAIT_EXIT = {
   proceed: 5,
   /** No verdict yet on a hard card: don't proceed. */
   park: 6,
+  /** No verdict yet, and the reviewer is still there: run `baesian wait` again (D101). */
+  again: 7,
 } as const;
 
 export type WaitOutcome =
   | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[] }
   | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[] }
-  | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean };
+  | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean }
+  /** This run is over, but the wait isn't: the agent runs `baesian wait` again (D101). */
+  | { kind: "again"; id: string; waitedMs: number; leftMs: number };
 
 export interface WaitOptions {
   agent: string;
+  /** The whole wait, across runs, counted from the card's first wait (D101). */
   timeoutMs?: number;
+  /** One run. */
+  sliceMs?: number;
   pollMs?: number;
   /** Return at once when the client's heartbeat is stale. Default true. */
   usePresence?: boolean;
@@ -46,14 +59,17 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
   const now = opts.now ?? Date.now;
   const sleep = opts.sleep ?? realSleep;
   const pollMs = opts.pollMs ?? POLL_MS;
-  const deadline = now() + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const card = store.card(id);
   if (!card) throw new Error(`no card ${id}`);
 
-  // The waiting marker (D90): while it's fresh, "stopped for you" is true. It's removed when this returns;
-  // an agent killed mid-wait leaves it behind, and it goes stale.
+  // The waiting marker (D90): while it's fresh, "stopped for you" is true. A run that ends with "again" keeps it,
+  // and the next run picks it up, so the wait's budget counts from when it first started (D101). It's removed when
+  // the wait is over; an agent killed mid-wait leaves it behind, and it goes stale.
   const marker = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+  const budgetEnd = Date.parse(marker.since) + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const sliceEnd = now() + (opts.sliceMs ?? SLICE_MS);
   let beat = now();
+  let keep = false;
   try {
     let reason: "timeout" | "away";
     for (;;) {
@@ -75,12 +91,16 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
           break;
         }
       }
-      const left = deadline - now();
-      if (left <= 0) {
+      if (now() >= budgetEnd) {
         reason = "timeout";
         break;
       }
-      await sleep(Math.min(pollMs, left));
+      if (now() >= sliceEnd) {
+        keep = true;
+        marker.refresh(new Date(now()).toISOString());
+        return { kind: "again", id, waitedMs: now() - Date.parse(marker.since), leftMs: budgetEnd - now() };
+      }
+      await sleep(Math.max(0, Math.min(pollMs, sliceEnd - now(), budgetEnd - now())));
       if (now() - beat >= WAITING_BEAT_MS) {
         beat = now();
         marker.refresh(new Date(beat).toISOString());
@@ -96,12 +116,13 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
     }
     return { kind: "no-verdict", id, reason, level, proceed, recorded };
   } finally {
-    marker.stop();
+    if (!keep) marker.stop();
   }
 }
 
 export function exitCodeFor(outcome: WaitOutcome): number {
   if (outcome.kind === "resolved") return WAIT_EXIT.resolved;
+  if (outcome.kind === "again") return WAIT_EXIT.again;
   if (outcome.kind === "answered") return WAIT_EXIT.answered;
   return outcome.proceed ? WAIT_EXIT.proceed : WAIT_EXIT.park;
 }
@@ -124,6 +145,10 @@ export function describeBrief(b: Brief): string[] {
 
 export function describeOutcome(o: WaitOutcome): string[] {
   const comment = (v: Verdict | undefined) => (v?.comment ? [`  reviewer: ${v.comment}`] : []);
+  if (o.kind === "again") {
+    const min = Math.max(1, Math.round(o.leftMs / 60_000));
+    return [`No verdict on ${o.id} yet, and the reviewer is still there.`, `Run \`baesian wait ${o.id}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`];
+  }
   const briefs = o.kind === "no-verdict" ? [] : o.briefs.flatMap(describeBrief);
   switch (o.kind) {
     case "resolved":
