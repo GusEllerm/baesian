@@ -195,7 +195,42 @@ export class Store {
 
   private list(kind: string, sub = ""): string[] {
     const dir = join(this.live, kind, sub);
-    return existsSync(dir) ? readdirSync(dir).sort() : [];
+    const cached = this.session?.lists.get(dir);
+    if (cached) return cached;
+    const names = existsSync(dir) ? readdirSync(dir).sort() : [];
+    this.session?.lists.set(dir, names);
+    return names;
+  }
+
+  /** One consistent read of the live layer, while `view` runs. */
+  private session?: { files: Map<string, unknown>; lists: Map<string, string[]>; report: (path: string, error: string) => void };
+
+  /**
+   * Run `fn` over one consistent view of the live layer: each file is read once, and a file that can't be read
+   * (half-written, or invalid) is reported and skipped instead of thrown. The server reads through this (D84).
+   */
+  view<T>(fn: () => T, report: (path: string, error: string) => void): T {
+    const outer = this.session;
+    this.session = { files: new Map(), lists: new Map(), report };
+    try {
+      return fn();
+    } finally {
+      this.session = outer;
+    }
+  }
+
+  /** Read and parse one live file: throws, unless a view is reporting problems instead. */
+  private read<T>(path: string, parseText: (text: string) => T): T | undefined {
+    if (this.session?.files.has(path)) return this.session.files.get(path) as T | undefined;
+    let value: T | undefined;
+    try {
+      value = parseText(readFileSync(path, "utf8"));
+    } catch (e) {
+      if (!this.session) throw e;
+      this.session.report(relative(this.live, path), e instanceof Error ? e.message : String(e));
+    }
+    this.session?.files.set(path, value);
+    return value;
   }
 
   // ---------------------------------------------------------------- cards
@@ -207,10 +242,10 @@ export class Store {
   revisions(id: string): Card[] {
     return this.list("cards", id)
       .filter((f) => /^r\d+\.md$/.test(f))
-      .map((f) => {
-        const { meta, body } = parseDoc(readFileSync(join(this.live, "cards", id, f), "utf8"));
+      .flatMap((f) => this.read(join(this.live, "cards", id, f), (text) => {
+        const { meta, body } = parseDoc(text);
         return { meta: parse(CardMeta, meta, `${id}/${f}`), body };
-      })
+      }) ?? [])
       .sort((a, b) => a.meta.revision - b.meta.revision);
   }
 
@@ -359,7 +394,7 @@ export class Store {
   attachments(id?: string): Attachment[] {
     return this.list("attachments")
       .filter((f) => !id || f.startsWith(`${id}-`))
-      .map((f) => parse(Attachment, JSON.parse(readFileSync(join(this.live, "attachments", f), "utf8")), f));
+      .flatMap((f) => this.read(join(this.live, "attachments", f), (t) => parse(Attachment, JSON.parse(t), f)) ?? []);
   }
 
   /** How many agents are waiting on a card: its filer plus every attachment (D36). */
@@ -386,7 +421,7 @@ export class Store {
   fallbacks(id: string): Fallback[] {
     return this.list("cards", id)
       .filter((f) => f.startsWith("fallback-"))
-      .map((f) => parse(Fallback, JSON.parse(readFileSync(join(this.live, "cards", id, f), "utf8")), f));
+      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => parse(Fallback, JSON.parse(t), f)) ?? []);
   }
 
   // ---------------------------------------------------------------- ledger and rules
@@ -407,20 +442,20 @@ export class Store {
   ledger(id: string): { meta: LedgerMeta; body: string }[] {
     return this.list("ledger")
       .filter((f) => f.startsWith(`${id}-`))
-      .map((f) => {
-        const { meta, body } = parseDoc(readFileSync(join(this.live, "ledger", f), "utf8"));
+      .flatMap((f) => this.read(join(this.live, "ledger", f), (text) => {
+        const { meta, body } = parseDoc(text);
         return { meta: parse(LedgerMeta, meta, `ledger/${f}`), body };
-      })
+      }) ?? [])
       .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
   }
 
   rules(): { meta: RuleMeta; body: string }[] {
     return this.list("rules")
       .filter((f) => f.endsWith(".md"))
-      .map((f) => {
-        const { meta, body } = parseDoc(readFileSync(join(this.live, "rules", f), "utf8"));
+      .flatMap((f) => this.read(join(this.live, "rules", f), (text) => {
+        const { meta, body } = parseDoc(text);
         return { meta: parse(RuleMeta, meta, `rules/${f}`), body };
-      });
+      }) ?? []);
   }
 
   // ---------------------------------------------------------------- presence
@@ -452,8 +487,10 @@ export class Store {
   deck(id: string): Deck | undefined {
     const path = join(this.live, "decks", `${id}.md`);
     if (!existsSync(path)) return undefined;
-    const { meta, body } = parseDoc(readFileSync(path, "utf8"));
-    return { meta: parse(DeckMeta, meta, `decks/${id}.md`), body };
+    return this.read(path, (text) => {
+      const { meta, body } = parseDoc(text);
+      return { meta: parse(DeckMeta, meta, `decks/${id}.md`), body };
+    });
   }
 
   decks(): Deck[] {
@@ -490,10 +527,16 @@ export class Store {
   ensureBranchDeck(): string {
     const id = this.branchDeckId();
     if (!this.deck(id)) {
-      this.createDeck(
-        { id, title: `Decisions on ${this.repo.branch}` },
-        `Decisions filed while working on the branch \`${this.repo.branch}\`.\n`,
-      );
+      try {
+        this.createDeck(
+          { id, title: `Decisions on ${this.repo.branch}` },
+          `Decisions filed while working on the branch \`${this.repo.branch}\`.\n`,
+        );
+      } catch (e) {
+        // Another agent on this branch created it at the same moment: the exclusive create lost the race,
+        // and the deck it wanted exists. Found by the server's concurrency test.
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      }
     }
     return id;
   }
@@ -503,7 +546,7 @@ export class Store {
   verdicts(id: string): Verdict[] {
     return this.list("verdicts")
       .filter((f) => f.startsWith(`${id}-`))
-      .map((f) => parse(Verdict, JSON.parse(readFileSync(join(this.live, "verdicts", f), "utf8")), f))
+      .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => parse(Verdict, JSON.parse(t), f)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
   }
 
@@ -642,7 +685,7 @@ export class Store {
   aliases(): TopicAlias[] {
     return this.list("topics")
       .filter((f) => f.startsWith("alias-"))
-      .map((f) => parse(TopicAlias, JSON.parse(readFileSync(join(this.live, "topics", f), "utf8")), f));
+      .flatMap((f) => this.read(join(this.live, "topics", f), (t) => parse(TopicAlias, JSON.parse(t), f)) ?? []);
   }
 
   /** Follow topic aliases to the canonical key (D44). */
@@ -721,7 +764,7 @@ export class Store {
   waitingOn(id: string, nowMs: number = Date.now()): { marker: Waiting; stale: boolean }[] {
     return this.list("waiting")
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
-      .map((f) => parse(Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), f))
+      .flatMap((f) => this.read(join(this.live, "waiting", f), (t) => parse(Waiting, JSON.parse(t), f)) ?? [])
       .map((marker) => ({ marker, stale: nowMs - Date.parse(marker.at) > WAITING_STALE_MS }));
   }
 

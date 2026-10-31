@@ -17,7 +17,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 
 ## Rules that apply to every file
 
-- **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat and the waiting markers is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
+- **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat, the waiting markers and the server file is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
 - **Flat.** Frontmatter and JSON have no nested objects. Lists of strings are fine. Empty lists and unset fields are left out when writing.
 - **IDs.** Cards are `B-` plus five Crockford base32 characters (`B-7f3kq`), and rules are `R-` plus five. The alphabet is lowercase and has no `i`, `l`, `o` or `u` (D51). A new ID is checked against the live layer and retried on collision (`newId`).
 - **Two layers (D34).** Everything is written to the live layer, `.git/baesian/`. The record, `.baesian/` in the worktree, receives copies of the files for the cards the branch filed or attached to (D37).
@@ -38,6 +38,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `cursors/<branch>.json` | — | yes (mutable) | no | `baesian inbox` |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
+| `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
 | `config.json` | `Config` | no | yes (mutable) | `baesian init` |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
 
@@ -126,6 +127,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
   - more than 90 seconds old (`PRESENCE_STALE_MS`): the reviewer is away;
   - missing: unknown, because the client has never run.
 - **Waiting marker** (`Waiting`, D90): `card`, `revision`, `agent`, `since`, `at`. `baesian wait` writes it when it starts, rewrites it every 30 seconds (with a temporary file and a rename, as presence does), and removes it when it returns. A marker more than 90 seconds old means the agent stopped waiting: the card says so, and drops back to its place in the queue. Several agents can wait on one card, each with its own marker. `baesian wait` writes it from M4 step 3.
+- **Server file** (`ServerInfo`, D97): `pid`, `port`, `token`, `started`. `baesian serve` writes it atomically, readable only by the user, and removes it when it stops. The token is new on every start. Another `serve` uses it to find a running server, and ignores it if that process has gone or doesn't answer.
 - **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;

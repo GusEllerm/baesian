@@ -22,6 +22,8 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D97 | 2026-10-24 | **Each `baesian serve` gets a new token and a port the system picks** (or `--port`). The token lives in the server file only while the server runs. Closing the server ends the session, and the next `serve` opens the new address. Stable addresses, for phone access and bookmarks, wait for M4c and Tailscale (D63). Rejected: one token and port per repo, kept across restarts (bookmarkable, but a long-lived secret on disk). | decision card |
+| D96 | 2026-10-24 | **The server's API is a snapshot plus change events.** `GET /api/state` returns the live layer, as computed by the store. `GET /api/events` (Server-Sent Events) says "changed", and the client reads the snapshot again. `POST /api/verdicts` and `POST /api/presence` write. Rejected: endpoints per resource, with events carrying each change (less data per update, but the client must apply changes in order and recover from missed ones). [[Local Server]]. | decision card |
 | D95 | 2026-10-24 | **`reverse` is required on every card:** `cheap`, `moderate` or `one-way`. It decides the stakes line, the first thing on the card, and feeds rarity. A missing answer would understate the stakes. Adds to D77's core. Rejected: optional, with unstated meaning cheap; optional, with unstated meaning moderate. | decision card |
 | D94 | 2026-10-24 | **Conflict cards carry a fixed crux,** because Baesian files them itself with no model (D65): "Was the newer decision made with context the older one lacked?" "If it wasn't" keeps the base branch's decision; "if it was" keeps the branch's. Rejected: the branch's agent writes a specific crux before the card reaches the reviewer (the merge would wait on an agent too); exempting conflict cards from the crux. | decision card |
 | D93 | 2026-10-24 | **A card has exactly one alternative,** with its own "then", which is what the crux and the two-option card need. Other options the agent considered go in an optional `also_considered` list of names, not shown on the card. Replaces `alternatives`. Rejected: one alternative and nothing else; a list with the first as the strongest. | decision card |
@@ -127,6 +129,13 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-10-24 `[agent decision]` The details of M4 step 4's server ([[Local Server]], [[src-server]]):
+  - **Verdicts from the client** carry `reviewer` from git's `user.name`, and `client: "web"`.
+  - **Presence, the server file, inbox cursors and temporary files never count as a change.** A waiting marker's staleness is computed at snapshot time, and the client re-evaluates it as time passes.
+  - **Codes:** 403 for a wrong host or a bad token, 401 when not signed in, 415 for a write that isn't JSON, 413 over 64 KB, and 409, 404 or 400 for a verdict that's stale, about an unknown card, or invalid.
+  - **`GET /api/health`** lets a second `serve` check that the first is really answering, before trusting the server file.
+  - **The branch-deck race**, found by the four-writer test, is fixed in the store rather than by a lock.
 
 - 2026-10-24 `[agent decision]` M4 step 3's readings of D80, D81 and D90:
   - **D80 covers the reviewer's own answer** (`correction`) as well as the alternative: neither is the proposal the dependents assumed.

@@ -32,6 +32,8 @@ tags: [baesian, module]
 
 All of these go through a private write-once helper that uses an exclusive create. Nothing is ever edited in place.
 
+**`Store.ensureBranchDeck`** creates the branch's deck on first use. If another agent on the branch creates it at the same moment, the exclusive create fails, and that's taken as success, since the deck now exists. The server's four-writer test found this race.
+
 ## Reading
 
 - **`Store.status`** is computed, in this order:
@@ -44,6 +46,7 @@ All of these go through a private write-once helper that uses an exclusive creat
 - **`Store.briefs`** says what an agent should be told beyond the verdict, computed from the records and never stored (`Brief`):
   - `parent-decided-otherwise`: a parent went the other way, so this card is returned (D80);
   - `answer-changed`: the answer changed after an earlier one had resolved the card. It lists the ledger's commits from before the change; only commits that cite the card, so a lower bound (D81).
+- **`Store.view`** runs a function over one consistent read of the live layer: each file is read once, and a file that can't be read is reported and skipped instead of thrown. The server reads through it ([[src-server]]). Outside a view, a bad file throws, so the CLI stays loud.
 - **`Store.inbox`** returns `InboxItem`s newer than a per-branch cursor, and advances the cursor unless peeking. They cover verdicts on the branch's cards (filed or attached), and dependents returned by a parent's verdict, listed under the dependent's ID. Each carries its brief.
 - **`Store.branchDeckId`** and **`Store.ensureBranchDeck`** give each branch its default deck.
 - **`Store.rules`** reads accepted rules. The gate uses their `covers` globs to acknowledge facts automatically.

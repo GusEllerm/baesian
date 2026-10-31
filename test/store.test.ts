@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PossibleDuplicate, ValidationError } from "../src/store.js";
 import { BODY, REVIEWER, cleanup, draft, repo, worktree } from "./helpers.js";
 
@@ -180,6 +180,16 @@ describe("the filing check (D36, D38)", () => {
     expect(() => store.fileCard(draft({ title: "Epoch ints?", topic: "timestamps/format" }), BODY, AGENT)).toThrow(
       PossibleDuplicate,
     );
+  });
+});
+
+describe("filing at the same moment as another agent", () => {
+  it("doesn't fail when another agent creates the branch deck first", () => {
+    const { store } = repo();
+    store.fileCard(draft(), BODY, AGENT); // the deck exists now
+    // This agent looked before the other one wrote it, so it tries to create the deck too.
+    vi.spyOn(store, "deck").mockReturnValueOnce(undefined);
+    expect(() => store.fileCard(draft({ title: "Another store", topic: "storage/other" }), BODY, AGENT)).not.toThrow();
   });
 });
 

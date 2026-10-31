@@ -17,7 +17,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-10-24.*
 
-- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 141 passing tests after M4's steps 2 and 3:
+- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 156 passing tests after M4's steps 2 to 4:
   - **M1:** the store and the core CLI;
   - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions;
   - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs;
@@ -28,7 +28,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0);
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D95 in [[Decision Log]]):
+- **Decided by the user** (D1–D97 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;
@@ -75,7 +75,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Research done: [[Minimal Card Content]]** (D72). Five strands reported on what a card minimally needs, framed by facets rather than decision types. The synthesis revises the core and the facets, and sets out a test of "enough" and a measurement plan. The user decided four of its implications: the trigger back on the card (D73), one shared crux (D74), three facets to trial (D75), and when the agent's pick shows (D76).
 - **The dry run (2026-10-24):** the user answered the Client Data Contract's ten open decisions as real cards in round 5 (`#dryrun`). Nine were decided (D77–D85), including the required card fields, commits left out of the client, and the undo kept (revising D67). Three rest on premises that are checked first. The waiting-marker card came back as "I need more context". Revised with the missing fact, it was decided in one pass (D90), so all ten are made. The dry run changed the user's mind about the agent's pick: it's now hidden on every card until you choose. A disagreement gets an optional reason, you can switch after the reveal, and the agent may reply once, with facts (D86–D89, built into round 5). [[2026-10-23 Client Mockups#The dry run: real decisions in round 5 (2026-10-24)]].
 - **Next:**
-  - **M4, in the order of D91:** ~~the file-watching test~~ (done: D84's premise holds on macOS and Linux); ~~the P12 format changes in the store~~ (done: D92–D95 settled the draft's open points); ~~the store's new behaviour~~ (done: returned dependents, briefs, the waiting marker); the local server (step 4, next); then the React client, porting round 5.
+  - **M4, in the order of D91:** ~~the file-watching test~~ (done: D84's premise holds on macOS and Linux); ~~the P12 format changes in the store~~ (done: D92–D95 settled the draft's open points); ~~the store's new behaviour~~ (done: returned dependents, briefs, the waiting marker); ~~the local server~~ (done: `baesian serve`, D96, D97); then the React client, porting round 5.
   - **A general scenario harness,** extracted from hpc-bridge as a separate project. Its handoff plan is `docs/handoffs/scenario-harness-extraction.md`. Baesian becomes its second consumer when it's ready.
   - **Later: Baesian on the user's cluster of Sparks,** alongside persistent agents. Everything assumes one machine today ([[Baesian Design#Open questions]]).
 

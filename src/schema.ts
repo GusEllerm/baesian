@@ -305,6 +305,19 @@ export const Waiting = z.strictObject({
 });
 export type Waiting = z.infer<typeof Waiting>;
 
+/**
+ * The running server, `server.json` in the live layer (D97). Mutable and readable only by the user; written
+ * when `baesian serve` starts and removed when it stops. The token is new each time.
+ */
+export const ServerInfo = z.strictObject({
+  type: z.literal("server"),
+  pid: z.number().int().positive(),
+  port: z.number().int().min(1).max(65535),
+  token: z.string().min(32),
+  started: Timestamp,
+});
+export type ServerInfo = z.infer<typeof ServerInfo>;
+
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. */
 export const Config = z.strictObject({
   vault: z.string().optional(),

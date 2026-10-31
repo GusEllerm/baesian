@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
@@ -9,6 +10,7 @@ import { installHooks, runHook } from "./hooks.js";
 import { notifyFiled } from "./notify.js";
 import { openRepo } from "./git.js";
 import { parseTrailers } from "./trailers.js";
+import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
@@ -71,6 +73,22 @@ function seconds(value: string): number {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw new InvalidArgumentError("expected a number of seconds");
   return n;
+}
+
+function port(value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new InvalidArgumentError("expected a port number");
+  return n;
+}
+
+/** Open an address in the default browser; if that fails, the printed address is enough. */
+function openInBrowser(url: string): void {
+  const [cmd, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+  try {
+    spawn(cmd as string, args as string[], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  } catch {
+    // no browser to open
+  }
 }
 
 function agentName(opt: string | undefined): string {
@@ -319,6 +337,32 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         io.out(item.verdict.card === item.card ? verdictLine(item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
         if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
       }
+    });
+
+  program
+    .command("serve")
+    .description("serve the client on 127.0.0.1 and open it; one server per repo")
+    .option("--port <n>", "listen on this port (by default the system picks one)", port)
+    .option("--no-open", "don't open the browser")
+    .option("--poll", "check the live layer every second instead of watching it, for shared storage")
+    .action(async (opts: { port?: number; open: boolean; poll?: boolean }) => {
+      const s = store();
+      const running = await findRunningServer(s);
+      if (running) {
+        io.out(`already serving this repo: ${serverUrl(running)}`);
+        if (opts.open) openInBrowser(serverUrl(running));
+        return;
+      }
+      const server = await startServer(s, { ...(opts.port ? { port: opts.port } : {}), poll: opts.poll ?? false });
+      io.out(`serving ${s.repo.toplevel} at ${server.url}`);
+      io.out(`watching the live layer by ${server.watchMode() === "poll" ? "polling every second" : "file events, with a rescan every 30 seconds"}; Ctrl-C to stop`);
+      if (opts.open) openInBrowser(server.url);
+      await new Promise<void>((done) => {
+        process.once("SIGINT", done);
+        process.once("SIGTERM", done);
+      });
+      await server.close();
+      io.out("stopped");
     });
 
   program

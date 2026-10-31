@@ -1,0 +1,240 @@
+import { type ChildProcess, spawn } from "node:child_process";
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
+import type { ApiState } from "../src/api.js";
+import { type RunningServer, findRunningServer, startServer } from "../src/server.js";
+import { WAITING_STALE_MS } from "../src/store.js";
+import { WAITING_STALE_MS as API_WAITING_STALE_MS } from "../src/api.js";
+import { BODY, REVIEWER, cleanup, draft, draftFile, repo } from "./helpers.js";
+
+// M4 step 4: the local server, against real repos, with real processes writing to the store while it runs.
+
+const ROOT = resolve(import.meta.dirname, "..");
+const TSX = pathToFileURL(join(ROOT, "node_modules/tsx/dist/loader.mjs")).href;
+const AGENT = { agent: "claude-code" };
+const servers: RunningServer[] = [];
+const children: ChildProcess[] = [];
+
+afterEach(async () => {
+  for (const c of children.splice(0)) c.kill("SIGKILL");
+  for (const s of servers.splice(0)) await s.close();
+  cleanup();
+});
+
+async function serve(store: Parameters<typeof startServer>[0], opts: Parameters<typeof startServer>[1] = {}) {
+  const s = await startServer(store, { reviewer: "tester", debounceMs: 20, ...opts });
+  servers.push(s);
+  return s;
+}
+
+const base = (s: RunningServer) => `http://127.0.0.1:${s.port}`;
+const auth = (s: RunningServer) => ({ authorization: `Bearer ${s.token}` });
+const state = async (s: RunningServer): Promise<ApiState> => (await fetch(`${base(s)}/api/state`, { headers: auth(s) })).json() as Promise<ApiState>;
+const post = (s: RunningServer, path: string, body: unknown, type = "application/json") =>
+  fetch(`${base(s)}${path}`, { method: "POST", headers: { ...auth(s), "content-type": type }, body: JSON.stringify(body) });
+
+/** Run the real CLI from source, in `cwd`. */
+function cli(cwd: string, args: string[]): ChildProcess {
+  const c = spawn(process.execPath, ["--import", TSX, join(ROOT, "src/bin.ts"), ...args], { cwd, env: { ...process.env, BAESIAN_OS_NOTIFY: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+  children.push(c);
+  return c;
+}
+const exited = (c: ChildProcess) => new Promise<number | null>((r) => c.on("exit", (code) => r(code)));
+async function until<T>(get: () => Promise<T> | T, ok: (v: T) => boolean, ms = 5000): Promise<T> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await get();
+    if (ok(v) || Date.now() > end) return v;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/** Listen on `/api/events`, and collect the versions it announces. */
+function listen(s: RunningServer) {
+  const versions: number[] = [];
+  const req = request({ host: "127.0.0.1", port: s.port, path: "/api/events", headers: auth(s) }, (res) => {
+    res.setEncoding("utf8");
+    res.on("data", (chunk: string) => {
+      for (const m of chunk.matchAll(/event: changed\ndata: (\{.*\})/g)) versions.push(JSON.parse(m[1]!).version);
+    });
+  });
+  req.end();
+  return { versions, close: () => req.destroy() };
+}
+
+describe("security (D62, D97)", () => {
+  it("trades the token for a cookie, and refuses anything else", async () => {
+    const { store } = repo();
+    const s = await serve(store);
+    expect((await fetch(`${base(s)}/?token=wrong`, { redirect: "manual" })).status).toBe(403);
+    const signIn = await fetch(s.url, { redirect: "manual" });
+    expect(signIn.status).toBe(302);
+    const cookie = signIn.headers.get("set-cookie")!;
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/SameSite=Strict/);
+    expect((await fetch(`${base(s)}/api/state`, { headers: { cookie: cookie.split(";")[0]! } })).status).toBe(200);
+    expect((await fetch(`${base(s)}/api/state`)).status).toBe(401);
+    const ok = await fetch(`${base(s)}/api/state`, { headers: auth(s) });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("refuses a request for another host name, as a DNS-rebinding page would send", async () => {
+    const { store } = repo();
+    const s = await serve(store);
+    const status = await new Promise<number>((done) => {
+      request({ host: "127.0.0.1", port: s.port, path: "/api/state", headers: { ...auth(s), host: `evil.example:${s.port}` } }, (res) => done(res.statusCode!)).end();
+    });
+    expect(status).toBe(403);
+  });
+
+  it("accepts writes only as JSON", async () => {
+    const { store } = repo();
+    const s = await serve(store);
+    expect((await post(s, "/api/presence", {}, "text/plain")).status).toBe(415);
+  });
+
+  it("keeps its file readable only by the user, and removes it when it stops", async () => {
+    const { store } = repo();
+    const s = await serve(store);
+    const path = join(store.live, "server.json");
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(await findRunningServer(store)).toMatchObject({ port: s.port, pid: process.pid });
+    await servers.pop()!.close();
+    expect(existsSync(path)).toBe(false);
+    expect(await findRunningServer(store)).toBeUndefined();
+  });
+
+  it("ignores a file left by a server that has gone", async () => {
+    const { store } = repo();
+    writeFileSync(join(store.live, "server.json"), JSON.stringify({ type: "server", pid: 2 ** 22 - 1, port: 1, token: "x".repeat(43), started: new Date().toISOString() }));
+    expect(await findRunningServer(store)).toBeUndefined();
+  });
+});
+
+describe("the API (D96)", () => {
+  it("serves the live layer as one snapshot, with what the store computes", async () => {
+    const { store } = repo();
+    const parent = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const child = store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files", depends_on: [parent] }), BODY, AGENT).card.meta.id;
+    store.addVerdict({ card: parent, revision: 1, response: "alternative", choice: "Postgres", ...REVIEWER });
+    store.startWaiting(child, "codex");
+    const s = await serve(store);
+    const st = await state(s);
+    const byId = Object.fromEntries(st.cards.map((c) => [c.meta.id, c]));
+    expect(byId[parent]).toMatchObject({ status: "resolved", decision: "Postgres", dependents: [child] });
+    expect(byId[child]).toMatchObject({ status: "returned", briefs: [expect.objectContaining({ kind: "parent-decided-otherwise" })] });
+    expect(byId[child]!.waiting).toEqual([expect.objectContaining({ agent: "codex", stale: false })]);
+    expect(st.problems).toEqual([]);
+    expect(st.server.watch).toBe("events");
+    expect(API_WAITING_STALE_MS).toBe(WAITING_STALE_MS);
+  });
+
+  it("records the client's verdicts, and refuses bad ones", async () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const s = await serve(store);
+    const ok = await post(s, "/api/verdicts", { card: id, revision: 1, response: "alternative", choice: "Postgres", first_choice: "alternative" });
+    expect(ok.status).toBe(201);
+    expect(await ok.json()).toMatchObject({ status: "resolved" });
+    expect(store.verdicts(id).at(-1)).toMatchObject({ reviewer: "tester", client: "web", first_choice: "alternative" });
+    expect((await post(s, "/api/verdicts", { card: id, revision: 2, response: "accept" })).status).toBe(409);
+    expect((await post(s, "/api/verdicts", { card: "B-zzzzz", revision: 1, response: "accept" })).status).toBe(404);
+    expect((await post(s, "/api/verdicts", { card: id, revision: 1, response: "maybe" })).status).toBe(400);
+    expect((await post(s, "/api/verdicts", { card: id, revision: 1, response: "accept", reviewer: "someone else" })).status).toBe(400);
+  });
+
+  it("writes the client's heartbeat (D41)", async () => {
+    const { store } = repo();
+    const s = await serve(store);
+    expect((await post(s, "/api/presence", {})).status).toBe(204);
+    expect(store.presence()).toMatchObject({ client: "web" });
+  });
+
+  it("reports a half-written file instead of failing, and recovers", async () => {
+    const { store } = repo();
+    store.fileCard(draft(), BODY, AGENT);
+    mkdirSync(join(store.live, "cards", "B-zzzzz"));
+    writeFileSync(join(store.live, "cards", "B-zzzzz", "r1.md"), "---\ntitle: [half");
+    const s = await serve(store);
+    const st = await state(s);
+    expect(st.cards).toHaveLength(1);
+    expect(st.problems).toEqual([expect.objectContaining({ path: join("cards", "B-zzzzz", "r1.md") })]);
+    rmSync(join(store.live, "cards", "B-zzzzz"), { recursive: true });
+    expect((await state(s)).problems).toEqual([]);
+  });
+});
+
+describe("live updates (D84)", () => {
+  for (const poll of [false, true]) {
+    it(`announces a card another process files, ${poll ? "when polling" : "from file events"}`, async () => {
+      const { dir, store } = repo();
+      const s = await serve(store, { poll, pollMs: 100 });
+      const events = listen(s);
+      await until(() => events.versions.length, (n) => n > 0);
+      const first = events.versions.at(-1)!;
+      writeFileSync(join(dir, "card.md"), draftFile());
+      expect(await exited(cli(dir, ["file", "card.md"]))).toBe(0);
+      await until(() => events.versions.at(-1)!, (v) => v > first);
+      expect(events.versions.at(-1)).toBeGreaterThan(first);
+      expect((await state(s)).cards).toHaveLength(1);
+      expect(s.watchMode()).toBe(poll ? "poll" : "events");
+      events.close();
+    });
+  }
+
+  it("keeps up with four agents filing at once", async () => {
+    const { dir, store } = repo();
+    const s = await serve(store);
+    const events = listen(s);
+    const writers = [0, 1, 2, 3].map((w) => {
+      const c = spawn(process.execPath, ["--import", TSX, join(ROOT, "test/fixtures/file-cards.ts"), dir, String(w), "10"], { stdio: "ignore" });
+      children.push(c);
+      return exited(c);
+    });
+    expect(await Promise.all(writers)).toEqual([0, 0, 0, 0]);
+    const st = await until(() => state(s), (x) => x.cards.length === 40 && x.problems.length === 0);
+    expect(st.cards).toHaveLength(40);
+    expect(st.problems).toEqual([]);
+    expect(events.versions.length).toBeGreaterThan(1);
+    events.close();
+  }, 30_000);
+
+  it("reads 150 cards in one snapshot quickly", async () => {
+    const { store } = repo();
+    for (let i = 0; i < 150; i++) {
+      store.fileCard(draft({ title: `Card ${i}`, topic: `scale/c${i}`, depends_on: i > 0 && i % 5 === 0 ? [store.cardIds()[0]!] : [] }), BODY, { ...AGENT, force: true });
+    }
+    const s = await serve(store);
+    const t0 = performance.now();
+    const st = await state(s);
+    const ms = performance.now() - t0;
+    expect(st.cards).toHaveLength(150);
+    expect(ms).toBeLessThan(3000);
+  }, 60_000);
+});
+
+describe("baesian serve", () => {
+  it("prints its address, finds itself when run again, and stops cleanly", async () => {
+    const { dir, store } = repo();
+    const first = cli(dir, ["serve", "--no-open"]);
+    let out = "";
+    first.stdout!.on("data", (d) => (out += d));
+    await until(() => out, (o) => /serving .* at http/.test(o), 15_000);
+    const url = out.match(/at (http\S+)/)![1]!;
+    expect((await fetch(url, { redirect: "manual" })).status).toBe(302);
+
+    const second = cli(dir, ["serve", "--no-open"]);
+    let again = "";
+    second.stdout!.on("data", (d) => (again += d));
+    expect(await exited(second)).toBe(0);
+    expect(again).toContain(`already serving this repo: ${url}`);
+
+    first.kill("SIGINT");
+    expect(await exited(first)).toBe(0);
+    expect(existsSync(join(store.live, "server.json"))).toBe(false);
+  }, 30_000);
+});

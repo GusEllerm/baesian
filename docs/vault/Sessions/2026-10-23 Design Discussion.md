@@ -271,6 +271,11 @@ The user judged the plan ready for development.
     - An LLM reviewer bot can drive the protocol but can't judge cards, so its policy should be scripted over structured fields.
   - **The user's decision:** extract hpc-bridge's pattern into a general tool, as a separate project handed to another agent. Baesian goes on with implementation, plus ordinary tests per step, until the tool is ready.
   - **The handoff plan** is `docs/handoffs/scenario-harness-extraction.md`, outside the vault. It's based on a second, module-level survey of hpc-bridge's harness, and covers what exists, both consumers' needs, the hardest couplings, validity principles, milestones with acceptance tests, and the decisions for the user.
+- **M4 step 4: the local server.**
+  - **The draft:** the agent drafted [[Local Server]] from D41, D62, D63 and D84. The user decided its open points: a snapshot plus change events (D96), and a new token and port each time (D97).
+  - **Built:** `baesian serve`, `startServer`, `Store.view`, and 15 integration tests against real servers and real processes. 156 tests pass on macOS and on Linux.
+  - **A bug found:** the four-writer test exposed a race when two agents on one branch file their first cards at the same moment. It's fixed in the store, with a unit test of its own.
+  - **A hook false positive:** a PreToolUse hook blocked a shell command that wrote source code containing the word `token`, taking it for a credential. The file was written with the editor tools instead.
 
 ## Next
 
