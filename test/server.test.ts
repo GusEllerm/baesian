@@ -217,6 +217,61 @@ describe("live updates (D84)", () => {
   }, 60_000);
 });
 
+describe("serving the client (D98, D99)", () => {
+  function fakeBuild() {
+    const dir = join(repo().dir, "client-build");
+    mkdirSync(join(dir, "assets"), { recursive: true });
+    writeFileSync(join(dir, "index.html"), "<!doctype html><title>client</title>");
+    writeFileSync(join(dir, "assets", "index-abc123.js"), "console.log(1)");
+    writeFileSync(join(dir, "secret.txt"), "inside the build, but fine to serve");
+    return dir;
+  }
+  const get = (s: RunningServer, path: string) => fetch(`${base(s)}${path}`, { headers: auth(s) });
+
+  it("serves index.html with a policy that allows only its own origin", async () => {
+    const { store } = repo();
+    const s = await serve(store, { clientDir: fakeBuild() });
+    const r = await get(s, "/");
+    expect(r.status).toBe(200);
+    expect(await r.text()).toContain("<title>client</title>");
+    expect(r.headers.get("content-security-policy")).toMatch(/default-src 'self'/);
+    expect(r.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("caches hashed assets for good, and sends the client's own routes to index.html", async () => {
+    const { store } = repo();
+    const s = await serve(store, { clientDir: fakeBuild() });
+    const asset = await get(s, "/assets/index-abc123.js");
+    expect(asset.headers.get("content-type")).toMatch(/javascript/);
+    expect(asset.headers.get("cache-control")).toMatch(/immutable/);
+    expect(await (await get(s, "/cards/B-7f3kq")).text()).toContain("<title>client</title>");
+    expect((await get(s, "/assets/missing.js")).status).toBe(404);
+  });
+
+  it("never serves a file from outside the build", async () => {
+    const { store } = repo();
+    const dir = fakeBuild();
+    writeFileSync(join(dir, "..", "outside.txt"), "not for the browser");
+    const s = await serve(store, { clientDir: dir });
+    for (const path of ["/../outside.txt", "/%2e%2e/outside.txt", "/assets/..%2f..%2foutside.txt"]) {
+      const r = await get(s, path);
+      expect(await r.text()).not.toContain("not for the browser");
+    }
+  });
+
+  it("still asks for sign-in before serving the client", async () => {
+    const { store } = repo();
+    const s = await serve(store, { clientDir: fakeBuild() });
+    expect((await fetch(`${base(s)}/assets/index-abc123.js`)).status).toBe(401);
+  });
+
+  it("says how to build the client when there's no build", async () => {
+    const { store } = repo();
+    const s = await serve(store, { clientDir: join(store.live, "no-such-build") });
+    expect(await (await get(s, "/")).text()).toContain("npm run build");
+  });
+});
+
 describe("baesian serve", () => {
   it("prints its address, finds itself when run again, and stops cleanly", async () => {
     const { dir, store } = repo();

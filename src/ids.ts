@@ -3,9 +3,7 @@ import { randomInt } from "node:crypto";
 /** Crockford base32, lowercase: no i, l, o or u, so IDs read aloud without ambiguity (D51). */
 export const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 
-const SUFFIX = "[0-9a-hjkmnp-tv-z]";
-export const CARD_ID = new RegExp(`^B-${SUFFIX}{5}$`);
-export const RULE_ID = new RegExp(`^R-${SUFFIX}{5}$`);
+export { CARD_ID, RULE_ID } from "./schema.js";
 
 export function randomSuffix(length = 5): string {
   let s = "";

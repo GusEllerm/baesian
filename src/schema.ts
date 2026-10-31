@@ -1,8 +1,12 @@
 import { z } from "zod";
-import { CARD_ID, RULE_ID } from "./ids.js";
 
 // The file formats. docs/vault/Design/File Formats.md describes them for people; this module is the
 // definition. Every type is flat (no nested objects) so the Markdown ones read well in Obsidian.
+
+/** Crockford base32, lowercase, with no i, l, o or u (D51). Here rather than in ids.ts, so the schema imports nothing from Node. */
+const SUFFIX = "[0-9a-hjkmnp-tv-z]";
+export const CARD_ID = new RegExp(`^B-${SUFFIX}{5}$`);
+export const RULE_ID = new RegExp(`^R-${SUFFIX}{5}$`);
 
 export const CardId = z.string().regex(CARD_ID, "a card ID looks like B-7f3kq");
 export const RuleId = z.string().regex(RULE_ID, "a rule ID looks like R-7f3kq");

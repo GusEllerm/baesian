@@ -31,12 +31,14 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 | `src/facts.ts`, `src/trailers.ts`, `src/gate.ts`, `src/hooks.ts`, `src/globs.ts` | the commit gate ([[src-gate]]) |
 | `src/verify.ts` | `baesian verify`: CI and the merge gate ([[src-verify]]) |
 | `src/server.ts`, `src/api.ts` | the local server and its API types, which the client shares ([[src-server]]) |
+| `client/` | the React client (D98): its own TypeScript and Vite configs; builds into `dist/client/` ([[Client Build]]) |
+| `e2e/` | the client's browser tests, Playwright (D100), run with `npm run e2e` |
 | `src/frontmatter.ts`, `src/git.ts`, `src/ids.ts`, `src/similarity.ts` | helpers |
 | `test/` | Vitest, against real temporary git repos and linked worktrees |
 | `test/premises/` | checks of decisions' premises, run by hand (`watch.mjs`, for D84) |
 | `test/fixtures/` | helper processes for tests that need several writers at once |
 
-Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <command>` (from source, via tsx).
+Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <command>` (from source, via tsx). For the client: `npm run e2e` (it builds first) and `npm run dev:client`.
 
 ## Milestones
 
@@ -59,7 +61,7 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 2. the P12 format changes in the store (D62, D66, D73–D75, D77, D79, D85, D88, D90, D92–D95), and filing rejects unknown `depends_on` IDs (**done**);
 3. the store's new behaviour: choosing the alternative returns dependents (D80), a changed answer brings a rework brief (D81), and `baesian wait` keeps a heartbeat (D90) (**done**);
 4. the local server: watching the live layer, the API and live updates (**done**);
-5. the React client, porting round 5.
+5. the React client, porting round 5 ([[Client Build]]; 5a, the scaffold, is done).
 
 ## Notes from M1
 

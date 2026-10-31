@@ -50,7 +50,7 @@ Provenance: drafted by the agent on 2026-10-24 for M4 step 4 (D91), from earlier
 | `GET /api/events` | **Server-Sent Events.** `changed`, with the new `version`, whenever the live layer changes. Changes are gathered over 100 ms, and a keep-alive comment goes out every 15 seconds. The client reads `/api/state` again |
 | `POST /api/verdicts` | `{card, revision, response, choice?, comment?, first_choice?, make_rule?}`, recorded through `Store.addVerdict`. `reviewer` is git's `user.name`, and `client` is `web`. A stale revision returns 409; an invalid verdict returns 400 with the reason |
 | `POST /api/presence` | **The client's heartbeat** (D41), through `Store.touchPresence` |
-| `GET /`, static files | **The client's build** (step 5). Until then, a page that says the server is running |
+| `GET /`, static files | **The client's build** ([[Client Build]]), with a policy that allows only the server's own origin. With no build, a page saying how to build it |
 
 **Later, not in step 4:** rules and topic merges written from the client, practice cards, and agent operations over HTTP.
 

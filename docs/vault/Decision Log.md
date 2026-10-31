@@ -22,6 +22,9 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D100 | 2026-10-31 | **The client's browser tests use Playwright with its own Chromium, run locally only for now.** Round 5's self-test becomes the suite. CI keeps running the typecheck, unit tests and build, which now builds the client too; running the browser tests in CI can come later, as a decision of its own. Rejected: running them in CI now (a browser install on every push); `playwright-core` driving the system's Chrome (no CI possible, and it depends on the machine). [[Client Build]]. | decision card |
+| D99 | 2026-10-31 | **The client's fonts are bundled,** through the open-licensed `@fontsource` packages for Alegreya and Archivo. The client works offline, and never contacts Google. Rejected: loading them from Google Fonts, as the prototype does. [[Client Build]]. | decision card |
+| D98 | 2026-10-31 | **The client lives in `client/` at the repo root,** with its own TypeScript and Vite configs, and builds into `dist/client/`, so it ships in the npm package. It imports the API's types from `src/api.ts`. Its dependencies (React, Vite, Motion, fonts, Playwright) are all devDependencies, because it ships prebuilt (D50). Rejected: `src/client/` beside the CLI (one tree, but browser and Node code mixed). [[Client Build]]. | decision card |
 | D97 | 2026-10-24 | **Each `baesian serve` gets a new token and a port the system picks** (or `--port`). The token lives in the server file only while the server runs. Closing the server ends the session, and the next `serve` opens the new address. Stable addresses, for phone access and bookmarks, wait for M4c and Tailscale (D63). Rejected: one token and port per repo, kept across restarts (bookmarkable, but a long-lived secret on disk). | decision card |
 | D96 | 2026-10-24 | **The server's API is a snapshot plus change events.** `GET /api/state` returns the live layer, as computed by the store. `GET /api/events` (Server-Sent Events) says "changed", and the client reads the snapshot again. `POST /api/verdicts` and `POST /api/presence` write. Rejected: endpoints per resource, with events carrying each change (less data per update, but the client must apply changes in order and recover from missed ones). [[Local Server]]. | decision card |
 | D95 | 2026-10-24 | **`reverse` is required on every card:** `cheap`, `moderate` or `one-way`. It decides the stakes line, the first thing on the card, and feeds rarity. A missing answer would understate the stakes. Adds to D77's core. Rejected: optional, with unstated meaning cheap; optional, with unstated meaning moderate. | decision card |
@@ -129,6 +132,13 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-10-31 `[agent decision]` M4 step 5a's details ([[Client Build]]):
+  - **The client's devDependencies are pinned exactly,** so a build is reproducible.
+  - **The API's types are self-contained,** so the client can check its types without Node's: `Status` and `Brief` moved into `src/api.ts` (the store re-exports them), and the ID patterns into `src/schema.ts` (`ids.ts` re-exports them). Nothing changed in behaviour.
+  - **The client's security policy is strict:** only the server's own origin, for everything, with no inline styles or scripts. The browser tests check that nothing breaks under it.
+  - **The dev server uses port 5317,** and its proxy reads the running server's file. Development only.
+  - **The browser tests reuse the unit tests' fixture helpers** (`test/helpers.ts`), and start a real server for each test.
 
 - 2026-10-24 `[agent decision]` The details of M4 step 4's server ([[Local Server]], [[src-server]]):
   - **Verdicts from the client** carry `reviewer` from git's `user.name`, and `client: "web"`.

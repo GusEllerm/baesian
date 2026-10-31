@@ -3,7 +3,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { type FSWatcher, existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { userInfo } from "node:os";
-import { basename, join, relative, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ApiCard, ApiState, ApiVerdictInput } from "./api.js";
 import { ServerInfo } from "./schema.js";
 import { type Store, ValidationError } from "./store.js";
@@ -30,6 +31,8 @@ export interface ServerOptions {
   debounceMs?: number;
   /** A comment on every event stream this often, so idle connections stay open. */
   keepAliveMs?: number;
+  /** Where the client's build is. Defaults to `dist/client/` (D98). */
+  clientDir?: string;
 }
 
 export interface RunningServer {
@@ -239,6 +242,55 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+/** The client's build (D98): beside this module once built, or in `dist/` when the server runs from source. */
+export function findClient(): string | undefined {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return [join(here, "client"), join(here, "..", "dist", "client")].find((d) => existsSync(join(d, "index.html")));
+}
+
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+};
+
+/** Only the server's own origin, for everything: the client needs nothing else, fonts included (D99). */
+const CSP = "default-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+/** Serve a file of the client's build. A path with no extension is one of the client's own routes. */
+function serveClient(res: ServerResponse, dir: string | undefined, pathname: string) {
+  if (!dir || !existsSync(join(dir, "index.html"))) {
+    return send(res, 200, page("Baesian is running", "The client hasn't been built: run <code>npm run build</code> in Baesian's repo. Until then, <a href=\"/api/state\">/api/state</a> shows the live layer."), "text/html");
+  }
+  let rel: string;
+  try {
+    rel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  } catch {
+    return send(res, 400, { error: "a malformed path" });
+  }
+  const file = resolve(dir, rel || "index.html");
+  const inside = file.startsWith(dir + sep);
+  let path = inside && existsSync(file) && statSync(file).isFile() ? file : undefined;
+  if (!path && inside && !extname(rel)) path = join(dir, "index.html");
+  if (!path) return send(res, 404, { error: "not found" });
+  const hashed = path.startsWith(join(dir, "assets") + sep);
+  const body = readFileSync(path); // before any header goes out, so a failed read can still become an error
+  res.writeHead(200, {
+    ...HEADERS,
+    "content-type": TYPES[extname(path)] ?? "application/octet-stream",
+    "cache-control": hashed ? "public, max-age=31536000, immutable" : "no-store",
+    ...(extname(path) === ".html" ? { "content-security-policy": CSP } : {}),
+  });
+  res.end(body);
+}
+
 const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule"]);
 
 /** Start the server. It runs until `close`. */
@@ -318,11 +370,11 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
         req.on("close", () => streams.delete(res));
         return;
       }
-      if (url.pathname === "/") {
-        return send(res, 200, page("Baesian is running", `The client arrives in M4 step 5. Until then, <a href="/api/state">/api/state</a> shows the live layer.`), "text/html");
-      }
+      if (!url.pathname.startsWith("/api/")) return serveClient(res, opts.clientDir ?? findClient(), url.pathname);
       return send(res, 404, { error: "not found" });
     } catch (e) {
+      // Headers already sent: the response can't become an error any more, so end it rather than leave it hanging.
+      if (res.headersSent) return res.destroy();
       const status = (e as { status?: number }).status ?? 500;
       return send(res, status, { error: e instanceof Error ? e.message : String(e) });
     }

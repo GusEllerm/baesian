@@ -1,8 +1,21 @@
 import type { CardMeta, DeckMeta, Fallback, Presence, RuleMeta, Verdict } from "./schema.js";
-import type { Brief, Status } from "./store.js";
 
-// The server's API (D96): what `GET /api/state` returns, and what the client may write. Types only, so the
-// client can share them. docs/vault/Design/Local Server.md describes the API for people.
+// The server's API (D96): what `GET /api/state` returns, and what the client may write. Types only, and nothing
+// from Node, so the client can share them. docs/vault/Design/Local Server.md describes the API for people.
+
+/** A card's status, computed from its files by the store. */
+export type Status = "open" | "returned" | "rerouted" | "deferred" | "resolved" | "withdrawn" | "superseded";
+
+/**
+ * What an agent is told along with a verdict, computed from the records like status (D71): never stored.
+ * - `parent-decided-otherwise` (D80): a card this one builds on was decided against the proposal it assumed,
+ *   so this card is returned.
+ * - `answer-changed` (D81): the answer on this card changed after an earlier one resolved it. `commits` are
+ *   the ledger's entries before the change: only commits that cite the card, so a lower bound.
+ */
+export type Brief =
+  | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; assumed: string; decided: string; at: string }
+  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: { commit?: string; branch: string }[]; at: string };
 
 /** One card as the client sees it: its latest revision, and everything the store computes about it. */
 export interface ApiCard {

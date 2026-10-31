@@ -290,6 +290,14 @@ The user judged the plan ready for development.
     - statistics and budget principles;
     - milestones resequenced, so Baesian is useful earlier.
   - **The record:** `docs/handoffs/scenario-harness-extraction-reviews.md` keeps each finding and what was done with it. The user starts the extraction project from the revised plan.
+- **Committed** the revised plan and the review record (`bfa5af5`). `baesian init` recreated the live layer, with the user's go-ahead.
+- **rehearse.** The user named the extraction tool `rehearse` (a private repo, `GusEllerm/rehearse`). They asked for the plan to set up the repo, the remote and livedocs. The plan now has those steps, approved, in "Day one". The agent read "livedocs / vault sync" as livedocs, which keeps the vault in step with the code. No separate vault-sync tool exists on this machine.
+- **M4 step 5, the client.**
+  - **The plan:** the agent drafted [[Client Build]]. The user decided `client/` at the root (D98), bundled fonts (D99), and Playwright run locally only (D100).
+  - **5a, the scaffold, is built:** exact-pinned dependencies (React 19.3, Vite 8.3, Motion 14.9, `@fontsource` and Playwright 1.64, all devDependencies); the build into `dist/client/`; the server serving it under a strict policy; the dev server with its proxy; the API's types made self-contained.
+  - **Tests:** 161 unit and integration tests and 4 browser tests pass.
+  - **Two bugs caught:** a hanging response when a request failed after its headers were sent, caught by a new server test; and a font check that would have passed vacuously, caught by the agent and tightened.
+  - **The credential hook fired again,** this time on a `sed` that was redacting the token from a log line. The agent dropped the line.
 
 ## Next
 

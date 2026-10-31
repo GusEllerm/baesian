@@ -7,3 +7,7 @@ docs/vault/.trash/
 # Node
 node_modules/
 dist/
+
+# Playwright (D100)
+/test-results/
+/playwright-report/

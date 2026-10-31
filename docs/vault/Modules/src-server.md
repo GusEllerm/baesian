@@ -39,7 +39,14 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
   - 409 for a stale revision, 404 for an unknown card, 400 for an invalid verdict or an unexpected field.
 - **`POST /api/presence`** is the client's heartbeat (D41), through `Store.touchPresence`.
 - **`GET /api/health`** is how `findRunningServer` checks that a server is really answering.
-- **`GET /`** is a placeholder page until the client exists (step 5).
+- **Anything else outside `/api/`** is the client (`serveClient`), from the build `findClient` finds: `dist/client/` beside the built server, or `dist/` when the server runs from source. `ServerOptions.clientDir` overrides it, for tests.
+  - **What's served:**
+    - `index.html`, with a Content-Security-Policy that allows only the server's own origin, for fonts too (D99), and is never cached;
+    - hashed files under `assets/`, cached for good;
+    - for a path with no extension (one of the client's own routes), `index.html`.
+  - **Refused:** any path that resolves outside the build (404).
+  - **With no build,** a page says to run `npm run build`.
+  - **Every file is read before its headers go out.** If a request fails after its headers are sent, the error handler closes the response rather than leave it hanging. A test caught that hang.
 
 ## Watching (D84)
 

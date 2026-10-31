@@ -1,6 +1,6 @@
-# Plan: a general scenario harness, extracted from hpc-bridge
+# Plan: rehearse, a general scenario harness extracted from hpc-bridge
 
-A handoff for the agent who starts this as its own project.
+A handoff for the agent who starts this as its own project. The tool is called **rehearse**: agents rehearse against a staged world and stand-in people before they go live. Scenarios are its scripts, simulated people its understudies, and mid-run hooks its cues. The owner chose the name on 2026-10-31.
 - **When:** written on 2026-10-24 in the Baesian repo, in a session with the owner of both projects. Revised on 2026-10-31 after four independent reviews: accuracy against the code, architecture and milestones, readiness to hand over, and generality and validity. Their findings, and where this plan departs from them, are in `scenario-harness-extraction-reviews.md` beside this file.
 - **What the facts describe:** hpc-bridge's `main` at `a8db4dc`, the last commit on `main` to touch the harness. hpc-bridge's main checkout is on another branch, `fix/perlmutter-report`, 21 commits ahead, where line numbers drift by about ten and there are more scenarios. Read `main` without touching the checkout: `git -C /Users/gusellerm/Projects/hpc-bridge show main:<path>`.
 - **Paths:** relative to `/Users/gusellerm/Projects/hpc-bridge/agentic/`, unless they start with `src/`, `docs/`, `.github/` or `CLAUDE.md`, which are at hpc-bridge's root. Baesian's paths are relative to `/Users/gusellerm/Projects/baesian/`.
@@ -15,21 +15,53 @@ It's kept separate from Baesian ("I dont want to dilute what we are doing here")
 
 ## Day one
 
-Your first action is a message to the owner, with these questions. None of them can be answered from the code:
-1. **Where your notes, decisions and session log live** until the new repo exists. A folder the owner names, not committed anywhere, is one option.
-2. **Whether you may create your own worktree of hpc-bridge, off `main`.** You need it for the baseline and, later, the extraction branch.
-3. **Which channel to raise decisions in:** the chat, a shared document, or Baesian cards.
-4. **The budget for runs that call a model,** if any, before M3.
+### Set up the repo
 
-Until the owner answers, you may do anything that's free and changes nothing:
+The owner has approved these steps, including the first commit and push. They make the repo the home for your notes, decisions and session logs from the start.
+
+1. **Create the repo:** `mkdir ~/Projects/rehearse && cd ~/Projects/rehearse && git init -b main`. Neither the folder nor a GitHub repo of that name existed on 2026-10-31.
+2. **Add a short `README.md`** saying what rehearse is, with one line pointing to this plan, and a `.gitignore` for Python: `.venv/`, `__pycache__/`, `.env`, and any run output. Add no package skeleton or license yet: packaging and the license are decisions for M0.
+3. **Install livedocs and create the vault.** livedocs keeps the vault's notes in step with the code: a note that names code in backticks is bound to it, and a commit that changes that code is blocked until the note is reconciled.
+   - **Install or upgrade it:** `uv tool install livedocs` (or `uv tool upgrade livedocs`). Use version 0.2.2 or later.
+   - **Create the vault:** `livedocs new-vault docs/vault --name "rehearse vault"`.
+   - **Set up the gate:** `livedocs init --vault docs/vault`. This writes `.githooks/` and sets `core.hooksPath`, writes `.livedocs/config.json`, adds a Claude Code heads-up hook to `.claude/settings.local.json`, and appends livedocs' instructions to `AGENTS.md`.
+   - **Mark dated notes as snapshots.** Add `snapshot_globs` to `.livedocs/config.json`, as Baesian's has, so session logs, reviews and templates are never checked: `["Reference/Review *", "Reviews/*", "Sessions/*", "Templates/*"]`.
+4. **Bring this plan home.** Copy it, and the review record beside it, into `docs/vault/Design/`, with a line saying where they came from. From then on, correct the plan there. That's where M0's output goes.
+5. **Start the vault's memory:**
+   - **`docs/vault/Home.md`:** what rehearse is, its current status, and the reading order for a fresh session.
+   - **`docs/vault/Decision Log.md`:** every decision, saying who made it. The first entries are the owner's of 2026-10-31: the name, and a private repo.
+   - **`docs/vault/Sessions/`:** a log at the end of every session that changes anything.
+
+   Baesian's vault is a working example: its `docs/vault/Home.md`, `Working Agreement.md`, `Decision Log.md`, and `Templates/Decision Card.md`.
+6. **Make the first commit, then create the remote and push:**
+   - `gh repo create GusEllerm/rehearse --private --source . --remote origin`
+   - `git push -u origin main`
+
+   `gh` was signed in as GusEllerm, with repo access, on 2026-10-31. If it isn't, ask the owner rather than working around it. The repo stays private: making anything public is the owner's decision.
+
+**Using livedocs from then on:**
+- **In notes,** name symbols in backticks (`Trace`, `gating()`, `World.snapshot`), not files: a path to a module binds only its default export.
+- **A new or edited note is stamped** by the commit that contains it.
+- **When a commit is blocked,** edit the note and commit again; or, if the note is still right, run `livedocs stamp <note> --ack --reason "<why>"`, `git add -A`, and commit.
+- **`livedocs affected`** lists the notes your uncommitted changes touch, and **`livedocs coverage`** shows which mentions are anchored.
+
+### Then ask the owner
+
+Your next action is a message to the owner, with these questions. None of them can be answered from the code:
+1. **Whether you may create your own worktree of hpc-bridge, off `main`.** You need it for the baseline and, later, the extraction branch.
+2. **Which channel to raise decisions in:** the chat, a shared document, or Baesian cards. Whatever the channel, the decision goes in the Decision Log.
+3. **The budget for runs that call a model,** if any, before M3.
+
+Until the owner answers, you may do anything that's free and changes nothing outside rehearse's own repo:
 - read both repos (hpc-bridge from `main`, as above);
 - read the stored run bundles in place;
-- draft the M0 split.
+- draft the M0 split in the vault.
 
 ## How to work
 
+- **Commit and push only when the owner asks.** The setup steps above are the exception, and are already approved.
 - **The owner decides anything hard to reverse.**
-  - **The list:** the name; the repo and its visibility; the language; packaging, and how hpc-bridge depends on the tool; the run model (see M0); the freeze or rebase policy for hpc-bridge during the extraction; image tags; the budget for model runs; model endpoints and credentials; new dependencies; and publishing.
+  - **The list** (the name and a private repo are already decided): the language; packaging, and how hpc-bridge depends on the tool; the run model (see M0); the freeze or rebase policy for hpc-bridge during the extraction; image tags; the budget for model runs; model endpoints and credentials; new dependencies; and publishing.
   - **How to bring each:** a recommendation, its strongest alternative, and what would change your mind. Never present a proposal as agreed.
   - **What an approved split covers:** once the owner approves the M0 split, that approval covers the moves it lists, on your branch. Departures from it, new dependencies, and merges into hpc-bridge's `main` go back to the owner.
 - **Money.** hpc-bridge's own rule: live agentic runs cost money, and must not be launched unprompted (`CLAUDE.md:21`).
@@ -286,11 +318,13 @@ Each one has an acceptance test that's free to run, unless marked.
 
 ## Decisions for the owner (the M0 gate)
 
-Raise each with a recommendation:
-1. **The name.**
-2. **Where the repo lives, and whether it's private.**
-   - A private tool can't be fetched by hpc-bridge's CI, or by `uv sync --extra dev`, without credentials.
-   - One option: give `agentic/` its own `pyproject.toml` and lock, so hpc-bridge's root project and CI don't depend on the tool.
+Already decided by the owner, on 2026-10-31:
+- **the name, rehearse;**
+- **the repo:** `~/Projects/rehearse`, with a private remote at `github.com/GusEllerm/rehearse`.
+
+Raise each of these with a recommendation:
+1. **How hpc-bridge reaches a private tool.** It can't be fetched by hpc-bridge's CI, or by `uv sync --extra dev`, without credentials. One option: give `agentic/` its own `pyproject.toml` and lock, so hpc-bridge's root project and CI don't depend on the tool.
+2. **Whether the package name `rehearse` is free on PyPI.** It only matters before any publishing.
 3. **The language.** Python is recommended.
 4. **Packaging:** how hpc-bridge depends on the tool, and how the Docker image gets it (a BuildKit named context, or a pinned git install).
 5. **The run model,** before M1 freezes the types.
@@ -318,6 +352,7 @@ Raise each with a recommendation:
 - **hermes, Pi, Codex:** agent harnesses. hermes21 is hermes driven as a CLI.
 - **INFRA:** a run that produced nothing to grade, because of infrastructure.
 - **Jail:** the container an agent runs in.
+- **livedocs:** the owner's tool that binds vault notes to the code they name, and blocks a commit until a changed note is reconciled. Installed with `uv tool install livedocs`.
 - **MEP:** hpc-bridge's multi-user endpoint mode.
 - **Pilot:** a job hpc-bridge leaves on the cluster; the pilot checks look for leftovers.
 - **Plan B:** hpc-bridge's plan for its runtime sandbox.

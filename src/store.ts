@@ -33,7 +33,8 @@ export const RECORD_DIR = ".baesian";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
 
-export type Status = "open" | "returned" | "rerouted" | "deferred" | "resolved" | "withdrawn" | "superseded";
+export type { Brief, Status } from "./api.js";
+import type { Brief, Status } from "./api.js";
 
 /** Statuses that still need the reviewer. */
 export const PENDING: ReadonlySet<Status> = new Set(["open", "returned", "rerouted", "deferred"]);
@@ -53,17 +54,6 @@ export interface Match {
   status: Status;
   by: "topic" | "title";
 }
-
-/**
- * What an agent is told along with a verdict, computed from the records like status (D71): never stored.
- * - `parent-decided-otherwise` (D80): a card this one builds on was decided against the proposal it assumed,
- *   so this card is returned.
- * - `answer-changed` (D81): the answer on this card changed after an earlier one resolved it. `commits` are
- *   the ledger's entries before the change: only commits that cite the card, so a lower bound.
- */
-export type Brief =
-  | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; assumed: string; decided: string; at: string }
-  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: { commit?: string; branch: string }[]; at: string };
 
 /** One thing for an agent in `baesian inbox`: a verdict, and the brief that goes with it. */
 export interface InboxItem {
