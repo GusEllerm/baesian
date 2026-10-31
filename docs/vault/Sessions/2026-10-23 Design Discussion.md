@@ -277,6 +277,20 @@ The user judged the plan ready for development.
   - **A bug found:** the four-writer test exposed a race when two agents on one branch file their first cards at the same moment. It's fixed in the store, with a unit test of its own.
   - **A hook false positive:** a PreToolUse hook blocked a shell command that wrote source code containing the word `token`, taking it for a credential. The file was written with the editor tools instead.
 
+## 2026-10-31: back after a week
+
+- **Step 4 committed** (`b5fd9bc`). The user chose not to hold it back for the agentic test environment. The agent argued that the dependency runs the other way: the harness's reviewer actor needs the server's API.
+- **The environment had been reset.** The `npm link` was gone; the agent restored it, as D57 had it. This repo's live layer `.git/baesian/` was gone too. It was empty when last seen on 2026-10-24. Parts of `.git` were rewritten at once on 2026-10-27, which looks like a copy or restore. Commits still pass the gate through the hooks' fallback. `baesian init` would recreate the live layer; that's waiting for the user's say-so, in case removing it was deliberate.
+- **The extraction plan, reviewed.** Four independent reviewers read the handoff plan: accuracy against the code, architecture and milestones, readiness to hand over, and generality and validity. The agent checked their key claims against the code, and revised the plan.
+  - **The main changes:**
+    - a golden dump of the whole corpus replaces "re-grades to the same verdicts" as the first acceptance test;
+    - the run model is decided in M0;
+    - a "Day one" section, and rules on money and on working in hpc-bridge;
+    - Baesian's instructions must actually reach the agent, and its ground truth must be taken from outside the agent's reach;
+    - statistics and budget principles;
+    - milestones resequenced, so Baesian is useful earlier.
+  - **The record:** `docs/handoffs/scenario-harness-extraction-reviews.md` keeps each finding and what was done with it. The user starts the extraction project from the revised plan.
+
 ## Next
 
 - **The user's own five-second test of round 5** against round 4. Then they confirm or overturn the departures listed in [[2026-10-23 Client Mockups#Round 5: glance first]], and the round 4 agent decisions above.

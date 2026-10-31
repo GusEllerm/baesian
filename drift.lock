@@ -453,7 +453,7 @@ sig = "a587008f80c8114c"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "docs/handoffs/scenario-harness-extraction.md"
-sig = "b1eb0b02d47f0297"
+sig = "2950807806bf8a90"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
