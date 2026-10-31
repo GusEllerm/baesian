@@ -19,7 +19,7 @@ It's kept separate from Baesian ("I dont want to dilute what we are doing here")
 
 The owner has approved these steps, including the first commit and push. They make the repo the home for your notes, decisions and session logs from the start.
 
-1. **Create the repo:** `mkdir ~/Projects/rehearse && cd ~/Projects/rehearse && git init -b main`. Neither the folder nor a GitHub repo of that name existed on 2026-10-31.
+1. **Make it a repo.** The owner creates `~/Projects/rehearse` and starts you in it. If it isn't a git repo yet, run `git init -b main` there. No GitHub repo of that name existed on 2026-10-31.
 2. **Add a short `README.md`** saying what rehearse is, with one line pointing to this plan, and a `.gitignore` for Python: `.venv/`, `__pycache__/`, `.env`, and any run output. Add no package skeleton or license yet: packaging and the license are decisions for M0.
 3. **Install livedocs and create the vault.** livedocs keeps the vault's notes in step with the code: a note that names code in backticks is bound to it, and a commit that changes that code is blocked until the note is reconciled.
    - **Install or upgrade it:** `uv tool install livedocs` (or `uv tool upgrade livedocs`). Use version 0.2.2 or later.

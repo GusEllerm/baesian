@@ -86,7 +86,14 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - refusal without signing in;
      - a card an agent files appearing live;
      - no request to any other server, and no console errors under the security policy. The bundled fonts must actually be loaded, from the server itself.
-2. **5b, the model,** with its unit tests.
+2. **5b, the model (done, 2026-10-31):** `client/src/model.ts`, with 13 unit tests in `model.test.ts`.
+   - **What it works out:**
+     - rarity and the stakes line, counting only live dependents (`rarityOf`, `stakesLine`, `liveDependents`);
+     - whether an agent is waiting, gone or carried on, by the server's clock (`waitState`, `serverNow`);
+     - the queue and the parked cards (`queue`, `parked`);
+     - each card's relations, with their effects (`relationsOf`);
+     - each card's sides (`sidesFor`).
+   - **The scaffold page now orders cards with it.** It shows the stakes line, and how many agents are waiting.
 3. **5c, the card and answering,** against the live server.
 4. **5d, the path, the pile, the breadcrumbs, and their motion.**
 5. **5e, the rest:** presence, notifications, the calibration panel, keyboard help, and the empty state.

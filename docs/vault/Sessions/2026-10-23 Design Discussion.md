@@ -298,6 +298,8 @@ The user judged the plan ready for development.
   - **Tests:** 161 unit and integration tests and 4 browser tests pass.
   - **Two bugs caught:** a hanging response when a request failed after its headers were sent, caught by a new server test; and a font check that would have passed vacuously, caught by the agent and tightened.
   - **The credential hook fired again,** this time on a `sed` that was redacting the token from a log line. The agent dropped the line.
+- **5a committed** (`3693f30`). The user creates `~/Projects/rehearse` themselves, so the plan's first setup step became `git init` inside it.
+- **5b, the client's model,** ported from round 5 with 13 unit tests. 174 tests and 4 browser tests pass. Its readings of D90, D91 and the Contract are logged as agent decisions. One is a change from round 5: the precedent skips decisions already on the path.
 
 ## Next
 

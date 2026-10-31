@@ -22,6 +22,56 @@ sig = "795cd7a903f0614c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts"
+sig = "fff59c29bf52ba92"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#liveDependents"
+sig = "de11e97c0bcd4906"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#parked"
+sig = "d219915487c475bc"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#queue"
+sig = "6d2abe6c04b5a1c7"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#rarityOf"
+sig = "68856157877c358e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#relationsOf"
+sig = "7469b9daeec6d78a"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#serverNow"
+sig = "0d4c984ba455d433"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#sidesFor"
+sig = "504fbf26cc39e09f"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#stakesLine"
+sig = "8d84a5b6c05283d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/model.ts#waitState"
+sig = "38e27287cb37ade4"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/tsconfig.json"
 sig = "906a7d169def19fd"
 
@@ -37,8 +87,28 @@ sig = "9f5ae144054b28f5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round3/app.js#queue"
+sig = "a1a0807df3e82fb9"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "design/explorations/round3/data.js"
 sig = "f495b4a7eb0f5ff6"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round3/data.js#rarityOf"
+sig = "0a6514f8831a74f5"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round4/app.js#queue"
+sig = "3de33eb997421454"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round4/app.js#sidesFor"
+sig = "71a8a4771a3249ee"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -47,8 +117,43 @@ sig = "e0173a56dfadcb2c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round4/data.js#rarityOf"
+sig = "a529f82bf25c2a5e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round4/map.js#relationsOf"
+sig = "17b18c4616ffbc07"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/app.js#queue"
+sig = "3de33eb997421454"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/app.js#relationsOf"
+sig = "8b5679d5f8af085f"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/app.js#sidesFor"
+sig = "6ee66bd70d55f080"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/app.js#stakesLine"
+sig = "68c96e5cc97ab3a2"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "design/explorations/round5/data.js"
 sig = "5f0d56fbadae188b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/data.js#rarityOf"
+sig = "a529f82bf25c2a5e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -518,7 +623,7 @@ sig = "a587008f80c8114c"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "docs/handoffs/scenario-harness-extraction.md"
-sig = "c64355ab510c5b07"
+sig = "e0fbb29477bf0c92"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"

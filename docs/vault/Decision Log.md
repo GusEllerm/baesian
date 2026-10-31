@@ -133,6 +133,13 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-31 `[agent decision]` M4 step 5b's readings, in the client's model ([[Client Build]]):
+  - **Only a card with an agent waiting *now* jumps the queue:** a fresh waiting marker, as D91 put it with D90. A card that's merely blocking, or whose agent has gone or carried on, keeps its place.
+  - **The queue holds open cards only.** Passed-on and deferred cards are parked, and listed separately (`parked`), for the client to show somewhere other than the queue.
+  - **Rarity counts only live dependents:** withdrawn and superseded cards no longer rest on anything.
+  - **The precedent is the newest settled decision on the same topic that isn't already shown.** Round 5 dropped it when that decision was already on the path, for example as what the card builds on.
+  - **Effects come from `proposal_breaks` and `alternative_breaks` only.** A decision one option breaks is "replaced" or "kept", and a rule "may break it" or "keeps to it". On a conflict card, the option that doesn't break a decision keeps it.
+
 - 2026-10-31 `[agent decision]` M4 step 5a's details ([[Client Build]]):
   - **The client's devDependencies are pinned exactly,** so a build is reproducible.
   - **The API's types are self-contained,** so the client can check its types without Node's: `Status` and `Brief` moved into `src/api.ts` (the store re-exports them), and the ID patterns into `src/schema.ts` (`ids.ts` re-exports them). Nothing changed in behaviour.

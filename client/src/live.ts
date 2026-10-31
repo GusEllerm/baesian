@@ -5,7 +5,8 @@ export type Live =
   | { kind: "loading" }
   | { kind: "signed-out" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; state: ApiState };
+  /** `fetchedAt` is when the snapshot arrived, by this browser's clock, so the server's clock can be read forward. */
+  | { kind: "ready"; state: ApiState; fetchedAt: number };
 
 /**
  * The live layer, as the server sees it (D96): one snapshot, read again whenever the server says it changed.
@@ -25,7 +26,7 @@ export function useLiveState(): Live {
         const state = (await r.json()) as ApiState;
         if (!stopped && state.version >= newest) {
           newest = state.version;
-          setLive({ kind: "ready", state });
+          setLive({ kind: "ready", state, fetchedAt: Date.now() });
         }
       } catch (e) {
         if (!stopped) setLive({ kind: "error", message: e instanceof Error ? e.message : String(e) });

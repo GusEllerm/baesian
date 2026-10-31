@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
-import type { ApiCard } from "../../src/api";
+import type { ApiCard, ApiState } from "../../src/api";
 import { useLiveState } from "./live";
+import { byId, liveDependents, queue, serverNow, stakesLine, waitState } from "./model";
 
 // M4 step 5a: the scaffold. It signs in, reads the live layer, and shows the first card to answer. Round 5's
 // card, path and answering arrive in steps 5b to 5e (docs/vault/Design/Client Build.md).
-
-// Cards waiting on the reviewer. Step 5b replaces this with round 5's queue.
-const TO_ANSWER = new Set(["open", "rerouted"]);
 
 export function App() {
   const live = useLiveState();
@@ -25,11 +23,16 @@ export function App() {
       </Shell>
     );
   }
-  const toAnswer = live.state.cards.filter((c) => TO_ANSWER.has(c.status));
+  const now = serverNow(live.state, live.fetchedAt);
+  const toAnswer = queue(live.state, now);
+  const stopped = toAnswer.filter((c) => waitState(c, now) === "waiting").length;
   const first = toAnswer[0];
+  const summary = toAnswer.length
+    ? `${toAnswer.length} to answer.${stopped ? ` ${stopped === 1 ? "An agent has" : `${stopped} agents have`} stopped for you.` : ""}`
+    : "Nothing to answer.";
   return (
-    <Shell summary={toAnswer.length ? `${toAnswer.length} to answer.` : "Nothing to answer."}>
-      {first ? <CardFace card={first} /> : <p className="notice">All caught up.</p>}
+    <Shell summary={summary}>
+      {first ? <CardFace card={first} state={live.state} /> : <p className="notice">All caught up.</p>}
     </Shell>
   );
 }
@@ -46,10 +49,11 @@ function Shell({ summary, children }: { summary: string; children?: ReactNode })
   );
 }
 
-function CardFace({ card }: { card: ApiCard }) {
+function CardFace({ card, state }: { card: ApiCard; state: ApiState }) {
   const m = card.meta;
   return (
     <article className="card" aria-label={m.question}>
+      <p className="stakes">{stakesLine(card, liveDependents(card, byId(state)).length)}</p>
       <p className="doing">
         <b>{m.source_agent}</b> is {m.doing}
       </p>
