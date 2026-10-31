@@ -81,6 +81,7 @@ Frontmatter (`CardMeta`):
 | `depends_on` | list of card IDs | | rejecting one of them withdraws this card (D14) |
 | `supersedes` | optional card ID | | for arguing against a resolved decision; that decision becomes `superseded` once this card resolves |
 | `conflict_of`, `caught_at` | optional | | conflict cards only: the decisions in conflict, and where it was caught (`filing`, `merge`, `late`; D45) |
+| `reply` | optional string | | the agent's one reply to an answer that went against its pick (D89, D104): a fact or a check. Only `baesian reply` sets it, on a revision that is otherwise the one before; a draft can't carry it |
 | `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
 | `domain`, `evidence` | lists | | routing tags; links |
 | `source_agent`, `source_branch`, `source_worktree`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness |

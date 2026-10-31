@@ -23,6 +23,8 @@ export interface ApiCard {
   body: string;
   /** How many revisions it has had. */
   revisions: number;
+  /** Whether its agent has had its one reply to an answer against its pick, on any revision (D89, D104). */
+  replied: boolean;
   status: Status;
   /** What was decided, for a resolved card. */
   decision?: string;

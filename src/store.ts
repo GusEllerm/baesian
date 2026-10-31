@@ -329,7 +329,36 @@ export class Store {
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }
 
-  private writeRevision(id: string, revision: number, draft: CardDraft, body: string, agent: string): Card {
+  /**
+   * Whether the agent may still reply to this card (D89, D104): its latest answer went against the agent's pick
+   * (the alternative, or the reviewer's own answer), and it hasn't had its one reply.
+   */
+  canReply(id: string): boolean {
+    const card = this.card(id);
+    if (!card || this.revisions(id).some((r) => r.meta.reply !== undefined) || this.status(id) !== "resolved") return false;
+    const last = this.latestVerdict(card);
+    return last?.response === "alternative" || last?.response === "correction";
+  }
+
+  /**
+   * The agent's one reply to an answer that went against its pick (D89, D104): the card's next revision, the same
+   * as the last but for the fact or check in `reply`. It reopens the card for the reviewer.
+   */
+  replyToCard(id: string, reply: string, opts: { agent: string }): Card {
+    this.requireInit();
+    const latest = this.card(id);
+    if (!latest) throw new Error(`no card ${id}`);
+    if (this.revisions(id).some((r) => r.meta.reply !== undefined)) throw new Error(`${id} has had its reply: an agent replies once to a card (D89)`);
+    if (!this.canReply(id)) {
+      throw new Error(`${id} is ${this.status(id)}; only a card answered against your pick (the alternative, or the reviewer's own answer) takes a reply`);
+    }
+    const text = reply.trim();
+    if (!text) throw new ValidationError("the reply is empty: give the fact or the check, in a line");
+    const { type: _t, id: _i, revision: _r, source_agent: _a, source_branch: _b, source_worktree: _w, created: _c, ...draft } = latest.meta;
+    return this.writeRevision(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent);
+  }
+
+  private writeRevision(id: string, revision: number, draft: CardDraft & { reply?: string }, body: string, agent: string): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
     if (!this.deck(deck)) throw new Error(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
     const meta = parse(
@@ -631,9 +660,13 @@ export class Store {
     return out;
   }
 
-  /** The answer on `card` changed after an earlier verdict resolved it (D81). */
+  /**
+   * The answer on `card` changed after an earlier verdict resolved it (D81). A reply (D104) is the same question
+   * asked again, so the answer it replied to counts as earlier.
+   */
   private answerChange(card: Card): Brief | undefined {
-    const vs = this.verdicts(card.meta.id).filter((v) => v.revision === card.meta.revision);
+    const asked = (r: number) => r === card.meta.revision || (card.meta.reply !== undefined && r === card.meta.revision - 1);
+    const vs = this.verdicts(card.meta.id).filter((v) => asked(v.revision));
     const last = vs.at(-1);
     const answerOf = (v: Verdict) => (v.response === "accept" ? card.meta.proposal : v.response === "alternative" || v.response === "correction" ? v.choice : undefined);
     const earlier = vs.slice(0, -1).reverse().find((v) => answerOf(v) !== undefined);

@@ -107,6 +107,8 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .facet.unverified b { background: #8c5a0b; color: #fff; }
 .facet.acted { background: #e2eee5; }
 .facet.acted b { background: #2f7448; color: #fff; }
+.facet.reply { margin-top: 4px; background: #e7e4f3; }
+.facet.reply b { background: var(--right); color: #fff; }
 
 /* the two options are the buttons; leaning lights one (--pl, --pr) */
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

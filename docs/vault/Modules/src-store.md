@@ -21,6 +21,7 @@ tags: [baesian, module]
   - **The filing check:** `Store.matches` returns open cards and resolved decisions with the same canonical topic, or a title similar enough (`SIMILAR_TITLE`). Any match raises `PossibleDuplicate` unless the caller forces it.
   - **Hard by default:** a draft without a `level` whose facts include one of `HARD_BY_DEFAULT` becomes `hard`.
 - **`Store.reviseCard`** writes the next revision, and only for a card whose status is `returned`.
+- **`Store.replyToCard`** writes the agent's one reply (D89, D104): the next revision, a copy of the last plus `reply`. It's allowed only when `Store.canReply` says so: the latest answer went against the pick (`alternative` or `correction`), and no revision has had a reply. The reply reopens the card. The D81 brief counts the answer the reply was to as the earlier one.
 - **`Store.attach`** records an `Attachment`, and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
 - **`Store.withdraw`** writes the card's single `Withdrawal`.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.

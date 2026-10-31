@@ -105,6 +105,11 @@ export const CardMeta = z.strictObject({
   depends_on: z.array(CardId).default([]),
   supersedes: CardId.optional(),
   conflict_of: z.array(CardId).optional(),
+  /**
+   * The agent's one reply to an answer that went against its pick (D89, D104): a fact the reviewer lacked, or a
+   * check that would settle it. The revision is otherwise the one before it. Only `baesian reply` sets it.
+   */
+  reply: Text.optional(),
   caught_at: CaughtAt.optional(),
   confidence: z.number().min(0).max(1).optional(),
   domain: z.array(z.string().min(1)).default([]),
@@ -125,6 +130,7 @@ export const CardDraft = CardMeta.omit({
   source_branch: true,
   source_worktree: true,
   created: true,
+  reply: true,
 }).extend({
   type: z.literal("card").optional(),
   deck: DeckId.optional(),

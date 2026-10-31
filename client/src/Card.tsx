@@ -3,7 +3,7 @@ import type { ApiCard } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
 import { Mark } from "./Mark";
-import { RARITY, type Rarity, type WaitState } from "./model";
+import { RARITY, type Rarity, type WaitState, replyOf } from "./model";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
 // Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys.
@@ -106,7 +106,21 @@ function Crux({ card }: { card: ApiCard }) {
         <span className="lbl">{m.crux_preference ? "It turns on what you value" : "It turns on"}</span> {m.crux}
       </p>
       {m.crux_fact && <p className="fact">{m.crux_fact}</p>}
+      <Reply card={card} />
     </div>
+  );
+}
+
+/** The agent's one reply to your answer against its pick (D89, D104): the card is back, with a fact or a check. */
+function Reply({ card }: { card: ApiCard }) {
+  const r = replyOf(card);
+  if (!r) return null;
+  return (
+    <p className="facet reply">
+      <b>{card.meta.source_agent} replied</b>
+      {r.to ? <>You chose “{r.to}”. </> : null}
+      {r.reply}
+    </p>
   );
 }
 
@@ -239,7 +253,11 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
       {!same && (
         <label className="why-line">
           <span className="lbl">
-            Why? <span className="soft">Optional. It goes to {m.source_agent} with your answer.</span>
+            Why?{" "}
+            <span className="soft">
+              Optional. It goes to {m.source_agent} with your answer
+              {card.replied ? "." : `, and ${m.source_agent} may reply once, with a new fact or a check.`}
+            </span>
           </span>
           <input
             type="text"

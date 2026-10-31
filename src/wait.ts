@@ -28,7 +28,8 @@ export const WAIT_EXIT = {
 } as const;
 
 export type WaitOutcome =
-  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[] }
+  /** `canReply`: the answer went against the agent's pick, and it hasn't replied yet (D89, D104). */
+  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[]; canReply: boolean }
   | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[] }
   | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean }
   /** This run is over, but the wait isn't: the agent runs `baesian wait` again (D101). */
@@ -79,7 +80,7 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
         .verdicts(id)
         .filter((v) => v.revision === latest.meta.revision)
         .at(-1);
-      if (status === "resolved") return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id) };
+      if (status === "resolved") return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id) };
       if (status !== "open" && status !== "rerouted") {
         return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id) };
       }
@@ -143,6 +144,13 @@ export function describeBrief(b: Brief): string[] {
   return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits];
 }
 
+/** What an agent is told when an answer went against its pick and it may still reply (D89, D104). */
+export const replyHint = (id: string) => [
+  `It went against your pick. If you hold a fact the reviewer lacked, or a check that would settle it, you may reply once:`,
+  `  baesian reply ${id} "<the fact or check>"`,
+  "Not your pick again. Until they answer again, proceed with their decision.",
+];
+
 export function describeOutcome(o: WaitOutcome): string[] {
   const comment = (v: Verdict | undefined) => (v?.comment ? [`  reviewer: ${v.comment}`] : []);
   if (o.kind === "again") {
@@ -152,7 +160,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
   const briefs = o.kind === "no-verdict" ? [] : o.briefs.flatMap(describeBrief);
   switch (o.kind) {
     case "resolved":
-      return [`${o.id} resolved: ${o.decision}`, ...comment(o.verdict), ...briefs, "Proceed with that decision."];
+      return [`${o.id} resolved: ${o.decision}`, ...comment(o.verdict), ...briefs, "Proceed with that decision.", ...(o.canReply ? replyHint(o.id) : [])];
     case "answered":
       if (o.status === "returned" && o.briefs.some((b) => b.kind === "parent-decided-otherwise")) {
         return [`${o.id} returned: what it builds on was decided the other way.`, ...briefs];

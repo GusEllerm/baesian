@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
-import { areaOf, byId, liveDependents, parked, queue, rarityOf, relationsOf, sidesFor, stakesLine, waitState } from "./model";
+import { areaOf, byId, liveDependents, parked, queue, rarityOf, relationsOf, replyOf, sidesFor, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
 
@@ -22,7 +22,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
       source_agent: "claude-code", source_branch: "main", source_worktree: "/repo", created: at(n),
       ...over,
     },
-    body: "", revisions: 1, status: "open", canonicalTopic: topic, verdicts: [], dependents: [], briefs: [], waiting: [], fallbacks: [], attachments: 0,
+    body: "", revisions: 1, replied: false, status: "open", canonicalTopic: topic, verdicts: [], dependents: [], briefs: [], waiting: [], fallbacks: [], attachments: 0,
     ...rest,
   };
 }
@@ -158,5 +158,14 @@ describe("sides (D86)", () => {
 describe("areas", () => {
   it("are the first segment of the canonical topic", () => {
     expect(areaOf(card({ topic: "storage/run-metadata" }))).toBe("storage");
+  });
+});
+
+describe("the agent's reply (D89, D104)", () => {
+  it("is on the revision that carries it, with the answer it replied to", () => {
+    const v = (revision: number, response: string, choice?: string) => ({ card: "B-00001", revision, response, ...(choice ? { choice } : {}), reviewer: "gus", client: "web", at: at(revision) });
+    const verdicts = [v(1, "question"), v(1, "alternative", "Option B"), v(2, "alternative", "Option C")] as unknown as ApiCard["verdicts"];
+    expect(replyOf(card({ revision: 2, reply: "Only CI writes runs." }, { verdicts }))).toEqual({ reply: "Only CI writes runs.", to: "Option B" });
+    expect(replyOf(card({}, { verdicts }))).toBeUndefined();
   });
 });

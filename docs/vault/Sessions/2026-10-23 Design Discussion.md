@@ -342,6 +342,11 @@ The user judged the plan ready for development.
   - **Restored from round 5:** the plain undo toast with its timer, the compact reveal, the summary's dot, the short-screen rule, the armed state, and the two-finger swipe.
   - **Found, for the user:** D89's one reply isn't in `AGENTS.md`, so the client doesn't promise it.
   - **Tests:** 196 tests and 32 browser tests pass, across three runs.
+- **5f committed** (`a7f7d1b`).
+- **D104, decided and built.** The user asked for D89's open question as a decision card. Checking first, the agent found the reply had no route at all: the store only let an agent revise a returned card, and choosing against the pick resolves it. The agent recommended waiting for dogfooding. The user chose to build it now.
+  - **Built:** `baesian reply` files the reply as the card's next revision, with a new `reply` field. It's allowed once per card, only after an answer against the pick, and it reopens the card. A changed answer after it brings D81's brief.
+  - **Agents are told** by `AGENTS.md` (this repo's is refreshed), `wait` and `inbox`. The client shows the reply under the crux, and promises it while it's still possible.
+  - **Tests:** 9 store and CLI tests, a client unit test, and a browser test. 206 tests and 33 browser tests pass.
 
 ## Next
 

@@ -24,6 +24,16 @@ export const areaOf = (card: ApiCard): string => card.canonicalTopic.split("/")[
 
 export const byId = (state: ApiState): Map<string, ApiCard> => new Map(state.cards.map((c) => [c.meta.id, c]));
 
+/**
+ * The agent's reply (D89, D104), on the revision that carries it: the fact or check, and the answer it replied to,
+ * which went against its pick.
+ */
+export function replyOf(card: ApiCard): { reply: string; to: string | undefined } | undefined {
+  if (card.meta.reply === undefined) return undefined;
+  const to = card.verdicts.filter((v) => v.revision === card.meta.revision - 1 && (v.response === "alternative" || v.response === "correction")).at(-1);
+  return { reply: card.meta.reply, to: to?.choice };
+}
+
 /** A card's identity for the client: a revised card is a new question, so it comes back. */
 export const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
 

@@ -122,6 +122,7 @@ export function snapshot(store: Store, extra: { version: number; started: string
           meta: c.meta,
           body: c.body,
           revisions: store.revisions(id).length,
+          replied: store.revisions(id).some((r) => r.meta.reply !== undefined),
           status: store.status(id),
           ...(decision !== undefined ? { decision } : {}),
           canonicalTopic: store.canonicalTopic(c.meta.topic),

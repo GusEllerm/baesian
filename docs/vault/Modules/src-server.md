@@ -32,7 +32,7 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
 - **`GET /api/state`** returns `snapshot`, an `ApiState`.
   - **The project:** its name and branch, and the server's pid, start time, clock and watch mode.
   - **Presence, decks and rules.**
-  - **One `ApiCard` per card:** the latest revision and its body, the number of revisions, status, decision, canonical topic, verdicts, dependents, briefs, waiting markers, fallbacks and the number of attachments.
+  - **One `ApiCard` per card:** the latest revision and its body, the number of revisions, whether its agent has had its reply (`replied`, D104), status, decision, canonical topic, verdicts, dependents, briefs, waiting markers, fallbacks and the number of attachments.
   - **`problems`:** files that couldn't be read.
 - **`GET /api/events`** is a Server-Sent Events stream. It sends `changed` with the new `version` whenever the live layer changes, gathering changes over 100 ms, and a keep-alive comment every 15 seconds.
 - **`POST /api/verdicts`** takes the fields of an `ApiVerdictInput` and nothing else. It records through `Store.addVerdict`, with `reviewer` from `reviewerName` (git's `user.name`) and `client: "web"`. The responses:

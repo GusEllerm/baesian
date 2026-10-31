@@ -14,7 +14,7 @@ import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
-import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, waitForVerdict } from "./wait.js";
+import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
@@ -244,6 +244,22 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     });
 
   program
+    .command("reply")
+    .description("reply once to an answer that went against your pick: a fact the reviewer lacked, or a check (D89)")
+    .argument("<id>", "the card")
+    .argument("<text>", "the fact or the check, in a line; not your pick again")
+    .action((id: string, text: string) => {
+      const card = store().replyToCard(id, text, { agent: agentName(program.opts().agent) });
+      notify(card);
+      io.out(`filed ${id} r${card.meta.revision}: your reply goes to the reviewer, and the card is open again`);
+      io.out(
+        card.meta.level === "hard"
+          ? `  it's hard: don't commit work that cites it until \`baesian wait ${id}\` exits 0`
+          : "  until they answer again, proceed with their decision; `baesian inbox` brings the new answer",
+      );
+    });
+
+  program
     .command("attach")
     .description("wait on an existing card instead of filing a duplicate")
     .argument("<id>", "the card")
@@ -327,13 +343,19 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--peek", "don't mark them as seen")
     .option("--json", "print as JSON")
     .action((opts: { peek?: boolean; json?: boolean }) => {
-      const items = store().inbox({ advance: !opts.peek });
+      const s = store();
+      const items = s.inbox({ advance: !opts.peek });
       if (opts.json) return json(items);
       if (!items.length) return io.out("no new verdicts");
       for (const item of items) {
         // A dependent returned by its parent's verdict (D80) is listed under its own ID.
         io.out(item.verdict.card === item.card ? verdictLine(item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
         if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
+        // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
+        const latest = s.card(item.card);
+        if (item.verdict.card === item.card && latest && item.verdict.revision === latest.meta.revision && s.canReply(item.card)) {
+          for (const line of replyHint(item.card)) io.out(`  ${line}`);
+        }
       }
     });
 

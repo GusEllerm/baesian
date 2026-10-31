@@ -82,7 +82,7 @@ So every element below has a standing:
 | Change your answer | A later `Verdict` on the same revision wins in `Store.status`, so the store already supports it. The agent may already have acted (hard part 3) | Reliable in the store. The protocol is new: **a rework brief (D81)** |
 | Which client wrote a verdict | **New** field on `Verdict` (D62) | Reliable |
 | Disagreeing: an optional one-line reason, and switching to the agent's pick after the reveal (D87, D88) | The reason is the `Verdict` comment. **New:** the verdict records the option chosen before the reveal (P12) | Reliable |
-| The agent's one reply to a disagreement (D89) | A revision of the card that adds a fact or a check | Declared |
+| The agent's one reply to a disagreement (D89) | **Built (D104):** a revision carrying `reply`, filed by `baesian reply` | Declared |
 
 ## Practice cards and calibration
 

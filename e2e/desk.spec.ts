@@ -169,6 +169,26 @@ test("the card in front of you stays there when the queue's order changes (5f)",
   await expect(page.locator(CARD)).toHaveAttribute("data-mode", "reveal");
 });
 
+test("an answer against the pick may get one reply, and the card comes back with it (D89, D104)", async ({ page }) => {
+  let id = "";
+  const { store } = await open(page, (s) => {
+    id = file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+  });
+  await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
+  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer, and claude-code may reply once, with a new fact or a check.");
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  await page.clock.fastForward(5100);
+  await expect.poll(() => store.status(id)).toBe("resolved");
+
+  store.replyToCard(id, "Only the CI runner writes runs.", { agent: "claude-code" });
+  const reply = page.locator(`${CARD} .facet.reply`);
+  await expect(reply).toHaveText("claude-code repliedYou chose “Postgres”. Only the CI runner writes runs.");
+  // It has had its reply: answering against its pick again promises nothing more.
+  await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
+  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer.");
+  await expect(page.locator(CARD)).not.toContainText("may reply once");
+});
+
 test("a card that arrives is tagged new until it's been on the desk", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "Card a", question: "Question a?", topic: "alpha/a" });

@@ -48,7 +48,9 @@ line.
 - `level: provisional` (the default): carry on with your proposal. `blocking`: run `baesian wait <id>`
   before building on it. `hard` (the default for publishing, security, money and data loss): never
   proceed without a verdict.
-- `baesian wait <id>` exits 0 when resolved (use the decision); 4 when answered otherwise (returned:
+- `baesian wait <id>` exits 0 when resolved (use the decision. If it went against your pick and you hold
+  a fact the reviewer lacked, or a check that would settle it, you may reply once:
+  `baesian reply <id> "<the fact or check>"`. Not your pick again); 4 when answered otherwise (returned:
   read the comment, then `baesian revise <id>` or `baesian withdraw <id>`); 5 with no verdict yet
   (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop); 7 while
   the reviewer is still there (run `baesian wait <id>` again). Each run lasts at most 100 seconds.

@@ -23,6 +23,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `template` | prints a card draft. Unfilled, it fails validation |
 | `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards, and prints notes on long fields |
 | `revise <id> [path]` | the next revision of a returned card |
+| `reply <id> <text>` | the agent's one reply to an answer against its pick: a fact or a check (D89, D104). `wait` and `inbox` offer it when it's open |
 | `attach <id>` | waits on an existing card instead of filing a duplicate |
 | `withdraw <id> --reason` | withdraws your own card |
 | `deck <id> --title [--from] [--note]` | creates a deck; its body is the briefing |
