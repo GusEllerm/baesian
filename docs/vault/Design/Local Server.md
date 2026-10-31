@@ -4,7 +4,7 @@ status: active
 authority: specifies
 summary: "M4 step 4: the local server the client talks to. The command (`baesian serve`), its security (D62), its API (a snapshot of the live layer, change notifications over Server-Sent Events, verdicts and presence), watching (D84), and the server file. Its two open points were decided as D96 (the API) and D97 (the token and port)."
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-31
 reviewed: 2026-10-24
 tags: [baesian, design, server, m4]
 ---
@@ -36,6 +36,7 @@ Provenance: drafted by the agent on 2026-10-24 for M4 step 4 (D91), from earlier
 - **Bound to 127.0.0.1 only.**
 - **The token** is 32 random bytes. `serve` opens `http://127.0.0.1:<port>/?token=<token>`.
   - The first request trades the token for a cookie (`HttpOnly`, `SameSite=Strict`), and redirects to `/`, so the token leaves the address bar and the history.
+  - **The cookie is named for the port** (`baesian-<port>`). Browsers keep cookies apart by host but not by port, so with one name, two projects served at once overwrote each other's sign-in, and each sent its token to the other. Found in M4 step 5e; a browser test covers it.
   - Scripts and tests can send `Authorization: Bearer <token>` instead.
 - **Every request's Host must be `127.0.0.1:<port>` or `localhost:<port>`.** That stops DNS rebinding.
 - **No CORS headers,** so no other site can read a response.

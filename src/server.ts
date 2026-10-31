@@ -45,7 +45,11 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-const COOKIE = "baesian";
+/**
+ * The sign-in cookie, named for the server's port. Browsers keep cookies apart by host but not by port, so two
+ * projects served at once would otherwise overwrite each other's sign-in, and each would send its token to the other.
+ */
+const cookieName = (port: number) => `baesian-${port}`;
 const MAX_BODY = 64 * 1024;
 /** The live layer's own bookkeeping, which never changes what the client shows. */
 const IGNORED = (rel: string) => rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel.startsWith(`cursors${sep}`) || rel.startsWith("cursors/");
@@ -325,11 +329,11 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
       const offered = url.searchParams.get("token");
       if (url.pathname === "/" && offered !== null) {
         if (!sameSecret(offered, token)) return send(res, 403, page("Baesian", "That link has expired. Run <code>baesian serve</code> for a new one."), "text/html");
-        res.writeHead(302, { ...HEADERS, location: "/", "set-cookie": `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/` });
+        res.writeHead(302, { ...HEADERS, location: "/", "set-cookie": `${cookieName(port)}=${token}; HttpOnly; SameSite=Strict; Path=/` });
         return res.end();
       }
       const bearer = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : undefined;
-      if (!sameSecret(cookieValue(req, COOKIE), token) && !sameSecret(bearer, token)) {
+      if (!sameSecret(cookieValue(req, cookieName(port)), token) && !sameSecret(bearer, token)) {
         if (url.pathname.startsWith("/api/")) return send(res, 401, { error: "not signed in: open the address `baesian serve` printed" });
         return send(res, 401, page("Baesian", "Open the address <code>baesian serve</code> printed. It signs this browser in."), "text/html");
       }

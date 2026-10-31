@@ -24,6 +24,9 @@ export const areaOf = (card: ApiCard): string => card.canonicalTopic.split("/")[
 
 export const byId = (state: ApiState): Map<string, ApiCard> => new Map(state.cards.map((c) => [c.meta.id, c]));
 
+/** A card's identity for the client: a revised card is a new question, so it comes back. */
+export const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
+
 /** Cards that still rest on this one: withdrawn and superseded dependents no longer do. */
 export function liveDependents(card: ApiCard, cards: Map<string, ApiCard>): ApiCard[] {
   return card.dependents.flatMap((id) => cards.get(id) ?? []).filter((d) => d.status !== "withdrawn" && d.status !== "superseded");

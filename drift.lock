@@ -28,7 +28,7 @@ sig = "179f511f51d3ece3"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "0623a24582f59f45"
+sig = "16852475f4311845"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -37,8 +37,13 @@ sig = "0d13d5c46a29a068"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Panels.tsx"
+sig = "bed8c6b05c10402d"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
-sig = "14b9fd9c49ead97c"
+sig = "56b9a163d8bf8735"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -47,8 +52,33 @@ sig = "b1706cf7d6a5cb8c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/calibration.ts"
+sig = "44a99a00c73cd265"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/calibration.ts#recap"
+sig = "f580a96d8af08667"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/live.ts#usePresence"
+sig = "38356e23dd280553"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/local.ts#addSpent"
+sig = "b57ce241bb0fb3a7"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/local.ts#useSeen"
+sig = "1f8c7c02469d986e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/model.ts"
-sig = "fff59c29bf52ba92"
+sig = "8dc267210d8f3e82"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -97,6 +127,16 @@ sig = "38e27287cb37ade4"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/notify.ts"
+sig = "f09f2ea133d765dc"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/notify.ts#useNotifications"
+sig = "cc49354e8d220f33"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts"
 sig = "bf69ae21dfce66fd"
 
@@ -137,6 +177,11 @@ sig = "3de33eb997421454"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round4/app.js#recap"
+sig = "64415c97c8e7fb8c"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "design/explorations/round4/app.js#sidesFor"
 sig = "71a8a4771a3249ee"
 
@@ -159,6 +204,11 @@ sig = "17b18c4616ffbc07"
 doc = "docs/vault/Design/Client Build.md"
 target = "design/explorations/round5/app.js#queue"
 sig = "3de33eb997421454"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "design/explorations/round5/app.js#recap"
+sig = "96e40a2e78f1163d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -452,6 +502,11 @@ sig = "0406b42d0614950c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
+target = "client/src/notify.ts"
+sig = "f09f2ea133d765dc"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
 target = "design/explorations/round4/map.js#show"
 sig = "77f21c726a34fd5c"
 
@@ -573,12 +628,12 @@ sig = "89ba8850dc646aa5"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts"
-sig = "441ea3b25561202c"
+sig = "4387baea8ab256fe"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts#startServer"
-sig = "7fe7ac33a96e961a"
+sig = "7e2bf9854733268c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -633,12 +688,12 @@ sig = "4c9bc53cfc129d3d"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "0623a24582f59f45"
+sig = "16852475f4311845"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Path.tsx"
-sig = "14b9fd9c49ead97c"
+sig = "56b9a163d8bf8735"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -683,12 +738,12 @@ sig = "a587008f80c8114c"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "0623a24582f59f45"
+sig = "16852475f4311845"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "14b9fd9c49ead97c"
+sig = "56b9a163d8bf8735"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -1008,12 +1063,12 @@ sig = "74e1d959a54ecf6f"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "0623a24582f59f45"
+sig = "16852475f4311845"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Path.tsx"
-sig = "14b9fd9c49ead97c"
+sig = "56b9a163d8bf8735"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -1113,7 +1168,7 @@ sig = "f245dca9d8e4fb3b"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#startServer"
-sig = "7fe7ac33a96e961a"
+sig = "7e2bf9854733268c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

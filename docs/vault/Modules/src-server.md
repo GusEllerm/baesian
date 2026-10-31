@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/server.ts and src/api.ts: the local server the client talks to (M4 step 4). How it signs a browser in (D62, D97), its API (a snapshot plus change events, D96), how it watches the live layer (D84), how it reads the live layer without failing on a bad file, and the server file."
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-31
 reviewed: 2026-10-24
 tags: [baesian, module]
 ---
@@ -17,6 +17,7 @@ The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127
 
 - **A new token on every start:** 32 random bytes.
 - **The address `baesian serve` opens** carries the token. The first request trades it for a cookie (`HttpOnly`, `SameSite=Strict`), and redirects to `/`.
+- **The cookie is named for the port,** so two projects served at once keep their own sign-in: browsers don't keep cookies apart by port.
 - **Scripts and tests** can send `Authorization: Bearer <token>` instead.
 - **Tokens are compared in constant time.**
 - **What's refused:**

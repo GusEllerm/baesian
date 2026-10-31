@@ -65,7 +65,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
   - the 5-second undo, held in the client and sent when it closes or the page goes (D82).
 - **Presence:** a heartbeat (`POST /api/presence`) every 30 seconds while the tab is open (D41).
 - **Notifications:** a browser notification when a blocking or hard card arrives (D40). Permission is asked on a click, never on load.
-- **What the client keeps itself,** in the browser's storage: time spent on each card, which cards you've already seen (for the "new" tag), and which reasoning you opened.
+- **What the client keeps itself,** in the browser's storage: time spent on each card, which cards you've already seen (for the "new" tag), and whether to notify you. A browser keeps storage per address, and the address includes the port, which changes on every `serve` (D97). So all of it lasts only while one server runs, and notification permission is asked again after a restart. That's open with the user (see 5e below).
 - **Not in step 5: practice cards (D83).** They're built from resolved cards, and there are none yet. They come after dogfooding has produced some, with a small design of their own.
 
 ## How it's tested
@@ -131,7 +131,18 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
    - **Fixed along the way:**
      - the path's `.row` rules reached the card's own button rows, as they had in round 5; they're now scoped to the path;
      - a card that's both related and next was listed twice; it now shows once, in Next, with its relation.
-5. **5e, the rest:** presence, notifications, the calibration panel, keyboard help, and the empty state.
+5. **5e, the rest (done, 2026-10-31).**
+   - **Presence** (`usePresence`): a beat when the page opens, every 30 seconds, and at once when you come back to the tab (D41).
+   - **Notifications** (`useNotifications`, in `client/src/notify.ts`): off until you turn them on, from the menu or the empty desk. That click asks the browser's permission, never the page load (D40). A blocking or hard card that arrives while you're elsewhere (the tab hidden, or the window not focused) is notified: "claude-code is waiting for you", with the card's question. Clicking it opens the card. Cards already there when the page opens aren't news; a revised card is.
+   - **The menu,** "More" in the header: your calibration, keyboard shortcuts, and notifications (on, off, or blocked by the browser). While it's open, the arrow keys move through it, not the card.
+   - **The panels** (`client/src/Panels.tsx`), ported from round 5:
+     - **keyboard shortcuts,** also opened with `?`;
+     - **your calibration** (`client/src/calibration.ts`): the median time on a card by its stakes, from a log kept in this browser (`addSpent`), and the decisions you settled in the client that were later superseded, by name, worded as "superseded", never "wrong" (Client Data Contract). Practice cards join it with D83. Round 5's "both directions" line is dropped: its "overturned decisions that held up" has no count behind it yet.
+   - **The empty desk:** "All caught up.", a one-sentence recap of the session (`recap`), the cards you put aside (passed on as outside your expertise, or deferred), which can be answered after all, and the offer of notifications.
+   - **The "new" tag** on a card in Next until it's been on the desk (`useSeen`). The first time a browser opens a project, everything already there counts as seen.
+   - **Tests:** 5 more unit tests, and 7 browser tests (`e2e/desk.spec.ts`, and one in `client.spec.ts`). Notifications are tested through a stand-in, since Playwright's Chromium can't show real ones. 193 unit tests and 28 browser tests pass.
+   - **Found and fixed:** the sign-in cookie had one name for every server, and browsers don't keep cookies apart by port. Two projects served at once signed each other out, and each sent its token to the other. It's now named for the port ([[Local Server]]).
+   - **Not ported:** round 5's two-finger swipe. The card can be dragged.
 6. **5f, a quality pass:** the layout check, and a side-by-side with round 5's screenshots.
 
 ## Decided by the user (2026-10-31)

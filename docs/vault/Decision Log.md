@@ -5,7 +5,7 @@ authority: log
 livedocs: snapshot
 summary: "Every Baesian decision, with who made it: the user's decisions, agent proposals awaiting the user, and agent two-way-door choices the user can overturn."
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-31
 reviewed: 2026-10-23
 tags: [baesian, decisions]
 ---
@@ -134,6 +134,14 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-10-31 `[agent decision]` M4 step 5e's details ([[Client Build]]):
+  - **Notifications are off until you turn them on.** Only then is the browser asked. They're shown only while you're elsewhere (the tab hidden or the window unfocused), since a card that arrives in front of you needs no notification.
+  - **If the browser blocks notifications,** the menu says so; the empty desk doesn't keep repeating it.
+  - **A card you put aside can be answered after all,** from the empty desk. The new verdict wins, as any later verdict does.
+  - **Your calibration shows only what has a source:** time spent, from this browser's log, and decisions later superseded. The practice-card row waits for D83, and round 5's "both directions" line waits for a count behind it.
+  - **The "new" tag means "since you last looked":** the first time a browser opens a project, everything already there counts as seen.
+  - **The sign-in cookie is named for the server's port,** a bug fix: with one name, two projects served at once signed each other out, and each sent its token to the other.
 
 - 2026-10-31 `[agent decision]` M4 step 5d's details ([[Client Build]]):
   - **A related card that's also next shows once,** in Next, with its relation on the row, as an earlier answer carries its link.

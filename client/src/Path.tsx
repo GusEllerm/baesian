@@ -24,6 +24,8 @@ export interface NextStep {
   name: string;
   rarity: Rarity;
   stopped: boolean;
+  /** Not on the desk yet since it arrived: tagged "new". */
+  fresh: boolean;
   /** How the current card relates to it, when it does: shown on its row, not listed twice. */
   link?: Relation;
 }
@@ -168,7 +170,10 @@ export function Path(p: PathProps) {
           {p.upcoming.map((n) => (
             <button type="button" key={n.id} className="row next" data-id={n.id} title={`${n.name}: to answer. Click to answer it.`} onClick={() => p.onGoTo(n.id)}>
               <span className="lbl">
-                <span className="nm">{n.name}</span>
+                <span className="nm">
+                  {n.fresh && <span className="new-tag">new</span>}
+                  {n.name}
+                </span>
                 {n.link && <span className={`tag link${n.link.kind === "conflict" || n.link.kind === "rule" ? " c" : ""}`}>{linkWords(n.link)}</span>}
               </span>
               <span className="node">

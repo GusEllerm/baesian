@@ -323,6 +323,13 @@ The user judged the plan ready for development.
   - **D101:** `baesian wait` runs in 100-second slices, and exits 7 ("run it again") while the reviewer is there. Its 9-minute budget counts across runs, through the waiting marker.
   - **D102:** an agent is named by `--agent`, then `$BAESIAN_AGENT`, then the harness's own variables (Claude Code's `AI_AGENT`), then "agent".
   - **This repo's `AGENTS.md` is refreshed.** 188 tests and 21 browser tests pass.
+- **D101 and D102 committed** (`3423f89`), with the user's go-ahead.
+- **5e, the rest of the client.**
+  - **What's built:** presence, notifications, the "More" menu with the calibration and keyboard panels, the empty desk (recap, put-aside cards, the offer of notifications), and the "new" tag.
+  - **Tests:** 193 unit tests and 28 browser tests pass. The agent broke two of the new checks on purpose to see them fail.
+  - **The screenshots led to three fixes:** a "1.4 s" that wrapped its "s", time spent reworded as one line per stakes level, and clearer put-aside rows.
+  - **A bug found on the way and fixed:** the sign-in cookie had one name for every server. Browsers don't keep cookies apart by port, so two projects served at once signed each other out, and each sent its token to the other. A browser test reproduced it before the fix.
+  - **A question for the user:** each `serve` takes a new port (D97), and a browser keeps storage and notification permission per address. So everything the client keeps itself is lost on a restart, and notifications have to be allowed again. The agent put the decision to them as a card.
 
 ## Next
 

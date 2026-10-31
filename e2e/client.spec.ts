@@ -68,3 +68,24 @@ test("asks nothing of any other server, and breaks none of its own rules", async
   expect(elsewhere).toEqual([]);
   expect(problems).toEqual([]);
 });
+
+test("two projects served at once each keep their own sign-in", async ({ context }) => {
+  // Browsers don't keep cookies apart by port, so two servers on this machine share one cookie jar.
+  const { server: first } = await serveWithOneCard();
+  const other = repo();
+  other.store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files" }), BODY, AGENT);
+  const second = await startServer(other.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  try {
+    const a = await context.newPage();
+    await a.goto(first.url);
+    await expect(a.getByRole("heading", { name: "Which store should hold run metadata?" })).toBeVisible();
+    const b = await context.newPage();
+    await b.goto(second.url);
+    await expect(b.getByRole("heading", { name: "Where should run files go?" })).toBeVisible();
+    // Signing in to the second didn't sign the first out.
+    expect((await a.request.get(`http://127.0.0.1:${first.port}/api/state`)).status()).toBe(200);
+    expect((await b.request.get(`http://127.0.0.1:${second.port}/api/state`)).status()).toBe(200);
+  } finally {
+    await second.close();
+  }
+});

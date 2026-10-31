@@ -3,15 +3,22 @@ import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { ApiCard, ApiState } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
+import { laterSuperseded, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
-import { type Rarity, areaOf, byId, liveDependents, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { usePresence } from "./live";
+import { addSpent, loadSpent, useSeen } from "./local";
+import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
+import { CalibrationPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
 import { Path } from "./Path";
 
-// M4 steps 5c and 5d: the desk, where you answer. It holds what you've answered this session, the mode the card is
+// M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
 // in, the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
 // (D82); every card goes through the reveal (D86). Beside the card, the path (Path.tsx); under it, the pile of the
-// rest of its area. Round 5's behaviour, ported: design/explorations/round5/app.js.
+// rest of its area. In the header, the menu and its panels (Panels.tsx). While it's open, it says you're there
+// (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
+// design/explorations/round5/app.js.
 
 const THRESH_X = 150, THRESH_Y = 110;
 const NEXT_MAX = 3;
@@ -41,9 +48,6 @@ interface Fly {
   from: { x: number; y: number };
   text: string;
 }
-
-/** A card's identity for this session: a revised card is a new question, so it comes back. */
-const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
 
 /** Your answer, as the path says it. */
 function pathState(card: ApiCard, answer: Answer): string {
@@ -77,12 +81,19 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const [fly, setFly] = useState<Fly>();
   const firstChoice = useRef(new Map<string, OptionKind>());
   const exitDir = useRef<Leave>("fade");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [panel, setPanel] = useState<PanelKind>();
+  const project = state.project.name;
+  usePresence();
+  const seen = useSeen(state);
 
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
+  const aside = parked(state).filter((c) => !answered.has(keyOf(c)));
   const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
-  const current = reviewCard ?? (pick ? ordered.find((c) => c.meta.id === pick) : undefined) ?? ordered[0];
+  // A card you put aside can be answered after all: it's picked from the empty desk.
+  const current = reviewCard ?? (pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick)) : undefined) ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
@@ -102,6 +113,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     setHover(undefined);
     setShownAt(performance.now());
   }
+  // A card counts as seen once it's been on the desk: it loses its "new" tag.
+  useEffect(() => {
+    if (key) seen.mark(key);
+  }, [key, seen.mark]);
   const dwell = r && mode.kind !== "review" ? READ_FIRST_MS[r.rarity] : 0;
   const [, setFrame] = useState(0);
   const readLeft = Math.max(0, dwell - (performance.now() - shownAt));
@@ -143,6 +158,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     const v = verdictFor(current, answer);
     if ("problem" in v) return setProblem(v.problem);
     const words = describeAnswer(current, answer);
+    // How long the card was in front of you, for your calibration: first answers only, not changes.
+    if (!reviewing) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
     exitDir.current = answer.kind === "choose" ? sideOf(answer.option) : answer.kind === "write" ? "up" : "down";
     // Your choice flies from the card into the path (round 5's one sequenced movement).
     if (answer.kind === "choose" && !reduced) {
@@ -233,6 +250,16 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     setPick(id);
   };
 
+  const notifications = useNotifications(state, goTo);
+  const toggleNotify = async () => {
+    const was = notifications.status;
+    const now = await notifications.toggle();
+    if (now === "on") say("Notifications are on. Keep this page open to get them.");
+    else if (now === "blocked") say("Your browser blocks notifications for this page. Its site settings can allow them.");
+    else if (was === "on") say("Notifications are off.");
+  };
+  const showPanel = (kind: PanelKind) => setPanel((p) => (p === kind ? undefined : kind));
+
   // A mythic card is held to confirm (D67): the bar fills over HOLD_MS; letting go early starts again.
   const holdStart = useRef<number>(undefined);
   const beginHold = () => {
@@ -259,16 +286,26 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   };
 
   // The keys, read through a ref so the listeners always see the latest state.
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity };
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
     const ARROWS: Record<string, Dir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
     const down = (e: KeyboardEvent) => {
       const h = handlers.current;
+      // The menu, while it's open, has the keys to itself.
+      if (h.menuOpen) {
+        if (e.key === "Escape") setMenuOpen(false);
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          moveInMenu(e.key === "ArrowDown" ? "down" : "up");
+        }
+        return;
+      }
       if (e.key === "Escape") {
-        if (h.mode.kind !== "live" || reviewingRef.current) h.back();
+        if (h.panel) setPanel(undefined);
+        else if (h.mode.kind !== "live" || reviewingRef.current) h.back();
         else if (keyHeld.current) {
           keyHeld.current = undefined;
           setLean(undefined);
@@ -278,6 +315,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       if (e.target instanceof Element && e.target.closest("input, textarea")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "z" || e.key === "Z") return h.undo();
+      if (e.key === "?") return setPanel((p) => (p === "keys" ? undefined : "keys"));
       if ((e.key === "j" || e.key === "k") && h.mode.kind === "live" && h.ordered.length) {
         const i = h.current ? h.ordered.indexOf(h.current) : -1;
         const next = h.ordered[(i + (e.key === "j" ? 1 : h.ordered.length - 1) + h.ordered.length) % h.ordered.length];
@@ -331,7 +369,14 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const ahead = current ? ordered.filter((c) => c.meta.id !== current.meta.id) : [];
   const nextUp = ahead.slice(0, NEXT_MAX).map((c) => {
     const link = relById.get(c.meta.id);
-    return { id: c.meta.id, name: c.meta.title, rarity: rarityOf(c, liveDependents(c, cards).length).rarity, stopped: waitState(c, now) === "waiting", ...(link ? { link } : {}) };
+    return {
+      id: c.meta.id,
+      name: c.meta.title,
+      rarity: rarityOf(c, liveDependents(c, cards).length).rarity,
+      stopped: waitState(c, now) === "waiting",
+      fresh: seen.isNew(keyOf(c)),
+      ...(link ? { link } : {}),
+    };
   });
   const leanKind = mode.kind === "live" ? (lean ? sides[lean] : hover ? sides[hover] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
 
@@ -351,7 +396,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         <p className="summary" aria-live="polite">
           {summary}
         </p>
+        <MoreMenu open={menuOpen} notify={notifications.status} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
+      {panel === "keys" && <KeysPanel onClose={() => setPanel(undefined)} />}
+      {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} onClose={() => setPanel(undefined)} />}
       <main className="desk">
         <Path
           trail={trail}
@@ -421,7 +469,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                 />
               ) : (
                 <motion.div key="empty" className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <p className="big">All caught up.</p>
+                  <EmptyDesk
+                    recap={recap([...answered.values()].map((a) => a.answer))}
+                    parked={aside}
+                    notify={notifications.status}
+                    onNotify={() => void toggleNotify()}
+                    onOpen={goTo}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

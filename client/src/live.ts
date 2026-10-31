@@ -42,3 +42,25 @@ export function useLiveState(): Live {
   }, []);
   return live;
 }
+
+/** How often the open client says the reviewer is there (D41). Three missed beats and they count as away. */
+export const PRESENCE_EVERY_MS = 30_000;
+
+/**
+ * The presence heartbeat (D41): while the page is open, and at once when you come back to it, so an agent's
+ * `baesian wait` knows someone may answer. A beat that fails is simply missed.
+ */
+export function usePresence() {
+  useEffect(() => {
+    const beat = () =>
+      void fetch("/api/presence", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
+    const back = () => document.visibilityState === "visible" && beat();
+    beat();
+    const t = setInterval(beat, PRESENCE_EVERY_MS);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, []);
+}
