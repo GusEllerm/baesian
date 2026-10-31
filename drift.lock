@@ -22,6 +22,26 @@ sig = "795cd7a903f0614c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Card.tsx"
+sig = "df7badee9f635cdd"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Desk.tsx"
+sig = "4b098cde15f8d5bc"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Mark.tsx"
+sig = "0d13d5c46a29a068"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/answer.ts"
+sig = "b1706cf7d6a5cb8c"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/model.ts"
 sig = "fff59c29bf52ba92"
 
@@ -69,6 +89,11 @@ sig = "8d84a5b6c05283d7"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/model.ts#waitState"
 sig = "38e27287cb37ade4"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/outbox.ts"
+sig = "bf69ae21dfce66fd"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"

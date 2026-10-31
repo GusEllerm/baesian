@@ -94,7 +94,28 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - each card's relations, with their effects (`relationsOf`);
      - each card's sides (`sidesFor`).
    - **The scaffold page now orders cards with it.** It shows the stakes line, and how many agents are waiting.
-3. **5c, the card and answering,** against the live server.
+3. **5c, the card and answering (done, 2026-10-31),** against the live server.
+   - **The card** (`client/src/Card.tsx`, with `Mark.tsx`) is drawn as round 5 draws it:
+     - the stakes line and rarity mark, and the agent's state: stopped, stopped waiting, or carried on (D90);
+     - the trigger, the question and the crux;
+     - two options;
+     - the facets, and the footer with its reading-time rule.
+   - **Every card goes through the reveal** (D86). On a disagreement it offers an optional reason and the switch (D87, D88). A mythic card is held to confirm (D67).
+   - **↑ writes:** a question, a correction or a rejection. **↓ can't judge:** more context, outside my expertise, or see it run (D85).
+   - **The desk** (`client/src/Desk.tsx`) holds:
+     - the queue for this session;
+     - the reading time (D91);
+     - keys (arrows, held to lean; Esc; Z; j and k);
+     - dragging, through Motion;
+     - the 5-second undo, in `client/src/outbox.ts`: the next answer, or the page closing, sends the waiting one (D82);
+     - the toast.
+   - **The mapping** from an answer to the API's verdict is `client/src/answer.ts`.
+   - **Tests:** 9 unit tests for the mapping and the outbox, and 12 browser tests ported from round 5's self-test. They cover the reveal, a disagreement and the switch, the reading time, undo, closing the page, the hold, writing, "see it run", a refused answer, the lean, the drag, and the layout as a card leaves. Playwright's clock skips the waits, with no test switch in the client.
+   - **Bugs the tests found, all fixed:**
+     - Motion's `popLayout` injects a `<style>` element, which the page's policy refuses, so a leaving card pushed the next one down. Leaving cards are now taken out of the flow by the stylesheet.
+     - A leaving card kept its old props, and could have answered again: it's now inert.
+     - Key listeners attached after the first paint, and the reset for a new card ran after it too. Both could miss or undo a key pressed at once.
+     - Moving between cards with j and k used the answer's sideways exit: it now fades.
 4. **5d, the path, the pile, the breadcrumbs, and their motion.**
 5. **5e, the rest:** presence, notifications, the calibration panel, keyboard help, and the empty state.
 6. **5f, a quality pass:** the layout check, and a side-by-side with round 5's screenshots.

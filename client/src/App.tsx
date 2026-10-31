@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
-import type { ApiCard, ApiState } from "../../src/api";
+import { Desk } from "./Desk";
 import { useLiveState } from "./live";
-import { byId, liveDependents, queue, serverNow, stakesLine, waitState } from "./model";
 
-// M4 step 5a: the scaffold. It signs in, reads the live layer, and shows the first card to answer. Round 5's
-// card, path and answering arrive in steps 5b to 5e (docs/vault/Design/Client Build.md).
+// The client (M4 step 5): it signs in, reads the live layer, and hands it to the desk, where you answer.
+// docs/vault/Design/Client Build.md.
 
 export function App() {
   const live = useLiveState();
@@ -23,18 +22,7 @@ export function App() {
       </Shell>
     );
   }
-  const now = serverNow(live.state, live.fetchedAt);
-  const toAnswer = queue(live.state, now);
-  const stopped = toAnswer.filter((c) => waitState(c, now) === "waiting").length;
-  const first = toAnswer[0];
-  const summary = toAnswer.length
-    ? `${toAnswer.length} to answer.${stopped ? ` ${stopped === 1 ? "An agent has" : `${stopped} agents have`} stopped for you.` : ""}`
-    : "Nothing to answer.";
-  return (
-    <Shell summary={summary}>
-      {first ? <CardFace card={first} state={live.state} /> : <p className="notice">All caught up.</p>}
-    </Shell>
-  );
+  return <Desk state={live.state} fetchedAt={live.fetchedAt} />;
 }
 
 function Shell({ summary, children }: { summary: string; children?: ReactNode }) {
@@ -46,21 +34,5 @@ function Shell({ summary, children }: { summary: string; children?: ReactNode })
       </header>
       <main className="desk">{children}</main>
     </>
-  );
-}
-
-function CardFace({ card, state }: { card: ApiCard; state: ApiState }) {
-  const m = card.meta;
-  return (
-    <article className="card" aria-label={m.question}>
-      <p className="stakes">{stakesLine(card, liveDependents(card, byId(state)).length)}</p>
-      <p className="doing">
-        <b>{m.source_agent}</b> is {m.doing}
-      </p>
-      <h1>{m.question}</h1>
-      <p className="crux">
-        <span className="lbl">It turns on</span> {m.crux}
-      </p>
-    </article>
   );
 }

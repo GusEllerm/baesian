@@ -133,6 +133,14 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-31 `[agent decision]` M4 step 5c's details ([[Client Build]]):
+  - **Round 5's wording is kept,** including "Suggest a correction". Its placeholder says what it means: your own answer, in place of both options.
+  - **The badge says what the waiting markers say:** "stopped" only while an agent is waiting now (D90), "stopped waiting" once its marker has gone stale, and "carried on" when a wait gave up.
+  - **The reading time restarts when you come back to a card,** as in round 5.
+  - **Moving between cards (j and k) and undoing just fade.** Only an answer sends the card toward a side.
+  - **Keys:** Enter in the reason box confirms (except on a mythic card, which is held), and ⌘ Enter sends a written answer.
+  - **The page's strict policy is kept,** rather than loosened for Motion's `popLayout`. Leaving cards are positioned by the stylesheet instead.
+
 - 2026-10-31 `[agent decision]` M4 step 5b's readings, in the client's model ([[Client Build]]):
   - **Only a card with an agent waiting *now* jumps the queue:** a fresh waiting marker, as D91 put it with D90. A card that's merely blocking, or whose agent has gone or carried on, keeps its place.
   - **The queue holds open cards only.** Passed-on and deferred cards are parked, and listed separately (`parked`), for the client to show somewhere other than the queue.

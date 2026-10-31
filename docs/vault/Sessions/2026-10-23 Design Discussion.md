@@ -300,6 +300,15 @@ The user judged the plan ready for development.
   - **The credential hook fired again,** this time on a `sed` that was redacting the token from a log line. The agent dropped the line.
 - **5a committed** (`3693f30`). The user creates `~/Projects/rehearse` themselves, so the plan's first setup step became `git init` inside it.
 - **5b, the client's model,** ported from round 5 with 13 unit tests. 174 tests and 4 browser tests pass. Its readings of D90, D91 and the Contract are logged as agent decisions. One is a change from round 5: the precedent skips decisions already on the path.
+- **5b committed** (`b42428f`). The user asked for the plan's path, to start the rehearse agent, and was given it with a suggested first prompt.
+- **5c, the card and answering.**
+  - **What's built:** the card in all its modes, the desk with keys, dragging and the hold, and the 5-second outbox with undo.
+  - **Tests:** 183 unit tests and 16 browser tests pass, steady across repeated runs.
+  - **Found by tests and screenshots, and fixed:**
+    - a policy violation from Motion's `popLayout`, which made a leaving card push the next one down;
+    - a leaving card that could have answered again;
+    - two races where a key pressed at once was missed or undone;
+    - navigation using the answer's exit.
 
 ## Next
 
