@@ -142,8 +142,32 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
    - **The "new" tag** on a card in Next until it's been on the desk (`useSeen`). The first time a browser opens a project, everything already there counts as seen.
    - **Tests:** 5 more unit tests, and 7 browser tests (`e2e/desk.spec.ts`, and one in `client.spec.ts`). Notifications are tested through a stand-in, since Playwright's Chromium can't show real ones. 193 unit tests and 28 browser tests pass.
    - **Found and fixed:** the sign-in cookie had one name for every server, and browsers don't keep cookies apart by port. Two projects served at once signed each other out, and each sent its token to the other. It's now named for the port ([[Local Server]]).
-   - **Not ported:** round 5's two-finger swipe. The card can be dragged.
-6. **5f, a quality pass:** the layout check, and a side-by-side with round 5's screenshots.
+   - **Not ported in 5e:** round 5's two-finger swipe. 5f ported it.
+6. **5f, a quality pass (done, 2026-10-31).**
+   - **The layout check, rebuilt.** Round 5's script was lost with its scratchpad, so it was rebuilt from what [[2026-10-23 Client Mockups]] records, as a browser test that stays in the repo.
+     - **How it runs:** `layoutProblems` (`e2e/layout.ts`) runs in the page. `e2e/layout.spec.ts` walks the desk through eighteen states at 1440×900 and 1280×800 on round 5's own cards, filed through the real store (`fileRound5`, `e2e/round5.ts`).
+     - **What it looks for:**
+       1. SVG shapes outside a clipping SVG's box;
+       2. elements, shadows and outlines cut off by a clipping ancestor;
+       3. text overlapping text;
+       4. path lines crossing text;
+       5. anything off the window;
+       6. new: text hidden under something painted over it.
+     - **The check was itself checked:** one defect of each kind was planted, and all were caught. That found a hole: straight lines have no height, so they were skipped. The browser runs it with reduced motion, since Motion's exits stall under Playwright's fake clock.
+   - **A side-by-side with round 5,** in five states at both sizes. Round 5's screenshots weren't kept either, so the prototype was run again on the same content.
+   - **Found and fixed:**
+     - **Leaning slid the card 105 px over the path,** hiding the rows that light up to say what leaning does. Round 5 caps the lean at about 18 px and tilts the card, so this was a porting error. The card now leans 17 px (`LEAN_X`), tilts as it moves, and leans a third as far while the reading time runs. The option is picked out as strongly as before.
+     - **The card in front of you could change by itself.** With no card picked, the desk showed the queue's first, so a re-sort (an answer reaching the server, an agent starting to wait) swapped the card mid-reveal. The card now stays until you answer it or move on. A test reproduced the bug first.
+     - **The undo toast named your choice again;** round 5 had taken that out, since the path shows it. It also lacked round 5's line running down the undo window.
+     - **The reveal kept each option's "then" line;** round 5 hides them to make room.
+     - **Also restored from round 5:**
+       - the summary's bold count and its "stopped" dot;
+       - the tighter card on screens under 860 px tall;
+       - the armed state: once a drag or swipe has gone far enough, the answer letting go would choose is filled in;
+       - the two-finger swipe. A vertical swipe scrolls the desk instead, when the desk has somewhere to scroll.
+     - **A one-line rule's full stop** is dropped from its name on the path.
+   - **Left as it is, on purpose:** the reason line in the reveal doesn't promise that the agent may reply once (D89). Round 5's did, but `AGENTS.md` doesn't yet tell agents they can, so the client says nothing it can't stand behind (D71).
+   - **Tests:** 196 unit tests and 32 browser tests pass, steady across three runs.
 
 ## Decided by the user (2026-10-31)
 

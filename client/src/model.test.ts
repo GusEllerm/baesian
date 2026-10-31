@@ -115,7 +115,7 @@ describe("relations, from stated fields only (D65)", () => {
   it("lights what an option would replace or break, as the agent declares it", () => {
     const decided = card({ title: "Tokens live in a cookie" }, { status: "resolved" });
     const subject = card({ proposal_breaks: [decided.meta.id, "R-aaaaa"] });
-    const rels = relationsOf(subject, snapshot([decided, subject], [rule("R-aaaaa", "# Never put secrets in URLs\n\nMore.")]));
+    const rels = relationsOf(subject, snapshot([decided, subject], [rule("R-aaaaa", "# Never put secrets in URLs.\n\nMore.")]));
     expect(rels).toEqual([
       expect.objectContaining({ id: decided.meta.id, kind: "conflict", label: "this card conflicts with", keptBy: "alternative", effect: { proposal: { text: "replaced", bad: true }, alternative: { text: "kept", bad: false } } }),
       expect.objectContaining({ id: "R-aaaaa", kind: "rule", name: "Never put secrets in URLs", state: "your rule", effect: { proposal: { text: "may break it", bad: true }, alternative: { text: "keeps to it", bad: false } } }),

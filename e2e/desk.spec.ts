@@ -153,6 +153,22 @@ test("the empty desk recaps your session, lists what you put aside, and offers n
   await expect(page.locator(CARD)).toHaveAttribute("aria-label", "How often should runs retry?");
 });
 
+test("the card in front of you stays there when the queue's order changes (5f)", async ({ page }) => {
+  let later = "";
+  const { store } = await open(page, (s) => {
+    file(s, { title: "Card a", question: "Question a?", topic: "alpha/a" });
+    later = file(s, { title: "Card b", question: "Question b?", topic: "beta/b" });
+  });
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await expect(page.locator(CARD)).toHaveAttribute("data-mode", "reveal");
+  // An agent starts waiting on the other card, which puts it at the front of the queue.
+  store.startWaiting(later, "codex");
+  await expect(page.locator(".path .row.next", { hasText: "Card b" })).toBeVisible();
+  await expect(page.getByText("One agent has stopped for you.")).toBeVisible();
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Question a?");
+  await expect(page.locator(CARD)).toHaveAttribute("data-mode", "reveal");
+});
+
 test("a card that arrives is tagged new until it's been on the desk", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "Card a", question: "Question a?", topic: "alpha/a" });

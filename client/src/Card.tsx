@@ -32,6 +32,8 @@ export interface CardProps {
   readFraction: number;
   /** How far a mythic card's confirm has been held, 0 to 1, while it's held. */
   hold?: number;
+  /** Where a drag or swipe that has gone far enough is pointing: letting go will choose it (round 5). */
+  armed?: Side | "up" | "down";
   problem?: string;
   /** For a reopened card: your answer in a few words, and whether it has gone to the agent. */
   review?: { words: string; sent: boolean };
@@ -115,7 +117,7 @@ function OptionButton(p: CardProps & { side: Side }) {
   const live = mode.kind === "live";
   // The agent's pick shows only after you choose (D86).
   const showPick = kind === "proposal" && mode.kind === "reveal";
-  const cls = mode.kind === "reveal" ? (mode.option === kind ? " chosen" : " unchosen") : "";
+  const cls = (mode.kind === "reveal" ? (mode.option === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
   return (
     <button
       type="button"
@@ -179,10 +181,10 @@ function Foot(p: CardProps) {
       <span className="rule" data-testid="rule">
         {rule}
       </span>
-      <button type="button" onClick={() => p.onReach("up")}>
+      <button type="button" className={p.armed === "up" ? "armed" : undefined} onClick={() => p.onReach("up")}>
         <kbd>↑</kbd> Other answer
       </button>
-      <button type="button" onClick={() => p.onReach("down")}>
+      <button type="button" className={p.armed === "down" ? "armed" : undefined} onClick={() => p.onReach("down")}>
         <kbd>↓</kbd> Can't judge
       </button>
     </div>

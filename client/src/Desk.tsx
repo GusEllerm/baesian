@@ -20,8 +20,18 @@ import { Path } from "./Path";
 // (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
 // design/explorations/round5/app.js.
 
+/** How far a drag must go to choose: sideways, and up or down. */
 const THRESH_X = 150, THRESH_Y = 110;
+/** The card follows a drag only this much, held to the desk. */
+const DRAG_ELASTIC = 0.16;
+/**
+ * How far the card moves when a drag reaches its threshold, and so the most it leans. Round 5 leaned a held arrow
+ * 105 px, which slid the card over the path and hid the very rows that light up to say what leaning does (5f).
+ */
+const LEAN_X = THRESH_X * DRAG_ELASTIC;
 const NEXT_MAX = 3;
+/** Small counts in words, as round 5's summary has them. */
+const NUMBER = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
 /** The flight of your choice into the path, and the pause before the next card arrives. */
 const MOVE_MS = 700;
 type Dir = Side | "up" | "down";
@@ -92,8 +102,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
   const aside = parked(state).filter((c) => !answered.has(keyOf(c)));
   const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
+  // The card in front of you stays until you answer it or move on. When the queue re-sorts (an answer reaching
+  // the server, an agent starting to wait), that changes what comes next, never the card you're reading (5f).
+  const [shownKey, setShownKey] = useState("");
+  const staying = ordered.find((c) => keyOf(c) === shownKey);
   // A card you put aside can be answered after all: it's picked from the empty desk.
-  const current = reviewCard ?? (pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick)) : undefined) ?? ordered[0];
+  const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick)) : undefined;
+  const current = reviewCard ?? picked ?? staying ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
@@ -104,7 +119,6 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   // Reset while rendering, not in an effect: an effect runs after the paint, and could land after the first key
   // you press on the new card.
   const [shownAt, setShownAt] = useState(() => performance.now());
-  const [shownKey, setShownKey] = useState(key);
   if (shownKey !== key) {
     setShownKey(key);
     setMode(reviewing && reviewing === key ? { kind: "review" } : { kind: "live" });
@@ -172,7 +186,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       new Map(m).set(key, { answer, phase: "held", words, agent: current.meta.source_agent, name: current.meta.title, rarity: r!.rarity, state: pathState(current, answer) }),
     );
     const held = outbox.current!.hold(key, v.verdict);
-    say(`${words} Sending to ${current.meta.source_agent} in`, held.until);
+    // Round 5 took your answer out of this toast: the path shows it.
+    say(`Sending to ${current.meta.source_agent} in`, held.until);
     setPick(undefined);
     setReviewing(undefined);
   };
@@ -385,9 +400,20 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
 
   const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
-  const summary = ordered.length
-    ? `${ordered.length} to answer.${waitingNow ? ` ${waitingNow === 1 ? "An agent has" : `${waitingNow} agents have`} stopped for you.` : ""}`
-    : "Nothing to answer.";
+  const summary = ordered.length ? (
+    <>
+      <b>{ordered.length} to answer.</b>
+      {waitingNow > 0 && (
+        <>
+          {" "}
+          <span className="stop-dot" aria-hidden="true" />
+          {NUMBER[waitingNow] ?? waitingNow} {waitingNow === 1 ? "agent has" : "agents have"} stopped for you.
+        </>
+      )}
+    </>
+  ) : (
+    <b>Nothing to answer.</b>
+  );
 
   return (
     <>
@@ -487,24 +513,82 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   );
 }
 
-/** One card on the desk, with its own motion: the lean, the drag, and leaving toward the side you chose. */
+/** Where a gesture that moved this far points, and whether it went far enough to choose. */
+function gesture(dx: number, dy: number): { dir: Dir; progress: number } {
+  const dir: Dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy < 0 ? "up" : "down";
+  return { dir, progress: Math.max(Math.abs(dx) / THRESH_X, Math.abs(dy) / THRESH_Y) };
+}
+/** A two-finger swipe ends once the wheel events stop for this long; the next can't start for the cooldown. */
+const SWIPE_IDLE_MS = 110, SWIPE_COOLDOWN_MS = 650;
+
+/** One card on the desk, with its own motion: the lean, the drag, the swipe, and leaving toward the side you chose. */
 function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; locked: boolean; exit: Leave; rarity: string; arriveAfter: number }) {
   const reduced = useReducedMotion();
   // A card that's leaving keeps its last props for its exit. It must not answer again: no clicks, no drag.
   const present = useIsPresent();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const pl = useTransform(x, [-THRESH_X, 0], [1, 0], { clamp: true });
-  const pr = useTransform(x, [0, THRESH_X], [0, 1], { clamp: true });
+  // How strongly each option is picked out: fully once the card has moved as far as a drag's threshold takes it.
+  const pl = useTransform(x, [-LEAN_X, 0], [1, 0], { clamp: true });
+  const pr = useTransform(x, [0, LEAN_X], [0, 1], { clamp: true });
+  // The card tilts as it moves (round 5): about a degree at a full lean, and more as it leaves.
+  const rotate = useTransform(x, (v) => v * 0.06);
   const live = p.card.mode.kind === "live" && present;
   // Read once, when the card arrives: clearing the flight must not restart its entrance without the pause.
   const [arriveAfter] = useState(p.arriveAfter);
 
   useEffect(() => {
-    const to = live && p.lean ? (p.lean === "left" ? -0.7 : 0.7) * THRESH_X : 0;
+    // While you still have to read (D91), the card resists: it leans a third as far, as round 5's did.
+    const to = live && p.lean ? (p.lean === "left" ? -1 : 1) * (p.locked ? 0.25 : 0.7) * LEAN_X : 0;
     const a = animate(x, to, reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 34 });
     return () => a.stop();
-  }, [p.lean, live, reduced, x]);
+  }, [p.lean, p.locked, live, reduced, x]);
+
+  // A two-finger swipe moves the card as a drag would, and chooses when it stops (round 5). Not React's onWheel,
+  // which can't prevent scrolling. A vertical swipe scrolls the desk instead, if the desk has somewhere to scroll.
+  const el = useRef<HTMLElement>(null);
+  // Where a drag or swipe that has gone far enough points: the card fills that answer in.
+  const [armed, setArmed] = useState<Dir>();
+  const arm = (dx: number, dy: number) => {
+    const g = gesture(dx, dy);
+    setArmed(g.progress >= 1 ? g.dir : undefined);
+  };
+  const swipe = useRef({ live, reduced, onReach: p.card.onReach, arm });
+  swipe.current = { live, reduced, onReach: p.card.onReach, arm };
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    let sum = { x: 0, y: 0 };
+    let idle = 0;
+    let cooldown = 0;
+    const wheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return; // a pinch zooms
+      const desk = node.closest(".desk");
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && desk && desk.scrollHeight > desk.clientHeight) return;
+      e.preventDefault();
+      if (!swipe.current.live || performance.now() < cooldown) return;
+      sum = { x: sum.x - e.deltaX, y: sum.y - e.deltaY };
+      swipe.current.arm(sum.x, sum.y);
+      x.set(Math.max(-LEAN_X, Math.min(LEAN_X, sum.x * DRAG_ELASTIC)));
+      y.set(Math.max(-LEAN_X, Math.min(LEAN_X, sum.y * DRAG_ELASTIC)));
+      clearTimeout(idle);
+      idle = window.setTimeout(() => {
+        cooldown = performance.now() + SWIPE_COOLDOWN_MS;
+        const g = gesture(sum.x, sum.y);
+        sum = { x: 0, y: 0 };
+        swipe.current.arm(0, 0);
+        const back = swipe.current.reduced ? { duration: 0 } : { type: "spring" as const, stiffness: 520, damping: 34 };
+        animate(x, 0, back);
+        animate(y, 0, back);
+        if (g.progress >= 1) swipe.current.onReach(g.dir);
+      }, SWIPE_IDLE_MS);
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", wheel);
+      clearTimeout(idle);
+    };
+  }, [x, y]);
 
   // Too early (D91): the card shakes its head.
   const first = useRef(true);
@@ -519,37 +603,37 @@ function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; 
   const out = (dir: Leave) => ({
     x: dir === "left" ? -130 : dir === "right" ? 130 : 0,
     y: dir === "up" ? -40 : dir === "down" ? 40 : 0,
-    rotate: dir === "left" ? -6 : dir === "right" ? 6 : 0,
     opacity: 0,
     transition: { duration: reduced ? 0 : 0.22, ease: "easeIn" as const },
   });
 
   return (
     <motion.article
+      ref={el}
       className={`card rarity-${p.rarity}`}
       data-mode={p.card.mode.kind}
       data-locked={p.locked || undefined}
       data-leaving={present ? undefined : true}
       inert={!present}
       aria-label={p.card.card.meta.question}
-      style={{ x, y, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      style={{ x, y, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24, delay: reduced ? 0 : arriveAfter / 1000 } }}
       exit={out(p.exit)}
       drag={live}
       dragSnapToOrigin
-      dragElastic={0.16}
+      dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      onDrag={(_e, info) => arm(info.offset.x, info.offset.y)}
       onDragEnd={(_e, info) => {
-        const { x: dx, y: dy } = info.offset;
-        const dir: Dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy < 0 ? "up" : "down";
-        const progress = Math.max(Math.abs(dx) / THRESH_X, Math.abs(dy) / THRESH_Y);
+        arm(0, 0);
+        const { dir, progress } = gesture(info.offset.x, info.offset.y);
         const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
         if (progress >= 1 || (speed > 900 && progress > 0.3)) p.card.onReach(dir);
       }}
     >
       <div className="frame" aria-hidden="true" />
-      <Card {...p.card} />
+      <Card {...p.card} {...(armed && live ? { armed } : {})} />
     </motion.article>
   );
 }
@@ -557,6 +641,14 @@ function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; 
 /** The toast: what just happened, and, while an answer waits, the way to take it back (Z). */
 function ToastView({ toast, onUndo, onDone }: { toast: Toast | undefined; onUndo: () => void; onDone: () => void }) {
   const [, setNow] = useState(0);
+  const reduced = useReducedMotion();
+  // The undo window runs down as a line along the toast's foot (round 5), through Web Animations.
+  const timer = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!toast?.undoUntil || reduced || !timer.current) return;
+    const a = timer.current.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], { duration: Math.max(0, toast.undoUntil - Date.now()), easing: "linear", fill: "forwards" });
+    return () => a.cancel();
+  }, [toast, reduced]);
   useEffect(() => {
     if (!toast) return;
     const t = setInterval(() => setNow((n) => n + 1), 250);
@@ -575,9 +667,12 @@ function ToastView({ toast, onUndo, onDone }: { toast: Toast | undefined; onUndo
         {toast.undoUntil ? <> {left}&nbsp;s.</> : null}
       </span>
       {toast.undoUntil && (
-        <button type="button" className="undo" onClick={onUndo}>
-          Undo <kbd>Z</kbd>
-        </button>
+        <>
+          <button type="button" className="undo" onClick={onUndo}>
+            Undo <kbd>Z</kbd>
+          </button>
+          <i className="timer" ref={timer} aria-hidden="true" />
+        </>
       )}
     </div>
   );

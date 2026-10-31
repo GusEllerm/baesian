@@ -103,7 +103,7 @@ export function KeysPanel({ onClose }: { onClose: () => void }) {
         </dt>
         <dd>These shortcuts</dd>
       </dl>
-      <p className="sub after">You can also drag the card.</p>
+      <p className="sub after">You can also drag the card, or swipe with two fingers.</p>
     </Panel>
   );
 }

@@ -332,6 +332,16 @@ The user judged the plan ready for development.
   - **A question for the user:** each `serve` takes a new port (D97), and a browser keeps storage and notification permission per address. So everything the client keeps itself is lost on a restart, and notifications have to be allowed again. The agent put the decision to them as a card.
 - **5e committed** (`95703e2`), with the cookie fix, at the user's go-ahead.
 - **D103, decided and built.** The user chose the agent's recommendation: `serve` starts on the last server's port when it's free, kept in `port.json` in the live layer, with a new token every time. Three server tests cover it: the same port again, a fallback when it's taken, and `--port` or `reusePort: false` leaving the record alone. 196 tests pass.
+- **D103 committed** (`acad9a9`).
+- **5f, the quality pass.**
+  - **The layout check:** round 5's script was gone with its scratchpad, so the agent rebuilt it as a browser test, from the five checks the vault recorded, and added a sixth: text hidden under something. The agent planted one defect of each kind to check the checker, and it caught them all once a hole was fixed: straight lines were being skipped.
+  - **The side-by-side:** round 5 was run again on the same cards, at both sizes.
+  - **Two bugs found and fixed:**
+    - leaning slid the card 105 px over the path, a porting error: round 5 caps it near 18 px;
+    - the card in front of you could change mid-reveal when the queue re-sorted.
+  - **Restored from round 5:** the plain undo toast with its timer, the compact reveal, the summary's dot, the short-screen rule, the armed state, and the two-finger swipe.
+  - **Found, for the user:** D89's one reply isn't in `AGENTS.md`, so the client doesn't promise it.
+  - **Tests:** 196 tests and 32 browser tests pass, across three runs.
 
 ## Next
 

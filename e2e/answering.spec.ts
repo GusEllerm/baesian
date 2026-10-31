@@ -182,8 +182,32 @@ test("dragging the card past the threshold chooses that side", async ({ page }) 
     await page.mouse.move(x + i * 20, y);
     await page.clock.runFor(16);
   }
+  // Past the threshold, the option letting go would choose is filled in (round 5).
+  await expect(page.locator(`${CARD} .opt[data-side="right"]`)).toHaveClass(/armed/);
   await page.mouse.up();
   await page.clock.runFor(100);
   expect(await mode(page)).toBe("reveal");
   await expect(page.locator(`${CARD} .opt[data-side="right"]`)).toHaveClass(/chosen/);
+});
+
+test("a two-finger swipe chooses as a drag does, once it stops; a short one doesn't (round 5)", async ({ page }) => {
+  await open(page, [{}]);
+  const box = (await page.locator(`${CARD} .crux`).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const swipe = async (dx: number, dy: number, steps = 4) => {
+    for (let i = 0; i < steps; i++) await page.mouse.wheel(dx / steps, dy / steps);
+    if (Math.abs(dx) >= 150) await expect(page.locator(`${CARD} .opt[data-side="${dx > 0 ? "left" : "right"}"]`)).toHaveClass(/armed/);
+    await page.clock.runFor(200); // the swipe ends when the wheel goes quiet
+  };
+  await swipe(80, 0);
+  expect(await mode(page)).toBe("live");
+  await page.clock.runFor(700); // the cooldown after a swipe
+  // Fingers moving left scroll the page right: the card goes left, as in round 5.
+  await swipe(200, 0);
+  expect(await mode(page)).toBe("reveal");
+  await expect(page.locator(`${CARD} .opt[data-side="left"]`)).toHaveClass(/chosen/);
+  await page.keyboard.press("Escape");
+  await page.clock.runFor(700);
+  await swipe(0, 160);
+  expect(await mode(page)).toBe("write");
 });

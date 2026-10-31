@@ -146,7 +146,8 @@ export interface Relation {
   keptBy?: OptionKind;
 }
 
-const ruleName = (body: string): string => body.split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "a rule";
+/** A rule's first line, as a name: without a heading's marks, or the full stop of a one-line rule. */
+const ruleName = (body: string): string => body.split("\n").map((l) => l.replace(/^#+\s*/, "").replace(/\.$/, "").trim()).find(Boolean) ?? "a rule";
 
 /**
  * Everything a card is connected to, in the order the path shows them: what it builds on, what it conflicts

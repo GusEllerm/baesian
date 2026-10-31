@@ -69,7 +69,7 @@ test("leaning toward an option lights what it would do to a rule (D79)", async (
     writeFileSync(join(s.live, "rules", "R-7f3kq.md"), renderDoc({ type: "rule", id: "R-7f3kq", covers: [], accepted_by: "gus", created: new Date().toISOString() }, "Never put secrets in URLs.\n"));
     file(s, { title: "Where the token lives", question: "Where should the token live?", topic: "client/auth", proposal: "In the URL fragment", alternative: "In a cookie", proposal_breaks: ["R-7f3kq"] });
   });
-  const rule = page.locator(".path .row.rel", { hasText: "Never put secrets in URLs." });
+  const rule = page.locator(".path .row.rel", { hasText: "Never put secrets in URLs" });
   await expect(rule).toContainText("this card may conflict with");
   await expect(rule).toContainText("“In the URL fragment” may break it");
   await page.locator(`${CARD} .opt[data-kind="proposal"]`).hover();

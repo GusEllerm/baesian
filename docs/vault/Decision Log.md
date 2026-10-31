@@ -136,6 +136,13 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-31 `[agent decision]` M4 step 5f's details ([[Client Build]]):
+  - **The card in front of you stays until you answer it or move on.** The queue's order decides what comes next, not what you're reading.
+  - **The lean is round 5's again:** about 17 px, with a tilt, and a third of that while the reading time runs. The option is picked out from the same distance, so a drag that reaches its threshold picks it out fully.
+  - **The two-finger swipe leaves vertical scrolling alone** when the desk has somewhere to scroll; round 5 always took it.
+  - **The reason line doesn't promise the agent's one reply (D89)** until `AGENTS.md` tells agents about it.
+  - **The layout check gains a sixth test,** for text hidden under something painted over it, and runs in the browser suite.
+
 - 2026-10-31 `[agent decision]` M4 step 5e's details ([[Client Build]]):
   - **Notifications are off until you turn them on.** Only then is the browser asked. They're shown only while you're elsewhere (the tab hidden or the window unfocused), since a card that arrives in front of you needs no notification.
   - **If the browser blocks notifications,** the menu says so; the empty desk doesn't keep repeating it.
