@@ -16,7 +16,9 @@ export type Mode =
   | { kind: "live" }
   | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string }
   | { kind: "write"; reason?: WriteReason; text: string }
-  | { kind: "pass"; reason?: PassReason; text: string };
+  | { kind: "pass"; reason?: PassReason; text: string }
+  /** A card you've answered this session, reopened from the path. */
+  | { kind: "review" };
 
 export interface CardProps {
   card: ApiCard;
@@ -31,12 +33,18 @@ export interface CardProps {
   /** How far a mythic card's confirm has been held, 0 to 1, while it's held. */
   hold?: number;
   problem?: string;
+  /** For a reopened card: your answer in a few words, and whether it has gone to the agent. */
+  review?: { words: string; sent: boolean };
   onReach: (dir: Side | "up" | "down") => void;
   onMode: (mode: Mode) => void;
   onConfirm: () => void;
   onSwitch: () => void;
   onBack: () => void;
   onSend: () => void;
+  /** Reopen a given answer, to change it (D81). */
+  onChange: () => void;
+  /** The pointer is over an option, or has left: the path lights what it would do. */
+  onHover: (side: Side | undefined) => void;
   onHoldStart: () => void;
   onHoldEnd: () => void;
 }
@@ -73,6 +81,7 @@ export function Card(p: CardProps) {
         </>
       )}
       {mode.kind === "reveal" && <Reveal {...p} mode={mode} />}
+      {mode.kind === "review" && <Review {...p} />}
       {(mode.kind === "write" || mode.kind === "pass") && <Written {...p} mode={mode} />}
     </div>
   );
@@ -116,6 +125,8 @@ function OptionButton(p: CardProps & { side: Side }) {
       tabIndex={live ? 0 : -1}
       aria-label={`Choose ${m[kind]}`}
       onClick={() => live && p.onReach(side)}
+      onPointerEnter={() => live && p.onHover(side)}
+      onPointerLeave={() => p.onHover(undefined)}
     >
       {live && (
         <kbd className="key" aria-hidden="true">
@@ -263,6 +274,29 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         )}
       </div>
       <p className="small">Esc goes back to the choice.</p>
+    </div>
+  );
+}
+
+/** A card you answered this session, reopened: what you said, and the way to change it. */
+function Review(p: CardProps) {
+  const agent = p.card.meta.source_agent;
+  return (
+    <div className="panel-in">
+      <div className="result">
+        <p>
+          <b>{p.review?.words ?? "You answered this card."}</b> {p.review?.sent ? `It was sent to ${agent}.` : `It goes to ${agent} in a few seconds.`}
+        </p>
+      </div>
+      <div className="row">
+        <button type="button" className="send" onClick={p.onChange}>
+          Change your answer
+        </button>
+        <button type="button" className="cancel" onClick={p.onBack}>
+          Back to the next card <kbd>Esc</kbd>
+        </button>
+      </div>
+      {p.review?.sent && <p className="small">A changed answer goes to {agent} with a brief of what it changes.</p>}
     </div>
   );
 }

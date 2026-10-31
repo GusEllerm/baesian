@@ -309,6 +309,15 @@ The user judged the plan ready for development.
     - a leaving card that could have answered again;
     - two races where a key pressed at once was missed or undone;
     - navigation using the answer's exit.
+- **5c committed** (`e332455`).
+- **The user asked how Baesian is interoperable across models and harnesses.**
+  - **The agent's answer:** no model calls (D65); a shell CLI with exit codes, and plain instructions in `AGENTS.md` (D27); checks rather than trust (the filing rules, the gate, verify); and optional adapters.
+  - **Two gaps, found by checking the code:**
+    - `baesian wait`'s 9-minute default assumes Claude Code's *maximum* command limit. Its default is 2 minutes, so a wait would be killed.
+    - Every agent is named "agent" unless told otherwise. Claude Code exposes `AI_AGENT=claude-code_2-1-314_agent` to its commands.
+
+    Both go to the user as decisions.
+- **5d, the path, the pile and the motion.** 183 tests and 21 browser tests pass. A clash of `.row` rules (present in round 5 too) and a duplicated related card were found and fixed.
 
 ## Next
 

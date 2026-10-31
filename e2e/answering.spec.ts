@@ -164,7 +164,7 @@ test("a card that leaves never pushes the next one down, and nothing breaks the 
   await option(page, "proposal").click();
   await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
   await expect(page.getByRole("heading", { name: "Question 1?" })).toBeVisible();
-  await page.clock.runFor(500); // let the next card's own entrance finish
+  await page.clock.runFor(1200); // let your choice fly into the path, and the next card's entrance finish
   expect(Math.round((await page.locator(CARD).boundingBox())!.y)).toBe(Math.round(top));
   await page.keyboard.press("j");
   await page.clock.runFor(500);

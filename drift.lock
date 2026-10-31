@@ -23,17 +23,22 @@ sig = "795cd7a903f0614c"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "df7badee9f635cdd"
+sig = "179f511f51d3ece3"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "4b098cde15f8d5bc"
+sig = "0623a24582f59f45"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Mark.tsx"
 sig = "0d13d5c46a29a068"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Path.tsx"
+sig = "14b9fd9c49ead97c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -644,6 +649,16 @@ sig = "af7e35662ab3013e"
 doc = "docs/vault/Design/Local Server.md"
 target = "src/verify.ts#MergeCheck"
 sig = "a587008f80c8114c"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "client/src/Desk.tsx"
+sig = "0623a24582f59f45"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "client/src/Path.tsx"
+sig = "14b9fd9c49ead97c"
 
 [[bindings]]
 doc = "docs/vault/Home.md"

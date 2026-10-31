@@ -116,7 +116,21 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - A leaving card kept its old props, and could have answered again: it's now inert.
      - Key listeners attached after the first paint, and the reset for a new card ran after it too. Both could miss or undo a key pressed at once.
      - Moving between cards with j and k used the answer's sideways exit: it now fades.
-4. **5d, the path, the pile, the breadcrumbs, and their motion.**
+4. **5d, the path, the pile, the breadcrumbs, and their motion (done, 2026-10-31).**
+   - **The path** (`client/src/Path.tsx`), as round 5 draws it:
+     - your answers this session, as a spine;
+     - the current card's node, joined to the card;
+     - the card's relationships hanging off the node, worded from its side;
+     - what's next, and how many more.
+   - **Leaning toward an option, or hovering over it,** lights what it would do to each relationship (✓ kept or keeps to it, ✗ replaced or may break it), from the `_breaks` fields. An earlier answer that's related is joined to the node by an arc.
+   - **The lines are SVG elements,** measured from the layout, and drawn again on resize and when the fonts arrive. The path lines the node up with the card's question, and folds the oldest answers away when it would fall below the card.
+   - **Clicking an answered decision reopens it.** "Change your answer" sends a new verdict, which brings the agent a brief (D81), and the decision keeps its place on the path.
+   - **Under the card,** the rest of its area lies in a slightly messy pile. **Above it,** the breadcrumbs name the area and the work.
+   - **Your choice flies from the card into its row on the path,** and the next card arrives once it lands (round 5's one sequenced movement). It uses Web Animations, so it needs nothing the page's policy forbids.
+   - **Tests:** 5 browser tests (`e2e/path.spec.ts`). 21 browser tests pass in all.
+   - **Fixed along the way:**
+     - the path's `.row` rules reached the card's own button rows, as they had in round 5; they're now scoped to the path;
+     - a card that's both related and next was listed twice; it now shows once, in Next, with its relation.
 5. **5e, the rest:** presence, notifications, the calibration panel, keyboard help, and the empty state.
 6. **5f, a quality pass:** the layout check, and a side-by-side with round 5's screenshots.
 

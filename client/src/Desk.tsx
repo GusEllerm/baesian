@@ -1,17 +1,22 @@
 import { AnimatePresence, type MotionStyle, animate, motion, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApiCard, ApiState } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
-import { Card, type CardProps, type Mode, type Side } from "./Card";
-import { byId, liveDependents, queue, rarityOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
+import { type Rarity, areaOf, byId, liveDependents, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { Outbox, postVerdict } from "./outbox";
+import { Path } from "./Path";
 
-// M4 step 5c: the desk, where you answer. It holds what you've answered this session, the mode the card is in,
-// the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
-// (D82). Every card goes through the reveal (D86). Round 5's behaviour, ported: design/explorations/round5/app.js.
+// M4 steps 5c and 5d: the desk, where you answer. It holds what you've answered this session, the mode the card is
+// in, the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
+// (D82); every card goes through the reveal (D86). Beside the card, the path (Path.tsx); under it, the pile of the
+// rest of its area. Round 5's behaviour, ported: design/explorations/round5/app.js.
 
 const THRESH_X = 150, THRESH_Y = 110;
+const NEXT_MAX = 3;
+/** The flight of your choice into the path, and the pause before the next card arrives. */
+const MOVE_MS = 700;
 type Dir = Side | "up" | "down";
 /** How the card on the desk leaves: toward the answer you gave, or, moving between cards or undoing, just fading. */
 type Leave = Dir | "fade";
@@ -21,53 +26,83 @@ interface Answered {
   phase: "held" | "sent";
   words: string;
   agent: string;
+  /** For the path: the card's name and rarity, and your answer in a few words. */
+  name: string;
+  rarity: Rarity;
+  state: string;
 }
 interface Toast {
   text: string;
   undoUntil?: number;
   id: number;
 }
+interface Fly {
+  key: string;
+  from: { x: number; y: number };
+  text: string;
+}
 
 /** A card's identity for this session: a revised card is a new question, so it comes back. */
 const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
 
+/** Your answer, as the path says it. */
+function pathState(card: ApiCard, answer: Answer): string {
+  if (answer.kind === "choose") return answer.option === "proposal" ? `you chose “${card.meta.proposal}”` : `you chose “${card.meta.alternative}”, not ${card.meta.source_agent}'s pick`;
+  return answer.kind === "write" ? "you wrote an answer" : "you couldn't judge it";
+}
+
+/** Fixed per card, so the pile looks tossed together but doesn't jitter between answers. */
+function messy(id: string, depth: number) {
+  let h = 7;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return { r: ((h % 9) - 4) * 0.55 + (depth % 2 ? 0.9 : -0.9), dx: ((h >> 4) % 9) - 4, dy: 3 + depth * 3 + ((h >> 8) % 3) };
+}
+
 export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number }) {
   const salt = useMemo(() => Math.random().toString(36).slice(2), []);
+  const reduced = useReducedMotion();
   const [answered, setAnswered] = useState<Map<string, Answered>>(() => new Map());
   const answeredRef = useRef(answered);
   answeredRef.current = answered;
   const [pick, setPick] = useState<string>();
+  /** A card you've answered this session, reopened from the path. */
+  const [reviewing, setReviewing] = useState<string>();
   const [mode, setMode] = useState<Mode>({ kind: "live" });
   const [problem, setProblem] = useState<string>();
   const [toast, setToast] = useState<Toast>();
   const [lean, setLean] = useState<Side>();
+  const [hover, setHover] = useState<Side>();
   const [hold, setHold] = useState<number>();
   const [nudged, setNudged] = useState(0);
+  const [fly, setFly] = useState<Fly>();
   const firstChoice = useRef(new Map<string, OptionKind>());
   const exitDir = useRef<Leave>("fade");
 
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
-  const current = (pick ? ordered.find((c) => c.meta.id === pick) : undefined) ?? ordered[0];
+  const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
+  const current = reviewCard ?? (pick ? ordered.find((c) => c.meta.id === pick) : undefined) ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
   const sides = current ? sidesFor(current.meta.id, salt) : { left: "alternative" as const, right: "proposal" as const };
   const sideOf = (kind: OptionKind): Side => (sides.left === kind ? "left" : "right");
 
-  // A new card starts in the choice, with its reading time (D91). Reset while rendering, not in an effect: an effect
-  // runs after the paint, and could land after the first key you press on the new card.
+  // A new card starts in the choice (or, reopened from the path, in its answer), with its reading time (D91).
+  // Reset while rendering, not in an effect: an effect runs after the paint, and could land after the first key
+  // you press on the new card.
   const [shownAt, setShownAt] = useState(() => performance.now());
   const [shownKey, setShownKey] = useState(key);
   if (shownKey !== key) {
     setShownKey(key);
-    setMode({ kind: "live" });
+    setMode(reviewing && reviewing === key ? { kind: "review" } : { kind: "live" });
     setProblem(undefined);
     setLean(undefined);
+    setHover(undefined);
     setShownAt(performance.now());
   }
-  const dwell = r ? READ_FIRST_MS[r.rarity] : 0;
+  const dwell = r && mode.kind !== "review" ? READ_FIRST_MS[r.rarity] : 0;
   const [, setFrame] = useState(0);
   const readLeft = Math.max(0, dwell - (performance.now() - shownAt));
   useEffect(() => {
@@ -109,10 +144,20 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     if ("problem" in v) return setProblem(v.problem);
     const words = describeAnswer(current, answer);
     exitDir.current = answer.kind === "choose" ? sideOf(answer.option) : answer.kind === "write" ? "up" : "down";
-    setAnswered((m) => new Map(m).set(key, { answer, phase: "held", words, agent: current.meta.source_agent }));
+    // Your choice flies from the card into the path (round 5's one sequenced movement).
+    if (answer.kind === "choose" && !reduced) {
+      const h2 = document.querySelector<HTMLElement>(`.stage article.card:not([data-leaving]) .opt[data-kind="${answer.option}"] h2`);
+      const rect = h2?.getBoundingClientRect();
+      if (rect) setFly({ key, from: { x: rect.left, y: rect.top }, text: current.meta[answer.option] });
+    }
+    // A changed answer keeps its place on the path (Map.set keeps the order) and replaces what was there.
+    setAnswered((m) =>
+      new Map(m).set(key, { answer, phase: "held", words, agent: current.meta.source_agent, name: current.meta.title, rarity: r!.rarity, state: pathState(current, answer) }),
+    );
     const held = outbox.current!.hold(key, v.verdict);
     say(`${words} Sending to ${current.meta.source_agent} in`, held.until);
     setPick(undefined);
+    setReviewing(undefined);
   };
 
   const undo = () => {
@@ -124,6 +169,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       return n;
     });
     exitDir.current = "fade";
+    setReviewing(undefined);
     setPick(k.split("@")[0]);
     say("Undone. The card is back.");
   };
@@ -151,8 +197,40 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     commit(mode.kind === "write" ? { kind: "write", reason: mode.reason, text: mode.text } : { kind: "pass", reason: mode.reason, text: mode.text });
   };
   const back = () => {
-    setMode({ kind: "live" });
     setProblem(undefined);
+    if (reviewing && (mode.kind === "review" || answered.has(reviewing))) {
+      exitDir.current = "fade";
+      setReviewing(undefined);
+      return;
+    }
+    setMode({ kind: "live" });
+  };
+
+  /** Changing an answer you've already given (D81): the card comes back to the choice, where it was on the path. */
+  const change = () => {
+    if (!reviewing) return;
+    const a = answered.get(reviewing);
+    if (a?.phase === "held") {
+      outbox.current!.undo();
+      setAnswered((m) => {
+        const n = new Map(m);
+        n.delete(reviewing);
+        return n;
+      });
+    }
+    setMode({ kind: "live" });
+    setShownAt(performance.now());
+  };
+
+  /** Clicking a decision on the path: a card to answer opens; one you've answered reopens. */
+  const goTo = (id: string) => {
+    if (mode.kind === "write" || mode.kind === "pass") return say("Send or cancel your written answer first.");
+    if (id === current?.meta.id) return;
+    exitDir.current = "fade";
+    const answeredKey = [...answered.keys()].find((k) => k.startsWith(`${id}@`));
+    if (answeredKey) return setReviewing(answeredKey);
+    setReviewing(undefined);
+    setPick(id);
   };
 
   // A mythic card is held to confirm (D67): the bar fills over HOLD_MS; letting go early starts again.
@@ -190,7 +268,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     const down = (e: KeyboardEvent) => {
       const h = handlers.current;
       if (e.key === "Escape") {
-        if (h.mode.kind !== "live") h.back();
+        if (h.mode.kind !== "live" || reviewingRef.current) h.back();
         else if (keyHeld.current) {
           keyHeld.current = undefined;
           setLean(undefined);
@@ -204,6 +282,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         const i = h.current ? h.ordered.indexOf(h.current) : -1;
         const next = h.ordered[(i + (e.key === "j" ? 1 : h.ordered.length - 1) + h.ordered.length) % h.ordered.length];
         exitDir.current = "fade";
+        setReviewing(undefined);
         return setPick(next?.meta.id);
       }
       const dir = ARROWS[e.key];
@@ -236,6 +315,29 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       removeEventListener("keyup", up);
     };
   }, []);
+  const reviewingRef = useRef(reviewing);
+  reviewingRef.current = reviewing;
+
+  // The path: your answers this session, the card's relationships, and what's next.
+  const relations = current ? relationsOf(current, state) : [];
+  const relById = new Map(relations.map((x) => [x.id, x]));
+  const trail = [...answered.entries()]
+    .filter(([k]) => k !== key)
+    .map(([k, a]) => {
+      const id = k.split("@")[0]!;
+      const link = relById.get(id);
+      return { key: k, id, name: a.name, state: a.state, rarity: a.rarity, ...(link ? { link } : {}) };
+    });
+  const ahead = current ? ordered.filter((c) => c.meta.id !== current.meta.id) : [];
+  const nextUp = ahead.slice(0, NEXT_MAX).map((c) => {
+    const link = relById.get(c.meta.id);
+    return { id: c.meta.id, name: c.meta.title, rarity: rarityOf(c, liveDependents(c, cards).length).rarity, stopped: waitState(c, now) === "waiting", ...(link ? { link } : {}) };
+  });
+  const leanKind = mode.kind === "live" ? (lean ? sides[lean] : hover ? sides[hover] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
+
+  // The pile: the rest of this card's area, slightly messy, under it.
+  const pile = current ? ahead.filter((c) => areaOf(c) === areaOf(current)).slice(0, 4) : [];
+  const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
 
   const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
   const summary = ordered.length
@@ -251,48 +353,79 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         </p>
       </header>
       <main className="desk">
+        <Path
+          trail={trail}
+          current={current && r ? { id: current.meta.id, rarity: r.rarity, stopped: waitState(current, now) === "waiting", conflict: (current.meta.conflict_of?.length ?? 0) > 0 } : undefined}
+          relations={relations}
+          upcoming={nextUp}
+          more={Math.max(0, ahead.length - NEXT_MAX)}
+          lean={leanKind}
+          optionLabel={(k) => `${ARROW[sideOf(k)]} “${current?.meta[k] ?? ""}”`}
+          onGoTo={goTo}
+          layoutKey={`${key}:${mode.kind}`}
+          {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
+        />
         <section className="stage" aria-label="The card to answer">
-          {/* Not mode="popLayout": that injects a <style> element, which the page's policy refuses (D99). A leaving
-              card is taken out of the flow by style.css instead, through its data-leaving mark. */}
-          <AnimatePresence custom={exitDir.current} initial={false}>
-            {current && r ? (
-              <LiveCard
-                key={key}
-                exit={exitDir.current}
-                lean={lean}
-                nudged={nudged}
-                locked={readLeft > 0}
-                rarity={r.rarity}
-                card={{
-                  card: current,
-                  rarity: r.rarity,
-                  stakes: stakesLine(current, deps),
-                  wait: waitState(current, now),
-                  sides,
-                  mode,
-                  readLeftMs: readLeft,
-                  readFraction: dwell ? 1 - readLeft / dwell : 1,
-                  ...(hold !== undefined ? { hold } : {}),
-                  ...(problem ? { problem } : {}),
-                  onReach: reach,
-                  onMode: (m) => {
-                    setProblem(undefined);
-                    setMode(m);
-                  },
-                  onConfirm: confirm,
-                  onSwitch: switchToPick,
-                  onBack: back,
-                  onSend: send,
-                  onHoldStart: beginHold,
-                  onHoldEnd: endHold,
-                }}
-              />
-            ) : (
-              <motion.div key="empty" className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <p className="big">All caught up.</p>
-              </motion.div>
+          <p className="crumbs">
+            {current && (
+              <>
+                {areaOf(current)} › <b>{deck?.meta.title ?? current.meta.deck}</b>
+              </>
             )}
-          </AnimatePresence>
+          </p>
+          <div className="deck">
+            <div className="pile" aria-hidden="true">
+              {pile.map((c, i) => {
+                const m = messy(c.meta.id, i + 1);
+                return <div key={c.meta.id} className="under" style={{ "--r": `${m.r.toFixed(2)}deg`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, zIndex: 10 - i } as CSSProperties} />;
+              })}
+            </div>
+            {/* Not mode="popLayout": that injects a <style> element, which the page's policy refuses (D99). A leaving
+                card is taken out of the flow by style.css instead, through its data-leaving mark. */}
+            <AnimatePresence custom={exitDir.current} initial={false}>
+              {current && r ? (
+                <LiveCard
+                  key={key}
+                  exit={exitDir.current}
+                  arriveAfter={fly && fly.key !== key ? MOVE_MS * 0.65 : 0}
+                  lean={lean}
+                  nudged={nudged}
+                  locked={readLeft > 0}
+                  rarity={r.rarity}
+                  card={{
+                    card: current,
+                    rarity: r.rarity,
+                    stakes: stakesLine(current, deps),
+                    wait: waitState(current, now),
+                    sides,
+                    mode,
+                    readLeftMs: readLeft,
+                    readFraction: dwell ? 1 - readLeft / dwell : 1,
+                    ...(hold !== undefined ? { hold } : {}),
+                    ...(problem ? { problem } : {}),
+                    ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent" } } : {}),
+                    onReach: reach,
+                    onMode: (m) => {
+                      setProblem(undefined);
+                      setMode(m);
+                    },
+                    onConfirm: confirm,
+                    onSwitch: switchToPick,
+                    onBack: back,
+                    onSend: send,
+                    onChange: change,
+                    onHover: setHover,
+                    onHoldStart: beginHold,
+                    onHoldEnd: endHold,
+                  }}
+                />
+              ) : (
+                <motion.div key="empty" className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <p className="big">All caught up.</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </section>
       </main>
       <ToastView toast={toast} onUndo={undo} onDone={() => setToast(undefined)} />
@@ -301,7 +434,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
 }
 
 /** One card on the desk, with its own motion: the lean, the drag, and leaving toward the side you chose. */
-function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; locked: boolean; exit: Leave; rarity: string }) {
+function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; locked: boolean; exit: Leave; rarity: string; arriveAfter: number }) {
   const reduced = useReducedMotion();
   // A card that's leaving keeps its last props for its exit. It must not answer again: no clicks, no drag.
   const present = useIsPresent();
@@ -310,6 +443,8 @@ function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; 
   const pl = useTransform(x, [-THRESH_X, 0], [1, 0], { clamp: true });
   const pr = useTransform(x, [0, THRESH_X], [0, 1], { clamp: true });
   const live = p.card.mode.kind === "live" && present;
+  // Read once, when the card arrives: clearing the flight must not restart its entrance without the pause.
+  const [arriveAfter] = useState(p.arriveAfter);
 
   useEffect(() => {
     const to = live && p.lean ? (p.lean === "left" ? -0.7 : 0.7) * THRESH_X : 0;
@@ -345,7 +480,7 @@ function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; 
       aria-label={p.card.card.meta.question}
       style={{ x, y, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
+      animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24, delay: reduced ? 0 : arriveAfter / 1000 } }}
       exit={out(p.exit)}
       drag={live}
       dragSnapToOrigin

@@ -133,6 +133,12 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-10-31 `[agent decision]` M4 step 5d's details ([[Client Build]]):
+  - **A related card that's also next shows once,** in Next, with its relation on the row, as an earlier answer carries its link.
+  - **Hovering over an option lights the path, as leaning does.**
+  - **A changed answer keeps its place on the path.** Changing an answer still waiting in the undo window takes it back first.
+  - **While your choice flies, the next card waits a moment before arriving** (round 5's sequence). With reduced motion, nothing flies.
+
 - 2026-10-31 `[agent decision]` M4 step 5c's details ([[Client Build]]):
   - **Round 5's wording is kept,** including "Suggest a correction". Its placeholder says what it means: your own answer, in place of both options.
   - **The badge says what the waiting markers say:** "stopped" only while an agent is waiting now (D90), "stopped waiting" once its marker has gone stale, and "carried on" when a wait gave up.
