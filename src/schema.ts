@@ -116,7 +116,6 @@ export const CardMeta = z.strictObject({
   evidence: z.array(z.string().min(1)).default([]),
   source_agent: z.string().min(1),
   source_branch: z.string().min(1),
-  source_worktree: z.string().min(1),
   created: Timestamp,
 });
 export type CardMeta = z.infer<typeof CardMeta>;
@@ -128,7 +127,6 @@ export const CardDraft = CardMeta.omit({
   revision: true,
   source_agent: true,
   source_branch: true,
-  source_worktree: true,
   created: true,
   reply: true,
 }).extend({
@@ -189,7 +187,10 @@ export const Response = z.enum([
 ]);
 export type Response = z.infer<typeof Response>;
 
-/** A verdict on one card revision: `verdicts/<id>-r<revision>-<suffix>.json`. Only the client writes these (D32). */
+/**
+ * A verdict on one card revision: `verdicts/<at>-<id>-r<revision>-<suffix>.json`, with `at` first and compact, so a
+ * listing shows verdicts in the order they were given (D107). Only the client writes these (D32).
+ */
 export const Verdict = z
   .strictObject({
     type: z.literal("verdict"),

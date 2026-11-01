@@ -64,6 +64,10 @@ export interface InboxItem {
   brief?: Brief;
 }
 
+/** The card a verdict file is for, from its name: `<at>-<id>-r<revision>-<suffix>.json` (D107). */
+const VERDICT_FILE = /^\d{8}T\d{6}\.\d{3}Z-(B-[0-9a-z]{5})-r\d+-[0-9a-z]+\.json$/;
+export const verdictFileCard = (name: string): string | undefined => VERDICT_FILE.exec(name)?.[1];
+
 /** A waiting marker counts as gone after three missed beats, as presence does (D41, D90). */
 export const WAITING_BEAT_MS = 30_000;
 export const WAITING_STALE_MS = 90_000;
@@ -354,7 +358,7 @@ export class Store {
     }
     const text = reply.trim();
     if (!text) throw new ValidationError("the reply is empty: give the fact or the check, in a line");
-    const { type: _t, id: _i, revision: _r, source_agent: _a, source_branch: _b, source_worktree: _w, created: _c, ...draft } = latest.meta;
+    const { type: _t, id: _i, revision: _r, source_agent: _a, source_branch: _b, created: _c, ...draft } = latest.meta;
     return this.writeRevision(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent);
   }
 
@@ -371,7 +375,6 @@ export class Store {
         deck,
         source_agent: agent,
         source_branch: this.repo.branch,
-        source_worktree: this.repo.toplevel,
         created: now(),
       },
       "the card",
@@ -564,7 +567,7 @@ export class Store {
 
   verdicts(id: string): Verdict[] {
     return this.list("verdicts")
-      .filter((f) => f.startsWith(`${id}-`))
+      .filter((f) => verdictFileCard(f) === id)
       .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => parse(Verdict, JSON.parse(t), f)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
   }
@@ -583,7 +586,7 @@ export class Store {
     const previous = this.verdicts(input.card).at(-1)?.at;
     if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
     const v = parse(Verdict, { ...input, type: "verdict", at }, "the verdict");
-    const name = `${v.card}-r${v.revision}-${randomSuffix()}.json`;
+    const name = `${v.at.replace(/[-:]/g, "")}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
     this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
     return v;
   }
@@ -822,7 +825,8 @@ export class Store {
         if (this.toRecord(rel)) added.push(rel);
       }
       for (const kind of ["verdicts", "ledger"] as const) {
-        for (const f of this.list(kind).filter((name) => name.startsWith(`${id}-`))) {
+        const mine = (name: string) => (kind === "verdicts" ? verdictFileCard(name) === id : name.startsWith(`${id}-`));
+        for (const f of this.list(kind).filter(mine)) {
           const rel = join(kind, f);
           if (this.toRecord(rel)) added.push(rel);
         }

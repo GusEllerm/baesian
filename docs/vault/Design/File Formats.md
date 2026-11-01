@@ -11,7 +11,7 @@ tags: [baesian, design, formats]
 
 # File Formats
 
-> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them.
+> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far (2026-11-01):** the card revision and verdict tables, and the open points, decided as D105–D107.
 
 The definitions are the Zod schemas in `src/schema.ts`. This note describes them for people, and livedocs binds it to them: a change to a schema blocks the commit until this note is reconciled.
 
@@ -29,7 +29,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `cards/<id>/r<n>.md` | `CardMeta` + body | yes | yes | `baesian file`, `baesian revise` |
 | `cards/<id>/withdrawn.json` | `Withdrawal` | yes | yes | `baesian withdraw` |
 | `cards/<id>/fallback-<suffix>.json` | `Fallback` | yes | yes | `baesian wait`, on a blocking card with no verdict (D46) |
-| `verdicts/<id>-r<n>-<suffix>.json` | `Verdict` | yes | on sync | the client only (D32) |
+| `verdicts/<at>-<id>-r<n>-<suffix>.json` | `Verdict` | yes | on sync | the client only (D32); named timestamp first, so a listing is in order (D107) |
 | `ledger/<id>-<suffix>.md` | `LedgerMeta` + body | yes | on sync | the git gate (M3) |
 | `decks/<deck>.md` | `DeckMeta` + body | yes | yes, with its cards | `baesian deck`; the branch deck on first use |
 | `rules/<id>.md` | `RuleMeta` + body | yes | yes | the client (M4) |
@@ -84,7 +84,7 @@ Frontmatter (`CardMeta`):
 | `reply` | optional string | | the agent's one reply to an answer that went against its pick (D89, D104): a fact or a check. Only `baesian reply` sets it, on a revision that is otherwise the one before; a draft can't carry it |
 | `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
 | `domain`, `evidence` | lists | | routing tags; links |
-| `source_agent`, `source_branch`, `source_worktree`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness |
+| `source_agent`, `source_branch`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness. The folder a card was filed from isn't recorded (D105) |
 
 **Body:** optional Markdown context, shown with the agent's reasoning (D92). Nothing in it is checked.
 
@@ -104,7 +104,7 @@ What an agent writes is a **draft** (`CardDraft`): the same frontmatter without 
 
 ## Verdict
 
-One file per response (`Verdict`). There can be several per revision: "not my area" then another reviewer's answer, or a deferral then a decision.
+One file per response (`Verdict`). There can be several per revision: "not my area" then another reviewer's answer, or a deferral then a decision. The file is named for its `at` first, in compact form (`20261101T093012.345Z-B-7f3kq-r1-x4k2m.json`, D107): a listing of `verdicts/` is in the order they were given. The store finds a card's verdicts by parsing the name.
 
 | Field | Notes |
 |---|---|
@@ -145,9 +145,9 @@ These aren't files, but they're part of the same public interface. They go in th
 - **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it.
 - **`Baesian-Ack: <fact-id> <reason>`** acknowledges a detected decision as a two-way door. The fact ID is the one the gate prints (`dep:httpx`, `schema:<path>`, `infra:<path>`, and later `api:<symbol>`). The reason is required.
 
-## Open points for P12
+## Decided points of P12 (2026-11-01)
 
-- **`source_worktree` is an absolute path,** and it's committed in the record. It's machine-specific and mildly private. Alternatives: the worktree's directory name, or leave it out and rely on `source_branch`.
-- **Verdict file names** use a random suffix. A timestamp prefix would make `ls` show them in order. Order already comes from `at`, so this is cosmetic.
-- **Conflict links** (D45) aren't defined yet. They arrive with the client (M4).
-- **`notify` moved from the committed config to the user config** (above). This needs the user's acceptance, like the rest of P12.
+- **D105:** cards don't record the folder they were filed from (`source_worktree` is gone).
+- **D106:** `notify` lives only in the personal config, as above.
+- **D107:** verdict files are named timestamp first.
+- **Conflict links** (D45), once open here, are the card fields `conflict_of` and `caught_at`.

@@ -347,6 +347,17 @@ The user judged the plan ready for development.
   - **Built:** `baesian reply` files the reply as the card's next revision, with a new `reply` field. It's allowed once per card, only after an answer against the pick, and it reopens the card. A changed answer after it brings D81's brief.
   - **Agents are told** by `AGENTS.md` (this repo's is refreshed), `wait` and `inbox`. The client shows the reply under the crux, and promises it while it's still possible.
   - **Tests:** 9 store and CLI tests, a client unit test, and a browser test. 206 tests and 33 browser tests pass.
+- **D104 committed** (`7a8f612`).
+
+## 2026-11-01: P12's open points
+
+- **The review plan.** The user asked what to review, and how. The agent put the committed record formats first, since they're expensive to change after 0.1.0, then a hands-on session with the client, then its agent decisions.
+- **The user accepted the card revision and verdict tables,** and answered P12's open points as decision cards:
+  - **D105:** drop `source_worktree`. The agent had checked that nothing read it, and that no card existed anywhere yet.
+  - **D106:** `notify` stays in the personal config.
+  - **D107:** verdict files are named timestamp first, against the agent's recommendation. The store now finds a card's verdicts by parsing the name.
+- **The stale open point** on conflict links was fixed in the note: they're `conflict_of` and `caught_at`.
+- **Tests:** 208 tests pass.
 
 ## Next
 

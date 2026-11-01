@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PossibleDuplicate, ValidationError } from "../src/store.js";
@@ -210,6 +210,31 @@ describe("verdicts", () => {
     expect(v).toMatchObject({ client: "test", first_choice: "alternative" });
     expect(store.decision(id)).toBe("SQLite (WAL mode)");
   });
+
+  it("are named for when they were given, so a listing shows them in order (D107)", () => {
+    const { store } = repo();
+    const a = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const b = store.fileCard(draft({ title: "Run file layout", question: "Where do run files go?", topic: "storage/run-files" }), BODY, AGENT).card.meta.id;
+    const first = store.addVerdict({ card: b, revision: 1, response: "question", comment: "Why there?", ...REVIEWER, at: "2026-11-01T09:30:12.345Z" });
+    const second = store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER, at: "2026-11-01T09:31:00.000Z" });
+    const third = store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER, at: "2026-11-01T09:32:00.000Z" });
+    const names = readdirSync(join(store.live, "verdicts")).sort();
+    expect(names.map((n) => n.slice(0, 20))).toEqual(["20261101T093012.345Z", "20261101T093100.000Z", "20261101T093200.000Z"]);
+    expect(names[0]).toMatch(new RegExp(`^20261101T093012\\.345Z-${b}-r1-[0-9a-z]+\\.json$`));
+    // Each card still finds its own, whatever the order of the names.
+    expect(store.verdicts(b)).toEqual([first, third]);
+    expect(store.verdicts(a)).toEqual([second]);
+  });
+});
+
+describe("cards don't record the folder they were filed from (D105)", () => {
+  it("leaves the path out of the record, and refuses a draft that carries one", () => {
+    const { store } = repo();
+    const { card } = store.fileCard(draft(), BODY, AGENT);
+    expect(card.meta).not.toHaveProperty("source_worktree");
+    expect(card.meta).toMatchObject({ source_agent: "claude-code", source_branch: "main" });
+    expect(() => store.fileCard(draft({ title: "Another", question: "Another?", topic: "x/y", source_worktree: "/Users/someone/repo" }), BODY, AGENT)).toThrow(/source_worktree/);
+  });
 });
 
 describe("status (computed, never stored)", () => {
@@ -327,7 +352,7 @@ describe("the record (D37)", () => {
     expect(existsSync(join(store.record, "verdicts"))).toBe(false);
     const added = store.syncRecord();
     expect(added).toHaveLength(1);
-    expect(added[0]).toMatch(new RegExp(`^verdicts/${id}-r1-`));
+    expect(added[0]).toMatch(new RegExp(`^verdicts/\\d{8}T\\d{6}\\.\\d{3}Z-${id}-r1-[0-9a-z]+\\.json$`));
     expect(store.syncRecord()).toEqual([]);
   });
 });

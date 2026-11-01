@@ -19,7 +19,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
       proposal: "Option A", proposal_then: "A happens", alternative: "Option B", alternative_then: "B happens", also_considered: [],
       crux: "Does A fit?", crux_proposal: "If it does", crux_alternative: "If it doesn't",
       rules: [], proposal_breaks: [], alternative_breaks: [], depends_on: [], domain: [], evidence: [],
-      source_agent: "claude-code", source_branch: "main", source_worktree: "/repo", created: at(n),
+      source_agent: "claude-code", source_branch: "main", created: at(n),
       ...over,
     },
     body: "", revisions: 1, replied: false, status: "open", canonicalTopic: topic, verdicts: [], dependents: [], briefs: [], waiting: [], fallbacks: [], attachments: 0,

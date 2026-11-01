@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Entry point to the Baesian vault: what the project is, where it stands, what to read first, and where notes go."
 created: 2026-10-23
-updated: 2026-10-31
+updated: 2026-11-01
 reviewed: 2026-10-23
 tags: [baesian, index]
 ---
@@ -15,9 +15,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-10-31.*
+*As of 2026-11-01.*
 
-- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 206 passing tests, plus 33 browser tests, after M4's steps 2 to 5f, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
+- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 208 passing tests, plus 33 browser tests, after M4's steps 2 to 5f, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
   - **M1:** the store and the core CLI;
   - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions;
   - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs;
@@ -26,9 +26,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Repo:** `main`, with both the livedocs and the Baesian gate, pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian). CI (D61) runs the typecheck, the tests, the build and `baesian verify` on every push.
 - **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions.
 - **Open for the user:**
-  - P12, the [[File Formats]] (accept or change them before 0.1.0);
+  - P12, the [[File Formats]] (accept or change them before 0.1.0). The card and verdict tables are accepted, and the open points were decided as D105–D107 (2026-11-01). The other files remain;
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D104 in [[Decision Log]]):
+- **Decided by the user** (D1–D107 in [[Decision Log]]):
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
   - **scope:** coding agents first, research later;

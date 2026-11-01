@@ -88,7 +88,6 @@ domain: [software, data-engineering]
 evidence: [link-to-diff, link-to-benchmark]
 source_agent: claude-code
 source_branch: feat/run-store
-source_worktree: "..."
 created: 2026-10-23
 ---
 
