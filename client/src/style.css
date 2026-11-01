@@ -161,6 +161,9 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .chips { display: flex; gap: 7px; flex-wrap: wrap; }
 .chips button { padding: 7px 11px; border: 1.5px solid var(--line); background: var(--face-light); border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
 .chips button[aria-pressed="true"] { border-color: var(--ink); background: #fff; }
+.topic-merge { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
+.topic-merge code { font: 600 12px/1 var(--ui); color: var(--ink); }
+.topic-merge button { border: 0; background: none; padding: 0 2px; cursor: pointer; font: inherit; font-weight: 700; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
 .rule-toggle { display: flex; gap: 8px; align-items: baseline; font: var(--t-meta); font-stretch: 90%; cursor: pointer; }
 .rule-toggle input { margin: 0; accent-color: var(--ink); transform: translateY(1px); }
 .rule-toggle .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }

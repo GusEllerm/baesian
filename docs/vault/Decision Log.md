@@ -144,6 +144,11 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-01 `[agent decision]` The details of merging topics on the card (D111; [[Client Build]], [[Local Server]]):
+  - **A new endpoint, `POST /api/aliases`,** since the client had no way to write an alias. It adds to D96's API, and is cheap to change before v1 (D108).
+  - **The merge asks once more** ("it can't be undone"), because alias files are immutable (D44). A held merge with undo, like answers have (D82), would be the alternative.
+  - **The card's topic merges into the one it looks like,** the topic already in use. The line shows only on a live card, and only for near-looking topics, as `baesian file` judges them.
+
 - 2026-11-01 `[agent decision]` The details of rules from answers (D109, D110; [[File Formats]], [[src-store]]):
   - **The box is on choices, your own answers and rejections,** not on questions or "can't judge", which decide nothing to make a rule of. It isn't on a rule draft itself.
   - **A draft is filed only when you asked for one,** and once per decision. D16's other route, rules mined from repeated decisions, is still to come.

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { type CSSProperties, useState } from "react";
 import type { ApiCard } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
@@ -32,6 +32,9 @@ export interface CardProps {
   readFraction: number;
   /** How far a mythic card's confirm has been held, 0 to 1, while it's held. */
   hold?: number;
+  /** Topics in use that look like this card's (D44, D111), with how many cards use each, to offer a merge. */
+  near?: { topic: string; count: number }[];
+  onMerge?: (into: string) => void;
   /** Where a drag or swipe that has gone far enough is pointing: letting go will choose it (round 5). */
   armed?: Side | "up" | "down";
   problem?: string;
@@ -79,6 +82,7 @@ export function Card(p: CardProps) {
       {mode.kind === "live" && (
         <>
           <Facets card={card} />
+          {p.near?.length && p.onMerge ? <TopicMerge topic={card.canonicalTopic} near={p.near} onMerge={p.onMerge} /> : null}
           <Foot {...p} />
         </>
       )}
@@ -86,6 +90,43 @@ export function Card(p: CardProps) {
       {mode.kind === "review" && <Review {...p} />}
       {(mode.kind === "write" || mode.kind === "pass") && <Written {...p} mode={mode} />}
     </div>
+  );
+}
+
+/**
+ * A topic that looks like another (D44, D111): the card offers the merge, and asks once more before it's made,
+ * since an alias can't be undone. Only near-looking topics are offered, as `baesian file` warns of them.
+ */
+function TopicMerge({ topic, near, onMerge }: { topic: string; near: { topic: string; count: number }[]; onMerge: (into: string) => void }) {
+  const [asking, setAsking] = useState<string>();
+  const cards = (n: number) => `${n} card${n === 1 ? "" : "s"}`;
+  if (asking) {
+    return (
+      <p className="topic-merge">
+        Merge <code>{topic}</code> into <code>{asking}</code>? Decisions on both then count as one topic, and it can't be undone.{" "}
+        <button type="button" onClick={() => onMerge(asking)}>
+          Merge them
+        </button>{" "}
+        <button type="button" onClick={() => setAsking(undefined)}>
+          Cancel
+        </button>
+      </p>
+    );
+  }
+  return (
+    <p className="topic-merge">
+      Its topic, <code>{topic}</code>, looks like{" "}
+      {near.map((n, i) => (
+        <span key={n.topic}>
+          {i > 0 ? " or " : ""}
+          <button type="button" onClick={() => setAsking(n.topic)}>
+            {n.topic}
+          </button>{" "}
+          ({cards(n.count)})
+        </span>
+      ))}
+      . Same topic?
+    </p>
   );
 }
 

@@ -62,5 +62,11 @@ export interface ApiState {
 export type ApiVerdictInput = Pick<Verdict, "card" | "revision" | "response"> &
   Partial<Pick<Verdict, "choice" | "comment" | "first_choice" | "make_rule">>;
 
+/** What the client sends to `POST /api/aliases` to merge two topics (D44, D111). The server adds who merged them. */
+export interface ApiAliasInput {
+  from: string;
+  to: string;
+}
+
 /** The milliseconds after which a waiting marker counts as gone; the same as the store's. */
 export const WAITING_STALE_MS = 90_000;

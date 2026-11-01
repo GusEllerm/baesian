@@ -372,6 +372,20 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
             throw e;
           }
         }
+        // Merging two topics (D44, D111): `{ from, to }`, recorded as an alias by the reviewer.
+        if (url.pathname === "/api/aliases") {
+          const input = (await readJson(req)) as Record<string, unknown>;
+          const unknown = Object.keys(input ?? {}).filter((k) => k !== "from" && k !== "to");
+          if (!input || typeof input.from !== "string" || typeof input.to !== "string" || unknown.length) {
+            return send(res, 400, { error: unknown.length ? `unexpected fields: ${unknown.join(", ")}` : "send { from, to }: the two topics" });
+          }
+          try {
+            return send(res, 201, { alias: store.mergeTopics(input.from, input.to, reviewer) });
+          } catch (e) {
+            if (e instanceof ValidationError) return send(res, 400, { error: e.message });
+            throw e;
+          }
+        }
         if (url.pathname === "/api/presence") {
           store.touchPresence("web");
           res.writeHead(204, HEADERS);

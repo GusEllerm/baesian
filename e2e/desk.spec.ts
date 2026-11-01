@@ -4,6 +4,7 @@ import { type Page, expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { layoutProblems } from "./layout.js";
 
 // M4 step 5e: what's around the card. The presence heartbeat (D41), notifications (D40), the menu and its panels,
 // the empty desk, and the "new" tag. A real server and browser.
@@ -215,6 +216,27 @@ test("ticking 'make this a rule' brings back a draft, and accepting it saves the
   await expect.poll(() => store.rules().map((r) => r.body.trim())).toEqual(["Use pytest for every Python test suite."]);
   expect(store.rules()[0]!.meta).toMatchObject({ covers: ["dep:pytest*"], from_card: id, accepted_by: "tester" });
   expect(store.status(draft)).toBe("resolved");
+});
+
+test("a card whose topic looks like another offers the merge, and asks once more (D44, D111)", async ({ page }) => {
+  const { store } = await open(page, (s) => {
+    const earlier = file(s, { title: "Timestamp format", question: "Which timestamp format?", topic: "time/format" });
+    s.addVerdict({ card: earlier, revision: 1, response: "accept", reviewer: "gus", client: "web" });
+    file(s, { title: "Clock source", question: "Which clock should stamp cards?", topic: "time/formats" });
+  });
+  const line = page.locator(`${CARD} .topic-merge`);
+  await expect(line).toHaveText("Its topic, time/formats, looks like time/format (1 card). Same topic?");
+  expect(await page.evaluate(layoutProblems)).toEqual([]);
+  await expect(page.locator(".path .row", { hasText: "Timestamp format" })).toHaveCount(0); // two topics: no precedent yet
+  await line.getByRole("button", { name: "time/format" }).click();
+  await expect(line).toContainText("Merge time/formats into time/format? Decisions on both then count as one topic, and it can't be undone.");
+  expect(store.aliases()).toEqual([]);
+  await line.getByRole("button", { name: "Merge them" }).click();
+  await expect(page.getByText("Merged: “time/formats” now counts as “time/format”.")).toBeVisible();
+  await expect.poll(() => store.canonicalTopic("time/formats")).toBe("time/format");
+  // Now one topic: no line, and the earlier decision is this card's precedent.
+  await expect(page.locator(`${CARD} .topic-merge`)).toHaveCount(0);
+  await expect(page.locator(".path .row", { hasText: "Timestamp format" })).toBeVisible();
 });
 
 test("a card that arrives is tagged new until it's been on the desk", async ({ page }) => {

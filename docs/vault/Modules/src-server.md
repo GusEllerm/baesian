@@ -39,6 +39,7 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
   - 201, with the verdict and the card's new status;
   - 409 for a stale revision, 404 for an unknown card, 400 for an invalid verdict or an unexpected field.
 - **`POST /api/presence`** is the client's heartbeat (D41), through `Store.touchPresence`.
+- **`POST /api/aliases`** merges two topics (D111): `{from, to}` (`ApiAliasInput`), through `Store.mergeTopics`, with `by` from `reviewerName`. 201 with the alias, or 400.
 - **`GET /api/health`** is how `findRunningServer` checks that a server is really answering.
 - **Anything else outside `/api/`** is the client (`serveClient`), from the build `findClient` finds: `dist/client/` beside the built server, or `dist/` when the server runs from source. `ServerOptions.clientDir` overrides it, for tests.
   - **What's served:**

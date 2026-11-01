@@ -787,6 +787,22 @@ export class Store {
       .flatMap((f) => this.read(join(this.live, "topics", f), (t) => parse(TopicAlias, JSON.parse(t), f)) ?? []);
   }
 
+  /**
+   * Merge two topics that mean the same thing (D44, D111): an alias from `from`'s canonical key to `to`'s. Aliases
+   * are immutable, so a merge can't be undone. Each always points at a canonical key, so no cycle can form.
+   */
+  mergeTopics(from: string, to: string, by: string): TopicAlias {
+    this.requireInit();
+    const source = this.canonicalTopic(from), target = this.canonicalTopic(to);
+    if (source === target) throw new ValidationError(`"${from}" and "${to}" are already the same topic`);
+    if (!this.topics().has(target)) throw new ValidationError(`no card uses the topic "${to}": merge into a topic that's in use`);
+    const alias = parse(TopicAlias, { type: "topic-alias", from: source, to: target, by, at: now() }, "the alias");
+    const rel = join("topics", `alias-${randomSuffix()}.json`);
+    this.writeOnce(join(this.live, rel), `${JSON.stringify(alias, null, 2)}\n`);
+    this.toRecord(rel);
+    return alias;
+  }
+
   /** Follow topic aliases to the canonical key (D44). */
   canonicalTopic(topic: string): string {
     const map = new Map(this.aliases().map((a) => [a.from, a.to]));

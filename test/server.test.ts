@@ -178,6 +178,20 @@ describe("the API (D96)", () => {
     expect((await post(s, "/api/verdicts", { card: id, revision: 1, response: "accept", reviewer: "someone else" })).status).toBe(400);
   });
 
+  it("merges two topics for the reviewer, and refuses a bad merge (D44, D111)", async () => {
+    const { store } = repo();
+    store.fileCard(draft({ title: "Timestamp format?", topic: "time/format" }), BODY, AGENT);
+    store.fileCard(draft({ title: "Clock source?", topic: "time/formats" }), BODY, { ...AGENT, force: true });
+    const s = await serve(store);
+    const ok = await post(s, "/api/aliases", { from: "time/formats", to: "time/format" });
+    expect(ok.status).toBe(201);
+    expect(((await ok.json()) as { alias: unknown }).alias).toMatchObject({ from: "time/formats", to: "time/format", by: "tester" });
+    expect((await state(s)).cards.map((c) => c.canonicalTopic)).toEqual(["time/format", "time/format"]);
+    expect((await post(s, "/api/aliases", { from: "time/formats", to: "time/format" })).status).toBe(400);
+    expect((await post(s, "/api/aliases", { from: "time/formats" })).status).toBe(400);
+    expect((await post(s, "/api/aliases", { from: "a/b", to: "time/format", by: "someone else" })).status).toBe(400);
+  });
+
   it("writes the client's heartbeat (D41)", async () => {
     const { store } = repo();
     const s = await serve(store);

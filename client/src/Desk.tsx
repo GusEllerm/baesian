@@ -1,6 +1,7 @@
 import { AnimatePresence, type MotionStyle, animate, motion, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ApiCard, ApiState } from "../../src/api";
+import type { ApiAliasInput, ApiCard, ApiState } from "../../src/api";
+import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
 import { laterSuperseded, recap } from "./calibration";
@@ -265,6 +266,23 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     setPick(id);
   };
 
+  // Topics that look like the card's (D44, D111): the same rule `baesian file` warns with, over the topics in use.
+  const topicCounts = new Map<string, number>();
+  for (const c of state.cards) topicCounts.set(c.canonicalTopic, (topicCounts.get(c.canonicalTopic) ?? 0) + 1);
+  const near = current ? nearTopics(current.canonicalTopic, topicCounts.keys()).map((topic) => ({ topic, count: topicCounts.get(topic)! })) : [];
+  const merge = async (into: string) => {
+    if (!current) return;
+    const from = current.canonicalTopic;
+    const body: ApiAliasInput = { from, to: into };
+    try {
+      const r = await fetch("/api/aliases", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `the server answered ${r.status}`);
+      say(`Merged: “${from}” now counts as “${into}”.`);
+    } catch (e) {
+      say(`The topics weren't merged: ${e instanceof Error ? e.message : String(e)}.`);
+    }
+  };
+
   const notifications = useNotifications(state, goTo);
   const toggleNotify = async () => {
     const was = notifications.status;
@@ -479,6 +497,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
                     ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent" } } : {}),
+                    ...(near.length ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
                     onMode: (m) => {
                       setProblem(undefined);

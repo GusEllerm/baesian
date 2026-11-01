@@ -181,6 +181,28 @@ describe("the filing check (D36, D38)", () => {
       PossibleDuplicate,
     );
   });
+
+  it("merges two topics into one, from the client (D44, D111)", () => {
+    const { store } = repo();
+    store.fileCard(draft({ title: "Timestamp format?", topic: "time/format" }), BODY, AGENT);
+    store.fileCard(draft({ title: "Clock source?", topic: "time/formats" }), BODY, { ...AGENT, force: true });
+    const alias = store.mergeTopics("time/formats", "time/format", "gus");
+    expect(alias).toMatchObject({ from: "time/formats", to: "time/format", by: "gus" });
+    expect(store.canonicalTopic("time/formats")).toBe("time/format");
+    expect(readdirSync(join(store.record, "topics")).filter((f) => f.startsWith("alias-"))).toHaveLength(1);
+    // Merging again, or into a topic nobody uses, is refused.
+    expect(() => store.mergeTopics("time/formats", "time/format", "gus")).toThrow(/already the same topic/);
+    expect(() => store.mergeTopics("time/format", "clocks/source", "gus")).toThrow(/no card uses the topic "clocks\/source"/);
+  });
+
+  it("merges from a topic's canonical key, so aliases never form a cycle", () => {
+    const { store } = repo();
+    for (const [title, topic] of [["A?", "a/x"], ["B?", "b/x"], ["C?", "c/x"]]) store.fileCard(draft({ title, topic }), BODY, { ...AGENT, force: true });
+    store.mergeTopics("a/x", "b/x", "gus");
+    store.mergeTopics("b/x", "c/x", "gus");
+    expect(store.canonicalTopic("a/x")).toBe("c/x");
+    expect(() => store.mergeTopics("c/x", "a/x", "gus")).toThrow(/already the same topic/);
+  });
 });
 
 describe("filing at the same moment as another agent", () => {
