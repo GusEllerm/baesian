@@ -538,7 +538,7 @@ sig = "363189123cd4d11b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/agents.ts"
-sig = "92b7cb4c7173bc9b"
+sig = "1efd95b90e5ed2c3"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -563,7 +563,7 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "54dbc72c95ec9bed"
+sig = "be92c9a33250a065"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -773,7 +773,7 @@ sig = "77f21c726a34fd5c"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "d7015a8c64fc1c9d"
+sig = "2049966a3f18db6d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -783,7 +783,7 @@ sig = "77e1aaf4e49bee9b"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#CARD_TEMPLATE"
-sig = "b1c556daee497539"
+sig = "d4a0b22d1a24a2ee"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"

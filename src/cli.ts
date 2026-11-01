@@ -471,6 +471,11 @@ export async function main(argv: string[] = process.argv, io: Io = defaultIo): P
       }
       io.err("Attach to an open card (`baesian attach <id>`), follow a resolved one,");
       io.err("or file anyway with --new, setting `supersedes:` if you are arguing against a decision.");
+      // A topic is one question (D112): a different question on the same subject is a narrower topic, not a duplicate.
+      if (e.matches.some((m) => m.by === "topic")) {
+        io.err("If yours is a different question on the same subject, give it a narrower topic of its own");
+        io.err("(client/rule-drafts beside client/rules), and list what it builds on in `depends_on`.");
+      }
       return EXIT_POSSIBLE_DUPLICATE;
     }
     io.err(e instanceof ValidationError || e instanceof Error ? e.message : String(e));

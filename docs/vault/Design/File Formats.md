@@ -58,7 +58,7 @@ Frontmatter (`CardMeta`):
 | `title` | string | yes | a neutral short name, not a question ("Where the access token lives"). A settled decision is shown as its title plus its outcome |
 | `question` | string | yes | the decision, as a neutral question |
 | `doing` | string | yes | one short line, in the agent's voice, on what it was doing when the decision came up (D73) |
-| `topic` | slash-separated key | yes (D66) | `storage/run-metadata`; canonicalised through aliases (D38, D44) |
+| `topic` | slash-separated key | yes (D66) | `storage/run-metadata`; canonicalised through aliases (D38, D44). It names one question (D112): a second card on it is a possible duplicate, the earlier answer is its precedent, and two branches answering it differently conflict at merge. A follow-on question gets its own, narrower topic |
 | `deck` | deck ID | | defaults to the branch deck, `branch-<branch>` (D29) |
 | `level` | `provisional` \| `blocking` \| `hard` | | defaults to `hard` when `touches` includes `publishes`, `security`, `money` or `data-loss` (D42), otherwise `provisional` |
 | `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |

@@ -36,7 +36,8 @@ changes a schema or on-disk format; changes a public API, URL scheme or module b
 dependency; changes CI, infrastructure or deployment; is user-facing; publishes something; touches
 security or privacy; spends money; deletes or overwrites stored data; or would break something to
 reverse. Otherwise decide yourself. Every card states its strongest alternative, and the one question
-the choice turns on (the crux). Reuse topics from `baesian topics`.
+the choice turns on (the crux). A topic names one question: reuse one from `baesian topics` only for the
+same question, and give a follow-on question its own, narrower topic.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose `touches`
@@ -59,7 +60,8 @@ line.
 - If you're a long-lived agent, set `BAESIAN_AGENT` to your name; otherwise your harness's name is used.
 - If `baesian file` exits 3, the decision may already be open or decided: attach with
   `baesian attach <id>`, or follow the decision. File with `--new` only to argue against one, and set
-  `supersedes:`.
+  `supersedes:`. If yours is a different question on the same subject, give it a narrower topic
+  (`client/rule-drafts` beside `client/rules`) and list what it builds on in `depends_on`.
 - Commits that build on a card carry the trailer `Baesian-Card: <id>`. The gate blocks a commit that
   builds on a rejected card, or on a hard card that isn't resolved yet.
 - Never record a verdict yourself: only a person answers, in the Baesian client.

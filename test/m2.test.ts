@@ -182,6 +182,10 @@ describe("an agent's name (D102)", () => {
 
   it("is in the instructions, with the new exit code (D101)", () => {
     expect(AGENTS_BLOCK).toContain("BAESIAN_AGENT");
+    // A topic names one question; a follow-on gets its own (D112).
+    expect(AGENTS_BLOCK).toContain("A topic names one question");
+    expect(AGENTS_BLOCK).toContain("give it a narrower topic");
+    expect(CARD_TEMPLATE).toContain("reuse one from `baesian topics` only for the same question");
     expect(AGENTS_BLOCK).toMatch(/7 while\s+the reviewer is still there/);
   });
 });

@@ -28,7 +28,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Open for the user:**
   - P12, the [[File Formats]] (accept or change them before 0.1.0). The card and verdict tables are accepted, and the open points were decided as D105–D107 (2026-11-01). The other files remain;
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D111 in [[Decision Log]]; D109–D111 through Baesian itself, while dogfooding):
+- **Decided by the user** (D1–D112 in [[Decision Log]]; D109–D112 through Baesian itself, while dogfooding):
   - **no compatibility between Baesian versions until a v1 is published** (D108): formats change freely until then;
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);

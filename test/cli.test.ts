@@ -31,6 +31,8 @@ describe("cli", () => {
     expect(r.code).toBe(EXIT_POSSIBLE_DUPLICATE);
     expect(r.err).toMatch(/same topic/);
     expect(r.err).toMatch(/baesian attach/);
+    // A topic is one question (D112): the message says how to file a different question on the same subject.
+    expect(r.err).toMatch(/If yours is a different question on the same subject, give it a narrower topic/);
     expect((await run(dir, ["file", "--new"], draftFile({ title: "SQLite or Postgres?" }))).code).toBe(0);
   });
 

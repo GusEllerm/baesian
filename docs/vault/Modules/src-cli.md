@@ -73,8 +73,14 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`), then `agent`. `AGENTS_BLOCK` covers four things:
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`), then `agent`. `AGENTS_BLOCK` covers:
 - when to file a card, and that every card states its strongest alternative and its crux;
+- that a topic names one question, so a follow-on gets its own, narrower topic (D112);
 - the commit gate: card or ack trailers, and `baesian check`;
-- `wait`'s exit codes;
+- `wait`'s exit codes, with the one reply to an answer against the agent's pick (D104);
+- drafting a rule when an answer asks for one, with `baesian rule` (D110);
+- naming a long-lived agent with `$BAESIAN_AGENT` (D102);
+- what to do when `baesian file` exits 3, including for a follow-on (D112);
 - that only a person resolves a card.
+
+The template's `topic` line says the same as the block: reuse a topic only for the same question.
