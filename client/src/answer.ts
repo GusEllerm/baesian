@@ -7,8 +7,9 @@ import type { Rarity } from "./model";
 
 /** What you chose in the client: an option, a written answer, or "can't judge". */
 export type Answer =
-  | { kind: "choose"; option: OptionKind; first: OptionKind; why?: string }
-  | { kind: "write"; reason: WriteReason; text: string }
+  /** `rule`: D16's "make this a rule", so the agent drafts one for you to confirm (D109, D110). */
+  | { kind: "choose"; option: OptionKind; first: OptionKind; why?: string; rule?: boolean }
+  | { kind: "write"; reason: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason: PassReason; text: string };
 
 export type WriteReason = "question" | "correction" | "reject";
@@ -37,15 +38,16 @@ export const HOLD_MS = 900;
 export function verdictFor(card: ApiCard, answer: Answer): { verdict: ApiVerdictInput } | { problem: string } {
   const base = { card: card.meta.id, revision: card.meta.revision };
   const text = answer.kind === "choose" ? (answer.why ?? "").trim() : answer.text.trim();
+  const rule = answer.kind !== "pass" && answer.rule ? { make_rule: true } : {};
   if (answer.kind === "choose") {
     const chosen = answer.option === "proposal" ? { response: "accept" as const } : { response: "alternative" as const, choice: card.meta.alternative };
     // The choice made before the agent's pick showed (D88), and a disagreement's reason (D87).
-    return { verdict: { ...base, ...chosen, first_choice: answer.first, ...(text ? { comment: text } : {}) } };
+    return { verdict: { ...base, ...chosen, first_choice: answer.first, ...(text ? { comment: text } : {}), ...rule } };
   }
   if (answer.kind === "write") {
     if (!text) return { problem: answer.reason === "question" ? "Write your question first." : answer.reason === "correction" ? "Write your answer first." : "Say why first." };
-    if (answer.reason === "correction") return { verdict: { ...base, response: "correction", choice: text } };
-    return { verdict: { ...base, response: answer.reason, comment: text } };
+    if (answer.reason === "correction") return { verdict: { ...base, response: "correction", choice: text, ...rule } };
+    return { verdict: { ...base, response: answer.reason, comment: text, ...(answer.reason === "reject" ? rule : {}) } };
   }
   return { verdict: { ...base, response: answer.reason, ...(text ? { comment: text } : {}) } };
 }

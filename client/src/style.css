@@ -161,6 +161,9 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .chips { display: flex; gap: 7px; flex-wrap: wrap; }
 .chips button { padding: 7px 11px; border: 1.5px solid var(--line); background: var(--face-light); border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
 .chips button[aria-pressed="true"] { border-color: var(--ink); background: #fff; }
+.rule-toggle { display: flex; gap: 8px; align-items: baseline; font: var(--t-meta); font-stretch: 90%; cursor: pointer; }
+.rule-toggle input { margin: 0; accent-color: var(--ink); transform: translateY(1px); }
+.rule-toggle .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .panel-in textarea { width: 100%; min-height: 64px; resize: vertical; font: var(--t-body); font-size: 16px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
 .problem { font: var(--t-meta); font-stretch: 90%; color: var(--left); }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }

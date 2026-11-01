@@ -29,8 +29,9 @@ export const WAIT_EXIT = {
 
 export type WaitOutcome =
   /** `canReply`: the answer went against the agent's pick, and it hasn't replied yet (D89, D104). */
-  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[]; canReply: boolean }
-  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[] }
+  /** `ruleAsked`: the answer asks for a rule, and none is drafted yet (D16, D109). */
+  | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[]; canReply: boolean; ruleAsked: boolean }
+  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[]; ruleAsked: boolean }
   | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean }
   /** This run is over, but the wait isn't: the agent runs `baesian wait` again (D101). */
   | { kind: "again"; id: string; waitedMs: number; leftMs: number };
@@ -80,9 +81,11 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
         .verdicts(id)
         .filter((v) => v.revision === latest.meta.revision)
         .at(-1);
-      if (status === "resolved") return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id) };
+      if (status === "resolved") {
+        return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
+      }
       if (status !== "open" && status !== "rerouted") {
-        return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id) };
+        return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
       }
       if (opts.usePresence !== false) {
         const p = store.presence();
@@ -144,6 +147,13 @@ export function describeBrief(b: Brief): string[] {
   return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits];
 }
 
+/** What an agent is told when the reviewer asked for a rule from a decision (D16, D109, D110). */
+export const ruleHint = (id: string) => [
+  "The reviewer asked for a rule from this decision. Draft it in a line, with the gate patterns it covers, if any (as gate reports name them: dep:pytest-*, schema:migrations/*):",
+  `  baesian rule ${id} "<the rule>" --covers <pattern>…`,
+  "It goes to them as a card; accepting it saves the rule.",
+];
+
 /** What an agent is told when an answer went against its pick and it may still reply (D89, D104). */
 export const replyHint = (id: string) => [
   `It went against your pick. If you hold a fact the reviewer lacked, or a check that would settle it, you may reply once:`,
@@ -160,7 +170,14 @@ export function describeOutcome(o: WaitOutcome): string[] {
   const briefs = o.kind === "no-verdict" ? [] : o.briefs.flatMap(describeBrief);
   switch (o.kind) {
     case "resolved":
-      return [`${o.id} resolved: ${o.decision}`, ...comment(o.verdict), ...briefs, "Proceed with that decision.", ...(o.canReply ? replyHint(o.id) : [])];
+      return [
+        `${o.id} resolved: ${o.decision}`,
+        ...comment(o.verdict),
+        ...briefs,
+        "Proceed with that decision.",
+        ...(o.ruleAsked ? ruleHint(o.id) : []),
+        ...(o.canReply ? replyHint(o.id) : []),
+      ];
     case "answered":
       if (o.status === "returned" && o.briefs.some((b) => b.kind === "parent-decided-otherwise")) {
         return [`${o.id} returned: what it builds on was decided the other way.`, ...briefs];
@@ -171,6 +188,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
           ...comment(o.verdict),
           ...briefs,
           `Reply with \`baesian revise ${o.id} <card.md>\`, or withdraw it with \`baesian withdraw ${o.id} --reason …\`.`,
+          ...(o.ruleAsked ? ruleHint(o.id) : []),
         ];
       }
       if (o.status === "deferred") {

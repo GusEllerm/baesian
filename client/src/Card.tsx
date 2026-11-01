@@ -14,8 +14,8 @@ export const ARROW = { left: "←", right: "→", up: "↑", down: "↓" } as co
 /** What the card is showing: the choice, the reveal after it (D86), or one of the two written answers. */
 export type Mode =
   | { kind: "live" }
-  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string }
-  | { kind: "write"; reason?: WriteReason; text: string }
+  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean }
+  | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
   | { kind: "review" };
@@ -274,6 +274,7 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           />
         </label>
       )}
+      <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
       <div className="reveal-row">
         {p.rarity === "mythic" ? (
           <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd}>
@@ -322,6 +323,22 @@ function Review(p: CardProps) {
 }
 
 /** ↑ Other answer and ↓ Can't judge: a reason, and words for the agent. */
+/**
+ * D16's "make this a rule": the agent drafts the rule, with the gate patterns it covers, and it comes back to you
+ * as a card to confirm (D109, D110). Not on a rule draft itself.
+ */
+function RuleToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undefined; onChange: (on: boolean) => void }) {
+  if (card.meta.rule !== undefined) return null;
+  return (
+    <label className="rule-toggle">
+      <input type="checkbox" checked={on ?? false} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        Make this a rule <span className="soft">{card.meta.source_agent} drafts it for you to confirm, so decisions like this one go the same way.</span>
+      </span>
+    </label>
+  );
+}
+
 function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }> }) {
   const { mode } = p;
   const agent = p.card.meta.source_agent;
@@ -351,6 +368,9 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
           }
         }}
       />
+      {mode.kind === "write" && (mode.reason === "correction" || mode.reason === "reject") && (
+        <RuleToggle card={p.card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
+      )}
       {p.problem && (
         <p className="problem" role="alert">
           {p.problem}

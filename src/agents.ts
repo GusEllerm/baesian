@@ -35,6 +35,8 @@ line.
   read the comment, then \`baesian revise <id>\` or \`baesian withdraw <id>\`); 5 with no verdict yet
   (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop); 7 while
   the reviewer is still there (run \`baesian wait <id>\` again). Each run lasts at most 100 seconds.
+- If an answer asks for a rule (\`wait\` and \`inbox\` say so), draft it, with the gate patterns it covers:
+  \`baesian rule <id> "<the rule>" --covers dep:pytest-*\`. It goes to the reviewer as a card.
 - If you're a long-lived agent, set \`BAESIAN_AGENT\` to your name; otherwise your harness's name is used.
 - If \`baesian file\` exits 3, the decision may already be open or decided: attach with
   \`baesian attach <id>\`, or follow the decision. File with \`--new\` only to argue against one, and set

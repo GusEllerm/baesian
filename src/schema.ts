@@ -54,6 +54,8 @@ export const Reverse = z.enum(["cheap", "moderate", "one-way"]);
 export const DecisionRef = z.union([CardId, RuleId]);
 
 const Text = z.string().min(1);
+/** A gate fact ID, or a pattern of them, as a rule covers them: `dep:httpx`, `dep:pytest-*`, `schema:migrations/*`. */
+export const FACT_PATTERN = /^(dep|schema|infra|api):\S+$/;
 
 /** Frontmatter of one card revision: `cards/<id>/r<revision>.md`. */
 export const CardMeta = z.strictObject({
@@ -110,6 +112,13 @@ export const CardMeta = z.strictObject({
    * check that would settle it. The revision is otherwise the one before it. Only `baesian reply` sets it.
    */
   reply: Text.optional(),
+  /**
+   * A drafted rule (D16, D109, D110): its wording, and the gate facts it covers, as patterns (`dep:pytest-*`). A card
+   * that carries one asks you to make it a rule, and accepting it saves `rules/<id>.md`. Only `baesian rule` sets
+   * them, on a card it files from the decision you asked a rule of.
+   */
+  rule: Text.optional(),
+  rule_covers: z.array(z.string().regex(FACT_PATTERN, "a gate pattern looks like dep:pytest-* or schema:migrations/*")).default([]),
   caught_at: CaughtAt.optional(),
   confidence: z.number().min(0).max(1).optional(),
   domain: z.array(z.string().min(1)).default([]),
@@ -129,6 +138,8 @@ export const CardDraft = CardMeta.omit({
   source_branch: true,
   created: true,
   reply: true,
+  rule: true,
+  rule_covers: true,
 }).extend({
   type: z.literal("card").optional(),
   deck: DeckId.optional(),

@@ -359,6 +359,15 @@ The user judged the plan ready for development.
 - **The stale open point** on conflict links was fixed in the note: they're `conflict_of` and `caught_at`.
 - **Tests:** 208 tests pass.
 - **D105–D107 committed** (`0f5a4bf`).
+- **D108 committed** (`1d0418c`).
+- **Dogfooding starts.** The agent found that no card had ever been filed in this repo: every decision from D77 to D108 had gone through chat. From now on, the agent's design decisions here go through `baesian file`, and the user answers them in the client.
+  - **The warm-up:** a throwaway repo with round 5's cards, served beside this one. That's two servers at once, which the cookie fix from 5e made possible.
+  - **The first cards,** in the deck "Finishing M4": how an answer becomes a rule (D16), and where you merge duplicate topics (D44). The agent waited on them with `baesian wait`, looping on exit 7, as `AGENTS.md` says.
+  - **D109, the first verdict through Baesian:** the agent drafts a rule and you confirm it, against the agent's pick. The wait printed the D104 reply offer; the agent didn't reply, having no fact against the reason given.
+  - **Finding 1: a follow-on decision is stopped as a duplicate.** The next card (how a drafted rule reaches you) shares its topic with the decision it builds on, so `baesian file` exited 3. `AGENTS.md` allows `--new` only to argue against a decision, so an honest agent has no way through. The agent used a more specific topic. A fix could skip matches the card `depends_on`, and say in `AGENTS.md` how to file a follow-on.
+  - **Finding 2: the topics card came back as "I need more context":** "When would this occur?" What the reviewer needs in order to choose was missing. The card shows the agent's case and body only after you choose, so the agent revised it with the context in the crux's fact.
+  - **D110:** a drafted rule reaches you as a card (the agent's pick). **D111:** you merge topics on the card, on the topics card's second revision (the agent's pick).
+  - **Rules from answers, built** on D109 and D110: the "make this a rule" box, `baesian rule`, the draft card, and saving the rule on acceptance. 218 tests and 34 browser tests pass. Topic merging (D111) is next.
 - **A review of the schemas, proposed and put off.** The agent suggested three independent reviewers, for change over time, git workflows, and integrity and exposure. It had confirmed one risk in the code: every schema is strict, and no file carries a version, so an older Baesian would fail on a newer card. The user ruled version compatibility out until a v1 is published (D108). Without that, the formats stay cheap to change, so the review waits until just before publishing. One point that isn't about versions went into the plan, to watch in dogfooding: ledger entries keep commit hashes, which squash merges replace.
 
 ## Next

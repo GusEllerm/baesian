@@ -9,6 +9,7 @@ import {
   CardDraft,
   CardMeta,
   Config,
+  FACT_PATTERN,
   DeckMeta,
   Fallback,
   HARD_BY_DEFAULT,
@@ -362,7 +363,78 @@ export class Store {
     return this.writeRevision(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent);
   }
 
-  private writeRevision(id: string, revision: number, draft: CardDraft & { reply?: string }, body: string, agent: string): Card {
+  /** The cards that draft a rule from decision `id` (D110), whatever became of them, short of being withdrawn. */
+  private ruleDrafts(id: string): Card[] {
+    return this.cards().filter((c) => c.meta.rule !== undefined && c.meta.depends_on.includes(id) && this.status(c.meta.id) !== "withdrawn");
+  }
+
+  /**
+   * Whether the reviewer asked for a rule from this decision (D16's toggle) and none has been drafted yet: the
+   * latest verdict on its latest revision carries `make_rule` (D109).
+   */
+  ruleAsked(id: string): boolean {
+    const card = this.card(id);
+    if (!card || !this.latestVerdict(card)?.make_rule) return false;
+    return this.ruleDrafts(id).length === 0;
+  }
+
+  /**
+   * Draft the rule the reviewer asked for (D109, D110): a card built from the decision, which asks them to make
+   * `rule` a rule covering `covers`. Accepting it saves the rule. It builds on the decision, in the same topic and
+   * deck, so it isn't a duplicate of it.
+   */
+  draftRule(id: string, rule: string, covers: string[], opts: { agent: string }): Card {
+    this.requireInit();
+    const from = this.card(id);
+    if (!from) throw new Error(`no card ${id}`);
+    if (this.ruleDrafts(id).length) throw new Error(`a rule from ${id} is already drafted: it's one card per decision`);
+    if (!this.latestVerdict(from)?.make_rule) throw new Error(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
+    const text = rule.trim();
+    if (!text) throw new ValidationError("the rule is empty: give it in a line");
+    const bad = covers.filter((p) => !FACT_PATTERN.test(p));
+    if (bad.length) throw new ValidationError(`not a gate pattern: ${bad.join(", ")}; patterns look like dep:pytest-* or schema:migrations/*`);
+    const lets = covers.length ? `the gate lets through, without a card, commits whose only decisions it covers (${covers.join(", ")})` : "it shows beside every card on this topic";
+    const prep = this.prepare({
+      title: `A rule from “${from.meta.title}”`,
+      question: `Make this a rule: “${text}”?`,
+      doing: `drafting the rule you asked for on “${from.meta.title}”`,
+      topic: from.meta.topic,
+      deck: from.meta.deck,
+      touches: [],
+      reverse: "moderate",
+      proposal: "Make it a rule",
+      proposal_then: `it's saved, and ${lets}`,
+      alternative: "Keep it to this decision",
+      alternative_then: "no rule is saved; the next decision like this one comes to you as a card",
+      crux: "Should every decision like this one go the same way from now on?",
+      crux_proposal: "If so",
+      crux_alternative: "If it depends",
+      depends_on: [id],
+    });
+    const newCard = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
+    return this.writeRevision(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts.agent);
+  }
+
+  /**
+   * Save the rule a draft asked for, once the reviewer accepts it, or answers with their own wording (D110). Rules
+   * are immutable, so it's saved once per decision.
+   */
+  private saveRule(card: Card, v: Verdict): void {
+    if (card.meta.rule === undefined || (v.response !== "accept" && v.response !== "correction")) return;
+    const from = card.meta.depends_on[0];
+    if (from && this.rules().some((r) => r.meta.from_card === from)) return;
+    const ruleId = newId("R", (candidate) => existsSync(join(this.live, "rules", `${candidate}.md`)));
+    const meta = parse(
+      RuleMeta,
+      { type: "rule", id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, created: v.at },
+      "the rule",
+    );
+    const rel = join("rules", `${ruleId}.md`);
+    this.writeOnce(join(this.live, rel), renderDoc(meta, `${v.response === "correction" ? v.choice : card.meta.rule}\n`));
+    this.toRecord(rel);
+  }
+
+  private writeRevision(id: string, revision: number, draft: CardDraft & { reply?: string; rule?: string; rule_covers?: string[] }, body: string, agent: string): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
     if (!this.deck(deck)) throw new Error(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
     const meta = parse(
@@ -588,6 +660,7 @@ export class Store {
     const v = parse(Verdict, { ...input, type: "verdict", at }, "the verdict");
     const name = `${v.at.replace(/[-:]/g, "")}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
     this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
+    this.saveRule(card, v);
     return v;
   }
 

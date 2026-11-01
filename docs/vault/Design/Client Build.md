@@ -168,6 +168,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - **A one-line rule's full stop** is dropped from its name on the path.
    - **Left out at first:** the reason line in the reveal didn't promise that the agent may reply once (D89). Round 5's did, but nothing let an agent reply. The user then had the reply built (D104, below).
    - **Tests:** 196 unit tests and 32 browser tests pass, steady across three runs.
+8. **Rules from answers (D16, D109, D110, 2026-11-01),** the first work decided through Baesian itself. The reveal, and a written correction or rejection, have a "Make this a rule" box, which puts `make_rule` on the verdict. The agent drafts the rule with `baesian rule`, and it arrives as a card that builds on the decision; accepting it saves the rule. A ticked box leaves the arrow keys to the card. A browser test covers the round trip.
 7. **The agent's reply (D104, 2026-10-31).** A card answered against the agent's pick can come back once, with a fact or a check, filed by `baesian reply`. The client shows it under the crux (`replyOf`), with the answer it replied to. The reveal's reason line promises the reply again, round 5's wording, until the card has had it (`replied`). A browser test covers the round trip.
 
 ## Decided by the user (2026-10-31)

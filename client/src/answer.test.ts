@@ -35,6 +35,15 @@ describe("verdictFor", () => {
     });
   });
 
+  it("asks for a rule when you tick the toggle: on a choice, your own answer, or a rejection (D16, D109)", () => {
+    expect(verdictFor(card, { kind: "choose", option: "proposal", first: "proposal", rule: true })).toEqual({ verdict: expect.objectContaining({ response: "accept", make_rule: true }) });
+    expect(verdictFor(card, { kind: "write", reason: "correction", text: "DuckDB", rule: true })).toEqual({ verdict: expect.objectContaining({ response: "correction", make_rule: true }) });
+    expect(verdictFor(card, { kind: "write", reason: "reject", text: "No ORMs.", rule: true })).toEqual({ verdict: expect.objectContaining({ response: "reject", make_rule: true }) });
+    // A question isn't an answer to make a rule of.
+    expect(verdictFor(card, { kind: "write", reason: "question", text: "Why?", rule: true })).toEqual({ verdict: expect.not.objectContaining({ make_rule: true }) });
+    expect(verdictFor(card, { kind: "choose", option: "proposal", first: "proposal" })).toEqual({ verdict: expect.not.objectContaining({ make_rule: true }) });
+  });
+
   it("describes an answer in a few words", () => {
     expect(describeAnswer(card, { kind: "choose", option: "alternative", first: "alternative" })).toBe("You chose “Postgres”.");
     expect(describeAnswer(card, { kind: "pass", reason: "see_it_run", text: "" })).toBe("You asked to see it run.");

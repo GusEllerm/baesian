@@ -14,7 +14,7 @@ import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
-import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, waitForVerdict } from "./wait.js";
+import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
@@ -260,6 +260,18 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     });
 
   program
+    .command("rule")
+    .description("draft the rule the reviewer asked for on a decision; it goes to them as a card (D16, D110)")
+    .argument("<id>", "the decision")
+    .argument("<text>", "the rule, in a line")
+    .option("--covers <patterns...>", "the gate facts it answers, as gate reports name them: dep:pytest-*, schema:migrations/*")
+    .action((id: string, text: string, opts: { covers?: string[] }) => {
+      const card = store().draftRule(id, text, opts.covers ?? [], { agent: agentName(program.opts().agent) });
+      notify(card);
+      io.out(`filed ${card.meta.id}: the rule goes to the reviewer as a card, and is saved once they accept it`);
+    });
+
+  program
     .command("attach")
     .description("wait on an existing card instead of filing a duplicate")
     .argument("<id>", "the card")
@@ -353,9 +365,9 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
         // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
         const latest = s.card(item.card);
-        if (item.verdict.card === item.card && latest && item.verdict.revision === latest.meta.revision && s.canReply(item.card)) {
-          for (const line of replyHint(item.card)) io.out(`  ${line}`);
-        }
+        const standing = item.verdict.card === item.card && latest !== undefined && item.verdict.revision === latest.meta.revision;
+        if (standing && item.verdict.make_rule && s.ruleAsked(item.card)) for (const line of ruleHint(item.card)) io.out(`  ${line}`);
+        if (standing && s.canReply(item.card)) for (const line of replyHint(item.card)) io.out(`  ${line}`);
       }
     });
 

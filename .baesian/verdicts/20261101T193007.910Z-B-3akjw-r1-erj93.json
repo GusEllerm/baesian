@@ -1,0 +1,12 @@
+{
+  "type": "verdict",
+  "card": "B-3akjw",
+  "revision": 1,
+  "response": "alternative",
+  "choice": "The agent drafts it for you to confirm",
+  "comment": "I think users will not want to provision the time to write out a sufficient rule.",
+  "first_choice": "alternative",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-01T19:30:07.910Z"
+}

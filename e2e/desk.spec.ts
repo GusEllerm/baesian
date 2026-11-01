@@ -189,6 +189,34 @@ test("an answer against the pick may get one reply, and the card comes back with
   await expect(page.locator(CARD)).not.toContainText("may reply once");
 });
 
+test("ticking 'make this a rule' brings back a draft, and accepting it saves the rule (D16, D109, D110)", async ({ page }) => {
+  let id = "";
+  const { store } = await open(page, (s) => {
+    id = file(s, { title: "The test runner", question: "Which test runner?", topic: "testing/runner", proposal: "pytest", alternative: "unittest" });
+  });
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await page.locator(CARD).getByLabel(/Make this a rule/).check();
+  // The box leaves the keys to the card: pressing the side again still confirms.
+  const side = (await page.locator(`${CARD} .opt[data-kind="proposal"]`).getAttribute("data-side")) === "left" ? "ArrowLeft" : "ArrowRight";
+  await page.keyboard.down(side);
+  await page.keyboard.up(side);
+  await page.clock.fastForward(5100);
+  await expect.poll(() => store.verdicts(id).at(-1)?.make_rule).toBe(true);
+
+  const draft = store.draftRule(id, "Use pytest for every Python test suite.", ["dep:pytest*"], { agent: "claude-code" }).meta.id;
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Make this a rule: “Use pytest for every Python test suite.”?");
+  await expect(page.locator(CARD).getByLabel(/Make this a rule/)).toHaveCount(0); // not on a draft itself
+  // The decision is on your trail, joined to the draft that builds on it.
+  await expect(page.locator(".path .row.past", { hasText: "The test runner" })).toContainText("this card builds on");
+  await page.clock.fastForward(2100); // a rule is costly to undo: the draft asks you to read it first (D91)
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  await page.clock.fastForward(5100);
+  await expect.poll(() => store.rules().map((r) => r.body.trim())).toEqual(["Use pytest for every Python test suite."]);
+  expect(store.rules()[0]!.meta).toMatchObject({ covers: ["dep:pytest*"], from_card: id, accepted_by: "tester" });
+  expect(store.status(draft)).toBe("resolved");
+});
+
 test("a card that arrives is tagged new until it's been on the desk", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "Card a", question: "Question a?", topic: "alpha/a" });

@@ -18,7 +18,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
       topic, deck: "branch-main", level: "provisional", touches: [], reverse: "cheap",
       proposal: "Option A", proposal_then: "A happens", alternative: "Option B", alternative_then: "B happens", also_considered: [],
       crux: "Does A fit?", crux_proposal: "If it does", crux_alternative: "If it doesn't",
-      rules: [], proposal_breaks: [], alternative_breaks: [], depends_on: [], domain: [], evidence: [],
+      rules: [], proposal_breaks: [], alternative_breaks: [], depends_on: [], domain: [], evidence: [], rule_covers: [],
       source_agent: "claude-code", source_branch: "main", created: at(n),
       ...over,
     },

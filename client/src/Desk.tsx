@@ -220,13 +220,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
 
   const confirm = () => {
     if (mode.kind !== "reveal") return;
-    commit({ kind: "choose", option: mode.option, first: mode.first, ...(mode.why.trim() ? { why: mode.why } : {}) });
+    commit({ kind: "choose", option: mode.option, first: mode.first, ...(mode.why.trim() ? { why: mode.why } : {}), ...(mode.rule ? { rule: true } : {}) });
   };
   const switchToPick = () => mode.kind === "reveal" && setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "" });
   const send = () => {
     if (mode.kind !== "write" && mode.kind !== "pass") return;
     if (!mode.reason) return setProblem("Choose a reason first.");
-    commit(mode.kind === "write" ? { kind: "write", reason: mode.reason, text: mode.text } : { kind: "pass", reason: mode.reason, text: mode.text });
+    commit(mode.kind === "write" ? { kind: "write", reason: mode.reason, text: mode.text, ...(mode.rule ? { rule: true } : {}) } : { kind: "pass", reason: mode.reason, text: mode.text });
   };
   const back = () => {
     setProblem(undefined);
@@ -327,7 +327,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         }
         return;
       }
-      if (e.target instanceof Element && e.target.closest("input, textarea")) return;
+      // Typing goes to the field; a ticked box (make this a rule) leaves the keys to the card.
+      if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "z" || e.key === "Z") return h.undo();
       if (e.key === "?") return setPanel((p) => (p === "keys" ? undefined : "keys"));
