@@ -11,7 +11,7 @@ tags: [baesian, design, formats]
 
 # File Formats
 
-> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far (2026-11-01):** the card revision and verdict tables, and the open points, decided as D105–D107.
+> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far (2026-11-01):** the card revision and verdict tables, and the open points, decided as D105–D107. Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
 
 The definitions are the Zod schemas in `src/schema.ts`. This note describes them for people, and livedocs binds it to them: a change to a schema blocks the commit until this note is reconciled.
 

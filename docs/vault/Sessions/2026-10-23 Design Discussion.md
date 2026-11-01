@@ -358,6 +358,8 @@ The user judged the plan ready for development.
   - **D107:** verdict files are named timestamp first, against the agent's recommendation. The store now finds a card's verdicts by parsing the name.
 - **The stale open point** on conflict links was fixed in the note: they're `conflict_of` and `caught_at`.
 - **Tests:** 208 tests pass.
+- **D105–D107 committed** (`0f5a4bf`).
+- **A review of the schemas, proposed and put off.** The agent suggested three independent reviewers, for change over time, git workflows, and integrity and exposure. It had confirmed one risk in the code: every schema is strict, and no file carries a version, so an older Baesian would fail on a newer card. The user ruled version compatibility out until a v1 is published (D108). Without that, the formats stay cheap to change, so the review waits until just before publishing. One point that isn't about versions went into the plan, to watch in dogfooding: ledger entries keep commit hashes, which squash merges replace.
 
 ## Next
 

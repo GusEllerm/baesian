@@ -100,6 +100,7 @@ Dogfooding on this repo starts once M3 is done, so that cards, gate and verdicts
 
 ## Notes from M4
 
+- **To watch in dogfooding (2026-11-01): ledger entries keep a commit's hash.** A squash merge or a rebase replaces it, so an entry can point at a commit that's gone, and rework briefs (D81) would list it. Not acted on: it shows up once merges are squashed. Version compatibility is out of scope until a v1 is published (D108).
 - **The file-watching check (D84's premise), 2026-10-24: it holds.** `test/premises/watch.mjs` is a check to run by hand, not part of the suite.
   - **What it does:** four writer processes create files the way the store does (`mkdir -p`, then an exclusive create) in bursts, while one recursive `fs.watch` records every path it hears. There are four scenarios of 1,000 files each, with five trials apiece:
     - flat files into an existing folder;
