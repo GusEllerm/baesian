@@ -58,6 +58,9 @@ export interface PathProps {
 }
 
 const TRAIL_MAX = 8;
+/** How long the path takes to glide into its new arrangement, landing before your choice's flight does. */
+const GLIDE_MS = 380;
+const GLIDE_EASE = "cubic-bezier(.3,.7,.3,1)";
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** The line into the card: from the node's edge, at the node's height, to the card at rest (its centre and width). */
@@ -88,6 +91,9 @@ export function Path(p: PathProps) {
   const hidden = p.trail.length - shown.length;
   const linked = new Set([...shown, ...p.upcoming].flatMap((s) => (s.link ? [s.id] : [])));
   const rels = p.relations.filter((r) => !linked.has(r.id));
+  // Where each row sat after the last settled layout, by its data-flip key, so a change can glide from there.
+  const tops = useRef(new Map<string, number>());
+  const lastShift = useRef(shift);
 
   // Line the current node up with the card's question; fold the oldest answers away if the node would fall below
   // the card. Then measure the lines. Runs after every render, and whenever the desk resizes or the fonts arrive;
@@ -102,11 +108,13 @@ export function Path(p: PathProps) {
     const now = el.querySelector<HTMLElement>(".row.now .node");
     let next = 0;
     if (card && h1 && now) {
-      // Where the card rests, not where a drag or its entrance has it now, so the path doesn't follow it around.
+      // Where the card rests, not where a drag or its entrance has it now, and where the rows sit by layout, not
+      // where a glide has them: so the path doesn't follow the motion around.
       const rest = restRect(card);
-      const top = h.getBoundingClientRect().top + 4;
-      const first = el.firstElementChild!.getBoundingClientRect().top - shift;
-      const at = now.getBoundingClientRect().top - shift + now.offsetHeight / 2;
+      const hr = h.getBoundingClientRect();
+      const top = hr.top + 4;
+      const first = hr.top + offsetIn(el.firstElementChild as HTMLElement, h).top;
+      const at = hr.top + offsetIn(now, h).top + now.offsetHeight / 2;
       next = Math.round(Math.max(rest.top + offsetIn(h1, card).top + 17 - at, top - first));
       if (at + next > rest.top + rest.height - 36 && shown.length > 0 && folded < p.trail.length) {
         setFolded((f) => f + 1);
@@ -117,14 +125,46 @@ export function Path(p: PathProps) {
       setShift(next);
       return;
     }
+    // The arrangement has settled: rows that moved glide from where they were, new ones fade in, and the shift
+    // eases (style.css). The lines are measured from where things are on screen, so they're redrawn as it glides.
+    const flips = [...el.querySelectorAll<HTMLElement>("[data-flip]")];
+    const settled = new Map(flips.map((r) => [r.dataset.flip!, offsetIn(r, h).top] as const));
+    const glides: Animation[] = [];
+    // Read live: Motion's own hook reads the setting once, when it mounts.
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced && tops.current.size) {
+      for (const r of flips) {
+        const was = tops.current.get(r.dataset.flip!) ?? (r.dataset.from ? tops.current.get(r.dataset.from) : undefined);
+        const to = settled.get(r.dataset.flip!)!;
+        if (was === undefined) glides.push(r.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: GLIDE_MS, easing: GLIDE_EASE }));
+        else if (Math.abs(was - to) > 0.5) glides.push(r.animate([{ transform: `translateY(${was - to}px)` }, { transform: "none" }], { duration: GLIDE_MS, easing: GLIDE_EASE }));
+      }
+    }
+    tops.current = settled;
+    if (!reduced && (glides.length || shift !== lastShift.current)) glide(glides);
+    lastShift.current = shift;
     const measured = desk ? measure(desk, el, card ?? undefined) : undefined;
     if (JSON.stringify(measured) !== JSON.stringify(lines)) setLines(measured);
     if (p.fly) {
       const row = el.querySelector<HTMLElement>(`.row.past[data-key="${CSS.escape(p.fly.key)}"]`);
-      if (row) flyInto(p.fly, row);
+      if (row) flyInto(p.fly, row, h, shift);
       p.onFlown?.();
     }
   });
+  // While the path glides, measure it again every frame, and once more when the glide is over.
+  const glideUntil = useRef(0);
+  const glideFrame = useRef(0);
+  const glide = (animations: Animation[]) => {
+    glideUntil.current = Math.max(glideUntil.current, performance.now() + GLIDE_MS + 40);
+    void Promise.allSettled(animations.map((a) => a.finished)).then(() => setTick((t) => t + 1));
+    if (glideFrame.current) return;
+    const step = () => {
+      setTick((t) => t + 1);
+      glideFrame.current = performance.now() < glideUntil.current ? requestAnimationFrame(step) : 0;
+    };
+    glideFrame.current = requestAnimationFrame(step);
+  };
+  useEffect(() => () => cancelAnimationFrame(glideFrame.current), []);
   useLayoutEffect(() => {
     const desk = hood.current?.closest(".desk");
     if (!desk) return;
@@ -174,10 +214,14 @@ export function Path(p: PathProps) {
         ))}
       </svg>
       <aside className="hood" ref={hood} aria-label="Your path through the decisions, and what this one is connected to" data-lean={p.lean ?? ""}>
-        <div className="path" ref={path} style={{ transform: `translateY(${shift}px)` }}>
-          {hidden > 0 && <p className="earlier">{hidden === 1 ? "1 earlier answer" : `${hidden} earlier answers`}</p>}
+        <div className="path" ref={path} style={{ transform: `translateY(${shift}px)` }} data-glide={tops.current.size ? "" : undefined}>
+          {hidden > 0 && (
+            <p className="earlier" data-flip="earlier">
+              {hidden === 1 ? "1 earlier answer" : `${hidden} earlier answers`}
+            </p>
+          )}
           {shown.map((s) => (
-            <button type="button" key={s.key} className="row past" data-id={s.id} data-key={s.key} title={`${s.name}: ${s.state}. Click to see your answer.`} onClick={() => p.onGoTo(s.id)} onPointerEnter={() => setHot(s.id)} onPointerLeave={() => setHot(undefined)}>
+            <button type="button" key={s.key} className="row past" data-id={s.id} data-key={s.key} data-flip={`past:${s.key}`} data-from={`id:${s.id}`} title={`${s.name}: ${s.state}. Click to see your answer.`} onClick={() => p.onGoTo(s.id)} onPointerEnter={() => setHot(s.id)} onPointerLeave={() => setHot(undefined)}>
               <span className="lbl">
                 <span className="nm">{s.name}</span>
                 <span className="st">{s.state}</span>
@@ -189,7 +233,7 @@ export function Path(p: PathProps) {
             </button>
           ))}
           {p.current && (
-            <div className="row now" data-id={p.current.id}>
+            <div className="row now" data-id={p.current.id} data-flip={`id:${p.current.id}`}>
               <span className="lbl" />
               <span className="node">
                 <Mark kind={p.current.rarity} size={22} stopped={p.current.stopped} />
@@ -198,15 +242,23 @@ export function Path(p: PathProps) {
           )}
           {rels.length > 0 && (
             <div className="rels">
-              {p.current?.conflict && <p className="group-h">Your answer keeps one, replaces the other</p>}
+              {p.current?.conflict && (
+                <p className="group-h" data-flip="group-h">
+                  Your answer keeps one, replaces the other
+                </p>
+              )}
               {rels.map((r) => (
                 <RelationRow key={r.id} rel={r} lean={p.lean} optionLabel={p.optionLabel} conflictCard={p.current?.conflict ?? false} />
               ))}
             </div>
           )}
-          {p.upcoming.length > 0 && <p className="next-h">Next</p>}
+          {p.upcoming.length > 0 && (
+            <p className="next-h" data-flip="next-h">
+              Next
+            </p>
+          )}
           {p.upcoming.map((n) => (
-            <button type="button" key={n.id} className="row next" data-id={n.id} title={`${n.name}: to answer. Click to answer it.`} onClick={() => p.onGoTo(n.id)}>
+            <button type="button" key={n.id} className="row next" data-id={n.id} data-flip={`id:${n.id}`} title={`${n.name}: to answer. Click to answer it.`} onClick={() => p.onGoTo(n.id)}>
               <span className="lbl">
                 <span className="nm">
                   {n.fresh && <span className="new-tag">new</span>}
@@ -219,7 +271,11 @@ export function Path(p: PathProps) {
               </span>
             </button>
           ))}
-          {p.more > 0 && <p className="earlier ahead">{p.more} more after these</p>}
+          {p.more > 0 && (
+            <p className="earlier ahead" data-flip="more">
+              {p.more} more after these
+            </p>
+          )}
         </div>
       </aside>
     </>
@@ -227,8 +283,9 @@ export function Path(p: PathProps) {
 }
 
 /** The one sequenced movement (round 5): your choice flies from the card along the line into its row, lands as
- * "you chose …", and the node pulses. Web Animations, so nothing is written into the page's styles. */
-function flyInto(fly: { from: { x: number; y: number }; text: string }, row: HTMLElement) {
+ * "you chose …", and the node pulses. Web Animations, so nothing is written into the page's styles. It aims at
+ * where the row settles (its layout, plus the path's shift), since the row is still gliding there. */
+function flyInto(fly: { from: { x: number; y: number }; text: string }, row: HTMLElement, hood: HTMLElement, shift: number) {
   const st = row.querySelector<HTMLElement>(".st");
   if (!st) return;
   const MOVE = 700;
@@ -236,8 +293,8 @@ function flyInto(fly: { from: { x: number; y: number }; text: string }, row: HTM
   chip.className = "fly";
   chip.textContent = fly.text;
   document.body.append(chip);
-  const to = st.getBoundingClientRect(), w = chip.offsetWidth;
-  const end = { x: to.right - w, y: to.top - 3 };
+  const hr = hood.getBoundingClientRect(), at = offsetIn(st, hood), w = chip.offsetWidth;
+  const end = { x: hr.left + at.left + st.offsetWidth - w, y: hr.top + at.top + shift - 3 };
   st.animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1, offset: 0.55 }], { duration: MOVE });
   row.querySelector(".node")?.animate([{ transform: "scale(1)" }, { transform: "scale(1)", offset: 0.35 }, { transform: "scale(1.35)", offset: 0.45 }, { transform: "scale(1)", offset: 0.6 }], { duration: MOVE });
   chip
@@ -270,7 +327,7 @@ function RelationRow({ rel, lean, optionLabel, conflictCard }: { rel: Relation; 
   const hurts = !conflictCard && rel.effect ? (Object.entries(rel.effect) as [OptionKind, { text: string; bad: boolean }][]).filter(([, v]) => v.bad) : [];
   const conflict = rel.kind === "conflict" || rel.kind === "rule";
   return (
-    <div className={`row rel${cls}`} data-id={rel.id}>
+    <div className={`row rel${cls}`} data-id={rel.id} data-flip={`rel:${rel.id}`}>
       <span className="lbl">
         <span className={`tag${conflict ? " c" : ""}${rel.kind === "precedent" ? " p" : ""}`}>{label}</span>
         <span className="nm">{rel.name}</span>

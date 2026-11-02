@@ -137,6 +137,30 @@ test("dragging the card toward an option lights the path as holding an arrow doe
   await expect(rule).not.toHaveClass(/fx-bad/);
 });
 
+/** The animations running in the path's rows (the glide and fades), not the flight or anything on the card. */
+const pathAnimations = (page: Page) =>
+  page.evaluate(() => document.getAnimations().filter((a) => (a.effect as KeyframeEffect | null)?.target instanceof Element && ((a.effect as KeyframeEffect).target as Element).matches(".path [data-flip]")).length);
+
+test("answering glides the path into its new places, and with reduced motion it changes at once", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+    file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
+    file(s, { title: "Run retention", question: "How long are runs kept?", topic: "alpha/c" });
+  });
+  await choose(page, "proposal");
+  expect(await pathAnimations(page)).toBeGreaterThan(0);
+  await expect.poll(() => pathAnimations(page)).toBe(0); // the glide is over in well under a second
+  await expect(page.locator(".path .row.past")).toHaveText(/The run store/);
+
+  // A changed setting takes effect when the page loads again (the flight reads it once, as Motion does).
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Where do files go?" })).toBeVisible();
+  await choose(page, "proposal");
+  expect(await pathAnimations(page)).toBe(0);
+  await expect(page.locator(".path .row.past")).toHaveText(/Run file layout/);
+});
+
 test("an answered card reopens from the path, and a changed answer is recorded with a brief (D81)", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
