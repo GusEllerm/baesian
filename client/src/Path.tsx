@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import type { MotionValue } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { OptionKind } from "../../src/schema";
 import { Mark } from "./Mark";
 import type { Rarity, Relation } from "./model";
@@ -7,7 +8,8 @@ import type { Rarity, Relation } from "./model";
 // and drawPath). A spine of the decisions you've answered this session, oldest first; the current card's node,
 // joined to the card; its relationships hanging off that node, worded from its side; then what's next. Lines are
 // measured from the layout and drawn as SVG elements. Leaning toward an option lights what it would do to each
-// relationship.
+// relationship. The card is measured where it rests, never where its motion has carried it, and the line into it
+// follows the card frame by frame as it's dragged, leans, shakes or springs back.
 
 export interface TrailStep {
   key: string;
@@ -29,6 +31,12 @@ export interface NextStep {
   /** How the current card relates to it, when it does: shown on its row, not listed twice. */
   link?: Relation;
 }
+/** The card's own motion: where its drag, lean or swipe has moved it from where it rests, and how far it has turned. */
+export interface CardMotion {
+  x: MotionValue<number>;
+  y: MotionValue<number>;
+  rotate: MotionValue<number>;
+}
 export interface PathProps {
   trail: TrailStep[];
   current: { id: string; rarity: Rarity; stopped: boolean; conflict: boolean } | undefined;
@@ -42,6 +50,8 @@ export interface PathProps {
   onGoTo: (id: string) => void;
   /** Bumped whenever the card's layout may have changed, so the path lines up again. */
   layoutKey: string;
+  /** The card in play's motion, for the line into it. */
+  card?: CardMotion;
   /** Your choice, flying from the card into its new row on the path. */
   fly?: { key: string; from: { x: number; y: number }; text: string };
   onFlown?: () => void;
@@ -50,12 +60,20 @@ export interface PathProps {
 const TRAIL_MAX = 8;
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
+/** The line into the card: from the node's edge, at the node's height, to the card at rest (its centre and width). */
+interface Join {
+  x1: number;
+  y: number;
+  cx: number;
+  cy: number;
+  w: number;
+}
 interface Lines {
   width: number;
   height: number;
   done: string[];
   ahead: string[];
-  join?: string;
+  join?: Join;
   arcs: { d: string; head: string; conflict: boolean; id: string }[];
 }
 
@@ -84,11 +102,13 @@ export function Path(p: PathProps) {
     const now = el.querySelector<HTMLElement>(".row.now .node");
     let next = 0;
     if (card && h1 && now) {
+      // Where the card rests, not where a drag or its entrance has it now, so the path doesn't follow it around.
+      const rest = restRect(card);
       const top = h.getBoundingClientRect().top + 4;
       const first = el.firstElementChild!.getBoundingClientRect().top - shift;
       const at = now.getBoundingClientRect().top - shift + now.offsetHeight / 2;
-      next = Math.round(Math.max(h1.getBoundingClientRect().top + 17 - at, top - first));
-      if (at + next > card.getBoundingClientRect().bottom - 36 && shown.length > 0 && folded < p.trail.length) {
+      next = Math.round(Math.max(rest.top + offsetIn(h1, card).top + 17 - at, top - first));
+      if (at + next > rest.top + rest.height - 36 && shown.length > 0 && folded < p.trail.length) {
         setFolded((f) => f + 1);
         return;
       }
@@ -122,12 +142,30 @@ export function Path(p: PathProps) {
   useLayoutEffect(() => setFolded(0), [p.layoutKey]);
   void tick;
 
+  // The line into the card is drawn outside React, on every frame the card moves, from where it rests plus its motion.
+  const joinEl = useRef<SVGPathElement>(null);
+  const join = useRef<Join | undefined>(undefined);
+  join.current = lines?.join;
+  const card = useRef(p.card);
+  card.current = p.card;
+  const drawJoin = useRef(() => {
+    const el = joinEl.current, g = join.current, m = card.current;
+    if (el && g) el.setAttribute("d", joinPath(g, m?.x.get() ?? 0, m?.y.get() ?? 0, m?.rotate.get() ?? 0));
+  }).current;
+  useLayoutEffect(drawJoin);
+  useEffect(() => {
+    const m = p.card;
+    if (!m) return;
+    const offs = [m.x.on("change", drawJoin), m.y.on("change", drawJoin), m.rotate.on("change", drawJoin)];
+    return () => offs.forEach((off) => off());
+  }, [p.card, drawJoin]);
+
   return (
     <>
       <svg className="path-lines" width={lines?.width ?? 0} height={lines?.height ?? 0} aria-hidden="true">
         {lines?.done.map((d) => <path key={d} className="spine done" d={d} />)}
         {lines?.ahead.map((d) => <path key={d} className="spine ahead" d={d} />)}
-        {lines?.join && <path className="join" d={lines.join} />}
+        {lines?.join && <path className="join" ref={joinEl} />}
         {lines?.arcs.map((a) => (
           <g key={a.id}>
             <path className={`arc${a.conflict ? " conflict" : ""}${hot === a.id ? " hot" : ""}`} d={a.d} />
@@ -246,6 +284,36 @@ function RelationRow({ rel, lean, optionLabel, conflictCard }: { rel: Relation; 
   );
 }
 
+/** Where an element sits with no transform of its own: its layout box, which the card's motion doesn't move. */
+function restRect(el: HTMLElement): { left: number; top: number; width: number; height: number } {
+  const parent = el.offsetParent as HTMLElement | null;
+  const p = parent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+  return { left: p.left + (parent?.clientLeft ?? 0) + el.offsetLeft, top: p.top + (parent?.clientTop ?? 0) + el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+}
+
+/** An element's offset inside an ancestor, by layout: transforms don't count. */
+function offsetIn(el: HTMLElement, root: HTMLElement): { left: number; top: number } {
+  let left = 0, top = 0;
+  for (let e: HTMLElement | null = el; e && e !== root; e = e.offsetParent as HTMLElement | null) {
+    left += e.offsetLeft;
+    top += e.offsetTop;
+  }
+  return { left, top };
+}
+
+/**
+ * The line from the card's node to the card's left edge, wherever the card has been moved (dx, dy) and turned (deg)
+ * from where it rests. It never runs backwards: with the card over the node, there's no line.
+ */
+export function joinPath(g: Join, dx: number, dy: number, deg: number): string {
+  const th = (deg * Math.PI) / 180, half = g.w / 2;
+  // The card turns about its centre: its left edge's points (−w/2, t) land at x = −w/2·cos θ − t·sin θ and
+  // y = −w/2·sin θ + t·cos θ. Solve for the t at the line's height, then take that x.
+  const t = (g.y - (g.cy + dy) + half * Math.sin(th)) / Math.cos(th);
+  const end = g.cx + dx - half * Math.cos(th) - t * Math.sin(th) + 2;
+  return end > g.x1 + 1 ? `M ${g.x1.toFixed(1)} ${g.y.toFixed(1)} H ${end.toFixed(1)}` : "";
+}
+
 /** The spine (solid through your answers, dotted through what's next), the line into the card, and the arcs. */
 function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undefined): Lines {
   const base = desk.getBoundingClientRect();
@@ -267,8 +335,9 @@ function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undef
   };
   const lines: Lines = { width: Math.round(base.width), height: Math.round(base.height), done: segments([...past, ...(now ? [now] : [])]), ahead: segments([...(now ? [now] : []), ...ahead]), arcs: [] };
   if (now && card) {
-    const n = at(now), c = card.getBoundingClientRect();
-    lines.join = `M ${(n.x + 15).toFixed(1)} ${n.y.toFixed(1)} H ${(c.left - base.left + 2).toFixed(1)}`;
+    const n = at(now), c = restRect(card);
+    const r1 = (v: number) => Math.round(v * 10) / 10;
+    lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
     // A link back to an earlier answer: an arc to the right of the spine, into this card's ring from above.
     for (const row of path.querySelectorAll<HTMLElement>(".row.past")) {
       const tag = row.querySelector(".tag.link");

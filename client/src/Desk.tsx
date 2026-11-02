@@ -1,5 +1,5 @@
 import { AnimatePresence, type MotionStyle, animate, motion, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApiAliasInput, ApiCard, ApiState } from "../../src/api";
 import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
@@ -12,7 +12,7 @@ import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarity
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
 import { CalibrationPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
-import { Path } from "./Path";
+import { type CardMotion, Path } from "./Path";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
 // in, the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
@@ -30,6 +30,8 @@ const DRAG_ELASTIC = 0.16;
  * 105 px, which slid the card over the path and hid the very rows that light up to say what leaning does (5f).
  */
 const LEAN_X = THRESH_X * DRAG_ELASTIC;
+/** How far a card moved by hand leans before the path lights what that side would do: past the shake's 6 px. */
+const LEAN_LIGHT = 8;
 const NEXT_MAX = 3;
 /** Small counts in words, as round 5's summary has them. */
 const NUMBER = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
@@ -87,6 +89,11 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const [toast, setToast] = useState<Toast>();
   const [lean, setLean] = useState<Side>();
   const [hover, setHover] = useState<Side>();
+  /** The side the card in play leans to under a drag or a swipe, which lights the path as a held arrow does. */
+  const [handLean, setHandLean] = useState<Side>();
+  /** The card in play's motion, so the path's line follows it. A card that's leaving gives it up. */
+  const [cardMotion, setCardMotion] = useState<CardMotion>();
+  const showMotion = useCallback((m: CardMotion | undefined, from?: CardMotion) => setCardMotion((cur) => (m ? m : cur === from ? undefined : cur)), []);
   const [hold, setHold] = useState<number>();
   const [nudged, setNudged] = useState(0);
   const [fly, setFly] = useState<Fly>();
@@ -413,7 +420,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       ...(link ? { link } : {}),
     };
   });
-  const leanKind = mode.kind === "live" ? (lean ? sides[lean] : hover ? sides[hover] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
+  const leaning = lean ?? handLean ?? hover;
+  const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
 
   // The pile: the rest of this card's area, slightly messy, under it.
   const pile = current ? ahead.filter((c) => areaOf(c) === areaOf(current)).slice(0, 4) : [];
@@ -457,6 +465,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           optionLabel={(k) => `${ARROW[sideOf(k)]} “${current?.meta[k] ?? ""}”`}
           onGoTo={goTo}
           layoutKey={`${key}:${mode.kind}`}
+          {...(cardMotion ? { card: cardMotion } : {})}
           {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
         />
         <section className="stage" aria-label="The card to answer">
@@ -483,6 +492,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   exit={exitDir.current}
                   arriveAfter={fly && fly.key !== key ? MOVE_MS * 0.65 : 0}
                   lean={lean}
+                  onMotion={showMotion}
+                  onHandLean={setHandLean}
                   nudged={nudged}
                   locked={readLeft > 0}
                   rarity={r.rarity}
@@ -544,7 +555,17 @@ function gesture(dx: number, dy: number): { dir: Dir; progress: number } {
 const SWIPE_IDLE_MS = 110, SWIPE_COOLDOWN_MS = 650;
 
 /** One card on the desk, with its own motion: the lean, the drag, the swipe, and leaving toward the side you chose. */
-function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; locked: boolean; exit: Leave; rarity: string; arriveAfter: number }) {
+function LiveCard(p: {
+  card: CardProps;
+  lean: Side | undefined;
+  onMotion: (m: CardMotion | undefined, from?: CardMotion) => void;
+  onHandLean: (side: Side | undefined) => void;
+  nudged: number;
+  locked: boolean;
+  exit: Leave;
+  rarity: string;
+  arriveAfter: number;
+}) {
   const reduced = useReducedMotion();
   // A card that's leaving keeps its last props for its exit. It must not answer again: no clicks, no drag.
   const present = useIsPresent();
@@ -558,6 +579,31 @@ function LiveCard(p: { card: CardProps; lean: Side | undefined; nudged: number; 
   const live = p.card.mode.kind === "live" && present;
   // Read once, when the card arrives: clearing the flight must not restart its entrance without the pause.
   const [arriveAfter] = useState(p.arriveAfter);
+
+  // While it's the card in play, the path's line follows its motion; once it's leaving, the next card's does.
+  const motionOf = useMemo<CardMotion>(() => ({ x, y, rotate }), [x, y, rotate]);
+  const { onMotion, onHandLean } = p;
+  useLayoutEffect(() => {
+    if (!present) return;
+    onMotion(motionOf);
+    return () => onMotion(undefined, motionOf);
+  }, [present, motionOf, onMotion]);
+  // A drag or a swipe that leans the card lights the path as a held arrow does, from the card's own motion.
+  const presentNow = useRef(present);
+  presentNow.current = present;
+  useEffect(() => {
+    let side: Side | undefined;
+    const off = x.on("change", (v) => {
+      const next: Side | undefined = !presentNow.current ? undefined : v <= -LEAN_LIGHT ? "left" : v >= LEAN_LIGHT ? "right" : undefined;
+      if (next === side) return;
+      side = next;
+      onHandLean(next);
+    });
+    return () => {
+      off();
+      if (side) onHandLean(undefined);
+    };
+  }, [x, onHandLean]);
 
   useEffect(() => {
     // While you still have to read (D91), the card resists: it leans a third as far, as round 5's did.
