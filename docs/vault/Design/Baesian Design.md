@@ -57,7 +57,7 @@ Principles:
 | Tier | What | Holds for |
 |---|---|---|
 | **0: relied on** | The store, the CLI (`file`, `wait`, `inbox`, `deck`), the git gate, CI | Any agent or human that commits |
-| **1: plain instructions** | An `AGENTS.md` block: when to file, run `baesian inbox` before starting work, add trailers | Any harness that reads instruction files |
+| **1: plain instructions** | An `AGENTS.md` block: when to file, run `baesian inbox` before starting work and when a task is finished (D116), add trailers | Any harness that reads instruction files |
 | **2: adapters** | The Claude Code plugin (skill, `SessionStart`, `ExitPlanMode` hook), Codex hooks, the MCP server | One harness each; faster, never required |
 
 ## Core pieces
@@ -269,11 +269,11 @@ Later: an **after-the-fact reviewer**. This is an independent agent that reads a
 A plan is a document, not a phase (D28). `baesian deck --from <file>` builds a deck from anything that proposes decisions: a plan file, a design note, an issue, a PR description. The document becomes the briefing. It works for a five-line plan in an interleaved session as well as for a long plan before an autonomous run.
 
 Adapters can call it automatically where a harness has a plan moment:
-- **Claude Code:** a `PostToolUse` hook with matcher `ExitPlanMode`.
-  - The hook receives the approved plan as `tool_response.plan`, and can return `additionalContext` listing the cards it filed.
+- **Claude Code:** a `PostToolUse` hook with matcher `ExitPlanMode` (D115).
+  - The hook receives the approved plan as `tool_response.plan`, pipes it to `baesian deck --from -`, and returns `additionalContext` telling the agent to file the plan's hard-to-undo decisions into the new deck. It files no cards itself (D65): approving the plan was one yes for all of it, and its hard-to-undo decisions still come to you one by one.
   - Never use `PreToolUse` returning `allow` here: for `ExitPlanMode`, that auto-approves the plan and skips the user's prompt.
-  - Source: <https://code.claude.com/docs/en/hooks>, read by a docs-checking subagent on 2026-10-23.
-  - *Unverified:* there's no worked example of the matcher (confirm with `claude --debug`); behaviour on a rejected plan isn't documented.
+  - Source: <https://code.claude.com/docs/en/hooks>, read by a docs-checking subagent on 2026-10-23, and again on 2026-11-01 (`tool_response` holds `plan` and `filePath`).
+  - *Unverified:* behaviour on a rejected plan isn't documented; it's to be tested in a real session.
 - **Codex:** its hooks (<https://learn.chatgpt.com/docs/hooks>) have no plan-mode event. `update_plan` is covered by `PostToolUse` but is called repeatedly, so it isn't a clean trigger (*unverified*).
 
 ### The git gate
@@ -450,11 +450,11 @@ The personal-website and live-docs vaults already run this decision process by h
 ## Getting it into harnesses
 
 - **Every harness (tiers 0 and 1):** the CLI, the git gate, CI, and the `AGENTS.md` block. This is the whole product; everything below only makes it faster.
-- **Claude Code plugin (tier 2):**
+- **Claude Code plugin (tier 2),** in this repo at `plugins/claude-code/`, with the marketplace file at the root (D114):
   - a skill that teaches the agent to file good cards, reading the project's rules;
-  - a `SessionStart` hook that injects `baesian inbox`;
-  - the `ExitPlanMode` hook that calls `baesian deck --from`;
-  - a `/baesian` command;
+  - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn;
+  - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115);
+  - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
   - the MCP server.
 - **Codex (tier 2):** MCP configuration, and its hooks for the same session-start injection. Codex reads `AGENTS.md` natively.
 - **The MCP server (tier 2):** `file_card`, `get_verdict(wait=…)`, `list_resolved(since=…)`, as a view over the live layer.

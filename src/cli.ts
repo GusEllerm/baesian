@@ -13,7 +13,7 @@ import { parseTrailers } from "./trailers.js";
 import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
-import { type Card, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { type Card, type InboxItem, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
@@ -296,11 +296,13 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("create a deck; its body is the briefing")
     .argument("<id>", "a lowercase slug, e.g. storage-layer")
     .requiredOption("--title <text>", "what the deck decides")
-    .option("--from <path>", "use a document (a plan, design note, issue) as the briefing")
+    .option("--from <path>", "use a document (a plan, design note, issue) as the briefing; '-' reads stdin")
     .option("--note <wikilink...>", "vault notes that give context")
-    .action((id: string, opts: { title: string; from?: string; note?: string[] }) => {
-      const from = opts.from ? resolve(io.cwd, opts.from) : undefined;
-      const body = from ? readFileSync(from, "utf8") : "";
+    .action(async (id: string, opts: { title: string; from?: string; note?: string[] }) => {
+      // A briefing piped in records no `from`: a harness's plan lives outside the repo, and its path would show the
+      // machine's layout in the record (as D105 found for worktrees).
+      const from = opts.from && opts.from !== "-" ? resolve(io.cwd, opts.from) : undefined;
+      const body = opts.from ? await readInput(opts.from, io) : "";
       const deck = store().createDeck(
         { id, title: opts.title, ...(from ? { from } : {}), ...(opts.note ? { context_notes: opts.note } : {}) },
         body,
@@ -354,11 +356,21 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("verdicts on this branch's cards since you last looked")
     .option("--peek", "don't mark them as seen")
     .option("--json", "print as JSON")
-    .action((opts: { peek?: boolean; json?: boolean }) => {
-      const s = store();
-      const items = s.inbox({ advance: !opts.peek });
+    .option("--quiet", "for a harness hook: print nothing when there's nothing new, or the repo doesn't use Baesian")
+    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean }) => {
+      let s: Store;
+      let items: InboxItem[];
+      try {
+        s = store();
+        items = s.inbox({ advance: !opts.peek });
+      } catch (e) {
+        // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
+        if (opts.quiet) return;
+        throw e;
+      }
       if (opts.json) return json(items);
-      if (!items.length) return io.out("no new verdicts");
+      if (!items.length) return opts.quiet ? undefined : io.out("no new verdicts");
+      if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
       for (const item of items) {
         // A dependent returned by its parent's verdict (D80) is listed under its own ID.
         io.out(item.verdict.card === item.card ? verdictLine(item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
@@ -438,10 +450,11 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const s = store();
       const message = opts.message ? readFileSync(resolve(io.cwd, opts.message), "utf8") : "";
       const report = evaluate(s, detectStaged(s, stagedSnapshot(s.repo.toplevel)), parseTrailers(message, s.repo.toplevel));
+      // The exit code is the same with --json: found by rehearse's agent, whose graders read the JSON.
+      state.code = report.ok ? 0 : 1;
       if (opts.json) return json(report);
       if (!report.facts.length && report.ok) return io.out("no decisions detected in the staged changes");
       for (const line of describeReport(report)) io.out(line.replace("commit blocked.", "this commit would be blocked."));
-      state.code = report.ok ? 0 : 1;
     });
 
   program

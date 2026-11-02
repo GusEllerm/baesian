@@ -22,7 +22,7 @@ export interface Round5 {
 
 export function fileRound5(store: Store): Round5 {
   const as = (agent: string) => ({ agent, force: true });
-  const file = (agent: string, deck: string, card: Record<string, unknown>) => store.fileCard({ deck, level: "provisional", touches: [], ...card }, "", as(agent)).card.meta.id;
+  const file = (agent: string, deck: string, card: Record<string, unknown>, body = "") => store.fileCard({ deck, level: "provisional", touches: [], ...card }, body, as(agent)).card.meta.id;
   const settle = (id: string) => store.addVerdict({ card: id, revision: 1, response: "accept", reviewer: "gus", client: "web" });
 
   for (const [id, title] of [
@@ -94,7 +94,7 @@ export function fileRound5(store: Store): Round5 {
     rules: [RULE],
     proposal_breaks: [RULE],
     depends_on: [server],
-  });
+  }, "**The request check** reads the token on every request.\n\n- In the fragment, it never reaches the server's logs.\n- In a cookie, `HttpOnly` keeps scripts from reading it.\n");
   // Two agents have stopped for you, as in round 5.
   const since = new Date().toISOString();
   store.startWaiting(token, "claude-code", since);

@@ -10,7 +10,8 @@ export const AGENTS_BLOCK = `${BEGIN}
 ## Decisions (Baesian)
 
 Design decisions that are hard to undo go to a person as cards; you don't make them silently. Run
-\`baesian inbox\` before starting work: it shows new verdicts on this branch's cards.
+\`baesian inbox\` before starting work, and again when you finish a task: it shows new verdicts on this branch's
+cards, to act on then rather than mid-task.
 
 **File a card** (\`baesian template > card.md\`, fill it in, \`baesian file card.md\`) when a decision
 changes a schema or on-disk format; changes a public API, URL scheme or module boundary; adds a runtime
@@ -18,7 +19,9 @@ dependency; changes CI, infrastructure or deployment; is user-facing; publishes 
 security or privacy; spends money; deletes or overwrites stored data; or would break something to
 reverse. Otherwise decide yourself. Every card states its strongest alternative, and the one question
 the choice turns on (the crux). A topic names one question: reuse one from \`baesian topics\` only for the
-same question, and give a follow-on question its own, narrower topic.
+same question, and give a follow-on question its own, narrower topic. The reviewer chooses before seeing
+your pick, your case or the card's body; put what they need in order to choose, kept neutral, in
+\`crux_fact\`, and background in the body.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose \`touches\`
@@ -62,6 +65,9 @@ export function harnessName(env: NodeJS.ProcessEnv): string | undefined {
   const ai = env.AI_AGENT?.trim();
   if (ai) return ai.split("_")[0] || undefined;
   if (env.CLAUDE_CODE_ENTRYPOINT || env.CLAUDECODE) return "claude-code";
+  // Codex sets no AI_AGENT, but gives the commands it runs a per-session CODEX_THREAD_ID (seen in 0.166.0, by
+  // rehearse's agent, with no model calls).
+  if (env.CODEX_THREAD_ID) return "codex";
   return undefined;
 }
 
@@ -108,7 +114,7 @@ crux: ""               # the one question the choice turns on
 crux_proposal: ""      # the answer that leads to your pick: "If it does"
 crux_alternative: ""   # the answer that leads to the alternative: "If it doesn't"
 # crux_preference: true    (the crux is about what the reviewer values, not a fact)
-# crux_fact: ""            (a fact that bears on the crux)
+# crux_fact: ""            (what the reviewer needs to choose, kept neutral: the only context they see first)
 # rationale: ""            (why you pick the proposal)
 # wrong_if: ""             (what would show your pick is wrong: required if reverse is one-way,
 # check: ""                 touches includes security, or a premise is set; check says where to look)
@@ -125,6 +131,6 @@ crux_alternative: ""   # the answer that leads to the alternative: "If it doesn'
 # level: blocking          (provisional by default; hard by default for publishes, security, money, data-loss)
 # depends_on: [B-xxxxx]
 # deck: storage-layer      (your branch's deck by default)
-# Below the closing line, optionally: the context behind the decision, for a reviewer who wants more.
+# Below the closing line, optionally: background, shown with your case once the reviewer has chosen.
 ---
 `;

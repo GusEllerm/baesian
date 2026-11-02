@@ -609,7 +609,12 @@ export class Store {
       },
       "the deck",
     );
-    this.writeOnce(join(this.live, "decks", `${meta.id}.md`), renderDoc(meta, body));
+    try {
+      this.writeOnce(join(this.live, "decks", `${meta.id}.md`), renderDoc(meta, body));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      throw Object.assign(new Error(`there's already a deck "${meta.id}"`), { code: "EEXIST" });
+    }
     return { meta, body };
   }
 

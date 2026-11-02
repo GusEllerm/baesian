@@ -1,0 +1,50 @@
+{
+  "description": "Baesian: new verdicts at natural stopping points, and an approved plan as a deck",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v baesian >/dev/null 2>&1 || exit 0; baesian inbox --quiet",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v baesian >/dev/null 2>&1 || exit 0; baesian inbox --quiet",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/turn-ended.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/plan-approved.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

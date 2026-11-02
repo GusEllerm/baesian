@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { EXIT_POSSIBLE_DUPLICATE, main } from "../src/cli.js";
-import { REVIEWER, cleanup, draftFile, repo } from "./helpers.js";
+import { REVIEWER, cleanup, draftFile, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
 
@@ -10,6 +13,44 @@ function run(cwd: string, args: string[], stdin = "") {
   const io = { out: (l: string) => out.push(l), err: (l: string) => err.push(l), stdin: () => stdin, cwd };
   return main(["node", "baesian", ...args], io).then((code) => ({ code, out: out.join("\n"), err: err.join("\n") }));
 }
+
+describe("inbox --quiet, for a harness's session-start hook", () => {
+  it("prints the new verdicts under a heading, and nothing when there are none", async () => {
+    const { dir, store } = repo();
+    const r = await run(dir, ["--agent", "claude-code", "file"], draftFile());
+    const id = /filed (B-\w{5})/.exec(r.out)![1]!;
+    expect((await run(dir, ["inbox", "--quiet"])).out).toBe("");
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    const once = await run(dir, ["inbox", "--quiet"]);
+    expect(once.code).toBe(0);
+    expect(once.out.split("\n")[0]).toBe("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
+    expect(once.out).toContain(`${id} r1  accept`);
+    expect((await run(dir, ["inbox", "--quiet"])).out).toBe(""); // delivered: marked as seen
+  });
+
+  it("is silent, and succeeds, in a repo that doesn't use Baesian", async () => {
+    const plain = mkdtempSync(join(tmpdir(), "baesian-plain-"));
+    try {
+      const r = await run(plain, ["inbox", "--quiet"]);
+      expect(r).toMatchObject({ code: 0, out: "", err: "" });
+      expect((await run(plain, ["inbox"])).code).not.toBe(0);
+    } finally {
+      rmSync(plain, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("check --json", () => {
+  it("exits as the gate would, so a grader reading the JSON gets the verdict from the exit code too", async () => {
+    const { dir } = repo();
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "x", dependencies: { "left-pad": "1.3.0" } }));
+    sh(dir, "add", "package.json");
+    const r = await run(dir, ["check", "--json"]);
+    expect(JSON.parse(r.out).ok).toBe(false);
+    expect(r.code).toBe(1);
+    expect((await run(dir, ["check"])).code).toBe(1);
+  });
+});
 
 describe("cli", () => {
   it("files from stdin and tells the agent which trailer to add", async () => {

@@ -27,13 +27,13 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `reply <id> <text>` | the agent's one reply to an answer against its pick: a fact or a check (D89, D104). `wait` and `inbox` offer it when it's open |
 | `attach <id>` | waits on an existing card instead of filing a duplicate |
 | `withdraw <id> --reason` | withdraws your own card |
-| `deck <id> --title [--from] [--note]` | creates a deck; its body is the briefing |
+| `deck <id> --title [--from] [--note]` | creates a deck; its body is the briefing. `--from -` reads it from stdin and records no `from`, for a harness's plan (D115) |
 | `wait <id> [--timeout s] [--no-presence]` | waits for a verdict; the exit code says what to do |
 | `list [--all] [--branch]`, `show <id>`, `topics` | read. `show` prints the card as the client shows it: the question, the trigger, the stakes, the crux and the two options, then any context |
-| `inbox [--peek]` | new verdicts on this branch's cards |
+| `inbox [--peek] [--quiet]` | new verdicts on this branch's cards. `--quiet` is for a harness's session-start hook (M5): a heading and the verdicts, or nothing at all when there's nothing new or the repo doesn't use Baesian, and never a failure |
 | `serve [--port <n>] [--no-open] [--poll]` | serves the client on 127.0.0.1 and opens it ([[src-server]]), on the last server's port when it's free (D103). If this repo's server is already running, it prints its address and opens that instead |
 | `sync` | copies new verdicts and ledger entries into the record |
-| `check [--message <file>]` | previews the commit gate on the staged changes: the decisions found, and what covers them |
+| `check [--message <file>] [--json]` | previews the commit gate on the staged changes: the decisions found, and what covers them. Exits 1 when the commit would be blocked, with `--json` too |
 | `verify [--base <ref>] [--merge] [--file-conflicts]` | CI: reruns the gate on every commit since the base, against its own committed record. `--merge` adds the merge gate and conflicting decisions ([[src-verify]]) |
 | `hook <name> [args…]` | hidden; what the installed git hooks call (`runHook`) |
 
@@ -73,9 +73,10 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`), then `agent`. `AGENTS_BLOCK` covers:
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`, or Codex's `CODEX_THREAD_ID`), then `agent`. `AGENTS_BLOCK` covers:
 - when to file a card, and that every card states its strongest alternative and its crux;
 - that a topic names one question, so a follow-on gets its own, narrower topic (D112);
+- that the reviewer chooses before seeing the agent's pick, case or body, so what they need in order to choose goes in `crux_fact`, kept neutral (provisional, on the finding 2 card);
 - the commit gate: card or ack trailers, and `baesian check`;
 - `wait`'s exit codes, with the one reply to an answer against the agent's pick (D104);
 - drafting a rule when an answer asks for one, with `baesian rule` (D110);
@@ -83,4 +84,4 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 - what to do when `baesian file` exits 3, including for a follow-on (D112);
 - that only a person resolves a card.
 
-The template's `topic` line says the same as the block: reuse a topic only for the same question.
+The template says the same as the block: reuse a topic only for the same question, and `crux_fact` is the only context the reviewer sees first.

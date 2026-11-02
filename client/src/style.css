@@ -141,6 +141,10 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .reasoning { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 9px; background: #ffffff55; font: var(--t-body); }
 .reasoning .who { font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); }
 .reasoning q { font-style: italic; quotes: "“" "”"; }
+.reasoning .context summary { cursor: pointer; font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); }
+.reasoning .context p, .reasoning .context ul { margin: 6px 0 0; }
+.reasoning .context ul { padding-left: 18px; }
+.reasoning .context code, .crux .fact code, .opt .then code { font: 600 0.88em/1 var(--ui); }
 .panel-in { --c: var(--ink); display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
 .panel-in .verdict { font: var(--t-body); font-size: 17px; }
 .panel-in h3 { margin: 0; font: var(--t-meta); font-stretch: 88%; font-size: 15px; }

@@ -50,7 +50,7 @@ Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <c
 | **M3b** | `baesian verify` for CI: every commit in a range checked against its own committed record, the merge gate (resolved or deferred), conflicting decisions and conflict cards, hints for a stale record ([[src-verify]]) | **done** (2026-10-23), 118 tests in total |
 | **M3c** | The exported-signature detector (`api:` facts): `livedocs signatures` (livedocs 0.2.1, D56), breaking changes only (D58), opt-in through `gate_api` (D59) | **done** (2026-10-23), 107 tests in total |
 | **M4** | The client: a local server (API plus live updates), the React app (desktop first, arrow-key and swipe gestures), decks, the response panel, rules, topic merging, conflict links, presence | |
-| **M5** | Harness adapters: the Claude Code plugin (skill, `SessionStart`, `ExitPlanMode`), Codex hooks | |
+| **M5** | Harness adapters: the Claude Code plugin (skill, `SessionStart`, `ExitPlanMode`), Codex hooks | **under way** (2026-11-01): the Claude Code plugin is built in `plugins/claude-code/` (D114–D116), 234 tests in total, provisionally tested in a real session; the full actor-driven run (rehearse) and Codex hooks to come |
 | **M6** | The vault adapter: decision and rule notes, the Decision Log's `base` query | |
 | **M7** | The MCP server | |
 

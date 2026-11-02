@@ -29,6 +29,9 @@ export function layoutProblems(): string[] {
   };
   const shown = (el: Element): boolean => {
     if (el.closest("[data-leaving]")) return false;
+    // A closed <details> hides all but its summary, without display: none.
+    const d = el.closest("details");
+    if (d && !d.open && !el.closest("summary")) return false;
     for (let e: Element | null = el; e; e = e.parentElement) {
       const cs = getComputedStyle(e);
       if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) < 0.05) return false;

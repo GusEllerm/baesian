@@ -176,6 +176,7 @@ describe("an agent's name (D102)", () => {
     expect(agentName(undefined, { ...claude, BAESIAN_AGENT: "spark-research" })).toBe("spark-research");
     expect(agentName(undefined, claude)).toBe("claude-code");
     expect(agentName(undefined, { CLAUDE_CODE_ENTRYPOINT: "cli" })).toBe("claude-code");
+    expect(agentName(undefined, { CODEX_THREAD_ID: "019a-thread", CODEX_VERSION: "0.166.0" })).toBe("codex");
     expect(agentName(undefined, { BAESIAN_AGENT: "  " })).toBe("agent");
     expect(agentName(undefined, {})).toBe("agent");
   });
@@ -185,7 +186,12 @@ describe("an agent's name (D102)", () => {
     // A topic names one question; a follow-on gets its own (D112).
     expect(AGENTS_BLOCK).toContain("A topic names one question");
     expect(AGENTS_BLOCK).toContain("give it a narrower topic");
+    // What the reviewer needs in order to choose goes where they see it first (D113).
+    expect(AGENTS_BLOCK).toContain("put what they need in order to choose, kept neutral, in\n`crux_fact`");
+    expect(CARD_TEMPLATE).toContain("the only context they see first");
     expect(CARD_TEMPLATE).toContain("reuse one from `baesian topics` only for the same question");
     expect(AGENTS_BLOCK).toMatch(/7 while\s+the reviewer is still there/);
+    // Late answers are taken at a stopping point, never mid-task (D116).
+    expect(AGENTS_BLOCK).toContain("and again when you finish a task");
   });
 });

@@ -3,6 +3,7 @@ import type { ApiCard } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
 import { Mark } from "./Mark";
+import { Prose, inline } from "./Prose";
 import { RARITY, type Rarity, type WaitState, replyOf } from "./model";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
@@ -146,7 +147,7 @@ function Crux({ card }: { card: ApiCard }) {
       <p>
         <span className="lbl">{m.crux_preference ? "It turns on what you value" : "It turns on"}</span> {m.crux}
       </p>
-      {m.crux_fact && <p className="fact">{m.crux_fact}</p>}
+      {m.crux_fact && <p className="fact">{inline(m.crux_fact)}</p>}
       <Reply card={card} />
     </div>
   );
@@ -192,7 +193,7 @@ function OptionButton(p: CardProps & { side: Side }) {
       )}
       <span className="ifans">{kind === "proposal" ? m.crux_proposal : m.crux_alternative}</span>
       <h2>{m[kind]}</h2>
-      <p className="then">then {kind === "proposal" ? m.proposal_then : m.alternative_then}</p>
+      <p className="then">then {inline(kind === "proposal" ? m.proposal_then : m.alternative_then)}</p>
       {showPick && (
         <span className="pickof">
           {m.source_agent}'s pick{m.serves ? `, for ${m.serves}` : ""}
@@ -274,21 +275,13 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         )}
       </p>
       <div className="reasoning">
-        {m.rationale || m.wrong_if ? (
-          <p>
-            <span className="who">{m.source_agent}:</span> {m.rationale && <q>{m.rationale}</q>}
-            {m.wrong_if && (
-              <>
-                {" "}
-                Its pick is wrong if {m.wrong_if}
-                {m.check ? ` (check ${m.check})` : ""}.
-              </>
-            )}
-          </p>
-        ) : (
-          <p>
-            <span className="who">{m.source_agent}</span> gave no reasoning beyond the card.
-          </p>
+        {(m.rationale || m.wrong_if || !card.body.trim()) && <ReasonLine card={card} />}
+        {/* The body is context, shown with the agent's case (D92): open by itself when it's all the reasoning there is. */}
+        {card.body.trim() && (
+          <details className="context" open={!(m.rationale || m.wrong_if)}>
+            <summary>More from {m.source_agent}</summary>
+            <Prose text={card.body} />
+          </details>
         )}
       </div>
       {!same && (
@@ -364,6 +357,30 @@ function Review(p: CardProps) {
 }
 
 /** ↑ Other answer and ↓ Can't judge: a reason, and words for the agent. */
+/** The agent's case, as it wrote it at filing (D77): its rationale, and what would show its pick is wrong. */
+function ReasonLine({ card }: { card: ApiCard }) {
+  const m = card.meta;
+  if (!m.rationale && !m.wrong_if) {
+    return (
+      <p>
+        <span className="who">{m.source_agent}</span> gave no reasoning beyond the card.
+      </p>
+    );
+  }
+  return (
+    <p>
+      <span className="who">{m.source_agent}:</span> {m.rationale && <q>{m.rationale}</q>}
+      {m.wrong_if && (
+        <>
+          {" "}
+          Its pick is wrong if {m.wrong_if}
+          {m.check ? ` (check ${m.check})` : ""}.
+        </>
+      )}
+    </p>
+  );
+}
+
 /**
  * D16's "make this a rule": the agent drafts the rule, with the gate patterns it covers, and it comes back to you
  * as a card to confirm (D109, D110). Not on a rule draft itself.

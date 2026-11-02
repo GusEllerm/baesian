@@ -1,0 +1,12 @@
+{
+  "name": "baesian",
+  "owner": { "name": "Gus Ellerm" },
+  "description": "Baesian's plugin for Claude Code: swipe review for agent decisions",
+  "plugins": [
+    {
+      "name": "baesian",
+      "source": "./plugins/claude-code",
+      "description": "Put an agent's hard-to-undo design decisions to you as cards, and bring your verdicts back into the session"
+    }
+  ]
+}

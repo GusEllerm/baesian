@@ -1,0 +1,10 @@
+{
+  "type": "verdict",
+  "card": "B-epbhs",
+  "revision": 2,
+  "response": "correction",
+  "choice": "The difference in these options is how we manage the timing of when responses are given back to the agent right. I worry that if it is instant, the interruption can cause messiness in the agents workflow, leading to files being missed etc. So waiting till a natural stopping point might be better?",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-02T00:45:54.084Z"
+}

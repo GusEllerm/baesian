@@ -239,6 +239,32 @@ test("a card whose topic looks like another offers the merge, and asks once more
   await expect(page.locator(".path .row", { hasText: "Timestamp format" })).toBeVisible();
 });
 
+test("a card's body shows with the agent's case, once you've chosen (D92)", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" }); // the agent wrote no case: the body is all of it
+  });
+  await expect(page.locator(CARD)).not.toContainText("Postgres is available but adds an ops dependency.");
+  await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
+  const context = page.locator(`${CARD} details.context`);
+  await expect(context.locator("summary")).toHaveText("More from claude-code");
+  await expect(context).toHaveAttribute("open", "");
+  await expect(context).toContainText("Postgres is available but adds an ops dependency.");
+  await expect(page.locator(CARD)).not.toContainText("gave no reasoning beyond the card");
+  expect(await page.evaluate(layoutProblems)).toEqual([]);
+});
+
+test("a card's body waits behind its summary when the agent gave its case too (D92)", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a", rationale: "One writer is enough." });
+  });
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  const context = page.locator(`${CARD} details.context`);
+  await expect(page.locator(`${CARD} .reasoning q`)).toHaveText("One writer is enough."); // the quote marks are the stylesheet's
+  await expect(context).not.toHaveAttribute("open", "");
+  await context.locator("summary").click();
+  await expect(context).toContainText("Postgres is available but adds an ops dependency.");
+});
+
 test("a card that arrives is tagged new until it's been on the desk", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "Card a", question: "Question a?", topic: "alpha/a" });
