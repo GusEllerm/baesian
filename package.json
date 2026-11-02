@@ -19,6 +19,7 @@
     "test": "vitest run",
     "e2e": "npm run build && playwright test",
     "dev:client": "vite --config client/vite.config.ts",
+    "demo": "vite build --config client/vite.config.ts --logLevel warn && tsx scripts/demo.ts",
     "baesian": "tsx src/bin.ts"
   },
   "dependencies": {

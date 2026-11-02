@@ -453,8 +453,8 @@ The personal-website and live-docs vaults already run this decision process by h
 - **Every harness (tiers 0 and 1):** the CLI, the git gate, CI, and the `AGENTS.md` block. This is the whole product; everything below only makes it faster.
 - **The plugin, for Claude Code and Codex (tier 2),** in this repo at `plugins/baesian/` (renamed from `plugins/claude-code/` by D118), with the marketplace file at the root (D114):
   - a skill that teaches the agent to file good cards, reading the project's rules;
-  - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn;
-  - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115);
+  - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn. When `Stop` brings in a verdict, Claude Code sends one more request on its own, so the agent acts on the answer in a turn of its own;
+  - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115). A plan sent back with feedback fires no `PostToolUse`, so it makes no deck (rehearse's probe, Claude Code 2.1.316);
   - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin, and takes `/baesian` when no other command has the name), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
   - the MCP server.
 - **Codex (tier 2):** Codex reads `AGENTS.md` natively, and reads Claude Code's plugin and marketplace files too: Codex 0.154 installs this repo's plugin unchanged (`codex plugin marketplace add`, then `codex plugin add baesian@baesian`). Codex users get the hooks from the same plugin, each person installing it, rather than from a `.codex/hooks.json` that `baesian init` would commit to the repo (D118). In Codex:
