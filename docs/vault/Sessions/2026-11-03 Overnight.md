@@ -46,7 +46,7 @@ Then:
 
 - [x] C1. **The sidebar's motion,** decided by the user: the connector follows the card (drag, lean, swipe, the shake, spring-back) and never points backwards; dragging lights the path as a held arrow does. A browser test that the connector meets the card at rest.
 - [x] C2. **The sidebar, continued:** answering glides the path into place with the flight; it lines up with where the next card comes to rest; folding and new arrivals move instead of jumping. Reduced motion stays instant.
-- [ ] C3. **Re-record the README's GIF** (`npm run readme-media -- gif`) once C1 and C2 land.
+- [x] C3. **Re-record the README's GIF** (`npm run readme-media -- gif`) once C1 and C2 land.
 - [ ] C4. **Two sessions of one agent on one branch share one inbox.** A card (deck `stability`) on how to separate them, provisional; build my pick.
 - [ ] C5. **Squash merges and rebases break commit links in the ledger.** A card (deck `stability`) with the options; design only.
 - [ ] C6. **A scale test:** 2,000 and 10,000 cards, timing `list`, `inbox`, `wait`'s polling, the server's state endpoint and the client's first render. A report in `Reviews/`; fixes only if trivial.
@@ -73,7 +73,8 @@ Then:
 - 2026-11-02, evening: today's work committed and pushed to `main` as `7231fba`. Plan written; waiting for the go-ahead.
 - 2026-11-02, 4:00pm: go-ahead given. Branch `overnight/2026-11-03` cut; the day's `baesian serve` stopped; the five research agents (B1–B5) launched in the background, writing to `Research/Preference Sliders - Strand B1…B4` and `Research/Hosted Service - Strand B5…`. Starting C1.
 - 4:20pm: C1 done. The path measures the card where it rests, and the line into it follows the card's own motion frame by frame; a drag or swipe that leans the card more than 8 px lights the path. Two new browser tests, which fail on the old code; all 40 browser tests and 247 unit tests pass. Committed as `fa6c431`; branch pushed.
-- 4:45pm: C2 done. Rows and headings glide from where they sat to where they now sit (380 ms), new rows fade in, the shift eases, the lines are redrawn every frame of a glide, and the flight aims at the settled row. Checked frame by frame on a live demo: the next card's node glides 202 → 133 px, with no jump. Reduced motion is read live in the path (Motion's hook reads it once, at mount, which also applies to the flight: noted, not changed). One new browser test; 41 pass.
+- 4:45pm: C2 done. Rows and headings glide from where they sat to where they now sit (380 ms), new rows fade in, the shift eases, the lines are redrawn every frame of a glide, and the flight aims at the settled row. Checked frame by frame on a live demo: the next card's node glides 202 → 133 px, with no jump. Reduced motion is read live in the path (Motion's hook reads it once, at mount, which also applies to the flight: noted, not changed). One new browser test; 41 pass. Committed as `8830e91`.
+- 4:55pm: C3 done: the README's GIF re-recorded with the gliding path (432 frames, 3.2 MB).
 
 ## Debrief
 
