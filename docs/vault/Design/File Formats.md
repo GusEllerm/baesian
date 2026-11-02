@@ -1,8 +1,8 @@
 ---
 type: design
-status: draft
+status: active
 authority: specifies
-summary: "Baesian's file formats (proposal P12): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-02
 reviewed: 2026-10-23
@@ -11,7 +11,7 @@ tags: [baesian, design, formats]
 
 # File Formats
 
-> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far:** the card revision and verdict tables, and the open points, decided as D105–D107 (2026-11-01); then the open points found in the other files, decided as D119–D121 (2026-11-02). The rest of the other files is still to be accepted or changed. Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
+> **Status: accepted (D124, 2026-11-02).** These formats are implemented as described here, and the user has accepted them: the card revision and verdict tables and the open points D105–D107 (2026-11-01), then the open points found in the other files, D119–D121, and the rest of the other files (2026-11-02). Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
 
 The definitions are the Zod schemas in `src/schema.ts`. This note describes them for people, and livedocs binds it to them: a change to a schema blocks the commit until this note is reconciled.
 

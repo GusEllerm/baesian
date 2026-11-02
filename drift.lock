@@ -3,7 +3,7 @@ version = 1
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "package.json"
-sig = "d6e57112cd0ebee6"
+sig = "bb19cf7a0de4993e"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -573,7 +573,7 @@ sig = "51ce45927f9f053e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "package.json"
-sig = "d6e57112cd0ebee6"
+sig = "bb19cf7a0de4993e"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -608,7 +608,7 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "958a64bb59a8bfd9"
+sig = "079e01826e445644"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -883,7 +883,7 @@ sig = "80c2badc8746c2d6"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "f69c714383cd00ef"
+sig = "c138e4193ee9b1cd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -988,7 +988,7 @@ sig = "36017e1bb0489597"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "package.json"
-sig = "d6e57112cd0ebee6"
+sig = "bb19cf7a0de4993e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -1398,7 +1398,7 @@ sig = "36017e1bb0489597"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "package.json"
-sig = "d6e57112cd0ebee6"
+sig = "bb19cf7a0de4993e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"

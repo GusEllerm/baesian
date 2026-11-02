@@ -117,8 +117,10 @@ function cardDetails(m: Card["meta"]): string[] {
   return out;
 }
 
-function verdictLine(v: Verdict): string {
-  const what = v.choice ? `: ${v.choice}` : "";
+/** One verdict, naming what it decided: an accept names the proposal it accepted, as `wait` does. */
+function verdictLine(s: Store, v: Verdict): string {
+  const proposal = v.response === "accept" ? s.revisions(v.card).find((r) => r.meta.revision === v.revision)?.meta.proposal : undefined;
+  const what = v.choice ? `: ${v.choice}` : proposal ? `: ${proposal}` : "";
   const why = v.comment ? ` — ${v.comment}` : "";
   const retired = v.retire_rules?.length ? `; retires ${v.retire_rules.join(", ")}` : "";
   return `${v.card} r${v.revision}  ${v.response}${what}${why}${retired}  (${v.reviewer}, ${v.at})`;
@@ -351,7 +353,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (card.body.trim()) io.out(`\n${card.body.trimEnd()}`);
       if (verdicts.length) {
         io.out("\nverdicts:");
-        for (const v of verdicts) io.out(`  ${verdictLine(v)}`);
+        for (const v of verdicts) io.out(`  ${verdictLine(s, v)}`);
       }
     });
 
@@ -377,7 +379,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
       for (const item of items) {
         // A dependent returned by its parent's verdict (D80) is listed under its own ID.
-        io.out(item.verdict.card === item.card ? verdictLine(item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
+        io.out(item.verdict.card === item.card ? verdictLine(s, item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
         if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
         // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
         const latest = s.card(item.card);

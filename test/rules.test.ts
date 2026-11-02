@@ -158,7 +158,7 @@ describe("retiring a rule (D119)", () => {
     expect(saved!.retired).toMatchObject({ rule, card: breaker, by: "gus" });
     expect(existsSync(join(store.record, "rules", `${rule}-retired.json`))).toBe(true);
     // The agent is told, and stops citing it.
-    expect((await run(dir, ["inbox"])).out).toContain(`${breaker} r1  accept; retires ${rule}`);
+    expect((await run(dir, ["inbox"])).out).toContain(`${breaker} r1  accept: A shell script; retires ${rule}`);
   });
 
   it("stops the gate approving what it covered", async () => {
