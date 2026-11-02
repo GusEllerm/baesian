@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "baesian",
-      "source": "./plugins/claude-code",
+      "source": "./plugins/baesian",
       "description": "Put an agent's hard-to-undo design decisions to you as cards, and bring your verdicts back into the session"
     }
   ]

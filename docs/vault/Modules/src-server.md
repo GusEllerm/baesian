@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/server.ts and src/api.ts: the local server the client talks to (M4 step 4). How it signs a browser in (D62, D97), its API (a snapshot plus change events, D96), how it watches the live layer (D84), how it reads the live layer without failing on a bad file, and the server file."
 created: 2026-10-24
-updated: 2026-10-31
+updated: 2026-11-02
 reviewed: 2026-10-24
 tags: [baesian, module]
 ---
@@ -31,13 +31,13 @@ The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127
 The types are in `src/api.ts`, which imports no Node modules, so the client can share them.
 - **`GET /api/state`** returns `snapshot`, an `ApiState`.
   - **The project:** its name and branch, and the server's pid, start time, clock and watch mode.
-  - **Presence, decks and rules.**
+  - **Presence, decks and rules,** each rule with its retirement if it has one (D119).
   - **One `ApiCard` per card:** the latest revision and its body, the number of revisions, whether its agent has had its reply (`replied`, D104), status, decision, canonical topic, verdicts, dependents, briefs, waiting markers, fallbacks and the number of attachments.
   - **`problems`:** files that couldn't be read.
 - **`GET /api/events`** is a Server-Sent Events stream. It sends `changed` with the new `version` whenever the live layer changes, gathering changes over 100 ms, and a keep-alive comment every 15 seconds.
 - **`POST /api/verdicts`** takes the fields of an `ApiVerdictInput` and nothing else. It records through `Store.addVerdict`, with `reviewer` from `reviewerName` (git's `user.name`) and `client: "web"`. The responses:
   - 201, with the verdict and the card's new status;
-  - 409 for a stale revision, 404 for an unknown card, 400 for an invalid verdict or an unexpected field.
+  - 409 for a stale revision, 404 for an unknown card, 400 for an invalid verdict (including one that retires a rule its choice doesn't break) or an unexpected field.
 - **`POST /api/presence`** is the client's heartbeat (D41), through `Store.touchPresence`.
 - **`POST /api/aliases`** merges two topics (D111): `{from, to}` (`ApiAliasInput`), through `Store.mergeTopics`, with `by` from `reviewerName`. 201 with the alias, or 400.
 - **`GET /api/health`** is how `findRunningServer` checks that a server is really answering.

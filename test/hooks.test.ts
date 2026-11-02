@@ -110,6 +110,31 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     expect(ok.err).toContain("decisions covered: dep:hono (ack)");
   });
 
+  it("unstages the record files it staged for a commit it blocks, and leaves what you staged (D122)", async () => {
+    const { dir, store } = repo();
+    await init(dir);
+    put(dir, "README.md", "hi\n");
+    expect(commit(dir, "Set up Baesian\n").code).toBe(0);
+    const first = store.fileCard(draft(), BODY, { agent: "a" }).card.meta.id;
+    put(dir, "package.json", pkg({ hono: "^4" }));
+    const blocked = commit(dir, "Add hono\n");
+    expect(blocked.code).toBe(1);
+    expect(blocked.err).toContain("baesian: staged");
+    expect(sh(dir, "diff", "--cached", "--name-only")).toBe("package.json");
+    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", ".baesian")).toBe(`?? .baesian/cards/${first}/r1.md\n?? .baesian/decks/branch-main.md`);
+
+    // A record file you staged yourself stays staged.
+    sh(dir, "add", "--", ".baesian");
+    const second = store.fileCard(draft({ title: "Where run files are kept", question: "Where should the run files go?", topic: "storage/run-files" }), BODY, { agent: "a" }).card.meta.id;
+    expect(commit(dir, "Add hono\n").code).toBe(1);
+    expect(sh(dir, "diff", "--cached", "--name-only").split("\n")).toEqual([`.baesian/cards/${first}/r1.md`, ".baesian/decks/branch-main.md", "package.json"]);
+    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", `.baesian/cards/${second}`)).toBe(`?? .baesian/cards/${second}/r1.md`);
+
+    // The commit that gets through takes the whole record, as before.
+    expect(commit(dir, "Add hono\n\nBaesian-Ack: dep:hono a small router\n").code).toBe(0);
+    expect(sh(dir, "ls-tree", "-r", "--name-only", "HEAD")).toContain(`.baesian/cards/${second}/r1.md`);
+  });
+
   it("covers by card, records the ledger, and syncs it into the record on the next commit", async () => {
     const { dir, store } = repo();
     await init(dir);
@@ -121,7 +146,7 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     const sha = sh(dir, "rev-parse", "HEAD");
     const ledger = store.ledger(id);
     expect(ledger.map((e) => e.meta.commit)).toEqual([sha]);
-    expect(ledger[0]?.body).toContain("`package.json`");
+    expect(ledger[0]?.body.trim()).toBe(`Commit \`${sha.slice(0, 12)}\` builds on ${id}.`); // just the commit (D120)
 
     // The card file itself was staged by pre-commit, so it is in that commit.
     expect(sh(dir, "ls-tree", "-r", "--name-only", "HEAD")).toContain(`.baesian/cards/${id}/r1.md`);

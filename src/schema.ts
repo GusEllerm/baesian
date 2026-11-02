@@ -213,6 +213,8 @@ export const Verdict = z
     /** The option chosen before the agent's pick was shown (D86, D88). */
     first_choice: OptionKind.optional(),
     make_rule: z.boolean().optional(),
+    /** Rules the chosen option breaks that the reviewer retired with this answer (D119). */
+    retire_rules: z.array(RuleId).optional(),
     reviewer: z.string().min(1),
     /** Which client wrote the verdict (D62). */
     client: z.string().min(1),
@@ -273,6 +275,20 @@ export const RuleMeta = z.strictObject({
 });
 export type RuleMeta = z.infer<typeof RuleMeta>;
 
+/**
+ * A rule retired by an answer that chose an option breaking it (D119): `rules/<id>-retired.json`, beside the rule,
+ * which stays on record. The gate and the client skip a retired rule.
+ */
+export const RuleRetirement = z.strictObject({
+  type: z.literal("rule-retirement"),
+  rule: RuleId,
+  /** The card it was retired on. */
+  card: CardId,
+  by: z.string().min(1),
+  at: Timestamp,
+});
+export type RuleRetirement = z.infer<typeof RuleRetirement>;
+
 /** A topic-key merge made in the client: `topics/alias-<suffix>.json` (D44). */
 export const TopicAlias = z.strictObject({
   type: z.literal("topic-alias"),
@@ -283,13 +299,15 @@ export const TopicAlias = z.strictObject({
 });
 export type TopicAlias = z.infer<typeof TopicAlias>;
 
-/** An agent waiting on an existing card instead of filing a duplicate (D36): `attachments/<id>-<suffix>.json`. */
+/**
+ * An agent waiting on an existing card instead of filing a duplicate (D36): `attachments/<id>-<suffix>.json`. No
+ * folder path: the branch already names the worktree, since git checks a branch out in only one (D121).
+ */
 export const Attachment = z.strictObject({
   type: z.literal("attachment"),
   card: CardId,
   agent: z.string().min(1),
   branch: z.string().min(1),
-  worktree: z.string().min(1),
   at: Timestamp,
 });
 export type Attachment = z.infer<typeof Attachment>;

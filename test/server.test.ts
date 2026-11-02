@@ -176,6 +176,10 @@ describe("the API (D96)", () => {
     expect((await post(s, "/api/verdicts", { card: "B-zzzzz", revision: 1, response: "accept" })).status).toBe(404);
     expect((await post(s, "/api/verdicts", { card: id, revision: 1, response: "maybe" })).status).toBe(400);
     expect((await post(s, "/api/verdicts", { card: id, revision: 1, response: "accept", reviewer: "someone else" })).status).toBe(400);
+    // Retiring a rule the chosen option doesn't break is refused, as an invalid verdict (D119).
+    const refused = await post(s, "/api/verdicts", { card: id, revision: 1, response: "accept", retire_rules: ["R-aaaaa"] });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toMatch(/isn't a rule that/);
   });
 
   it("merges two topics for the reviewer, and refuses a bad merge (D44, D111)", async () => {

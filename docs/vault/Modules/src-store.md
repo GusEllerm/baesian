@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/store.ts: the Store class, which reads and writes both layers, enforces write-once files, computes card status, and runs the filing check."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -23,8 +23,9 @@ tags: [baesian, module]
 - **`Store.reviseCard`** writes the next revision, and only for a card whose status is `returned`.
 - **`Store.mergeTopics`** writes a topic alias (D44, D111) from one topic's canonical key to another's, so aliases never form a cycle. It refuses two topics that are already one, and a target no card uses. Aliases are immutable: a merge can't be undone.
 - **Rules from answers (D16, D109, D110):** `Store.ruleAsked` says whether the latest verdict on a decision carries `make_rule` and no draft exists yet. `Store.draftRule` files the draft: a card built from the decision, in its topic and deck, that `depends_on` it and carries `rule` and `rule_covers`. When the reviewer accepts the draft, or answers it with their own wording, `Store.addVerdict` saves the rule (`saveRule`), once per decision.
+- **Retiring a rule (D119):** a verdict's `retire_rules` names rules the chosen option breaks. `Store.addVerdict` refuses it, writing nothing, unless the verdict chooses an option (`accept` or `alternative`), that option's `_breaks` lists each rule, and none is retired yet. It then writes a `RuleRetirement` beside each rule and copies it into the record.
 - **`Store.replyToCard`** writes the agent's one reply (D89, D104): the next revision, a copy of the last plus `reply`. It's allowed only when `Store.canReply` says so: the latest answer went against the pick (`alternative` or `correction`), and no revision has had a reply. The reply reopens the card. The D81 brief counts the answer the reply was to as the earlier one.
-- **`Store.attach`** records an `Attachment`, and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
+- **`Store.attach`** records an `Attachment` (with no folder path, D121), and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
 - **`Store.withdraw`** writes the card's single `Withdrawal`.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.
 - **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
@@ -50,9 +51,10 @@ All of these go through a private write-once helper that uses an exclusive creat
   - `parent-decided-otherwise`: a parent went the other way, so this card is returned (D80);
   - `answer-changed`: the answer changed after an earlier one had resolved the card. It lists the ledger's commits from before the change; only commits that cite the card, so a lower bound (D81).
 - **`Store.view`** runs a function over one consistent read of the live layer: each file is read once, and a file that can't be read is reported and skipped instead of thrown. The server reads through it ([[src-server]]). Outside a view, a bad file throws, so the CLI stays loud.
-- **`Store.inbox`** returns `InboxItem`s newer than a per-branch cursor, and advances the cursor unless peeking. They cover verdicts on the branch's cards (filed or attached), and dependents returned by a parent's verdict, listed under the dependent's ID. Each carries its brief.
+- **`Store.inbox`** returns `InboxItem`s newer than a per-branch cursor, and advances the cursor unless peeking. They cover verdicts on the branch's cards (filed or attached), and dependents returned by a parent's verdict, listed under the dependent's ID. Each carries its brief. Items that `baesian wait` has already delivered are skipped.
+- **`Store.markDelivered`** is how `wait` says what it delivered: the verdict it printed, and those behind its briefs. They're listed in the cursor file's `delivered`, beside its time, which doesn't move, so older verdicts on other cards stay in the inbox. Once `inbox` has shown everything newer than the cursor, the cursor moves past it all and the list empties.
 - **`Store.branchDeckId`** and **`Store.ensureBranchDeck`** give each branch its default deck.
-- **`Store.rules`** reads accepted rules. The gate uses their `covers` globs to acknowledge facts automatically.
+- **`Store.rules`** reads every rule, each with its retirement if it has one. The gate uses the `covers` globs of rules that aren't retired to acknowledge facts automatically.
 
 ## Not here yet
 

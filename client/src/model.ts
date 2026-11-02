@@ -157,7 +157,7 @@ export interface Relation {
 }
 
 /** A rule's first line, as a name: without a heading's marks, or the full stop of a one-line rule. */
-const ruleName = (body: string): string => body.split("\n").map((l) => l.replace(/^#+\s*/, "").replace(/\.$/, "").trim()).find(Boolean) ?? "a rule";
+export const ruleName = (body: string): string => body.split("\n").map((l) => l.replace(/^#+\s*/, "").replace(/\.$/, "").trim()).find(Boolean) ?? "a rule";
 
 /**
  * Everything a card is connected to, in the order the path shows them: what it builds on, what it conflicts
@@ -172,7 +172,7 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
     const c = cards.get(id);
     if (c) return { name: c.meta.title, state: STATE_WORDS[c.status] };
     const r = rules.get(id);
-    if (r) return { name: ruleName(r.body), state: "your rule" };
+    if (r) return { name: ruleName(r.body), state: r.retired ? "retired rule" : "your rule" };
     return undefined;
   };
   const add = (id: string, rel: Omit<Relation, "id" | "name" | "state">) => {
@@ -189,7 +189,8 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
   const conflicts = new Set([...(m.conflict_of ?? []), ...state.cards.filter((c) => c.meta.conflict_of?.includes(m.id)).map((c) => c.meta.id), ...breaks.proposal, ...breaks.alternative]);
   for (const id of conflicts) {
     const rule = id.startsWith("R-");
-    const hurts = (["proposal", "alternative"] as const).filter((k) => breaks[k].includes(id));
+    // A retired rule can't be broken any more (D119): it's shown, with nothing for either option to do to it.
+    const hurts = rules.get(id)?.retired ? [] : (["proposal", "alternative"] as const).filter((k) => breaks[k].includes(id));
     const one = hurts.length === 1 ? hurts[0]! : undefined;
     const effect = one
       ? { [one]: { text: rule ? "may break it" : "replaced", bad: true }, [OTHER[one]]: { text: rule ? "keeps to it" : "kept", bad: false } }
@@ -205,7 +206,7 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
   // Rules: one the agent cites may conflict (D79); one only on the same topic is said to be no more than that.
   for (const id of m.rules) add(id, { kind: "rule", label: "this card may conflict with", where: "down" });
   for (const r of state.rules) {
-    if (r.meta.topic && r.meta.topic === card.canonicalTopic) add(r.meta.id, { kind: "rule", label: "a rule on the same topic", where: "down" });
+    if (!r.retired && r.meta.topic && r.meta.topic === card.canonicalTopic) add(r.meta.id, { kind: "rule", label: "a rule on the same topic", where: "down" });
   }
 
   for (const d of liveDependents(card, cards)) add(d.meta.id, { kind: "relies-on-this", label: "relies on this card", where: "down" });

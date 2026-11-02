@@ -120,7 +120,8 @@ function cardDetails(m: Card["meta"]): string[] {
 function verdictLine(v: Verdict): string {
   const what = v.choice ? `: ${v.choice}` : "";
   const why = v.comment ? ` — ${v.comment}` : "";
-  return `${v.card} r${v.revision}  ${v.response}${what}${why}  (${v.reviewer}, ${v.at})`;
+  const retired = v.retire_rules?.length ? `; retires ${v.retire_rules.join(", ")}` : "";
+  return `${v.card} r${v.revision}  ${v.response}${what}${why}${retired}  (${v.reviewer}, ${v.at})`;
 }
 
 export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }): Command {
@@ -197,7 +198,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--no-presence", "wait the full timeout even if the client says the reviewer is away")
     .option("--json", "print the outcome as JSON")
     .action(async (id: string, opts: { timeout: number; slice: number; presence: boolean; json?: boolean }) => {
-      const outcome = await waitForVerdict(store(), id, {
+      const s = store();
+      const outcome = await waitForVerdict(s, id, {
         agent: agentName(program.opts().agent),
         timeoutMs: opts.timeout * 1000,
         sliceMs: opts.slice * 1000,
@@ -206,6 +208,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       });
       if (opts.json) json(outcome);
       else for (const line of describeOutcome(outcome)) io.out(line);
+      // The agent has the answer now: `inbox` and the hooks shouldn't hand it over again.
+      if (outcome.kind === "resolved" || outcome.kind === "answered") s.markDelivered(id, outcome);
       state.code = exitCodeFor(outcome);
     });
 

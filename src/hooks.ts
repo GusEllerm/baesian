@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
@@ -138,6 +138,47 @@ function mergeInProgress(store: Store): boolean {
   }
 }
 
+/** The record's entries in `git status`: each path, and its index column (`X`; `?` when untracked). */
+function recordStatus(top: string, rel: string): { x: string; path: string }[] {
+  const out = execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all", "--", rel], { cwd: top, encoding: "utf8" });
+  const parts = out.split("\0");
+  const entries: { x: string; path: string }[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const e = parts[i]!;
+    if (e.length < 4) continue;
+    entries.push({ x: e[0]!, path: e.slice(3) });
+    if (e[0] === "R" || e[0] === "C") i++; // the old path of a rename or copy comes next
+  }
+  return entries;
+}
+
+/** Where pre-commit notes what it staged: this worktree's own git directory, beside its index. */
+function stagedListPath(top: string): string {
+  return git(top, ["rev-parse", "--path-format=absolute", "--git-path", "baesian-staged.json"]);
+}
+
+function writeStaged(top: string, paths: string[]): void {
+  const path = stagedListPath(top);
+  if (paths.length) writeFileSync(path, `${JSON.stringify(paths)}\n`);
+  else rmSync(path, { force: true });
+}
+
+/** Unstage what pre-commit staged for a commit the gate blocked: back to the last commit's version, or out of the index. */
+function unstageOurs(top: string): void {
+  const path = stagedListPath(top);
+  if (!existsSync(path)) return;
+  const paths: string[] = JSON.parse(readFileSync(path, "utf8"));
+  if (!paths.length) return;
+  try {
+    git(top, ["rev-parse", "-q", "--verify", "HEAD"]);
+  } catch {
+    // The first commit: nothing to go back to.
+    git(top, ["rm", "-q", "--cached", "--ignore-unmatch", "--", ...paths]);
+    return;
+  }
+  git(top, ["reset", "-q", "--", ...paths]);
+}
+
 /** Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. */
 export function runHook(store: Store, name: string, args: string[], io: HookIo): number {
   if (!store.isInitialised()) return 0;
@@ -147,9 +188,14 @@ export function runHook(store: Store, name: string, args: string[], io: HookIo):
       // D37: bring the record up to date, then stage all of it. Staging only what this hook copied
       // would miss the cards `baesian file` wrote into the record when they were filed.
       store.syncRecord();
-      if (!existsSync(store.record)) return 0;
+      if (!existsSync(store.record)) {
+        writeStaged(top, []);
+        return 0;
+      }
       const rel = relative(top, store.record);
-      const pending = git(top, ["status", "--porcelain", "--untracked-files=all", "--", rel]).split("\n").filter(Boolean);
+      const pending = recordStatus(top, rel);
+      // What this hook stages that nobody had staged, so a blocked commit can unstage it again (D122).
+      writeStaged(top, pending.filter((p) => p.x === " " || p.x === "?").map((p) => p.path));
       if (pending.length) {
         execFileSync("git", ["add", "--", rel], { cwd: top });
         io.err(`baesian: staged ${pending.length} record file${pending.length === 1 ? "" : "s"} (${rel}/)`);
@@ -167,19 +213,17 @@ export function runHook(store: Store, name: string, args: string[], io: HookIo):
       const trailers = parseTrailers(readFileSync(isAbsolute(file) ? file : join(top, file), "utf8"), top);
       const report = evaluate(store, detectStaged(store, stagedSnapshot(top)), trailers);
       for (const line of describeReport(report, verdictsSinceLastCommit(store))) io.err(line);
+      if (!report.ok) unstageOurs(top);
+      writeStaged(top, []);
       return report.ok ? 0 : 1;
     }
     case "post-commit": {
-      // D15: the ledger. Which commits build on which cards.
+      // D15: the ledger. Which commits build on which cards. Just the commit (D120): what it changed is git's to say.
       const message = git(top, ["log", "-1", "--format=%B", "HEAD"]);
       const sha = git(top, ["rev-parse", "HEAD"]);
-      const files = git(top, ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"])
-        .split("\n")
-        .filter(Boolean);
       for (const id of parseTrailers(message, top).cards) {
         if (!store.card(id)) continue;
-        const body = `Commit \`${sha.slice(0, 12)}\` builds on ${id}.\n\n## Changed\n\n${files.map((f) => `- \`${f}\``).join("\n")}\n`;
-        store.writeLedger(id, { commit: sha }, body);
+        store.writeLedger(id, { commit: sha }, `Commit \`${sha.slice(0, 12)}\` builds on ${id}.\n`);
       }
       return 0;
     }

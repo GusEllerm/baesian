@@ -1,10 +1,10 @@
 import { type CSSProperties, useState } from "react";
-import type { ApiCard } from "../../src/api";
+import type { ApiCard, ApiState } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
 import { Mark } from "./Mark";
 import { Prose, inline } from "./Prose";
-import { RARITY, type Rarity, type WaitState, replyOf } from "./model";
+import { RARITY, type Rarity, type WaitState, replyOf, ruleName } from "./model";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
 // Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys.
@@ -15,7 +15,7 @@ export const ARROW = { left: "←", right: "→", up: "↑", down: "↓" } as co
 /** What the card is showing: the choice, the reveal after it (D86), or one of the two written answers. */
 export type Mode =
   | { kind: "live" }
-  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean }
+  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean; retire?: string[] }
   | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
@@ -28,6 +28,8 @@ export interface CardProps {
   wait: WaitState;
   sides: Record<Side, OptionKind>;
   mode: Mode;
+  /** Your rules, to offer retiring the ones the option you chose breaks (D119). */
+  rules?: ApiState["rules"];
   /** The reading time left (D91), and how much of it has passed, 0 to 1. */
   readLeftMs: number;
   readFraction: number;
@@ -309,6 +311,18 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         </label>
       )}
       <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
+      {retirable(card, mode.option, p.rules).map((r) => (
+        <label key={r.meta.id} className="rule-toggle">
+          <input
+            type="checkbox"
+            checked={mode.retire?.includes(r.meta.id) ?? false}
+            onChange={(e) => p.onMode({ ...mode, retire: e.target.checked ? [...(mode.retire ?? []), r.meta.id] : (mode.retire ?? []).filter((id) => id !== r.meta.id) })}
+          />
+          <span>
+            Retire this rule: {ruleName(r.body)} <span className="soft">Your answer breaks it. Retired, it stops approving changes at commit, and {m.source_agent} stops citing it.</span>
+          </span>
+        </label>
+      ))}
       <div className="reveal-row">
         {p.rarity === "mythic" ? (
           <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd}>
@@ -379,6 +393,12 @@ function ReasonLine({ card }: { card: ApiCard }) {
       )}
     </p>
   );
+}
+
+/** Your rules that `option` breaks and that aren't retired yet: the ones choosing it can retire (D119). */
+function retirable(card: ApiCard, option: OptionKind, rules: ApiState["rules"] = []): ApiState["rules"] {
+  const breaks = card.meta[`${option}_breaks`];
+  return rules.filter((r) => !r.retired && breaks.includes(r.meta.id));
 }
 
 /**

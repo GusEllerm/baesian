@@ -4,15 +4,15 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 // @ts-expect-error: the hook is plain JavaScript, so it runs with Node alone wherever the plugin is installed
-import { contextFor, deckFor, onPlanApproved } from "../plugins/claude-code/hooks/plan-approved.mjs";
+import { contextFor, deckFor, onPlanApproved } from "../plugins/baesian/hooks/plan-approved.mjs";
 // @ts-expect-error: plain JavaScript, as above
-import { onTurnEnded } from "../plugins/claude-code/hooks/turn-ended.mjs";
+import { onTurnEnded } from "../plugins/baesian/hooks/turn-ended.mjs";
 import { REVIEWER, cleanup, draftFile, repo } from "./helpers.js";
 
 afterEach(cleanup);
 
 const ROOT = join(import.meta.dirname, "..");
-const PLUGIN = join(ROOT, "plugins", "claude-code");
+const PLUGIN = join(ROOT, "plugins", "baesian");
 const readJson = (path: string) => JSON.parse(readFileSync(path, "utf8"));
 
 /** The CLI, in-process, the way the hooks run it: arguments, stdin, and the repo it's in. */
@@ -49,7 +49,7 @@ describe("the plugin's files", () => {
     }
     expect(hooks.Stop[0].hooks[0].command).toContain("hooks/turn-ended.mjs");
     expect(hooks.PostToolUse).toEqual([expect.objectContaining({ matcher: "ExitPlanMode" })]);
-    // Nothing mid-task (B-epbhs), and only a person approves a plan: a PreToolUse hook on ExitPlanMode could answer
+    // Nothing mid-task (D116), and only a person approves a plan: a PreToolUse hook on ExitPlanMode could answer
     // for them.
     expect(Object.keys(hooks).sort()).toEqual(["PostToolUse", "SessionStart", "Stop", "UserPromptSubmit"]);
   });
@@ -123,6 +123,20 @@ describe("the hook at the end of a turn", () => {
     expect(out.hookSpecificOutput.additionalContext).toContain(`${id} r1  accept`);
     expect(out.hookSpecificOutput.additionalContext).toContain("act on these before you finish");
     expect(await onTurnEnded({ ...stopped(dir), stop_hook_active: true }, cli)).toBeUndefined(); // seen: no loop
+  });
+
+  it("answers Codex in its own form: a block with a reason (D118)", async () => {
+    const { dir, store } = repo();
+    const filed = await cli(["file", "--json"], draftFile(), dir);
+    const id: string = JSON.parse(filed.stdout).card.meta.id;
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    // Codex's Stop input, as its hooks schema gives it.
+    const codex = { ...stopped(dir), turn_id: "turn-1", model: "gpt-5", last_assistant_message: null };
+    const out = await onTurnEnded(codex, cli);
+    expect(Object.keys(out)).toEqual(["decision", "reason"]);
+    expect(out.decision).toBe("block");
+    expect(out.reason).toContain(`${id} r1  accept`);
+    expect(await onTurnEnded({ ...codex, stop_hook_active: true }, cli)).toBeUndefined();
   });
 
   it("says nothing outside a repo that uses Baesian, without the CLI, or for another event", async () => {

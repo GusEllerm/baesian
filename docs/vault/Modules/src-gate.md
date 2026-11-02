@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/facts.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, reads the trailers, decides coverage, and installs and runs the git hooks."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -43,7 +43,7 @@ What counts as a signature is livedocs' rule: parameters, defaults, return types
 `evaluate` covers each fact in this order:
 1. an ack for its ID;
 2. a cited card whose `touches` map to its kind (`KIND_OF_TOUCH`, D53);
-3. a rule whose `covers` matches it.
+3. a rule whose `covers` matches it, unless the rule is retired (D119).
 
 Separately, it checks every cited card:
 - unknown, withdrawn or superseded: blocked;
@@ -66,9 +66,9 @@ The block is identical on every machine, because `.githooks/` is committed. It c
 The first version embedded the fallback's absolute paths in the hook itself. That would have put one machine's paths in the repo, and made every other machine's `init` rewrite the committed hooks.
 
 `runHook` runs each hook:
-- **`pre-commit`** syncs the record and stages all of `.baesian/` (D37).
-- **`commit-msg`** runs the gate. It skips merge commits, which CI checks.
-- **`post-commit`** writes a ledger entry for each `Baesian-Card:` in the commit (D15).
+- **`pre-commit`** syncs the record and stages all of `.baesian/` (D37). It notes which record files nobody had staged before it, in this worktree's own git directory (`baesian-staged.json`).
+- **`commit-msg`** runs the gate. It skips merge commits, which CI checks. When it blocks a commit, it unstages the record files `pre-commit` staged, back to the last commit's version, and leaves any you staged yourself (D122). The next commit stages the record again. A commit blocked by another hook still leaves them staged: livedocs' `pre-commit` runs after Baesian's part, and blocking there means `commit-msg` never runs.
+- **`post-commit`** writes a ledger entry for each `Baesian-Card:` in the commit (D15): one line naming the commit (D120).
 
 A repo where the live layer doesn't exist is never blocked.
 

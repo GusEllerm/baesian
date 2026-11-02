@@ -388,6 +388,19 @@ The user judged the plan ready for development.
   - **Committed** (`5a1b567`), citing `B-vqqhf`, `B-rwp68`, `B-e0b1j` and `B-epbhs`: the plugin, D113–D116, and the two fixes. Its hash went to rehearse's agent to pin.
 - **A review of the schemas, proposed and put off.** The agent suggested three independent reviewers, for change over time, git workflows, and integrity and exposure. It had confirmed one risk in the code: every schema is strict, and no file carries a version, so an older Baesian would fail on a newer card. The user ruled version compatibility out until a v1 is published (D108). Without that, the formats stay cheap to change, so the review waits until just before publishing. One point that isn't about versions went into the plan, to watch in dogfooding: ledger entries keep commit hashes, which squash merges replace.
 
+## 2026-11-02: next steps, five cards, and Codex
+
+- **Pushed** `3fc1921` at the user's word: 21 commits since `a65e084` that hadn't been pushed, so CI hadn't run on the M4 client or the plugin. CI passed.
+- **A bug found while planning the next steps:** `baesian wait` never marked the verdict it printed as seen, so `inbox`, and the plugin's hooks, would hand an agent an answer it had already acted on; `inbox` had just shown both answers on `B-epbhs`. Fixed at the user's word (an agent decision): `Store.markDelivered` lists what `wait` delivered beside the inbox cursor. Five tests, three of which fail without the fix.
+- **D117, the user's:** dogfooding on a second repo waits until v1 is released.
+- **Five cards, filed and all accepted in the client:**
+  - three for P12's other files (deck `file-formats`): **D119** (a rule is retired by an answer that breaks it; the user chose the list of rules first, then switched after the case), **D120** (a ledger entry names just the commit) and **D121** (attachments don't record the folder);
+  - two for M5 (deck `m5-adapters`): **D118** (Codex gets the hooks from the same plugin) and **D122** (a blocked commit unstages the record files Baesian staged; rehearse's third finding).
+- **Codex, looked into first** (through Context7, Codex's own source): it has hooks for the same moments, reads Claude Code's plugin and marketplace files, and sets `CLAUDE_PLUGIN_ROOT`. In a scratch `CODEX_HOME`, Codex 0.154 installed the plugin from this repo unchanged, with no model calls. Its `Stop` hook ignores `additionalContext` and continues a turn only on a block with a reason, so `onTurnEnded` answers each harness in its own form.
+- **Built:** D118 (the plugin renamed to `plugins/baesian/`, the `Stop` hook's Codex form, `$baesian` in the skill), D119 (`retire_rules` on the verdict, `RuleRetirement` beside the rule, the gate skipping retired rules, the box in the reveal, a retired rule on the path, a browser test), D120, D121 and D122. 247 tests and 38 browser tests pass.
+- **Found while building D122:** in this repo livedocs' gate runs in `pre-commit`, after Baesian's part, so a commit livedocs blocks still leaves the record staged. Noted in [[src-gate]]; not acted on.
+- **Still open:** the hooks running inside a Codex session, and the untested Claude Code hooks, are for rehearse, which the user is discussing with its agent. The rest of P12's other files is still to be accepted.
+
 ## Next
 
 - **The user's own five-second test of round 5** against round 4. Then they confirm or overturn the departures listed in [[2026-10-23 Client Mockups#Round 5: glance first]], and the round 4 agent decisions above.

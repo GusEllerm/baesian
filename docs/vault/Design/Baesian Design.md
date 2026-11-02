@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "The Baesian design (v0.5): git as the state machine; cards, decks and responses; one client; routing on impact and reversibility; where cards come from (documents, mid-task, the commit gate); verdict delivery and the merge gate; parallel agents; two-layer storage and the vault adapter; open questions and the v1 order."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, design]
 ---
@@ -333,6 +333,7 @@ The most valuable output may be standing rules, not individual verdicts (D7). A 
 - **How rules are used:**
   - filing reads them, and doesn't file cards they already answer;
   - the gate acks changes they cover.
+- **How a rule ends (D119):** by an answer. When the option you choose breaks one of your rules, the reveal offers "Retire this rule". To retire one nothing breaks, you ask an agent to file a card whose pick breaks it. The rule stays on record, marked retired, and the gate stops acknowledging what it covered. Replacing a rule is retiring it and making a new one.
 - **Success looks like** fewer cards per branch as the project matures.
 
 **From coupled toward autonomous.** You can let an agent run longer when two things are true:
@@ -450,13 +451,20 @@ The personal-website and live-docs vaults already run this decision process by h
 ## Getting it into harnesses
 
 - **Every harness (tiers 0 and 1):** the CLI, the git gate, CI, and the `AGENTS.md` block. This is the whole product; everything below only makes it faster.
-- **Claude Code plugin (tier 2),** in this repo at `plugins/claude-code/`, with the marketplace file at the root (D114):
+- **The plugin, for Claude Code and Codex (tier 2),** in this repo at `plugins/baesian/` (renamed from `plugins/claude-code/` by D118), with the marketplace file at the root (D114):
   - a skill that teaches the agent to file good cards, reading the project's rules;
   - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn;
   - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115);
-  - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
+  - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin, and takes `/baesian` when no other command has the name), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
   - the MCP server.
-- **Codex (tier 2):** MCP configuration, and its hooks for the same session-start injection. Codex reads `AGENTS.md` natively.
+- **Codex (tier 2):** Codex reads `AGENTS.md` natively, and reads Claude Code's plugin and marketplace files too: Codex 0.154 installs this repo's plugin unchanged (`codex plugin marketplace add`, then `codex plugin add baesian@baesian`). Codex users get the hooks from the same plugin, each person installing it, rather than from a `.codex/hooks.json` that `baesian init` would commit to the repo (D118). In Codex:
+  - the session-start and next-message hooks carry over, since Codex adds their plain output to the agent's context;
+  - the `Stop` hook answers Codex in its own form, a block with a reason, since Codex ignores `additionalContext` there (`onTurnEnded` tells the two apart by Codex's `turn_id`);
+  - the skill is `$baesian`;
+  - the plan hook never fires, since Codex has no plan approval like Claude Code's;
+  - Codex runs a plugin's hooks only once the person has reviewed and trusted them.
+
+  Not yet checked: the hooks running inside a Codex session, which needs a trusted hook and a model (rehearse's runs). Also to come: MCP configuration.
 - **The MCP server (tier 2):** `file_card`, `get_verdict(wait=…)`, `list_resolved(since=…)`, as a view over the live layer.
 
 ## Open questions

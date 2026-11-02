@@ -1,6 +1,7 @@
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Page, expect, test } from "@playwright/test";
+import { renderDoc } from "../src/frontmatter.js";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
@@ -216,6 +217,25 @@ test("ticking 'make this a rule' brings back a draft, and accepting it saves the
   await expect.poll(() => store.rules().map((r) => r.body.trim())).toEqual(["Use pytest for every Python test suite."]);
   expect(store.rules()[0]!.meta).toMatchObject({ covers: ["dep:pytest*"], from_card: id, accepted_by: "tester" });
   expect(store.status(draft)).toBe("resolved");
+});
+
+test("choosing an option that breaks one of your rules offers to retire it, and ticking it does (D119)", async ({ page }) => {
+  let id = "";
+  const { store } = await open(page, (s) => {
+    const rule = { type: "rule", id: "R-aaaaa", covers: ["dep:pytest*"], accepted_by: "gus", created: new Date().toISOString() };
+    writeFileSync(join(s.live, "rules", "R-aaaaa.md"), renderDoc(rule, "Use pytest for every Python test suite.\n"));
+    id = file(s, { title: "The CLI's smoke tests", question: "How should the CLI's smoke tests run?", topic: "testing/smoke", proposal: "A shell script", alternative: "pytest", proposal_breaks: ["R-aaaaa"] });
+  });
+  // The option that keeps to the rule offers nothing to retire.
+  await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
+  await expect(page.locator(CARD).getByLabel(/Retire this rule/)).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await page.locator(CARD).getByLabel(/Retire this rule: Use pytest for every Python test suite/).check();
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  await page.clock.fastForward(5100);
+  await expect.poll(() => store.verdicts(id).at(-1)?.retire_rules).toEqual(["R-aaaaa"]);
+  expect(store.rules()[0]!.retired).toMatchObject({ rule: "R-aaaaa", card: id, by: "tester" });
 });
 
 test("a card whose topic looks like another offers the merge, and asks once more (D44, D111)", async ({ page }) => {

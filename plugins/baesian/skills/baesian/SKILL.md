@@ -1,6 +1,6 @@
 ---
 name: baesian
-description: Use when you're about to make a design decision in a repo that uses Baesian (an AGENTS.md with a "Decisions (Baesian)" section, or a .baesian/ folder). Decide whether it needs a card, write one the reviewer can answer quickly, file it, and wait for or follow the verdict. Also run as /baesian:baesian to check for new verdicts, or to put a decision to the reviewer.
+description: Use when you're about to make a design decision in a repo that uses Baesian (an AGENTS.md with a "Decisions (Baesian)" section, or a .baesian/ folder). Decide whether it needs a card, write one the reviewer can answer quickly, file it, and wait for or follow the verdict. Also run as /baesian (Claude Code) or $baesian (Codex) to check for new verdicts, or to put a decision to the reviewer.
 argument-hint: "[a decision to put to the reviewer]"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "[a decision to put to the reviewer]"
 
 A person answers your design decisions as cards, in the Baesian client. `AGENTS.md` says when a decision needs a card; this skill is about writing one well, so it comes back answered rather than returned.
 
-## When the person runs `/baesian:baesian`
+## When the person runs `/baesian` (Claude Code) or `$baesian` (Codex)
 
 Run `baesian inbox`, and act on each new verdict as "Waiting and after" says; `baesian list --branch` shows what's still with them. If they wrote something after the command, it's a decision they want put to them: write it up as a card, as below, and file it.
 
@@ -42,6 +42,7 @@ Start from `baesian template`, which lists every field.
 - **Answers that come after a wait** reach you at stopping points, never mid-task: at the end of your turn, with the person's next message, and when a session starts. Act on them then, starting with any that went against a pick you've built on. Don't leave a command running in the background to catch them sooner.
 - **If the answer went against your pick** and you hold a fact the reviewer lacked, or a check that would settle it, you may reply once: `baesian reply <id> "<the fact or check>"`. Not your pick again.
 - **If the answer asks for a rule,** draft it with the gate patterns it covers: `baesian rule <id> "<the rule>" --covers dep:pytest-*`.
+- **A rule is retired by an answer.** When your pick would break one of the person's rules, list it in `proposal_breaks`, and they can retire it as they choose your pick. If they ask you to retire a rule, file a card whose pick breaks it. Once an answer says it retired a rule, don't cite that rule again.
 - **Commits that build on a card** carry `Baesian-Card: <id>` at the end of the message.
 
 Never record a verdict yourself: only a person answers.

@@ -311,7 +311,7 @@ function serveClient(res: ServerResponse, dir: string | undefined, pathname: str
   res.end(body);
 }
 
-const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule"]);
+const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule", "retire_rules"]);
 
 /** Start the server. It runs until `close`. */
 export async function startServer(store: Store, opts: ServerOptions = {}): Promise<RunningServer> {

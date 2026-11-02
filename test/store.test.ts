@@ -349,6 +349,8 @@ describe("parallel worktrees (D34)", () => {
     // The other worktree's agent asks the same question: it should attach, not duplicate.
     expect(() => feat.store.fileCard(draft({ title: "Storage for run metadata?" }), BODY, AGENT)).toThrow(PossibleDuplicate);
     feat.store.attach(id, "codex");
+    expect(feat.store.attachments()).toEqual([expect.objectContaining({ card: id, agent: "codex", branch: "feat/other" })]);
+    expect(feat.store.attachments()[0]).not.toHaveProperty("worktree"); // the branch names the folder (D121)
     expect(existsSync(join(feat.store.record, "cards", id, "r1.md"))).toBe(true);
     expect(main.store.waiting(id)).toBe(2);
     expect(feat.store.branchCards().map((c) => c.meta.id)).toEqual([id]);

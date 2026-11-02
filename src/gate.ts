@@ -84,7 +84,10 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
 export function evaluate(store: Store, detection: { facts: DetectedFact[]; warnings: string[] }, trailers: Trailers): GateReport {
   const problems = trailers.cards.map((id) => cardProblem(store, id)).filter((p): p is CardProblem => p !== undefined);
   const usable = trailers.cards.filter((id) => !problems.some((p) => p.card === id));
-  const rules = store.rules().map((r) => ({ id: r.meta.id, covers: matcher(r.meta.covers) }));
+  const rules = store
+    .rules()
+    .filter((r) => !r.retired)
+    .map((r) => ({ id: r.meta.id, covers: matcher(r.meta.covers) }));
 
   const covered: GateReport["covered"] = [];
   const uncovered: DetectedFact[] = [];

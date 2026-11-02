@@ -1,4 +1,4 @@
-import type { CardMeta, DeckMeta, Fallback, Presence, RuleMeta, Verdict } from "./schema.js";
+import type { CardMeta, DeckMeta, Fallback, Presence, RuleMeta, RuleRetirement, Verdict } from "./schema.js";
 
 // The server's API (D96): what `GET /api/state` returns, and what the client may write. Types only, and nothing
 // from Node, so the client can share them. docs/vault/Design/Local Server.md describes the API for people.
@@ -52,7 +52,8 @@ export interface ApiState {
   project: { name: string; branch: string };
   presence?: Presence;
   decks: { meta: DeckMeta; body: string }[];
-  rules: { meta: RuleMeta; body: string }[];
+  /** Every rule; a retired one carries its retirement (D119). */
+  rules: { meta: RuleMeta; body: string; retired?: RuleRetirement }[];
   cards: ApiCard[];
   /** Files that couldn't be read: half-written, or invalid. They're read again on the next change. */
   problems: { path: string; error: string }[];
@@ -60,7 +61,7 @@ export interface ApiState {
 
 /** What the client sends to `POST /api/verdicts`. The server adds `reviewer` and `client`. */
 export type ApiVerdictInput = Pick<Verdict, "card" | "revision" | "response"> &
-  Partial<Pick<Verdict, "choice" | "comment" | "first_choice" | "make_rule">>;
+  Partial<Pick<Verdict, "choice" | "comment" | "first_choice" | "make_rule" | "retire_rules">>;
 
 /** What the client sends to `POST /api/aliases` to merge two topics (D44, D111). The server adds who merged them. */
 export interface ApiAliasInput {

@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "M4 step 5: building the client in React, Vite and Motion (D50) from the round 5 prototype (D91), on the local server's API (D96). Where it lives, what it depends on, how it's served and developed, how it's tested, and the order it's ported in. Its open points were decided as D98 (where it lives), D99 (bundled fonts) and D100 (Playwright, run locally)."
 created: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-02
 reviewed: 2026-10-31
 tags: [baesian, design, client, m4]
 ---
@@ -168,6 +168,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - **A one-line rule's full stop** is dropped from its name on the path.
    - **Left out at first:** the reason line in the reveal didn't promise that the agent may reply once (D89). Round 5's did, but nothing let an agent reply. The user then had the reply built (D104, below).
    - **Tests:** 196 unit tests and 32 browser tests pass, steady across three runs.
+11. **Retiring a rule (D119, 2026-11-02).** When the option you choose breaks one of your rules (its `_breaks` lists the rule), the reveal offers "Retire this rule", under "Make this a rule", one box per rule (`retirable`). Ticking it puts `retire_rules` on the verdict. Switching to the agent's pick clears the boxes, since the other option breaks other rules. On the path, a retired rule shows as "retired rule", with nothing for either option to break, and no longer counts as a rule on the same topic (`relationsOf`). A browser test covers it.
 10. **The card's body, at last (D92, 2026-11-01).** Found while dogfooding: the client showed a card's body nowhere, so context an agent wrote there never reached the reviewer. It now shows in the reveal, beside the agent's case, as "More from" the agent (`Prose`, a small renderer for paragraphs, lists, bold and code, with no dependency). It's open by itself when it's the only reasoning, and folded when the agent also gave its case. The layout check now ignores what a closed disclosure hides. The crux's fact and each option's "then" line render **bold** and `code` the same way (`inline`), since agents write commands in them.
 9. **Merging topics on the card (D44, D111, 2026-11-01).** A live card whose topic is near another in use (by the rule `baesian file` warns with, `nearTopics`, shared with the client) says "Its topic, time/formats, looks like time/format (1 card). Same topic?" Choosing one asks once more, since an alias can't be undone, then posts it to `POST /api/aliases`. Once merged, decisions on both count as one topic: the line goes, and the precedent appears. A browser test covers it, with the layout check.
 8. **Rules from answers (D16, D109, D110, 2026-11-01),** the first work decided through Baesian itself. The reveal, and a written correction or rejection, have a "Make this a rule" box, which puts `make_rule` on the verdict. The agent drafts the rule with `baesian rule`, and it arrives as a card that builds on the decision; accepting it saves the rule. A ticked box leaves the arrow keys to the card. A browser test covers the round trip.

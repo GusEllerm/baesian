@@ -8,7 +8,8 @@ import type { Rarity } from "./model";
 /** What you chose in the client: an option, a written answer, or "can't judge". */
 export type Answer =
   /** `rule`: D16's "make this a rule", so the agent drafts one for you to confirm (D109, D110). */
-  | { kind: "choose"; option: OptionKind; first: OptionKind; why?: string; rule?: boolean }
+  /** `retire`: rules the chosen option breaks, which you retire with this answer (D119). */
+  | { kind: "choose"; option: OptionKind; first: OptionKind; why?: string; rule?: boolean; retire?: string[] }
   | { kind: "write"; reason: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason: PassReason; text: string };
 
@@ -42,7 +43,8 @@ export function verdictFor(card: ApiCard, answer: Answer): { verdict: ApiVerdict
   if (answer.kind === "choose") {
     const chosen = answer.option === "proposal" ? { response: "accept" as const } : { response: "alternative" as const, choice: card.meta.alternative };
     // The choice made before the agent's pick showed (D88), and a disagreement's reason (D87).
-    return { verdict: { ...base, ...chosen, first_choice: answer.first, ...(text ? { comment: text } : {}), ...rule } };
+    const retire = answer.retire?.length ? { retire_rules: answer.retire } : {};
+    return { verdict: { ...base, ...chosen, first_choice: answer.first, ...(text ? { comment: text } : {}), ...rule, ...retire } };
   }
   if (answer.kind === "write") {
     if (!text) return { problem: answer.reason === "question" ? "Write your question first." : answer.reason === "correction" ? "Write your answer first." : "Say why first." };

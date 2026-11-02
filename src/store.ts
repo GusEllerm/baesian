@@ -17,6 +17,7 @@ import {
   type Level,
   Presence,
   RuleMeta,
+  RuleRetirement,
   TopicAlias,
   Verdict,
   Waiting,
@@ -64,6 +65,9 @@ export interface InboxItem {
   verdict: Verdict;
   brief?: Brief;
 }
+
+/** An inbox item's name in the cursor's `delivered` list: the card it's listed under, and its verdict. */
+const inboxKey = (i: InboxItem) => `${i.card} ${i.verdict.card} ${i.verdict.at}`;
 
 /** The card a verdict file is for, from its name: `<at>-<id>-r<revision>-<suffix>.json` (D107). */
 const VERDICT_FILE = /^\d{8}T\d{6}\.\d{3}Z-(B-[0-9a-z]{5})-r\d+-[0-9a-z]+\.json$/;
@@ -476,7 +480,7 @@ export class Store {
     if (!card) throw new Error(`no card ${id}`);
     const a = parse(
       Attachment,
-      { type: "attachment", card: id, agent, branch: this.repo.branch, worktree: this.repo.toplevel, at: now() },
+      { type: "attachment", card: id, agent, branch: this.repo.branch, at: now() },
       "the attachment",
     );
     this.writeOnce(join(this.live, "attachments", `${id}-${randomSuffix()}.json`), `${JSON.stringify(a, null, 2)}\n`);
@@ -543,12 +547,17 @@ export class Store {
       .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
   }
 
-  rules(): { meta: RuleMeta; body: string }[] {
-    return this.list("rules")
+  /** Every rule, retired or not: a retired one carries its retirement (D119). */
+  rules(): { meta: RuleMeta; body: string; retired?: RuleRetirement }[] {
+    const files = this.list("rules");
+    return files
       .filter((f) => f.endsWith(".md"))
       .flatMap((f) => this.read(join(this.live, "rules", f), (text) => {
         const { meta, body } = parseDoc(text);
-        return { meta: parse(RuleMeta, meta, `rules/${f}`), body };
+        const rule = parse(RuleMeta, meta, `rules/${f}`);
+        const gone = `${rule.id}-retired.json`;
+        const retired = files.includes(gone) ? this.read(join(this.live, "rules", gone), (t) => parse(RuleRetirement, JSON.parse(t), `rules/${gone}`)) : undefined;
+        return { meta: rule, body, ...(retired ? { retired } : {}) };
       }) ?? []);
   }
 
@@ -663,10 +672,35 @@ export class Store {
     const previous = this.verdicts(input.card).at(-1)?.at;
     if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
     const v = parse(Verdict, { ...input, type: "verdict", at }, "the verdict");
+    for (const id of v.retire_rules ?? []) {
+      const problem = this.retirementProblem(card, v, id);
+      if (problem) throw new ValidationError(problem);
+    }
     const name = `${v.at.replace(/[-:]/g, "")}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
     this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
     this.saveRule(card, v);
+    this.retireRules(card, v);
     return v;
+  }
+
+  /** An answer retires only a rule that the option it chose breaks, and a rule is retired once (D119). */
+  private retirementProblem(card: Card, v: Verdict, id: string): string | undefined {
+    const option = v.response === "accept" ? "proposal" : v.response === "alternative" ? "alternative" : undefined;
+    if (!option) return `only choosing one of a card's options can retire a rule, not a ${v.response}`;
+    if (!card.meta[`${option}_breaks`].includes(id)) return `${id} isn't a rule that ${card.meta.id}'s ${option} breaks`;
+    const rule = this.rules().find((r) => r.meta.id === id);
+    if (!rule) return `no rule ${id}`;
+    if (rule.retired) return `${id} is already retired`;
+    return undefined;
+  }
+
+  private retireRules(card: Card, v: Verdict): void {
+    for (const id of v.retire_rules ?? []) {
+      const r = parse(RuleRetirement, { type: "rule-retirement", rule: id, card: card.meta.id, by: v.reviewer, at: v.at }, "the retirement");
+      const rel = join("rules", `${id}-retired.json`);
+      this.writeOnce(join(this.live, rel), `${JSON.stringify(r, null, 2)}\n`);
+      this.toRecord(rel);
+    }
   }
 
   // ---------------------------------------------------------------- status
@@ -833,11 +867,55 @@ export class Store {
     return this.cards().filter((c) => c.meta.source_branch === branch || attached.has(c.meta.id));
   }
 
-  /** Verdicts on this branch's cards newer than its inbox cursor. The cursor is local state, not a record. */
+  /**
+   * Verdicts on this branch's cards newer than its inbox cursor, less those `baesian wait` has already delivered.
+   * The cursor is local state, not a record.
+   */
   inbox(opts: { advance: boolean }): InboxItem[] {
     this.requireInit();
-    const cursorPath = join(this.live, "cursors", `${slug(this.repo.branch)}.json`);
-    const since: string = existsSync(cursorPath) ? JSON.parse(readFileSync(cursorPath, "utf8")).at : "";
+    const cursor = this.readCursor();
+    const all = this.inboxSince(cursor.at);
+    const delivered = new Set(cursor.delivered);
+    // Once everything newer than the cursor has been seen, here or through `wait`, the cursor moves past all of it.
+    if (opts.advance && all.length > 0) this.writeCursor({ at: all.at(-1)!.verdict.at });
+    return all.filter((i) => !delivered.has(inboxKey(i)));
+  }
+
+  /**
+   * Mark as seen what `baesian wait` just told the agent about `id`, its verdict and its briefs, so that `inbox`, and
+   * the harness hooks that run it (D116), don't deliver them again. The cursor stays where it is, so verdicts on the
+   * branch's other cards that the agent hasn't seen stay in the inbox; the delivered ones are listed beside it.
+   */
+  markDelivered(id: string, shown: { verdict?: Verdict; briefs: Brief[] }): void {
+    this.requireInit();
+    const cursor = this.readCursor();
+    const ats = new Set([shown.verdict?.at, ...shown.briefs.map((b) => b.at)]);
+    const keys = this.inboxSince(cursor.at)
+      .filter((i) => i.card === id && ats.has(i.verdict.at))
+      .map(inboxKey);
+    if (keys.every((k) => cursor.delivered.includes(k))) return;
+    this.writeCursor({ at: cursor.at, delivered: [...new Set([...cursor.delivered, ...keys])] });
+  }
+
+  private cursorPath(): string {
+    return join(this.live, "cursors", `${slug(this.repo.branch)}.json`);
+  }
+
+  private readCursor(): { at: string; delivered: string[] } {
+    const path = this.cursorPath();
+    if (!existsSync(path)) return { at: "", delivered: [] };
+    const c = JSON.parse(readFileSync(path, "utf8"));
+    return { at: c.at ?? "", delivered: c.delivered ?? [] };
+  }
+
+  private writeCursor(c: { at: string; delivered?: string[] }): void {
+    const path = this.cursorPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(c)}\n`);
+  }
+
+  /** Every inbox item newer than `since`, delivered or not, oldest first. */
+  private inboxSince(since: string): InboxItem[] {
     const items: InboxItem[] = [];
     for (const c of this.branchCards()) {
       const change = this.answerChange(c);
@@ -851,10 +929,6 @@ export class Store {
       }
     }
     items.sort((a, b) => a.verdict.at.localeCompare(b.verdict.at));
-    if (opts.advance && items.length > 0) {
-      mkdirSync(dirname(cursorPath), { recursive: true });
-      writeFileSync(cursorPath, `${JSON.stringify({ at: items.at(-1)!.verdict.at })}\n`);
-    }
     return items;
   }
 

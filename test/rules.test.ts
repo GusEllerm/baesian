@@ -134,3 +134,57 @@ describe("telling the agent (D109)", () => {
     expect(AGENTS_BLOCK).toContain('baesian rule <id> "<the rule>"');
   });
 });
+
+describe("retiring a rule (D119)", () => {
+  /** A saved rule, and a card whose proposal breaks it. */
+  function ruled() {
+    const r = asked();
+    const draftCard = r.store.draftRule(r.id, RULE, ["dep:pytest*"], AGENT);
+    r.store.addVerdict({ card: draftCard.meta.id, revision: 1, response: "accept", ...REVIEWER, at: later(1) });
+    const rule = r.store.rules()[0]!.meta.id;
+    const breaker = r.store.fileCard(
+      draft({ title: "The CLI's smoke tests", question: "How should the CLI's smoke tests run?", topic: "testing/smoke", proposal: "A shell script", alternative: "pytest", proposal_breaks: [rule] }),
+      BODY,
+      AGENT,
+    ).card.meta.id;
+    return { ...r, rule, breaker };
+  }
+
+  it("is done by an answer that chooses the option breaking it, beside the rule, which stays", async () => {
+    const { store, rule, breaker, dir } = ruled();
+    store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(2) });
+    const [saved] = store.rules();
+    expect(saved!.meta.id).toBe(rule);
+    expect(saved!.retired).toMatchObject({ rule, card: breaker, by: "gus" });
+    expect(existsSync(join(store.record, "rules", `${rule}-retired.json`))).toBe(true);
+    // The agent is told, and stops citing it.
+    expect((await run(dir, ["inbox"])).out).toContain(`${breaker} r1  accept; retires ${rule}`);
+  });
+
+  it("stops the gate approving what it covered", async () => {
+    const { store, rule, breaker, dir } = ruled();
+    const { evaluate } = await import("../src/gate.js");
+    const { parseTrailers } = await import("../src/trailers.js");
+    const fact = { id: "dep:pytest-cov", kind: "dep" as const, path: "package.json", detail: "added to package.json" };
+    expect(evaluate(store, { facts: [fact], warnings: [] }, parseTrailers("Add pytest-cov\n", dir)).covered[0]?.cover).toEqual({ by: "rule", rule });
+    store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(2) });
+    expect(evaluate(store, { facts: [fact], warnings: [] }, parseTrailers("Add pytest-cov\n", dir)).uncovered).toEqual([fact]);
+  });
+
+  it("only for a rule the chosen option breaks, by a choice between the options, once", () => {
+    const { store, rule, breaker } = ruled();
+    expect(() => store.addVerdict({ card: breaker, revision: 1, response: "alternative", choice: "pytest", retire_rules: [rule], ...REVIEWER, at: later(2) })).toThrow(/isn't a rule that .* alternative breaks/);
+    expect(() => store.addVerdict({ card: breaker, revision: 1, response: "reject", comment: "Neither.", retire_rules: [rule], ...REVIEWER, at: later(2) })).toThrow(/only choosing one of a card's options/);
+    expect(() => store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: ["R-zzzzz"], ...REVIEWER, at: later(2) })).toThrow(/isn't a rule that/);
+    expect(store.verdicts(breaker)).toEqual([]); // a refused answer writes nothing
+    store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(2) });
+    expect(() => store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(3) })).toThrow(/already retired/);
+  });
+
+  it("tells a waiting agent", async () => {
+    const { store, rule, breaker } = ruled();
+    store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(2) });
+    const lines = describeOutcome(await waitForVerdict(store, breaker, { ...AGENT, ...fakeClock() }));
+    expect(lines).toContain(`  The reviewer retired the rule it breaks, ${rule}: don't cite it again.`);
+  });
+});

@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "What the client may show and where each piece comes from: every element of the round 4 prototype mapped to its source in the store (exists, a new card field, or a new subsystem) and how far it can be trusted; the hard problems the backend must solve; and the rule that anything we can't show reliably is dropped (D71). Proposed for M4a; the new fields are part of P12. The user decided all ten of its open questions in a dry run of the round 5 prototype (D77–D85, D90)."
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, design, client, m4]
 ---
@@ -47,7 +47,7 @@ So every element below has a standing:
 |---|---|---|
 | "builds on" | `depends_on`. `CardMeta` checks only the IDs' format: filing doesn't check that the cards exist | Reliable once `Store.fileCard` rejects unknown IDs, a small fix for M4a |
 | "disagrees" (conflict cards) | `conflict_of`, written by the filing check and the merge gate (D35) | Reliable |
-| "may conflict with your rule" | Nothing links a card to a rule today. `RuleMeta` has `covers` (gate fact globs) and `topic`. **Decided (D79):** agents cite the rule in a **new** `rules` field; a rule matched only by canonical topic shows as "a rule on the same topic" | Cited: Declared. Topic match: Reliable, worded only as "on the same topic" |
+| "may conflict with your rule" | Nothing links a card to a rule today. `RuleMeta` has `covers` (gate fact globs) and `topic`. **Decided (D79):** agents cite the rule in a **new** `rules` field; a rule matched only by canonical topic shows as "a rule on the same topic". A retired rule shows as "retired rule", with nothing to break, and isn't matched by topic (D119) | Cited: Declared. Topic match: Reliable, worded only as "on the same topic" |
 | "your precedent" | The nearest resolved decision on the same canonical topic (`Store.canonicalTopic`), or with a similar title (`jaccard`, `nearTopics`) | Partial. Say which: "on the same topic" or "similar title" |
 
 ## What your answer changes (the right panel)
@@ -83,6 +83,7 @@ So every element below has a standing:
 | Which client wrote a verdict | **New** field on `Verdict` (D62) | Reliable |
 | Disagreeing: an optional one-line reason, and switching to the agent's pick after the reveal (D87, D88) | The reason is the `Verdict` comment. **New:** the verdict records the option chosen before the reveal (P12) | Reliable |
 | The agent's one reply to a disagreement (D89) | **Built (D104):** a revision carrying `reply`, filed by `baesian reply` | Declared |
+| "Retire this rule", when the option you choose breaks one of your rules (D119) | **Built:** the verdict's `retire_rules`; `Store.addVerdict` writes a `RuleRetirement` beside each rule, and `Store.rules` returns it with the rule | Reliable |
 
 ## Practice cards and calibration
 

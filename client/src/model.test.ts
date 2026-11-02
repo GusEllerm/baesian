@@ -139,6 +139,15 @@ describe("relations, from stated fields only (D65)", () => {
     ]);
   });
 
+  it("shows a retired rule as retired, with nothing for either option to break, and drops it from its topic (D119)", () => {
+    const retired = { ...rule("R-aaaaa", "Never put secrets in URLs.", "client/auth"), retired: { type: "rule-retirement" as const, rule: "R-aaaaa", card: "B-bbbbb", by: "gus", at: at(1) } };
+    const breaker = card({ topic: "client/auth", proposal_breaks: ["R-aaaaa"] });
+    expect(relationsOf(breaker, snapshot([breaker], [retired]))).toEqual([expect.objectContaining({ id: "R-aaaaa", kind: "rule", state: "retired rule" })]);
+    expect(relationsOf(breaker, snapshot([breaker], [retired]))[0]).not.toHaveProperty("effect");
+    const onTopic = card({ topic: "client/auth" });
+    expect(relationsOf(onTopic, snapshot([onTopic], [retired]))).toEqual([]);
+  });
+
   it("never names a card it can't find", () => {
     const subject = card({ depends_on: ["B-zzzzz"] });
     expect(relationsOf(subject, snapshot([subject]))).toEqual([]);

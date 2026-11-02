@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/cli.ts, src/wait.ts, src/notify.ts and src/agents.ts: the agent-facing CLI, its exit codes, waiting for verdicts, notifications, and the AGENTS.md instructions."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -30,7 +30,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `deck <id> --title [--from] [--note]` | creates a deck; its body is the briefing. `--from -` reads it from stdin and records no `from`, for a harness's plan (D115) |
 | `wait <id> [--timeout s] [--no-presence]` | waits for a verdict; the exit code says what to do |
 | `list [--all] [--branch]`, `show <id>`, `topics` | read. `show` prints the card as the client shows it: the question, the trigger, the stakes, the crux and the two options, then any context |
-| `inbox [--peek] [--quiet]` | new verdicts on this branch's cards. `--quiet` is for a harness's session-start hook (M5): a heading and the verdicts, or nothing at all when there's nothing new or the repo doesn't use Baesian, and never a failure |
+| `inbox [--peek] [--quiet]` | new verdicts on this branch's cards, less those `wait` already delivered. A verdict that retired a rule says so (D119). `--quiet` is for a harness's hooks (M5): a heading and the verdicts, or nothing at all when there's nothing new or the repo doesn't use Baesian, and never a failure |
 | `serve [--port <n>] [--no-open] [--poll]` | serves the client on 127.0.0.1 and opens it ([[src-server]]), on the last server's port when it's free (D103). If this repo's server is already running, it prints its address and opens that instead |
 | `sync` | copies new verdicts and ledger entries into the record |
 | `check [--message <file>] [--json]` | previews the commit gate on the staged changes: the decisions found, and what covers them. Exits 1 when the commit would be blocked, with `--json` too |
@@ -61,7 +61,7 @@ No command resolves a card (D32). When `init` installs the hooks, it records how
 - the wait's budget, `DEFAULT_TIMEOUT_MS` (9 minutes), is spent. It counts from the card's first run;
 - the run's slice, `SLICE_MS` (100 seconds), is over. The run then returns `again`, exit 7, and the agent runs `baesian wait` again.
 
-While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` (D90). A run that ends with `again` keeps its marker, and the next run picks it up, which is how the budget knows when the wait began. Any other ending removes it. With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed (D80, D81). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. The clock and the sleep can be injected, so the tests run without real time passing.
+While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` (D90). A run that ends with `again` keeps its marker, and the next run picks it up, which is how the budget knows when the wait began. Any other ending removes it. With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed (D80, D81). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. A wait that ends with an answer marks what it printed as delivered (`Store.markDelivered`), so `inbox` and the plugin's hooks don't hand it over again. A resolved card whose answer retired a rule tells the agent not to cite the rule again (D119). The clock and the sleep can be injected, so the tests run without real time passing.
 
 ## src/notify.ts
 

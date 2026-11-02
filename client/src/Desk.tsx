@@ -221,9 +221,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
 
   const confirm = () => {
     if (mode.kind !== "reveal") return;
-    commit({ kind: "choose", option: mode.option, first: mode.first, ...(mode.why.trim() ? { why: mode.why } : {}), ...(mode.rule ? { rule: true } : {}) });
+    commit({ kind: "choose", option: mode.option, first: mode.first, ...(mode.why.trim() ? { why: mode.why } : {}), ...(mode.rule ? { rule: true } : {}), ...(mode.retire?.length ? { retire: mode.retire } : {}) });
   };
-  const switchToPick = () => mode.kind === "reveal" && setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "" });
+  // The other option breaks other rules, if any: what you meant to retire goes with the option you left.
+  const switchToPick = () => mode.kind === "reveal" && setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "", retire: [] });
   const send = () => {
     if (mode.kind !== "write" && mode.kind !== "pass") return;
     if (!mode.reason) return setProblem("Choose a reason first.");
@@ -492,6 +493,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                     wait: waitState(current, now),
                     sides,
                     mode,
+                    rules: state.rules,
                     readLeftMs: readLeft,
                     readFraction: dwell ? 1 - readLeft / dwell : 1,
                     ...(hold !== undefined ? { hold } : {}),

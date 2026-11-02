@@ -44,6 +44,11 @@ describe("verdictFor", () => {
     expect(verdictFor(card, { kind: "choose", option: "proposal", first: "proposal" })).toEqual({ verdict: expect.not.objectContaining({ make_rule: true }) });
   });
 
+  it("retires the rules you ticked, with the choice that breaks them (D119)", () => {
+    expect(verdictFor(card, { kind: "choose", option: "alternative", first: "alternative", retire: ["R-aaaaa"] })).toEqual({ verdict: expect.objectContaining({ response: "alternative", retire_rules: ["R-aaaaa"] }) });
+    expect(verdictFor(card, { kind: "choose", option: "proposal", first: "proposal", retire: [] })).toEqual({ verdict: expect.not.objectContaining({ retire_rules: expect.anything() }) });
+  });
+
   it("describes an answer in a few words", () => {
     expect(describeAnswer(card, { kind: "choose", option: "alternative", first: "alternative" })).toBe("You chose “Postgres”.");
     expect(describeAnswer(card, { kind: "pass", reason: "see_it_run", text: "" })).toBe("You asked to see it run.");

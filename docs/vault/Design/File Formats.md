@@ -4,14 +4,14 @@ status: draft
 authority: specifies
 summary: "Baesian's file formats (proposal P12): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, design, formats]
 ---
 
 # File Formats
 
-> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far (2026-11-01):** the card revision and verdict tables, and the open points, decided as D105–D107. Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
+> **Status: proposal P12.** These formats are implemented as described here. The user accepts or changes them before the 0.1.0 release; until then nothing outside this repo depends on them. **Accepted so far:** the card revision and verdict tables, and the open points, decided as D105–D107 (2026-11-01); then the open points found in the other files, decided as D119–D121 (2026-11-02). The rest of the other files is still to be accepted or changed. Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
 
 The definitions are the Zod schemas in `src/schema.ts`. This note describes them for people, and livedocs binds it to them: a change to a schema blocks the commit until this note is reconciled.
 
@@ -33,9 +33,10 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `ledger/<id>-<suffix>.md` | `LedgerMeta` + body | yes | on sync | the git gate (M3) |
 | `decks/<deck>.md` | `DeckMeta` + body | yes | yes, with its cards | `baesian deck`; the branch deck on first use |
 | `rules/<id>.md` | `RuleMeta` + body | yes | yes | the client (M4) |
+| `rules/<id>-retired.json` | `RuleRetirement` | yes | yes | the client, with an answer that breaks the rule (D119) |
 | `topics/alias-<suffix>.json` | `TopicAlias` | yes | yes | the client (M4) |
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
-| `cursors/<branch>.json` | — | yes (mutable) | no | `baesian inbox` |
+| `cursors/<branch>.json` | — (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
@@ -115,16 +116,18 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 | `comment` | required for `question` and `defer`. A disagreement's optional reason (D87) goes here |
 | `first_choice` | optional: `proposal` or `alternative`, the option chosen before the agent's pick was shown (D86, D88) |
 | `make_rule` | the "make this a rule" toggle (D16) |
+| `retire_rules` | optional: rules the chosen option breaks, retired with this answer (D119). Only on `accept` or `alternative`, and only rules that option's `_breaks` lists and that aren't retired yet |
 | `reviewer`, `client`, `at` | `client` names the client that wrote it (D62). `at` is strictly increasing per card, so the latest verdict is unambiguous |
 
 ## The others
 
 - **Withdrawal** (`Withdrawal`): `card`, `reason`, `by`, `at`. One per card.
-- **Ledger entry** (`LedgerMeta`): `card`, `branch`, optional `commit`, `at`. The body names the symbols that depend on the decision, in backticks (D15).
+- **Ledger entry** (`LedgerMeta`): `card`, `branch`, optional `commit`, `at`. One per card a commit cites. The body is one line naming the commit (D120): what the commit changed is git's to say. Entries written before D120 also list the commit's files.
 - **Deck** (`DeckMeta`): `id`, `title`, optional `branch` and `from` (the source document, relative to the repo), `context_notes` (vault wikilinks), `created`. The body is the briefing. Membership isn't stored: it's computed from the cards' `deck` fields, so a deck never needs editing.
 - **Rule** (`RuleMeta`): `id`, optional `topic`, `covers` (gate fact-ID globs such as `dep:pytest-*`, which the gate acknowledges automatically; D24), optional `from_card`, `accepted_by`, `created`. The body is the rule. It's saved when you accept a rule draft (D110): the draft's wording, or yours if you answer with your own, its patterns and topic, `from_card` naming the decision it came from, and you as `accepted_by`. One rule per decision.
+- **Rule retirement** (`RuleRetirement`, D119): `rule`, `card` (the card it was retired on), `by`, `at`. Written when an answer chooses an option that breaks the rule and you tick "Retire this rule". The rule file stays; the gate and the client skip a retired rule. Replacing a rule is retiring it and making a new one.
 - **Topic alias** (`TopicAlias`): `from`, `to`, `by`, `at`. Written when you merge two topics on a card (D111): `from` is the card's topic and `to` the one it looked like, both canonical, so aliases never form a cycle.
-- **Attachment** (`Attachment`): `card`, `agent`, `branch`, `worktree`, `at`. Live only: it matters for priority and inbox delivery, not for the record.
+- **Attachment** (`Attachment`): `card`, `agent`, `branch`, `at`. Live only: it matters for priority and inbox delivery, not for the record. No folder path (D121): git checks a branch out in only one worktree, so the branch names it.
 - **Fallback** (`Fallback`): `card`, `revision`, `reason` (`timeout` or `away`), `agent`, `at`. Written when an agent proceeds on a blocking card without a verdict, so the client can show it. Never written for a hard card, which doesn't proceed.
 - **Presence** (`Presence`): `client`, `at`. The client rewrites it every 30 seconds, by writing a temporary file and renaming it, so readers never see half a file. `baesian wait` treats it as follows:
   - more than 90 seconds old (`PRESENCE_STALE_MS`): the reviewer is away;
@@ -146,9 +149,12 @@ These aren't files, but they're part of the same public interface. They go in th
 - **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it.
 - **`Baesian-Ack: <fact-id> <reason>`** acknowledges a detected decision as a two-way door. The fact ID is the one the gate prints (`dep:httpx`, `schema:<path>`, `infra:<path>`, and later `api:<symbol>`). The reason is required.
 
-## Decided points of P12 (2026-11-01)
+## Decided points of P12 (2026-11-01, 2026-11-02)
 
 - **D105:** cards don't record the folder they were filed from (`source_worktree` is gone).
 - **D106:** `notify` lives only in the personal config, as above.
 - **D107:** verdict files are named timestamp first.
+- **D119** (2026-11-02): a rule is retired by an answer that breaks it, in a file beside the rule.
+- **D120:** a ledger entry names just the commit.
+- **D121:** attachments don't record the folder.
 - **Conflict links** (D45), once open here, are the card fields `conflict_of` and `caught_at`.

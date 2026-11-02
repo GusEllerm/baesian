@@ -173,6 +173,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
       return [
         `${o.id} resolved: ${o.decision}`,
         ...comment(o.verdict),
+        ...(o.verdict?.retire_rules?.length ? [`  The reviewer retired the rule${o.verdict.retire_rules.length === 1 ? "" : "s"} it breaks, ${o.verdict.retire_rules.join(", ")}: don't cite ${o.verdict.retire_rules.length === 1 ? "it" : "them"} again.`] : []),
         ...briefs,
         "Proceed with that decision.",
         ...(o.ruleAsked ? ruleHint(o.id) : []),

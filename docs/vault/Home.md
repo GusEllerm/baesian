@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Entry point to the Baesian vault: what the project is, where it stands, what to read first, and where notes go."
 created: 2026-10-23
-updated: 2026-11-01
+updated: 2026-11-02
 reviewed: 2026-10-23
 tags: [baesian, index]
 ---
@@ -15,9 +15,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-11-01.*
+*As of 2026-11-02.*
 
-- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 234 passing tests, plus 37 browser tests, after M4's steps 2 to 5f, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
+- **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 247 passing tests, plus 38 browser tests, after M4's steps 2 to 5f, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
   - **M1:** the store and the core CLI;
   - **M2:** `wait` with card levels and presence, notifications, and the AGENTS.md instructions;
   - **M3a:** the commit gate, with three detectors, trailers, the ledger, `baesian check`, and hooks that coexist with livedocs;
@@ -26,9 +26,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **Repo:** `main`, with both the livedocs and the Baesian gate, pushed to the private GitHub repo [GusEllerm/baesian](https://github.com/GusEllerm/baesian). CI (D61) runs the typecheck, the tests, the build and `baesian verify` on every push.
 - **[[Baesian Design]] is at v0.5.** Everything in it is decided except its open questions.
 - **Open for the user:**
-  - P12, the [[File Formats]] (accept or change them before 0.1.0). The card and verdict tables are accepted, and the open points were decided as D105–D107 (2026-11-01). The other files remain;
+  - P12, the [[File Formats]] (accept or change them before 0.1.0). The card and verdict tables are accepted, and the open points were decided as D105–D107 (2026-11-01). The open points found in the other files were decided as D119–D121 (2026-11-02): a rule is retired by an answer that breaks it, a ledger entry names just the commit, and attachments don't record the folder. The rest of the other files is still to be accepted;
   - (P13 was decided as D56: a `livedocs signatures` command, requested from live-docs-agent.)
-- **Decided by the user** (D1–D116 in [[Decision Log]]; D109–D116 through Baesian itself, while dogfooding):
+- **Decided by the user** (D1–D122 in [[Decision Log]]; D109–D116 and D118–D122 through Baesian itself, while dogfooding):
   - **no compatibility between Baesian versions until a v1 is published** (D108): formats change freely until then;
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
@@ -56,10 +56,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - **contradictions:** "conflicts with…" links in the client; each records where it was caught, and the late rate is reviewed after dogfooding;
   - **gate levels:** only hard cards need a verdict at commit; at merge, every card must be resolved or deferred;
   - **v1 order:** store and CLI → git gate → client → harness adapters → vault adapter → MCP;
-  - **dogfooding:** this repo and personal-website;
+  - **dogfooding:** this repo, and personal-website once v1 is released (D117);
   - the [[Working Agreement]] is active.
 - **livedocs is 0.2.0** (from PyPI, 2026-10-23). The `new-vault` crash and the first-commit problem are both fixed there; this repo's first commit (`fd64e0c`) used `--no-verify` under 0.1.4. `livedocs verify` passes. Details are in [[2026-10-23 Design Discussion]].
-- **M5 is under way:** the Claude Code plugin is built in `plugins/claude-code/` (D114, D115): the skill and `/baesian`; hooks that bring in new verdicts at natural stopping points (a new session, your next message, the end of the agent's turn: D116); and the hook that makes an approved plan a deck. **Provisionally tested** by the user in a real session (2026-11-01): the skill is offered as `/baesian:baesian` and filed a card, `SessionStart` fired, and `UserPromptSubmit` brought in the verdict. The `Stop` hook and the plan hook (and what a rejected plan does) are still untested; that full run is to go to rehearse, whose agent was asked when it could drive it. Still to do: Codex hooks ([[Baesian Design#Decks from documents]]).
+- **M5 is under way:** the plugin, for Claude Code and Codex, is built in `plugins/baesian/` (D114, D115, D118): the skill (`/baesian`, or `$baesian` in Codex); hooks that bring in new verdicts at natural stopping points (a new session, your next message, the end of the agent's turn: D116); and the hook that makes an approved plan a deck. **Provisionally tested** in Claude Code by the user in a real session (2026-11-01): `SessionStart` fired, and `UserPromptSubmit` brought in the verdict. Codex 0.154 installs the same plugin unchanged (2026-11-02), and the end-of-turn hook answers Codex in its own form. Still untested: the `Stop` hook and the plan hook in Claude Code (and what a rejected plan does), and every hook inside a Codex session. That full run goes to rehearse, which the user is discussing with its agent. Also fixed (2026-11-02): `baesian wait` now marks what it delivers as seen, so the hooks don't hand an agent an answer again; and a commit the gate blocks no longer leaves the record staged (D122).
 - **Dogfooding has started (D57):** `baesian` is on PATH via `npm link`, and this repo's commits go through its own gate.
 - **M4 design is under way** ([[2026-10-23 Client Mockups]]). Round 1's three static mockups picked no winner, but set the direction (D65–D68). Round 2 is an interactive prototype at `design/explorations/round2/`: a four-way swipe and a context hierarchy. It's waiting for the user to try it.
 - **Research cycle done** ([[Contextualising Decisions]]): four lenses (theory, analogous tools, spatial and visual, overseeing AI agents). It gives principles, tensions, proposed changes to D12, D13, D40 and D65, and three extreme concepts for round 3.

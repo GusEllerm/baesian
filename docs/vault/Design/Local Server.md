@@ -4,7 +4,7 @@ status: active
 authority: specifies
 summary: "M4 step 4: the local server the client talks to. The command (`baesian serve`), its security (D62), its API (a snapshot of the live layer, change notifications over Server-Sent Events, verdicts and presence), watching (D84), and the server file. Its two open points were decided as D96 (the API) and D97 (the token and port)."
 created: 2026-10-24
-updated: 2026-10-31
+updated: 2026-11-02
 reviewed: 2026-10-24
 tags: [baesian, design, server, m4]
 ---
@@ -50,7 +50,7 @@ Provenance: drafted by the agent on 2026-10-24 for M4 step 4 (D91), from earlier
 |---|---|
 | `GET /api/state` | **A snapshot of the live layer:** <br>- the project's name, and the server's start time, clock and watch mode; <br>- presence, decks and rules; <br>- every card, with its latest revision, body, status, decision, verdicts, dependents, briefs, waiting markers (and whether each is stale), fallbacks and attachments; <br>- `problems`, files that couldn't be read. <br>A `version` number changes whenever anything does |
 | `GET /api/events` | **Server-Sent Events.** `changed`, with the new `version`, whenever the live layer changes. Changes are gathered over 100 ms, and a keep-alive comment goes out every 15 seconds. The client reads `/api/state` again |
-| `POST /api/verdicts` | `{card, revision, response, choice?, comment?, first_choice?, make_rule?}`, recorded through `Store.addVerdict`. `reviewer` is git's `user.name`, and `client` is `web`. A stale revision returns 409; an invalid verdict returns 400 with the reason |
+| `POST /api/verdicts` | `{card, revision, response, choice?, comment?, first_choice?, make_rule?, retire_rules?}`, recorded through `Store.addVerdict`. `reviewer` is git's `user.name`, and `client` is `web`. A stale revision returns 409; an invalid verdict returns 400 with the reason |
 | `POST /api/presence` | **The client's heartbeat** (D41), through `Store.touchPresence` |
 | `POST /api/aliases` | `{from, to}`: **merging two topics** (D44, D111), through `Store.mergeTopics`, by git's `user.name`. A merge that isn't possible (already one topic, or into a topic nobody uses) returns 400 |
 | `GET /`, static files | **The client's build** ([[Client Build]]), with a policy that allows only the server's own origin. With no build, a page saying how to build it |
