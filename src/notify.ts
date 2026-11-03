@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { UserConfig, describeError } from "./schema.js";
+import { UserConfig, describeError, upgradeFile } from "./schema.js";
 import type { Card } from "./store.js";
 
 /** `$BAESIAN_CONFIG`, else `$XDG_CONFIG_HOME/baesian/config.json`, else `~/.config/baesian/config.json`. */
@@ -14,7 +14,7 @@ export function userConfigPath(): string {
 
 export function userConfig(path: string = userConfigPath()): UserConfig {
   if (!existsSync(path)) return {};
-  const result = UserConfig.safeParse(JSON.parse(readFileSync(path, "utf8")));
+  const result = UserConfig.safeParse(upgradeFile("user-config", JSON.parse(readFileSync(path, "utf8")), path));
   if (!result.success) throw new Error(`${path} is not valid:\n${describeError(result.error)}`);
   return result.data;
 }

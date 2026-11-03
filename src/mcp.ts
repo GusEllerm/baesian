@@ -83,10 +83,11 @@ const cardId = CardId.describe("the card's ID, such as B-7f3kq");
 
 /**
  * The card's fields as the filing tools take them (D167): the store's `CardDraft`, less what Baesian sets itself, each
- * described by its note in `CARD_FIELDS`, the table `baesian template` is made from.
+ * described by its note in `CARD_FIELDS`, the table `baesian template` is made from. A draft's `format` is for drafts
+ * people write in files (D156): the tool's own schema is its format.
  */
 const CardFields = (() => {
-  const draft = CardDraft.omit({ type: true, conflict_of: true, caught_at: true });
+  const draft = CardDraft.omit({ type: true, format: true, conflict_of: true, caught_at: true });
   const notes = new Map(CARD_FIELDS.map((f) => [f.field, f.note]));
   const shape = Object.fromEntries(
     Object.entries(draft.shape).map(([name, schema]) => {

@@ -106,6 +106,9 @@ describe("the tools", () => {
     expect(schema.required.sort()).toEqual(CARD_FIELDS.filter((f) => !f.optional && f.template !== false && f.field !== "touches").map((f) => f.field).sort());
     expect(Object.keys(schema.properties)).toEqual(expect.arrayContaining(["body", "new", "cwd"]));
     expect(schema.properties).not.toHaveProperty("conflict_of");
+    // A draft's format is for drafts in files (D156): Baesian sets the revision's, and the tool doesn't offer it.
+    expect(schema.properties).not.toHaveProperty("format");
+    expect(CARD_TEMPLATE).not.toMatch(/format/);
     expect(schema.additionalProperties).toBe(false);
     const revise = tools.find((t) => t.name === "revise_card")!.inputSchema as { required: string[] };
     expect(revise.required).toContain("id");

@@ -45,7 +45,7 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 
 ## The card's fields (D167)
 
-`file_card` and `revise_card` take the card's fields as arguments: the store's `CardDraft`, less `type`, `conflict_of` and `caught_at`, which Baesian sets itself, with each field described by its note in `CARD_FIELDS`, the same table `CARD_TEMPLATE` is made from. Plus `body` (background) and, for filing, `new` (file even if it may be a duplicate). The schema is strict, and the SDK checks the arguments before the tool runs, naming each field that's wrong. The store then checks them again, with its filing rules.
+`file_card` and `revise_card` take the card's fields as arguments: the store's `CardDraft`, less `type`, `format` (a draft's own, for drafts in files: D156), `conflict_of` and `caught_at`, which Baesian sets itself, with each field described by its note in `CARD_FIELDS`, the same table `CARD_TEMPLATE` is made from. Plus `body` (background) and, for filing, `new` (file even if it may be a duplicate). The schema is strict, and the SDK checks the arguments before the tool runs, naming each field that's wrong. The store then checks them again, with its filing rules.
 
 ## Errors
 

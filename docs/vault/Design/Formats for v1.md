@@ -9,7 +9,7 @@ tags: [baesian, design, formats]
 
 # Formats for v1
 
-> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
+> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it. Section 1, the format numbers, is built.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
 
 From v1 on, a change to an on-disk format needs a version and a migration (D108). So every format change v1 needs is designed here, while formats are still free. [[File Formats]] stays the description of what's built. This note proposes what changes.
 
@@ -37,6 +37,8 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
 
 ## 1. A format number in every file (D108)
 
+> **Built (2026-11-03), as D156 and D157 decided,** with one change from this section: no record is rewritten at v1. A file with no `format` was written before v1, and reads as format 1, so old commits stay readable as they are (the main session's decision, replacing the last point below). [[File Formats#Rules that apply to every file]] describes it, `FILE_KINDS`, `upgradeFile()` and `NewerFormat` in `src/schema.ts` define it, and [[src-store]] says how the store reads and writes it.
+
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | format | integer ≥ 1 | yes, in every file Baesian writes; optional in `Config`, `UserConfig` and card drafts (`CardDraft`), which people write by hand | the version of this kind of file's format. v1 writes 1 everywhere |
@@ -48,11 +50,11 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
   - signatures and passkey proofs cover a file's exact bytes (D138, D139).
 
   So a file must say what it is for as long as it exists. Mutable local files (cursors, presence, waiting markers, the server and relay state) are rewritten in the new format the next time they're written.
-- **Where the number lives,** in each file or once per store: **decision,** card formats-1.
-- **Newer files are refused,** with a message naming the format and the Baesian that reads it: "this record has card format 2; this Baesian reads up to 1: upgrade it". Schemas stay strict, as now. **Decision:** card formats-2.
+- **Where the number lives,** in each file or once per store: **decision,** card formats-1: in each file (D156).
+- **Newer files are refused,** with a message naming the format and the Baesian that reads it: "this record has card format 2; this Baesian reads up to 1: upgrade it". Schemas stay strict, as now. **Decision:** card formats-2: refused (D157). As built, the message names the file: "cards/B-7f3kq/r1.md has card format 2; this Baesian reads up to 1: upgrade Baesian".
 - **The inbox cursors** (`cursors/<branch>.json`) get a schema, with `type` and format. They're the only files Baesian writes that have none.
 - **The relay's protocol** carries its own version, in its address (section 8).
-- **Before v1,** no migration is written (D108). At v1, this repo's record, the only one there is (D117), is rewritten once by a throwaway script, so v1 starts with every file at format 1.
+- **Before v1,** no migration is written (D108). ~~At v1, this repo's record, the only one there is (D117), is rewritten once by a throwaway script, so v1 starts with every file at format 1.~~ Replaced: a file with no `format` reads as format 1, and nothing is rewritten, since CI checks every commit against its own committed record.
 
 ## 2. Preference files (D146, D147, D148)
 
@@ -332,7 +334,7 @@ The relay keeps one entry per file, in an append-only log, and sends entries dow
 
 | File or format | Layers | Once or mutable | Written by | Serves |
 |---|---|---|---|---|
-| format, in every file | all | — | whatever writes the file | D108 |
+| format, in every file (built) | all | — | whatever writes the file | D108, D156, D157 |
 | preferences/{at}-{suffix}.json | live, record | once | the client; hosted, the relay | D146–D148 |
 | cards/{id}/gate-r{n}-cli.json | live, record | once | `Store.fileCard`, `Store.reviseCard` | D144, D145, D148 |
 | cards/{id}/gate-r{n}-relay.json | live, record | once | the relay | D138, D145 |
@@ -348,7 +350,7 @@ The relay keeps one entry per file, in an append-only log, and sends entries dow
 | relay.json | live | mutable | the CLI | D127 |
 | grants/{project}.json | personal | mutable | baesian login | D128 |
 | the relay's entry, with enc reserved | the relay | once | the relay | D127, D137 |
-| cursors, with a schema | live | mutable | `baesian inbox`, `baesian wait` | D108 |
+| cursors, with a schema (built: `Cursor`) | live | mutable | `baesian inbox`, `baesian wait` | D108 |
 
 **Behaviour that changes with them,** not formats:
 - **`Store.syncRecord` copies preference and trust files, and rules, into every branch's record,** so CI rechecks each commit with what the local gate saw. Today a rule reaches only the record of the worktree where it was saved, so this branch's record has no rules at all.
@@ -379,7 +381,7 @@ Filed as cards in deck formats-v1 on 2026-11-03, in the order they're best answe
 - the convention signals and their thresholds, and convention cards reaching every branch's inbox (section 6);
 - account as Baesian's own ID, and `at` set by the relay (section 7);
 - the passkey challenge as the verdict's digest, with no separate nonce (section 7);
-- this repo's record rewritten once at v1 (section 1).
+- ~~this repo's record rewritten once at v1 (section 1)~~: replaced, a file with no format reads as format 1.
 
 **Still open in P14 and P15, and only held by these formats:** P14 items 9, 10 and 12 to 17; P15's grant scope and token storage, retention periods, notification text, and the relay's API boundary.
 

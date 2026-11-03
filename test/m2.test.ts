@@ -64,7 +64,7 @@ describe("notifications (D40)", () => {
     const dir = mkdtempSync(join(tmpdir(), "baesian-cfg-"));
     const path = join(dir, "config.json");
     writeFileSync(path, JSON.stringify({ notify: "ntfy publish me", os_notify: false }));
-    expect(userConfig(path)).toEqual({ notify: "ntfy publish me", os_notify: false });
+    expect(userConfig(path)).toEqual({ format: 1, notify: "ntfy publish me", os_notify: false });
     expect(userConfig(join(dir, "missing.json"))).toEqual({});
     writeFileSync(path, JSON.stringify({ vault: "docs" }));
     expect(() => userConfig(path)).toThrow(/not valid/);

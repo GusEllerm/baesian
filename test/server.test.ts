@@ -125,7 +125,7 @@ describe("the address (D97, D103)", () => {
     const second = await serve(store);
     expect(second.port).toBe(first.port);
     expect(second.token).not.toBe(first.token);
-    expect(remembered(store)).toEqual({ type: "port", port: first.port });
+    expect(remembered(store)).toEqual({ type: "port", format: 1, port: first.port });
   });
 
   it("takes a port the system picks when the last one is in use, and remembers that one", async () => {
@@ -133,7 +133,7 @@ describe("the address (D97, D103)", () => {
     const first = await serve(store);
     const second = await serve(store, { writeServerFile: false });
     expect(second.port).not.toBe(first.port);
-    expect(remembered(store)).toEqual({ type: "port", port: second.port });
+    expect(remembered(store)).toEqual({ type: "port", format: 1, port: second.port });
   });
 
   it("neither reads nor writes the record when given a port, or told not to reuse it", async () => {

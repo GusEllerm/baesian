@@ -3,6 +3,98 @@ import { z } from "zod";
 // The file formats. docs/vault/Design/File Formats.md describes them for people; this module is the
 // definition. Every type is flat (no nested objects) so the Markdown ones read well in Obsidian.
 
+// ---------------------------------------------------------------- format numbers (D156, D157)
+
+/** A file's fields as read, before its schema checks them. */
+type Fields = Record<string, unknown>;
+
+/** Takes a file's fields from one format of its kind to the next, in memory. */
+type Upgrade = (fields: Fields) => Fields;
+
+interface FileKind {
+  /** What a message calls it. */
+  name: string;
+  /** `upgrades[n - 1]` takes format n to n + 1: the newest format is one more than their number. */
+  upgrades: readonly Upgrade[];
+  /** What a file written before v1, with no `format`, needs in order to read as format 1, if anything. */
+  beforeV1?: Upgrade;
+}
+
+/**
+ * Every kind of file Baesian writes, or reads from a person, and the upgrades from each older format (D156). Each kind is
+ * numbered on its own: a card format 2 leaves verdicts at 1. A file is upgraded in memory as it's read, and never
+ * rewritten: files are written once (D34), and CI checks each commit against its own record (`checkCommit()`), so an old
+ * commit's files must stay readable as they are. Writers write only the newest format.
+ *
+ * A file with no `format` was written before v1, and reads as format 1. That changes nothing, except that the inbox
+ * cursor gains the `type` it lacked. A format 2 adds one function to its kind's `upgrades`, and its schema changes to match.
+ */
+export const FILE_KINDS = {
+  card: { name: "card", upgrades: [] },
+  "card-draft": { name: "card draft", upgrades: [] },
+  verdict: { name: "verdict", upgrades: [] },
+  withdrawal: { name: "withdrawal", upgrades: [] },
+  fallback: { name: "fallback", upgrades: [] },
+  ledger: { name: "ledger entry", upgrades: [] },
+  deck: { name: "deck", upgrades: [] },
+  rule: { name: "rule", upgrades: [] },
+  "rule-retirement": { name: "rule retirement", upgrades: [] },
+  "topic-alias": { name: "topic alias", upgrades: [] },
+  attachment: { name: "attachment", upgrades: [] },
+  cursor: { name: "inbox cursor", upgrades: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
+  presence: { name: "presence", upgrades: [] },
+  waiting: { name: "waiting marker", upgrades: [] },
+  server: { name: "server file", upgrades: [] },
+  port: { name: "port file", upgrades: [] },
+  config: { name: "config", upgrades: [] },
+  "user-config": { name: "personal config", upgrades: [] },
+  "decision-note": { name: "decision note", upgrades: [] },
+  "rule-note": { name: "rule note", upgrades: [] },
+} as const satisfies Record<string, FileKind>;
+export type FileKindName = keyof typeof FILE_KINDS;
+
+/** The newest format of a kind of file, which is the one Baesian writes (D156). */
+export function newestFormat(kind: FileKindName): number {
+  return FILE_KINDS[kind].upgrades.length + 1;
+}
+
+/** A schema's `format`: only the newest, since a file is upgraded before its schema reads it. */
+const formatOf = (kind: FileKindName) => z.literal(newestFormat(kind));
+
+/**
+ * A file in a newer format than this Baesian reads (D157). It's refused as a bad file is: thrown, or, in a view that
+ * reports problems (the server's), reported and skipped.
+ */
+export class NewerFormat extends Error {
+  constructor(
+    readonly file: string,
+    readonly kind: FileKindName,
+    readonly format: number,
+  ) {
+    super(`${file} has ${FILE_KINDS[kind].name} format ${format}; this Baesian reads up to ${newestFormat(kind)}: upgrade Baesian`);
+  }
+}
+
+/**
+ * A file's fields in the newest format of its kind, for its schema to check (D156): a file with no `format` reads as
+ * format 1, and an older one is upgraded, in memory. A newer one throws `NewerFormat` (D157), naming `file`. A `format`
+ * that isn't a whole number from 1 is left for the schema to reject.
+ */
+export function upgradeFile(kind: FileKindName, fields: unknown, file: string): unknown {
+  if (typeof fields !== "object" || fields === null || Array.isArray(fields)) return fields;
+  const k: FileKind = FILE_KINDS[kind];
+  let f = fields as Fields;
+  if (f.format === undefined) f = { ...(k.beforeV1 ? k.beforeV1(f) : f), format: 1 };
+  const from = f.format;
+  if (typeof from !== "number" || !Number.isInteger(from) || from < 1) return f;
+  const newest = newestFormat(kind);
+  if (from > newest) throw new NewerFormat(file, kind, from);
+  for (let n = from; n < newest; n++) f = { ...k.upgrades[n - 1]!(f), format: n + 1 };
+  return f;
+}
+
+// ---------------------------------------------------------------- the formats
+
 /** Crockford base32, lowercase, with no i, l, o or u (D51). Here rather than in ids.ts, so the schema imports nothing from Node. */
 const SUFFIX = "[0-9a-hjkmnp-tv-z]";
 export const CARD_ID = new RegExp(`^B-${SUFFIX}{5}$`);
@@ -60,6 +152,7 @@ export const FACT_PATTERN = /^(dep|schema|infra|api):\S+$/;
 /** Frontmatter of one card revision: `cards/<id>/r<revision>.md`. */
 export const CardMeta = z.strictObject({
   type: z.literal("card"),
+  format: formatOf("card"),
   id: CardId,
   revision: z.number().int().min(1),
   /** A neutral short name, not a question: "Where the access token lives". */
@@ -129,9 +222,13 @@ export const CardMeta = z.strictObject({
 });
 export type CardMeta = z.infer<typeof CardMeta>;
 
-/** What an agent writes: a card without the fields Baesian fills in. */
+/**
+ * What an agent writes: a card without the fields Baesian fills in. Its optional `format` is the draft's own, never
+ * the revision's: Baesian writes every revision in the newest card format.
+ */
 export const CardDraft = CardMeta.omit({
   type: true,
+  format: true,
   id: true,
   revision: true,
   source_agent: true,
@@ -142,6 +239,7 @@ export const CardDraft = CardMeta.omit({
   rule_covers: true,
 }).extend({
   type: z.literal("card").optional(),
+  format: formatOf("card-draft").optional(),
   deck: DeckId.optional(),
   level: Level.optional(),
 });
@@ -243,6 +341,7 @@ export type Response = z.infer<typeof Response>;
 export const Verdict = z
   .strictObject({
     type: z.literal("verdict"),
+    format: formatOf("verdict"),
     card: CardId,
     revision: z.number().int().min(1),
     response: Response,
@@ -271,6 +370,7 @@ export type Verdict = z.infer<typeof Verdict>;
 /** The agent withdrawing its own card: `cards/<id>/withdrawn.json`. */
 export const Withdrawal = z.strictObject({
   type: z.literal("withdrawal"),
+  format: formatOf("withdrawal"),
   card: CardId,
   reason: z.string().min(1),
   by: z.string().min(1),
@@ -281,6 +381,7 @@ export type Withdrawal = z.infer<typeof Withdrawal>;
 /** Frontmatter of a ledger entry: `ledger/<id>-<suffix>.md`. The body names symbols in backticks (D15). */
 export const LedgerMeta = z.strictObject({
   type: z.literal("ledger"),
+  format: formatOf("ledger"),
   card: CardId,
   branch: z.string().min(1),
   commit: z.string().optional(),
@@ -291,6 +392,7 @@ export type LedgerMeta = z.infer<typeof LedgerMeta>;
 /** Frontmatter of a deck: `decks/<id>.md`. The body is the briefing. Membership is computed from cards. */
 export const DeckMeta = z.strictObject({
   type: z.literal("deck"),
+  format: formatOf("deck"),
   id: DeckId,
   title: z.string().min(1),
   branch: z.string().optional(),
@@ -303,6 +405,7 @@ export type DeckMeta = z.infer<typeof DeckMeta>;
 /** Frontmatter of a rule: `rules/<id>.md`. The body is the rule. */
 export const RuleMeta = z.strictObject({
   type: z.literal("rule"),
+  format: formatOf("rule"),
   id: RuleId,
   topic: Topic.optional(),
   /** Gate fact IDs this rule answers, as globs (`dep:pytest-*`): the gate acks them automatically (D24). */
@@ -319,6 +422,7 @@ export type RuleMeta = z.infer<typeof RuleMeta>;
  */
 export const RuleRetirement = z.strictObject({
   type: z.literal("rule-retirement"),
+  format: formatOf("rule-retirement"),
   rule: RuleId,
   /** The card it was retired on. */
   card: CardId,
@@ -330,6 +434,7 @@ export type RuleRetirement = z.infer<typeof RuleRetirement>;
 /** A topic-key merge made in the client: `topics/alias-<suffix>.json` (D44). */
 export const TopicAlias = z.strictObject({
   type: z.literal("topic-alias"),
+  format: formatOf("topic-alias"),
   from: Topic,
   to: Topic,
   by: z.string().min(1),
@@ -343,6 +448,7 @@ export type TopicAlias = z.infer<typeof TopicAlias>;
  */
 export const Attachment = z.strictObject({
   type: z.literal("attachment"),
+  format: formatOf("attachment"),
   card: CardId,
   agent: z.string().min(1),
   branch: z.string().min(1),
@@ -353,6 +459,7 @@ export type Attachment = z.infer<typeof Attachment>;
 /** A blocking card the agent proceeded on without a verdict (D46): `cards/<id>/fallback-<suffix>.json`. */
 export const Fallback = z.strictObject({
   type: z.literal("fallback"),
+  format: formatOf("fallback"),
   card: CardId,
   revision: z.number().int().min(1),
   reason: z.enum(["timeout", "away"]),
@@ -364,6 +471,7 @@ export type Fallback = z.infer<typeof Fallback>;
 /** The client's heartbeat, `presence.json` in the live layer (D41). Mutable; never in the record. */
 export const Presence = z.strictObject({
   type: z.literal("presence"),
+  format: formatOf("presence"),
   client: z.string().min(1),
   at: Timestamp,
 });
@@ -375,6 +483,7 @@ export type Presence = z.infer<typeof Presence>;
  */
 export const Waiting = z.strictObject({
   type: z.literal("waiting"),
+  format: formatOf("waiting"),
   card: CardId,
   revision: z.number().int().min(1),
   agent: z.string().min(1),
@@ -389,6 +498,7 @@ export type Waiting = z.infer<typeof Waiting>;
  */
 export const ServerInfo = z.strictObject({
   type: z.literal("server"),
+  format: formatOf("server"),
   pid: z.number().int().positive(),
   port: z.number().int().min(1).max(65535),
   token: z.string().min(32),
@@ -403,12 +513,28 @@ export type ServerInfo = z.infer<typeof ServerInfo>;
  */
 export const LastPort = z.strictObject({
   type: z.literal("port"),
+  format: formatOf("port"),
   port: z.number().int().min(1).max(65535),
 });
 export type LastPort = z.infer<typeof LastPort>;
 
-/** `.baesian/config.json`: committed, shared by everyone working on the repo. */
+/**
+ * An inbox cursor, `cursors/<branch>.json` in the live layer: the branch's place in its inbox, the time of the newest
+ * verdict it has read (empty before the first), and `delivered`, what `baesian wait` has delivered since. A session
+ * keeps its own place in `cursors/<branch>/<session>.json` (B-ghhym), with no `delivered`. Mutable; never in the
+ * record. Written before v1, a cursor had neither `type` nor `format`.
+ */
+export const Cursor = z.strictObject({
+  type: z.literal("cursor"),
+  format: formatOf("cursor"),
+  at: z.union([Timestamp, z.literal("")]),
+  delivered: z.array(z.string().min(1)).optional(),
+});
+export type Cursor = z.infer<typeof Cursor>;
+
+/** `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it. */
 export const Config = z.strictObject({
+  format: formatOf("config").optional(),
   vault: z.string().optional(),
   /** Globs for the schema detector; replace the defaults (D25). */
   gate_schema: z.array(z.string().min(1)).optional(),
@@ -426,9 +552,11 @@ export type Config = z.infer<typeof Config>;
 
 /**
  * `~/.config/baesian/config.json`: personal, never committed. Notification settings live here, not in
- * the repo: a committed `notify` command would run on every clone, and push tokens would leak.
+ * the repo: a committed `notify` command would run on every clone, and push tokens would leak. Its `format` is
+ * optional: Baesian never writes it.
  */
 export const UserConfig = z.strictObject({
+  format: formatOf("user-config").optional(),
   /** A shell command run when a blocking or hard card is filed; it receives the card as JSON on stdin (D40). */
   notify: z.string().optional(),
   /** OS notifications for blocking and hard cards. Default true. */
