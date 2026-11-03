@@ -176,6 +176,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
           io.out("note: CLAUDE.md doesn't import AGENTS.md. Add a line `@AGENTS.md` so Claude Code reads the instructions.");
         }
       }
+      // The first preferences are chosen in the client, from example decisions (B-5na1k): only the client writes them (D147).
+      if (!s.inForce().name) io.out("preferences: none yet. Run `baesian serve`: the client asks about a few example decisions and suggests how much should reach you.");
     });
 
   program

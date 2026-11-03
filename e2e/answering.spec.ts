@@ -1,6 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { skipSetup } from "./setup.js";
 
 // M4 step 5c: answering, end to end. Round 5's self-test (#selftest), ported: a real server over a fixture repo,
 // a real browser, and Playwright's clock to skip the reading time (D91) and the undo window (D82).
@@ -19,6 +20,7 @@ async function open(page: Page, cards: Record<string, unknown>[]) {
     r.store.fileCard(draft({ title: `Card ${i}`, question: `Question ${i}?`, topic: `area${i}/x`, reverse: "cheap", ...over }), BODY, { agent: "claude-code", force: true }).card.meta.id,
   );
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await skipSetup(page, r.dir);
   await page.clock.install();
   await page.goto(server.url);
   await expect(page.locator("article.card")).toBeVisible();

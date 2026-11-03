@@ -1,13 +1,16 @@
 import { type CSSProperties, useState } from "react";
 import type { ApiCard, ApiState } from "../../src/api";
+import { isOwnCard } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
 import { Mark } from "./Mark";
 import { Prose, inline } from "./Prose";
-import { RARITY, type Rarity, type WaitState, replyOf, ruleName } from "./model";
+import { RARITY, type Rarity, type WaitState, agentOf, isHeld, quoted, replyOf, ruleName } from "./model";
+import { POSITION_NAMES, type Position, rowInSentence } from "./prefs";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
-// Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys.
+// Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys. M8b: a held card is answered blind
+// first, then shows what its agent went ahead with, to keep or overturn (D151).
 
 export type Side = "left" | "right";
 export const ARROW = { left: "←", right: "→", up: "↑", down: "↓" } as const;
@@ -15,7 +18,8 @@ export const ARROW = { left: "←", right: "→", up: "↑", down: "↓" } as co
 /** What the card is showing: the choice, the reveal after it (D86), or one of the two written answers. */
 export type Mode =
   | { kind: "live" }
-  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean; retire?: string[] }
+  /** `asked`: "you should have asked me", on a card the gate held back, or in shadow would have (B-87tkc). */
+  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean; retire?: string[]; asked?: boolean }
   | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
@@ -67,10 +71,11 @@ export function Card(p: CardProps) {
           <Mark kind={rarity} size={22} />
         </span>
         <b>{p.stakes}</b>
-        <WaitBadge agent={m.source_agent} wait={p.wait} />
+        {/* A held card's agent went ahead: whether it ever waited says nothing you need before choosing (D151). */}
+        {!isHeld(card) && <WaitBadge agent={agentOf(card)} wait={p.wait} />}
       </p>
       <p className="doing">
-        <b>{m.source_agent}</b> is {m.doing}
+        <b>{agentOf(card)}</b> is {m.doing}
       </p>
       <h1>{m.question}</h1>
       {mode.kind === "write" || mode.kind === "pass" ? null : (
@@ -161,7 +166,7 @@ function Reply({ card }: { card: ApiCard }) {
   if (!r) return null;
   return (
     <p className="facet reply">
-      <b>{card.meta.source_agent} replied</b>
+      <b>{agentOf(card)} replied</b>
       {r.to ? <>You chose “{r.to}”. </> : null}
       {r.reply}
     </p>
@@ -173,8 +178,9 @@ function OptionButton(p: CardProps & { side: Side }) {
   const m = card.meta;
   const kind = p.sides[side];
   const live = mode.kind === "live";
-  // The agent's pick shows only after you choose (D86).
+  // The agent's pick shows only after you choose (D86); on a held card, it's what the agent went ahead with (D151).
   const showPick = kind === "proposal" && mode.kind === "reveal";
+  const pickWords = isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
   const cls = (mode.kind === "reveal" ? (mode.option === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
   return (
     <button
@@ -196,16 +202,15 @@ function OptionButton(p: CardProps & { side: Side }) {
       <span className="ifans">{kind === "proposal" ? m.crux_proposal : m.crux_alternative}</span>
       <h2>{m[kind]}</h2>
       <p className="then">then {inline(kind === "proposal" ? m.proposal_then : m.alternative_then)}</p>
-      {showPick && (
-        <span className="pickof">
-          {m.source_agent}'s pick{m.serves ? `, for ${m.serves}` : ""}
-        </span>
-      )}
+      {showPick && <span className="pickof">{pickWords}</span>}
     </button>
   );
 }
 
-/** The trial facets (D75): a premise nobody has checked, and work the agent has already done. */
+/**
+ * The trial facets (D75): a premise nobody has checked, and work the agent has already done. On a held card, what's
+ * built waits until you've chosen, since it says which option the agent took (D151).
+ */
 function Facets({ card }: { card: ApiCard }) {
   const m = card.meta;
   return (
@@ -215,17 +220,62 @@ function Facets({ card }: { card: ApiCard }) {
           <b>Unverified</b> “{m[m.premise_option]}” {m.premise}. <span className="soft">Check: {m.premise_check}.</span>
         </p>
       )}
-      {m.acted && m.acted_option && (
-        <p className="facet acted">
-          <b>Already built</b> {m.source_agent} has done “{m[m.acted_option]}”: {m.acted}.
-        </p>
-      )}
+      {!isHeld(card) && <Acted card={card} />}
     </>
   );
 }
 
+function Acted({ card }: { card: ApiCard }) {
+  const m = card.meta;
+  if (!m.acted || !m.acted_option) return null;
+  return (
+    <p className="facet acted">
+      <b>Already built</b> {agentOf(card)} has done “{m[m.acted_option]}”: {m.acted}.
+    </p>
+  );
+}
+
+/** What the gate did with a held card, once you've chosen: why it was held back, and what's built (D151). */
+function HeldFacts({ card }: { card: ApiCard }) {
+  const g = card.gate;
+  return (
+    <>
+      {g && (
+        <p className="facet held">
+          <b>Held back</b> Your setting for {rowInSentence(g.row)} is “{POSITION_NAMES[g.position as Position]}”, so {agentOf(card)} went ahead without asking.
+          {card.audit ? " This one came back to you as a sample." : ""}
+        </p>
+      )}
+      <Acted card={card} />
+    </>
+  );
+}
+
+/**
+ * "You should have asked me" (B-87tkc), on a card the gate held back, or in shadow would have: it counts as a miss on
+ * the card's row, whatever you choose, and a miss is what makes Baesian propose showing more of them (B-y6jn6).
+ */
+function AskedToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undefined; onChange: (on: boolean) => void }) {
+  const g = card.gate;
+  if (g?.outcome !== "held") return null;
+  const enforced = g.mode === "enforce";
+  return (
+    <label className="rule-toggle">
+      <input type="checkbox" checked={on ?? false} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        {enforced ? "You should have asked me" : "I'd have wanted to be asked"}{" "}
+        <span className="soft">
+          {enforced
+            ? "Whatever you choose, it counts against that setting, and Baesian may propose showing you more like it."
+            : `In shadow, your setting for ${rowInSentence(g.row)}, “${POSITION_NAMES[g.position as Position]}”, would have held this back. Ticked, it counts against that setting.`}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function Foot(p: CardProps) {
-  const agent = p.card.meta.source_agent;
+  const agent = agentOf(p.card);
   const rule =
     p.readLeftMs > 0 ? (
       <>
@@ -249,23 +299,40 @@ function Foot(p: CardProps) {
   );
 }
 
-/** The reveal (D86–D88): the agent's pick and the case it wrote at filing; on a disagreement, a reason and the switch. */
+/**
+ * The reveal (D86–D88): the agent's pick and the case it wrote at filing; on a disagreement, a reason and the switch.
+ * On a held card (D151), what the agent went ahead with and what's built; you keep it or overturn it.
+ */
 function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const { card, mode } = p;
   const m = card.meta;
+  const agent = agentOf(card);
+  const held = isHeld(card);
+  const own = isOwnCard(m);
   const same = mode.option === "proposal";
   const switched = same && mode.first !== "proposal";
   const key = ARROW[mode.side];
+  const confirmWords = held ? (same ? `Keep ${quoted(m.proposal)}` : `Overturn it: ${quoted(m.alternative)}`) : `Confirm ${quoted(m[mode.option])}`;
   return (
     <div className="panel-in">
       <p className="verdict">
-        {switched ? (
+        {held ? (
+          switched ? (
+            <>
+              You're keeping <b>{m.proposal}</b>, what {agent} went ahead with.
+            </>
+          ) : (
+            <>
+              You chose <b>{m[mode.option]}</b>. {agent} went ahead with {same ? "the same" : <b>{m.proposal}</b>}.
+            </>
+          )
+        ) : switched ? (
           <>
-            You switched to <b>{m.proposal}</b>, {m.source_agent}'s pick.
+            You switched to <b>{m.proposal}</b>, {agent}'s pick.
           </>
         ) : (
           <>
-            You chose <b>{m[mode.option]}</b>. {m.source_agent}{" "}
+            You chose <b>{m[mode.option]}</b>. {agent}{" "}
             {same ? (
               "picked the same."
             ) : (
@@ -276,12 +343,13 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           </>
         )}
       </p>
+      {held && <HeldFacts card={card} />}
       <div className="reasoning">
         {(m.rationale || m.wrong_if || !card.body.trim()) && <ReasonLine card={card} />}
         {/* The body is context, shown with the agent's case (D92): open by itself when it's all the reasoning there is. */}
         {card.body.trim() && (
           <details className="context" open={!(m.rationale || m.wrong_if)}>
-            <summary>More from {m.source_agent}</summary>
+            <summary>More from {agent}</summary>
             <Prose text={card.body} />
           </details>
         )}
@@ -291,8 +359,14 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           <span className="lbl">
             Why?{" "}
             <span className="soft">
-              Optional. It goes to {m.source_agent} with your answer
-              {card.replied ? "." : `, and ${m.source_agent} may reply once, with a new fact or a check.`} It's committed with the code.
+              {own ? (
+                "Optional. It's kept with your answer, and committed with the code."
+              ) : (
+                <>
+                  Optional. It goes to {agent} with your answer
+                  {card.replied ? "." : `, and ${agent} may reply once, with a new fact or a check.`} It's committed with the code.
+                </>
+              )}
             </span>
           </span>
           <input
@@ -310,7 +384,8 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           />
         </label>
       )}
-      <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
+      <AskedToggle card={card} on={mode.asked} onChange={(asked) => p.onMode({ ...mode, asked })} />
+      {!own && <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />}
       {retirable(card, mode.option, p.rules).map((r) => (
         <label key={r.meta.id} className="rule-toggle">
           <input
@@ -319,7 +394,7 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
             onChange={(e) => p.onMode({ ...mode, retire: e.target.checked ? [...(mode.retire ?? []), r.meta.id] : (mode.retire ?? []).filter((id) => id !== r.meta.id) })}
           />
           <span>
-            Retire this rule: {ruleName(r.body)} <span className="soft">Your answer breaks it. Retired, it stops approving changes at commit, and {m.source_agent} stops citing it.</span>
+            Retire this rule: {ruleName(r.body)} <span className="soft">Your answer breaks it. Retired, it stops approving changes at commit, and {agent} stops citing it.</span>
           </span>
         </label>
       ))}
@@ -333,23 +408,23 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           </button>
         ) : (
           <button type="button" className="confirm" onClick={p.onConfirm}>
-            Confirm “{m[mode.option]}” <kbd>{key}</kbd>
+            {confirmWords} <kbd>{key}</kbd>
           </button>
         )}
         {!same && (
           <button type="button" className="switch" onClick={p.onSwitch}>
-            Switch to {m.source_agent}'s pick
+            {held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
           </button>
         )}
       </div>
-      <p className="small">Esc goes back to the choice.</p>
+      <p className="small">{held && !same ? `Overturning it sends ${agent} a brief of what to redo. ` : ""}Esc goes back to the choice.</p>
     </div>
   );
 }
 
 /** A card you answered this session, reopened: what you said, and the way to change it. */
 function Review(p: CardProps) {
-  const agent = p.card.meta.source_agent;
+  const agent = agentOf(p.card);
   return (
     <div className="panel-in">
       <div className="result">
@@ -377,13 +452,13 @@ function ReasonLine({ card }: { card: ApiCard }) {
   if (!m.rationale && !m.wrong_if) {
     return (
       <p>
-        <span className="who">{m.source_agent}</span> gave no reasoning beyond the card.
+        <span className="who">{agentOf(card)}</span> gave no reasoning beyond the card.
       </p>
     );
   }
   return (
     <p>
-      <span className="who">{m.source_agent}:</span> {m.rationale && <q>{m.rationale}</q>}
+      <span className="who">{agentOf(card)}:</span> {m.rationale && <q>{m.rationale}</q>}
       {m.wrong_if && (
         <>
           {" "}
@@ -411,7 +486,7 @@ function RuleToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undef
     <label className="rule-toggle">
       <input type="checkbox" checked={on ?? false} onChange={(e) => onChange(e.target.checked)} />
       <span>
-        Make this a rule <span className="soft">{card.meta.source_agent} drafts it for you to confirm, so decisions like this one go the same way.</span>
+        Make this a rule <span className="soft">{agentOf(card)} drafts it for you to confirm, so decisions like this one go the same way.</span>
       </span>
     </label>
   );
@@ -419,7 +494,7 @@ function RuleToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undef
 
 function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }> }) {
   const { mode } = p;
-  const agent = p.card.meta.source_agent;
+  const agent = agentOf(p.card);
   const up = mode.kind === "write";
   const chips = up ? WRITE_REASONS : PASS_REASONS;
   const placeholder = up ? (WRITE_REASONS.find((r) => r.reason === mode.reason)?.placeholder ?? `Goes back to ${agent} with this card.`) : "Optional: what would help you judge it?";

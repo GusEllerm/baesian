@@ -1,5 +1,5 @@
 import { type Counted, countedCards, replayCards, rowWindows } from "./report.js";
-import { POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
+import { LEVEL_AT, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
 import type { Verdict } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, tokens } from "./similarity.js";
 import { type Card, PENDING, type Store } from "./store.js";
@@ -150,10 +150,12 @@ function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down",
   const evidence = dir === "up" ? misses.at(-1)! : answered.at(-1)!;
   const moved = { ...settings, rows: { ...settings.rows, [row]: to } };
   const after = replay(replayCards(counted), moved).rows[row];
-  const history = after ? ` Of the ${after.cards} cards on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
+  const cards = (k: number) => `${k} ${k === 1 ? "card" : "cards"}`;
+  // What the move would have held of past cards, when it moves to a stop that holds any back.
+  const history = after && !LEVEL_AT[to] ? ` Of the ${cards(after.cards)} on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
   const fact =
     dir === "up"
-      ? `“${name}” is at ${named(from)}. On ${evidence.card.meta.id}, “${evidence.card.meta.title}”, ${evidence.answers.final?.response === "accept" ? "you kept the agent's pick, and marked that you should have been asked" : "your final answer went against the agent's pick"}: ${misses.length} of the ${answered.length} final answers on this row at ${named(from)} were misses.${history}`
+      ? `“${name}” is at ${named(from)}. On ${evidence.card.meta.id}, “${evidence.card.meta.title}”, ${evidence.answers.final?.response === "accept" ? "you kept the agent's pick, and marked that you should have been asked" : "your final answer went against the agent's pick"}. Misses on this row at ${named(from)}: ${misses.length} in ${answered.length} final ${answered.length === 1 ? "answer" : "answers"}.${history}`
       : `“${name}” is at ${named(from)}. Your last ${answered.length} final answers on it kept the agent's pick, and none was marked “you should have asked me”: with no misses in ${answered.length}, the miss rate is under about 1 in ${Math.floor(answered.length / 3)}.${history}`;
   return {
     title: `The setting for ${lower}`,

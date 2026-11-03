@@ -1,4 +1,5 @@
 import { type ApiCard, type ApiState, type Status, WAITING_STALE_MS } from "../../src/api";
+import { BAESIAN } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
 
 // M4 step 5b: what the client works out from the server's snapshot (D96). Pure functions, ported from the round 5
@@ -82,8 +83,35 @@ export function stakesLine(card: ApiCard, dependents: number): string {
   const hard = m.touches.filter((f) => HARD_FACTS.has(f));
   if (hard.length) parts.push(`touches ${listJoin(hard.map((f) => f.replace("-", " ")))}`);
   if ((m.conflict_of?.length ?? 0) > 0) parts.push("two settled decisions disagree");
+  if (m.pref_row) parts.push("a change to your preferences");
   if (dependents) parts.push(`${dependents} decision${dependents === 1 ? " rests" : "s rest"} on it`);
   return [undo, ...parts].join(", ");
+}
+
+/** An option's name in quotes, unless it quotes something itself: “Move it to “stop and ask”” reads as Move it to “stop and ask”. */
+export const quoted = (text: string): string => (/[“”]/.test(text) ? text : `“${text}”`);
+
+/** Who filed a card, as the card names them: Baesian's own cards (conflicts, conventions, slider proposals) by its name. */
+export const agentOf = (card: ApiCard): string => (card.meta.source_agent === BAESIAN ? "Baesian" : card.meta.source_agent);
+
+/** Card IDs in what Baesian writes, with the title that follows, or alone; and its references in brackets (D69). */
+const CITED = /\b(B-[0-9a-hjkmnp-tv-z]{5}),\s+(?=“)/g;
+const LONE_ID = /\b(B-[0-9a-hjkmnp-tv-z]{5})\b/g;
+const REFS = /\s*\((?:(?:B-[0-9a-hjkmnp-tv-z]{5}|D\d+|P\d+)(?:,\s*)?)+\)/g;
+
+/**
+ * Text Baesian wrote on its own cards, for people (D69: no IDs): "On B-x1y2z, “The run store”, …" becomes "On “The run
+ * store”, …", a card ID on its own becomes its title, and a bracketed "(B-y6jn6)" or "(D161)" goes. An agent's own
+ * words are never changed.
+ */
+export function ownText(text: string, cards: Map<string, ApiCard>): string {
+  return text
+    .replace(REFS, "")
+    .replace(CITED, "")
+    .replace(LONE_ID, (id) => {
+      const c = cards.get(id);
+      return c ? `“${c.meta.title}”` : "another decision";
+    });
 }
 
 /**
@@ -107,7 +135,8 @@ export const serverNow = (state: ApiState, fetchedAtMs: number, nowMs: number = 
 /**
  * The queue (round 5's order, with D90): cards with an agent waiting now come first of all; then each area in
  * turn, the area with the rarest card first, and within it the rarest first, oldest first among equals.
- * Only open cards are in it: passed-on and deferred cards are parked (`parked`).
+ * Only open cards are in it, and audits (D151): passed-on and deferred cards are parked (`parked`), and held cards
+ * wait in their own list (`heldBack`) unless they're drawn for audit.
  */
 export function queue(state: ApiState, nowMs: number): ApiCard[] {
   const cards = byId(state);
@@ -123,11 +152,43 @@ export function queue(state: ApiState, nowMs: number): ApiCard[] {
     if (x !== y) return best.get(y)! - best.get(x)! || x.localeCompare(y);
     return byRank(a, b);
   });
-  return [...first, ...rest];
+  const audits = state.cards.filter((c) => c.audit).sort((a, b) => a.meta.created.localeCompare(b.meta.created));
+  return spaceOut([...first, ...rest], audits);
+}
+
+/** How many other cards come before each audit in the queue. */
+export const AUDIT_EVERY = 2;
+
+/**
+ * Audits spaced out among the other cards, never in a run while there are others to put between them (P14 section 3:
+ * people miss the rare bad item in a stream that's mostly fine), and never ahead of an agent that has stopped: one
+ * after every `AUDIT_EVERY` cards, and the rest at the end.
+ */
+export function spaceOut(cards: ApiCard[], audits: ApiCard[], every = AUDIT_EVERY): ApiCard[] {
+  const out: ApiCard[] = [];
+  let next = 0;
+  cards.forEach((c, i) => {
+    out.push(c);
+    if ((i + 1) % every === 0 && next < audits.length) out.push(audits[next++]!);
+  });
+  return [...out, ...audits.slice(next)];
 }
 
 /** Cards that need the reviewer, but not now: passed to another reviewer, or deferred. */
 export const parked = (state: ApiState): ApiCard[] => state.cards.filter((c) => c.status === "rerouted" || c.status === "deferred");
+
+/**
+ * Cards the gate held back, whose agents went ahead (D150): out of the queue, and in the "Held back" list, where any
+ * can be opened and answered. Audits are in the queue instead. Newest first.
+ */
+export const heldBack = (state: ApiState): ApiCard[] =>
+  state.cards.filter((c) => c.status === "held" && !c.audit).sort((a, b) => b.meta.created.localeCompare(a.meta.created));
+
+/**
+ * A card answered blind first, then shown what its agent went ahead with (D151): an audit, or any held card opened
+ * from the list. Until you choose, nothing on it may say which option the agent took.
+ */
+export const isHeld = (card: ApiCard): boolean => card.status === "held";
 
 const STATE_WORDS: Record<Status, string> = {
   open: "waiting for you",

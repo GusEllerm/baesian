@@ -66,6 +66,21 @@ export function useSeen(state: ApiState) {
 }
 
 /**
+ * Whether this browser has offered the setup survey for this project (B-5na1k): it's offered once, when the repo has
+ * no preference file, and counts as offered once you've started it or said "Not now". The preferences panel offers it
+ * again.
+ */
+export function useSetupOffered(state: ApiState) {
+  const key = storageKey(state.project.name, "setup");
+  const [offered, setOffered] = useState(() => load(key, false));
+  const mark = useCallback(() => {
+    save(key, true);
+    setOffered(true);
+  }, [key]);
+  return { offered, mark };
+}
+
+/**
  * The decks whose briefing card you've been shown (B-j6b75): each comes once, before the first of its cards you
  * reach. Unlike "seen", nothing counts as briefed the first time a browser opens a project: you haven't read them.
  */

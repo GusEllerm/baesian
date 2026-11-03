@@ -53,6 +53,14 @@ describe("verdictFor", () => {
     expect(describeAnswer(card, { kind: "choose", option: "alternative", first: "alternative" })).toBe("You chose “Postgres”.");
     expect(describeAnswer(card, { kind: "pass", reason: "see_it_run", text: "" })).toBe("You asked to see it run.");
   });
+
+  it("marks \"you should have asked me\" on the verdict when you tick it (B-87tkc), and words a held card's answer as keeping or overturning (D151)", () => {
+    expect(verdictFor(card, { kind: "choose", option: "proposal", first: "alternative", asked: true })).toEqual({ verdict: expect.objectContaining({ response: "accept", first_choice: "alternative", should_have_asked: true }) });
+    expect(verdictFor(card, { kind: "choose", option: "proposal", first: "proposal" })).toEqual({ verdict: expect.not.objectContaining({ should_have_asked: expect.anything() }) });
+    const held = { ...card, status: "held" } as ApiCard;
+    expect(describeAnswer(held, { kind: "choose", option: "proposal", first: "alternative" })).toBe("You kept “SQLite”.");
+    expect(describeAnswer(held, { kind: "choose", option: "alternative", first: "alternative" })).toBe("You overturned it, for “Postgres”.");
+  });
 });
 
 describe("the outbox (D82)", () => {
@@ -76,6 +84,14 @@ describe("the outbox (D82)", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(posts).toEqual([{ keepalive: false }]);
     expect(sent).toEqual(["B-7f3kq"]);
+  });
+
+  it("passes on the cards Baesian proposed from the answer (D161, B-y6jn6)", async () => {
+    const sent: unknown[][] = [];
+    const box = new Outbox(async () => ({ filed: ["B-ccccc"] }), 5000, { sent: (...a) => void sent.push(a), failed: () => {} });
+    box.hold("B-7f3kq", verdict);
+    box.flush();
+    await vi.waitFor(() => expect(sent).toEqual([["B-7f3kq", { filed: ["B-ccccc"] }]]));
   });
 
   it("takes an answer back on undo, and sends nothing", async () => {

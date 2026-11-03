@@ -3,6 +3,7 @@ import { type RunningServer, startServer } from "../src/server.js";
 import { cleanup, repo } from "../test/helpers.js";
 import { layoutProblems } from "./layout.js";
 import { fileRound5 } from "./round5.js";
+import { skipSetup } from "./setup.js";
 
 // M4 step 5f: the layout check over every state of the desk, at desktop and laptop sizes, on round 5's cards.
 // The check itself is e2e/layout.ts.
@@ -22,13 +23,14 @@ const SIZES = [
 
 for (const size of SIZES) {
   test(`nothing is clipped, overlapping or off the window, in any state (${size.name}, ${size.width}×${size.height})`, async ({ page }) => {
-    const { store } = repo();
+    const { store, dir } = repo();
     const r5 = fileRound5(store);
     server = await startServer(store, { reviewer: "gus", writeServerFile: false, debounceMs: 20 });
     await page.setViewportSize({ width: size.width, height: size.height });
     // Still states only: with reduced motion the client moves nothing, so no card is caught halfway. (Motion's
     // exits also stall under Playwright's fake clock, which leaves leaving cards on the page.)
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await skipSetup(page, dir);
     await page.clock.install();
     await page.goto(server.url);
     await expect(page.locator(CARD)).toBeVisible();

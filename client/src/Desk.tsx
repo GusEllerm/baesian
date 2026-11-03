@@ -1,23 +1,29 @@
 import { AnimatePresence, type MotionStyle, animate, motion, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApiAliasInput, ApiCard, ApiState } from "../../src/api";
+import { isOwnCard, suggestPreset } from "../../src/routing";
 import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
 import { laterSuperseded, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
 import { usePresence } from "./live";
-import { addSpent, loadSpent, useBriefed, useSeen } from "./local";
-import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
+import { type Rarity, agentOf, areaOf, byId, heldBack, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
-import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
+import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path } from "./Path";
+import { POSITION_NAMES, ROW_NAMES, type Draft, pastCards, replacesOf, rowInSentence, surveyAnswersOf, surveyChange } from "./prefs";
+import { PreferencesPanel, postPreferences, usePresets } from "./Preferences";
+import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Survey";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
 // in, the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
-// (D82); every card goes through the reveal (D86). Beside the card, the path (Path.tsx); under it, the pile of the
-// rest of its area. In the header, the menu and its panels (Panels.tsx). While it's open, it says you're there
+// (D82); every card goes through the reveal (D86). M8b: audits come through the queue and held cards from their list,
+// both answered blind first (D151); the setup survey comes before the cards, once (B-5na1k). Beside the card, the path
+// (Path.tsx); under it, the pile of the rest of its area. In the header, the menu and its panels (Panels.tsx,
+// Preferences.tsx). While it's open, it says you're there
 // (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
 // design/explorations/round5/app.js.
 
@@ -46,6 +52,8 @@ interface Answered {
   phase: "held" | "sent";
   words: string;
   agent: string;
+  /** What the toast says once it's recorded. */
+  sent: string;
   /** For the path: the card's name and rarity, and your answer in a few words. */
   name: string;
   rarity: Rarity;
@@ -62,10 +70,28 @@ interface Fly {
   text: string;
 }
 
-/** Your answer, as the path says it. */
+/** Your answer, as the path says it. A held card's agent went ahead, so you kept it or overturned it (D151). */
 function pathState(card: ApiCard, answer: Answer): string {
-  if (answer.kind === "choose") return answer.option === "proposal" ? `you chose “${card.meta.proposal}”` : `you chose “${card.meta.alternative}”, not ${card.meta.source_agent}'s pick`;
+  const { proposal, alternative } = card.meta;
+  if (answer.kind === "choose" && isHeld(card)) return answer.option === "proposal" ? `you kept ${quoted(proposal)}` : `you overturned it, for ${quoted(alternative)}`;
+  if (answer.kind === "choose") return answer.option === "proposal" ? `you chose ${quoted(proposal)}` : `you chose ${quoted(alternative)}, not ${agentOf(card)}'s pick`;
   return answer.kind === "write" ? "you wrote an answer" : "you couldn't judge it";
+}
+
+/** What the toast says once an answer is recorded: a slider proposal accepted moves its row (B-y6jn6); Baesian's own cards go to no agent. */
+function sentWords(card: ApiCard, answer: Answer): string {
+  const m = card.meta;
+  if (m.pref_row && m.pref_to && answer.kind === "choose") {
+    return answer.option === "proposal" ? `Saved: ${ROW_NAMES[m.pref_row]} is at “${POSITION_NAMES[m.pref_to]}” now.` : `Recorded: the setting for ${rowInSentence(m.pref_row)} stays as it is.`;
+  }
+  return isOwnCard(m) ? "Recorded." : `Sent to ${m.source_agent}.`;
+}
+
+/** Baesian's own cards, for people: its card IDs and references become words (D69). An agent's own words are left as they are. */
+function forPeople(card: ApiCard, cards: Map<string, ApiCard>): ApiCard {
+  if (!isOwnCard(card.meta)) return card;
+  const { crux_fact } = card.meta;
+  return { ...card, body: ownText(card.body, cards), meta: { ...card.meta, ...(crux_fact ? { crux_fact: ownText(crux_fact, cards) } : {}) } };
 }
 
 /** Fixed per card, so the pile looks tossed together but doesn't jitter between answers. */
@@ -101,28 +127,40 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const exitDir = useRef<Leave>("fade");
   const [menuOpen, setMenuOpen] = useState(false);
   const [panel, setPanel] = useState<PanelKind>();
+  /** The setup survey, once you've started it (B-5na1k); before that, it may be offered. */
+  const [setupStep, setSetupStep] = useState<Setup>();
+  /** A draft for the preferences panel to open with: the survey's suggestion, to adjust. */
+  const [prefsInitial, setPrefsInitial] = useState<Draft>();
   const project = state.project.name;
   usePresence();
   const seen = useSeen(state);
   const briefed = useBriefed(state);
+  const setupOffered = useSetupOffered(state);
 
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
   const aside = parked(state).filter((c) => !answered.has(keyOf(c)));
+  const held = heldBack(state).filter((c) => !answered.has(keyOf(c)));
   const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
   // The card in front of you stays until you answer it or move on. When the queue re-sorts (an answer reaching
   // the server, an agent starting to wait), that changes what comes next, never the card you're reading (5f).
   const [shownKey, setShownKey] = useState("");
   const staying = ordered.find((c) => keyOf(c) === shownKey);
-  // A card you put aside can be answered after all: it's picked from the empty desk.
-  const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick)) : undefined;
+  // A card you put aside can be answered after all, and so can one held back (D150): picked from their lists.
+  const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick) ?? held.find((c) => c.meta.id === pick)) : undefined;
   const current = reviewCard ?? picked ?? staying ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
+  // With no preference file, the setup survey is offered once, before the cards (B-5na1k), unless an agent has
+  // stopped for you: then it waits until none has.
+  const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
+  const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked;
+  const setup: Setup | undefined = setupStep ?? (offerDue ? { step: "offer" } : undefined);
+  const presets = usePresets(panel === "preferences" || setup !== undefined, state.version);
   // The first card you reach from a deck with a briefing comes after its briefing card, once per deck (B-j6b75).
   // A card reopened from the path is one you've already reached.
-  const briefing = !reviewCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
+  const briefing = !setup && !reviewCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
   const sides = current ? sidesFor(current.meta.id, salt) : { left: "alternative" as const, right: "proposal" as const };
@@ -140,10 +178,17 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     setHover(undefined);
     setShownAt(performance.now());
   }
-  // A card counts as seen once it's been on the desk, not behind its deck's briefing: it loses its "new" tag.
+  // A card counts as seen once it's been on the desk, not behind its deck's briefing or the setup survey: it loses its "new" tag.
+  const behind = !!briefing || !!setup;
   useEffect(() => {
-    if (key && !briefing) seen.mark(key);
-  }, [key, briefing, seen.mark]);
+    if (key && !behind) seen.mark(key);
+  }, [key, behind, seen.mark]);
+  // Its reading time (D91) starts once it's in front of you.
+  const wasBehind = useRef(behind);
+  if (wasBehind.current !== behind) {
+    wasBehind.current = behind;
+    if (!behind) setShownAt(performance.now());
+  }
   const dwell = r && mode.kind !== "review" ? READ_FIRST_MS[r.rarity] : 0;
   const [, setFrame] = useState(0);
   const readLeft = Math.max(0, dwell - (performance.now() - shownAt));
@@ -159,10 +204,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const outbox = useRef<Outbox>(undefined);
   if (!outbox.current) {
     outbox.current = new Outbox(postVerdict, UNDO_MS, {
-      sent: (k) => {
+      sent: (k, posted) => {
         const a = answeredRef.current.get(k);
         setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "sent" }) : m));
-        say(`Sent to ${a?.agent ?? "the agent"}.`);
+        // Baesian may have proposed something from your answer (D161, B-y6jn6): it's in the queue now.
+        const n = posted?.filed?.length ?? 0;
+        const filed = n ? ` Baesian has ${n === 1 ? "a proposal" : `${NUMBER[n]?.toLowerCase() ?? n} proposals`} from your answers, in your queue.` : "";
+        say(`${a?.sent ?? "Sent."}${filed}`);
       },
       failed: (k, error) => {
         setAnswered((m) => {
@@ -196,11 +244,11 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     }
     // A changed answer keeps its place on the path (Map.set keeps the order) and replaces what was there.
     setAnswered((m) =>
-      new Map(m).set(key, { answer, phase: "held", words, agent: current.meta.source_agent, name: current.meta.title, rarity: r!.rarity, state: pathState(current, answer) }),
+      new Map(m).set(key, { answer, phase: "held", words, agent: agentOf(current), sent: sentWords(current, answer), name: current.meta.title, rarity: r!.rarity, state: pathState(current, answer) }),
     );
-    const held = outbox.current!.hold(key, v.verdict);
+    const waiting = outbox.current!.hold(key, v.verdict);
     // Round 5 took your answer out of this toast: the path shows it.
-    say(`Sending to ${current.meta.source_agent} in`, held.until);
+    say(isOwnCard(current.meta) ? "Recording it in" : `Sending to ${current.meta.source_agent} in`, waiting.until);
     setPick(undefined);
     setReviewing(undefined);
   };
@@ -233,7 +281,15 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
 
   const confirm = () => {
     if (mode.kind !== "reveal") return;
-    commit({ kind: "choose", option: mode.option, first: mode.first, ...(mode.why.trim() ? { why: mode.why } : {}), ...(mode.rule ? { rule: true } : {}), ...(mode.retire?.length ? { retire: mode.retire } : {}) });
+    commit({
+      kind: "choose",
+      option: mode.option,
+      first: mode.first,
+      ...(mode.why.trim() ? { why: mode.why } : {}),
+      ...(mode.rule ? { rule: true } : {}),
+      ...(mode.retire?.length ? { retire: mode.retire } : {}),
+      ...(mode.asked ? { asked: true } : {}),
+    });
   };
   // The other option breaks other rules, if any: what you meant to retire goes with the option you left.
   const switchToPick = () => mode.kind === "reveal" && setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "", retire: [] });
@@ -271,6 +327,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   /** Clicking a decision on the path: a card to answer opens; one you've answered reopens. */
   const goTo = (id: string) => {
     if (mode.kind === "write" || mode.kind === "pass") return say("Send or cancel your written answer first.");
+    // Going to a card leaves the setup survey, as "Not now" does.
+    if (setup) setupAway();
     if (id === current?.meta.id) return;
     exitDir.current = "fade";
     const answeredKey = [...answered.keys()].find((k) => k.startsWith(`${id}@`));
@@ -284,9 +342,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   };
 
   // Topics that look like the card's (D44, D111): the same rule `baesian file` warns with, over the topics in use.
+  // Baesian names its own cards' topics after the decisions they come from, so they look alike by design: never offered.
   const topicCounts = new Map<string, number>();
-  for (const c of state.cards) topicCounts.set(c.canonicalTopic, (topicCounts.get(c.canonicalTopic) ?? 0) + 1);
-  const near = current ? nearTopics(current.canonicalTopic, topicCounts.keys()).map((topic) => ({ topic, count: topicCounts.get(topic)! })) : [];
+  for (const c of state.cards) if (!isOwnCard(c.meta)) topicCounts.set(c.canonicalTopic, (topicCounts.get(c.canonicalTopic) ?? 0) + 1);
+  const near = current && !isOwnCard(current.meta) ? nearTopics(current.canonicalTopic, topicCounts.keys()).map((topic) => ({ topic, count: topicCounts.get(topic)! })) : [];
   const merge = async (into: string) => {
     if (!current) return;
     const from = current.canonicalTopic;
@@ -308,7 +367,67 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     else if (now === "blocked") say("Your browser blocks notifications for this page. Its site settings can allow them.");
     else if (was === "on") say("Notifications are off.");
   };
-  const showPanel = (kind: PanelKind) => setPanel((p) => (p === kind ? undefined : kind));
+  const showPanel = (kind: PanelKind) => {
+    if (kind === "preferences") setPrefsInitial(undefined);
+    setPanel((p) => (p === kind ? undefined : kind));
+  };
+
+  // The setup survey (B-5na1k): the offer, the example decisions one by one, then the preset they suggest.
+  const survey = presets?.survey;
+  const focusCard = () => requestAnimationFrame(() => document.querySelector<HTMLElement>(".stage article.card:not([data-leaving])")?.focus({ preventScroll: true }));
+  const setupAway = () => {
+    setupOffered.mark();
+    exitDir.current = "fade";
+    setSetupStep(undefined);
+    focusCard();
+  };
+  const setupStart = () => {
+    if (!survey) return;
+    setupOffered.mark();
+    setPanel(undefined);
+    exitDir.current = "fade";
+    setSetupStep({ step: "ask", i: 0, answers: {} });
+    focusCard();
+  };
+  const setupAnswer = (side: Side | "down") => {
+    if (setup?.step !== "ask" || !survey) return;
+    const item = survey.items[setup.i]!;
+    const answers = { ...setup.answers };
+    if (side === "down") delete answers[item.row];
+    else answers[item.row] = SURVEY_SIDES[side];
+    exitDir.current = side;
+    setSetupStep(setup.i + 1 < survey.items.length ? { step: "ask", i: setup.i + 1, answers } : { step: "result", answers });
+  };
+  const setupBack = () => {
+    if (setup?.step !== "ask" || setup.i === 0) return;
+    exitDir.current = "fade";
+    setSetupStep({ ...setup, i: setup.i - 1 });
+  };
+  const setupUse = async () => {
+    if (setup?.step !== "result") return;
+    setSetupStep({ ...setup, saving: true });
+    const result = await postPreferences(surveyChange(setup.answers, replacesOf(state.routing)));
+    if ("ok" in result) {
+      const preset = suggestPreset(surveyAnswersOf(setup.answers));
+      say(result.ok.file.mode === "shadow" ? `Saved: “${preset.name}”, in shadow. Nothing is held back yet.` : `Saved: “${preset.name}”. It applies to the next cards agents file.`);
+      setupAway();
+    } else {
+      setSetupStep({ ...setup, saving: false, problem: "stale" in result ? "Your preferences changed meanwhile, so nothing was saved. Open them, in the menu, to see them as they are." : `That wasn't saved: ${result.error}.` });
+    }
+  };
+  const setupAdjust = () => {
+    if (setup?.step !== "result") return;
+    const answers = surveyAnswersOf(setup.answers);
+    const preset = suggestPreset(answers);
+    setPrefsInitial({ mode: state.routing.settings.mode, rows: { ...preset.rows }, preset: preset.id, survey: answers });
+    setupAway();
+    setPanel("preferences");
+  };
+  const setupKey = (k: Dir | "enter") => {
+    if (setup?.step === "offer" && (k === "right" || k === "enter")) setupStart();
+    else if (setup?.step === "ask" && (k === "left" || k === "right" || k === "down")) setupAnswer(k);
+    else if (setup?.step === "result" && k === "enter") void setupUse();
+  };
   /** On from the briefing to the deck's card, whose reading time starts now (D91). */
   const dismissBriefing = () => {
     if (!briefing) return;
@@ -343,8 +462,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   };
 
   // The keys, read through a ref so the listeners always see the latest state.
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing };
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
@@ -362,6 +481,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       }
       if (e.key === "Escape") {
         if (h.panel) setPanel(undefined);
+        else if (h.setup) h.setupAway();
         else if (h.briefing) h.dismissBriefing();
         else if (h.mode.kind !== "live" || reviewingRef.current) h.back();
         else if (keyHeld.current) {
@@ -370,11 +490,22 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         }
         return;
       }
-      // Typing goes to the field; a ticked box (make this a rule) leaves the keys to the card.
-      if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea')) return;
+      // Typing goes to the field, and a radio button keeps its arrows; a ticked box (make this a rule) leaves the keys
+      // to the card. Inside a panel, the keys are the panel's.
+      if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea, .panel')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "z" || e.key === "Z") return h.undo();
       if (e.key === "?") return setPanel((p) => (p === "keys" ? undefined : "keys"));
+      const dir = ARROWS[e.key];
+      // The setup survey has the arrows, and Enter, to itself. A focused button takes its own Enter.
+      if (h.setup) {
+        const enter = e.key === "Enter" && !(e.target instanceof HTMLButtonElement);
+        if (dir || enter) {
+          e.preventDefault();
+          if (!e.repeat) h.setupKey(dir ?? "enter");
+        }
+        return;
+      }
       if ((e.key === "j" || e.key === "k") && h.mode.kind === "live" && h.ordered.length) {
         const i = h.current ? h.ordered.indexOf(h.current) : -1;
         const next = h.ordered[(i + (e.key === "j" ? 1 : h.ordered.length - 1) + h.ordered.length) % h.ordered.length];
@@ -382,7 +513,6 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         setReviewing(undefined);
         return setPick(next?.meta.id);
       }
-      const dir = ARROWS[e.key];
       // A briefing card: any arrow, or Enter, goes on to the card. A focused button takes its own Enter.
       if (h.briefing) {
         if (dir || (e.key === "Enter" && !(e.target instanceof HTMLButtonElement))) {
@@ -423,8 +553,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const reviewingRef = useRef(reviewing);
   reviewingRef.current = reviewing;
 
-  // The path: your answers this session, the card's relationships, and what's next.
-  const relations = current ? relationsOf(current, state) : [];
+  // The path: your answers this session, the card's relationships, and what's next. Behind the setup survey, no card
+  // is in play: the path shows only what's next.
+  const inPlay = setup ? undefined : current;
+  const relations = inPlay ? relationsOf(inPlay, state) : [];
   const relById = new Map(relations.map((x) => [x.id, x]));
   const trail = [...answered.entries()]
     .filter(([k]) => k !== key)
@@ -433,7 +565,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       const link = relById.get(id);
       return { key: k, id, name: a.name, state: a.state, rarity: a.rarity, ...(link ? { link } : {}) };
     });
-  const ahead = current ? ordered.filter((c) => c.meta.id !== current.meta.id) : [];
+  const ahead = inPlay ? ordered.filter((c) => c.meta.id !== inPlay.meta.id) : setup ? ordered : [];
   const nextUp = ahead.slice(0, NEXT_MAX).map((c) => {
     const link = relById.get(c.meta.id);
     return {
@@ -448,10 +580,14 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const leaning = lean ?? handLean ?? hover;
   const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
 
-  // The pile: the rest of this card's area, slightly messy, under it.
-  const pile = current ? ahead.filter((c) => areaOf(c) === areaOf(current)).slice(0, 4) : [];
+  // The pile: the rest of this card's area, slightly messy, under it; under the survey, the examples still to come.
+  const surveyLeft = !setup || !survey ? 0 : setup.step === "offer" ? survey.items.length : setup.step === "ask" ? survey.items.length - setup.i - 1 : 0;
+  const pile = setup
+    ? Array.from({ length: Math.min(4, surveyLeft) }, (_, i) => `survey-${i}`)
+    : inPlay
+      ? ahead.filter((c) => areaOf(c) === areaOf(inPlay)).slice(0, 4).map((c) => c.meta.id)
+      : [];
 
-  const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
   const summary = ordered.length ? (
     <>
       <b>{ordered.length} to answer.</b>
@@ -474,10 +610,32 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         <p className="summary" aria-live="polite">
           {summary}
         </p>
-        <MoreMenu open={menuOpen} notify={notifications.status} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
+        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
       {panel === "keys" && <KeysPanel onClose={() => setPanel(undefined)} />}
-      {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} onClose={() => setPanel(undefined)} />}
+      {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
+      {panel === "held" && (
+        <HeldPanel
+          held={held}
+          mode={state.routing.settings.mode}
+          onOpen={(id) => {
+            setPanel(undefined);
+            goTo(id);
+          }}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
+      {panel === "preferences" && (
+        <PreferencesPanel
+          routing={state.routing}
+          cards={pastCards(state.cards)}
+          presets={presets}
+          {...(prefsInitial ? { initial: prefsInitial } : {})}
+          onSaved={(text) => say(text)}
+          onSurvey={setupStart}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
       {panel === "deck" && deck && (
         <DeckPanel
           deck={deck}
@@ -492,12 +650,12 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       <main className="desk">
         <Path
           trail={trail}
-          current={current && r ? { id: current.meta.id, rarity: r.rarity, stopped: waitState(current, now) === "waiting", conflict: (current.meta.conflict_of?.length ?? 0) > 0 } : undefined}
+          current={inPlay && r ? { id: inPlay.meta.id, rarity: r.rarity, stopped: waitState(inPlay, now) === "waiting", conflict: (inPlay.meta.conflict_of?.length ?? 0) > 0 } : undefined}
           relations={relations}
           upcoming={nextUp}
           more={Math.max(0, ahead.length - NEXT_MAX)}
           lean={leanKind}
-          optionLabel={(k) => `${ARROW[sideOf(k)]} “${current?.meta[k] ?? ""}”`}
+          optionLabel={(k) => `${ARROW[sideOf(k)]} ${quoted(current?.meta[k] ?? "")}`}
           onGoTo={goTo}
           layoutKey={`${key}:${mode.kind}`}
           {...(cardMotion ? { card: cardMotion } : {})}
@@ -505,7 +663,12 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         />
         <section className="stage" aria-label="The card to answer">
           <p className="crumbs">
-            {current && (
+            {setup ? (
+              <>
+                setting up › <b>Your preferences</b>
+              </>
+            ) : (
+              current && (
               <>
                 {areaOf(current)} ›{" "}
                 {/* The deck's briefing and its context notes open from its name (M6). */}
@@ -517,19 +680,50 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   <b>{deck?.meta.title ?? current.meta.deck}</b>
                 )}
               </>
+              )
             )}
           </p>
           <div className="deck">
             <div className="pile" aria-hidden="true">
-              {pile.map((c, i) => {
-                const m = messy(c.meta.id, i + 1);
-                return <div key={c.meta.id} className="under" style={{ "--r": `${m.r.toFixed(2)}deg`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, zIndex: 10 - i } as CSSProperties} />;
+              {pile.map((id, i) => {
+                const m = messy(id, i + 1);
+                return <div key={id} className="under" style={{ "--r": `${m.r.toFixed(2)}deg`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, zIndex: 10 - i } as CSSProperties} />;
               })}
             </div>
             {/* Not mode="popLayout": that injects a <style> element, which the page's policy refuses (D99). A leaving
                 card is taken out of the flow by style.css instead, through its data-leaving mark. */}
             <AnimatePresence custom={exitDir.current} initial={false}>
-              {briefing ? (
+              {setup ? (
+                <SetupCard
+                  key={setup.step === "ask" ? `setup:ask:${setup.i}` : `setup:${setup.step}`}
+                  label={setup.step === "offer" ? "Setting up your preferences" : setup.step === "ask" && survey ? survey.items[setup.i]!.question : "The preset your answers suggest"}
+                  exit={exitDir.current}
+                  {...(setup.step === "ask" ? { onSwipe: (dir: Side | "down") => setupAnswer(dir) } : {})}
+                >
+                  {(armed) =>
+                    setup.step === "offer" ? (
+                      <OfferFace count={survey?.items.length} onStart={setupStart} onAway={setupAway} />
+                    ) : setup.step === "ask" && survey ? (
+                      <AskFace survey={survey} i={setup.i} armed={armed} onAnswer={setupAnswer} onSkip={() => setupAnswer("down")} onBack={setupBack} onAway={setupAway} />
+                    ) : setup.step === "result" && presets ? (
+                      <ResultFace
+                        presets={presets}
+                        answers={setup.answers}
+                        mode={state.routing.settings.mode}
+                        saving={setup.saving}
+                        problem={setup.problem}
+                        onUse={() => void setupUse()}
+                        onAdjust={setupAdjust}
+                        onAway={setupAway}
+                      />
+                    ) : (
+                      <div className="face">
+                        <p className="doing">Reading the example decisions…</p>
+                      </div>
+                    )
+                  }
+                </SetupCard>
+              ) : briefing ? (
                 <BriefingCard
                   key={`brief:${briefing.meta.id}`}
                   deck={briefing}
@@ -553,7 +747,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   locked={readLeft > 0}
                   rarity={r.rarity}
                   card={{
-                    card: current,
+                    card: forPeople(current, cards),
                     rarity: r.rarity,
                     stakes: stakesLine(current, deps),
                     wait: waitState(current, now),
@@ -586,9 +780,11 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   <EmptyDesk
                     recap={recap([...answered.values()].map((a) => a.answer))}
                     parked={aside}
+                    held={held}
                     notify={notifications.status}
                     onNotify={() => void toggleNotify()}
                     onOpen={goTo}
+                    onAllHeld={() => setPanel("held")}
                   />
                 </motion.div>
               )}
@@ -834,6 +1030,91 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; kno
           <p className="small">Shown once. The deck's name above each card opens it again.</p>
         </div>
       </div>
+    </motion.article>
+  );
+}
+
+/**
+ * A card of the setup survey (B-5na1k), with the card's own gestures: an example decision is answered by dragging or a
+ * two-finger swipe, sideways for its two answers or down for "not sure", as well as by the arrows and by clicking. The
+ * offer and the suggestion are read and clicked.
+ */
+function SetupCard(p: { label: string; exit: Leave; onSwipe?: (dir: Side | "down") => void; children: (armed: Dir | undefined) => ReactNode }) {
+  const reduced = useReducedMotion();
+  const present = useIsPresent();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotate = useTransform(x, (v) => v * 0.06);
+  const pl = useTransform(x, [-LEAN_X, 0], [1, 0], { clamp: true });
+  const pr = useTransform(x, [0, LEAN_X], [0, 1], { clamp: true });
+  const [armed, setArmed] = useState<Dir>();
+  const el = useRef<HTMLElement>(null);
+  const swipe = useRef(p.onSwipe);
+  swipe.current = present ? p.onSwipe : undefined;
+  const answer = (dir: Dir) => dir !== "up" && swipe.current?.(dir);
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    let sum = 0;
+    let idle = 0;
+    const wheel = (e: WheelEvent) => {
+      if (!swipe.current || e.ctrlKey || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      sum -= e.deltaX;
+      x.set(Math.max(-LEAN_X, Math.min(LEAN_X, sum * DRAG_ELASTIC)));
+      setArmed(Math.abs(sum) >= THRESH_X ? (sum > 0 ? "right" : "left") : undefined);
+      clearTimeout(idle);
+      idle = window.setTimeout(() => {
+        const far = Math.abs(sum) >= THRESH_X;
+        const dir = sum > 0 ? "right" : "left";
+        sum = 0;
+        setArmed(undefined);
+        animate(x, 0, reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 34 });
+        if (far) swipe.current?.(dir);
+      }, SWIPE_IDLE_MS);
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", wheel);
+      clearTimeout(idle);
+    };
+  }, [x, reduced]);
+  const out = (dir: Leave) => ({
+    x: dir === "left" ? -130 : dir === "right" ? 130 : 0,
+    y: dir === "up" ? -40 : dir === "down" ? 40 : 0,
+    opacity: 0,
+    transition: { duration: reduced ? 0 : 0.22, ease: "easeIn" as const },
+  });
+  const draggable = present && !!p.onSwipe;
+  return (
+    <motion.article
+      ref={el}
+      tabIndex={-1}
+      className="card setup-card"
+      data-leaving={present ? undefined : true}
+      inert={!present}
+      aria-label={p.label}
+      style={{ x, y, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
+      exit={out(p.exit)}
+      drag={draggable}
+      dragSnapToOrigin
+      dragElastic={DRAG_ELASTIC}
+      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      onDrag={(_e, info) => {
+        const g = gesture(info.offset.x, info.offset.y);
+        setArmed(g.progress >= 1 && g.dir !== "up" ? g.dir : undefined);
+      }}
+      onDragEnd={(_e, info) => {
+        setArmed(undefined);
+        const { dir, progress } = gesture(info.offset.x, info.offset.y);
+        const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
+        if (progress >= 1 || (speed > 900 && progress > 0.3)) answer(dir);
+      }}
+    >
+      <div className="frame" aria-hidden="true" />
+      {p.children(armed)}
     </motion.article>
   );
 }

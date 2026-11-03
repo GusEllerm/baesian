@@ -1,0 +1,20 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-y531h",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-03T16:43:38.106Z"
+}

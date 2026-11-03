@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
 import { layoutProblems } from "./layout.js";
+import { skipSetup } from "./setup.js";
 
 // M6, P17 §8: a deck's briefing, with the vault notes it links to and each one's summary line: on a briefing card
 // before the deck's first card, once (B-j6b75), and from the breadcrumbs. A real server over a repo with a vault,
@@ -27,6 +28,7 @@ test("a deck's briefing comes before its first card, once; its name opens it aga
   const other = r.store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files", reverse: "cheap" }), BODY, agent).card.meta.id;
   writeFileSync(join(r.dir, "docs/vault/Design/Storage Design.md"), `---\nsummary: "How runs are stored; the open question is ${other}."\n---\n\n# Storage Design\n`);
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await skipSetup(page, r.dir);
   await page.goto(server.url);
   const card = page.getByRole("article", { name: "The briefing for The storage layer" });
   await expect(card).toBeVisible();
@@ -69,6 +71,7 @@ test("without a vault, the context notes are plain text", async ({ page }) => {
   r.store.createDeck({ id: "storage", title: "The storage layer", context_notes: ["[[Design/Storage Design#Runs|the storage design]]"] }, "");
   r.store.fileCard(draft({ deck: "storage", reverse: "cheap" }), BODY, agent);
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await skipSetup(page, r.dir);
   await page.goto(server.url);
   // Context notes alone earn a briefing card, and its button goes on.
   const card = page.getByRole("article", { name: "The briefing for The storage layer" });
