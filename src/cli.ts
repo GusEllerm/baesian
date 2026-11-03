@@ -10,6 +10,7 @@ import { installHooks, runHook } from "./hooks.js";
 import { notifyFiled } from "./notify.js";
 import { openRepo } from "./git.js";
 import { parseTrailers } from "./trailers.js";
+import { serveMcp } from "./mcp.js";
 import {
   type Actor,
   type InboxEntry,
@@ -322,6 +323,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (!op.data.length && opts.quiet) return;
       if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
       for (const line of op.lines) io.out(line);
+    });
+
+  program
+    .command("mcp")
+    .description("serve the agent commands as MCP tools over stdio, for a harness to start (the plugin registers it)")
+    .action(async () => {
+      // Only protocol messages go to the output; the server opens the store on every call, in the harness's directory.
+      await serveMcp({ cwd: io.cwd, ...(program.opts().agent ? { agent: program.opts().agent } : {}) });
     });
 
   program

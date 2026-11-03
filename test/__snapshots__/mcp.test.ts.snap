@@ -1,0 +1,122 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the tools > are the twelve agent commands, with fixed descriptions and instructions (D166) 1`] = `
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "Put a design decision to the reviewer as a card, as \`baesian file\` does. Give the card's fields; card_template shows them with their notes. Returns the card's ID and level, near-match topics and warnings. A blocking card: call wait_for_verdict before building on it; a hard one: never proceed without a verdict. If the decision may already be on file, the error is possible_duplicate, with the matches: attach to an open one, follow a decided one, or file with new set, giving supersedes when you argue against a decision.",
+    "name": "file_card",
+    "title": "File a decision card",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "File the next revision of a card the reviewer returned, as \`baesian revise\` does: your reply to their answer, as the card's fields in full. Returns the new revision.",
+    "name": "revise_card",
+    "title": "Revise a returned card",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "When the reviewer's answer went against your pick and you hold a fact they lacked, or a check that would settle it, reply once, as \`baesian reply\` does. Not your pick again. Until they answer again, proceed with their decision.",
+    "name": "reply_to_card",
+    "title": "Reply once to an answer",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "When an answer asks for a rule (check_inbox and wait_for_verdict say so), draft it in a line, with the gate patterns it covers, as \`baesian rule\` does. It goes to the reviewer as a card; accepting it saves the rule.",
+    "name": "draft_rule",
+    "title": "Draft a rule the reviewer asked for",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "Wait on a card that's already open instead of filing a duplicate, as \`baesian attach\` does. Returns how many agents now wait on it.",
+    "name": "attach_to_card",
+    "title": "Wait on an existing card",
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "Withdraw a card you filed or attached to, when it no longer applies, as \`baesian withdraw\` does. It can't be undone.",
+    "name": "withdraw_card",
+    "title": "Withdraw a card",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "Wait for the reviewer to answer a card, as \`baesian wait\` does: one call lasts at most 100 seconds. Returns next: use (resolved: use the decision), read (answered otherwise: read the comment, then revise or withdraw), proceed (no verdict in time: proceed provisionally on your pick), park (no verdict on a hard card: don't proceed; park the task or stop), or again (the reviewer is still there: call it again). The whole wait lasts the timeout, across calls.",
+    "name": "wait_for_verdict",
+    "title": "Wait for the reviewer's verdict",
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+    },
+    "description": "The new verdicts on this branch's cards since you last looked, less those wait_for_verdict already gave you, as \`baesian inbox\` does. Each says whether it can still take a reply or a rule draft. Call it before you start work and when you finish a task.",
+    "name": "check_inbox",
+    "title": "Check for new verdicts",
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
+    "description": "A card as the reviewer sees it, with its status, its verdicts, who is waiting on it, and what you should know beyond its verdict, as \`baesian show\` does.",
+    "name": "show_card",
+    "title": "Show a card",
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
+    "description": "The cards still with the reviewer, or all of them, as \`baesian list\` does.",
+    "name": "list_cards",
+    "title": "List cards",
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
+    "description": "The topics in use, as \`baesian topics\` does. A topic names one question: reuse one only for the same question, and give a follow-on question its own, narrower topic.",
+    "name": "list_topics",
+    "title": "List topics",
+  },
+  {
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+    },
+    "description": "The card draft \`baesian template\` prints: every field, with a note on each. file_card takes the same fields as arguments.",
+    "name": "card_template",
+    "title": "The card template",
+  },
+]
+`;
