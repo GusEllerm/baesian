@@ -119,6 +119,12 @@ describe("schema and infra", () => {
     ]);
   });
 
+  it("counts a change to committed git hooks as infra, since they run on everyone's machine (D135)", () => {
+    const { dir } = repo();
+    stage(dir, { ".githooks/pre-commit": "#!/bin/sh\nexit 0\n", ".husky/commit-msg": "#!/bin/sh\n" });
+    expect(ids(dir)).toEqual(["infra:.githooks/pre-commit", "infra:.husky/commit-msg"]);
+  });
+
   it("ignores node_modules and Baesian's own record", () => {
     const { dir } = repo();
     stage(dir, { "node_modules/x/package.json": pkg({ evil: "1" }), ".baesian/cards/x.sql": "x" });

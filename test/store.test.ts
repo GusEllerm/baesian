@@ -113,13 +113,17 @@ describe("filing", () => {
     expect(() => store.fileCard(draft({ topic: "Not A Topic" }), BODY, AGENT)).toThrow(/topic/);
   });
 
-  it("makes cards that spend money or delete data hard by default (D42)", () => {
+  it("makes cards that spend money or delete data hard, whatever level the agent asks for (D42, D144)", () => {
     const { store } = repo();
     const result = store.fileCard(draft({ title: "Delete old runs?", topic: "retention", touches: ["data-loss"] }), BODY, AGENT);
     expect(result.card.meta.level).toBe("hard");
     expect(result.hardBecause).toEqual(["data-loss"]);
-    const explicit = store.fileCard(draft({ title: "Buy a domain?", topic: "domain", touches: ["money"], level: "blocking" }), BODY, AGENT);
-    expect(explicit.card.meta.level).toBe("blocking");
+    // An agent may raise a card's level, never lower it: asking for less than hard doesn't take.
+    const lower = store.fileCard(draft({ title: "Buy a domain?", topic: "domain", touches: ["money"], level: "blocking" }), BODY, AGENT);
+    expect(lower.card.meta.level).toBe("hard");
+    expect(lower.hardBecause).toEqual(["money"]);
+    const security = store.fileCard(draft({ title: "Where the token lives", question: "Where should the token live?", topic: "auth/token", touches: ["security"], level: "provisional", wrong_if: "a page script reads it", check: "the client's scripts" }), BODY, AGENT);
+    expect(security.card.meta.level).toBe("hard");
   });
 
   it("refuses an unknown named deck, and accepts a created one", () => {

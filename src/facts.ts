@@ -142,6 +142,9 @@ export const DEFAULT_SCHEMA = [
 
 export const DEFAULT_INFRA = [
   ".github/workflows/**",
+  // Git hooks that are committed run on everyone's machine: changing one is an infra decision (D135).
+  ".githooks/**",
+  ".husky/**",
   ".gitlab-ci.yml",
   "**/Dockerfile",
   "**/Dockerfile.*",

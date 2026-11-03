@@ -240,7 +240,7 @@ An agent can't fudge these the way it can fudge a number, and the reviewer can a
 - **Choose a level (D42):**
   - **provisional** (the default): the agent proceeds on its proposal, and the card waits in the queue, grouped by deck (by default one per branch; D29);
   - **blocking**, when proceeding would be expensive to undo: it notifies at once, at most four at a time. The agent waits while you're there, and proceeds provisionally if you're away;
-  - **hard**, when the decision must never proceed without a verdict. Spending money, touching security or privacy, deleting or overwriting stored data, and publishing make a card hard by default.
+  - **hard**, when the decision must never proceed without a verdict. Spending money, touching security or privacy, deleting or overwriting stored data, and publishing make a card hard, whatever level the agent asks for: an agent may raise a card's level, never lower it (D144).
 
 **Priority, in order:**
 1. blocking cards;

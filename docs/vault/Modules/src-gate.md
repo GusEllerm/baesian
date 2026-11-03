@@ -23,7 +23,7 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 |---|---|---|
 | `dep` | runtime dependencies added to or removed from `package.json`, `pyproject.toml` (PEP 621 and Poetry), `requirements*.txt`. Not dev dependencies, version bumps or lockfiles | Python names normalised (`normalisePython`) |
 | `schema` | paths matching `DEFAULT_SCHEMA`, or `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL |
-| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify |
+| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135) |
 
 **`api:` facts (M3c; D56, D58, D59).** The detector is off unless `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
 - Only breaking changes count (`BREAKING`: a changed signature, or a removed export), and only in the listed modules. A new export is additive.

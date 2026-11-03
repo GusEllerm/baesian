@@ -229,7 +229,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (opts.json) return json(result);
       const { id, level, deck } = result.card.meta;
       io.out(`filed ${id} (${level}, deck ${deck})`);
-      if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42)`);
+      if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42; an agent can raise a card's level, never lower it: D144)`);
       if (result.nearTopics.length) io.out(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
       for (const w of result.warnings) io.out(`  note: ${w}`);
       if (level === "blocking") io.out(`  run \`baesian wait ${id}\` before building on it`);

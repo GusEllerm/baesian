@@ -287,7 +287,9 @@ export class Store {
     let hardBecause: string[] | undefined;
     const hardFacts = parsed.touches.filter((f) => HARD_BY_DEFAULT.has(f));
     let level: Level = parsed.level ?? "provisional";
-    if (parsed.level === undefined && hardFacts.length > 0) {
+    // An agent may raise a card's level, never lower it (D144): a hard-by-default fact makes it hard, whatever
+    // level the draft asks for. Only the repo's settings may lower it (D146), once they exist.
+    if (level !== "hard" && hardFacts.length > 0) {
       level = "hard";
       hardBecause = hardFacts;
     }
