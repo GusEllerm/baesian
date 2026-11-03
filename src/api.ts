@@ -10,12 +10,21 @@ export type Status = "open" | "returned" | "rerouted" | "deferred" | "resolved" 
  * What an agent is told along with a verdict, computed from the records like status (D71): never stored.
  * - `parent-decided-otherwise` (D80): a card this one builds on was decided against the proposal it assumed,
  *   so this card is returned.
- * - `answer-changed` (D81): the answer on this card changed after an earlier one resolved it. `commits` are
- *   the ledger's entries before the change: only commits that cite the card, so a lower bound.
+ * - `answer-changed` (D81): the answer on this card changed after an earlier one resolved it. `commits` are those
+ *   built on it before the change: the commits on a branch whose trailers cite it, found in the history, then the
+ *   ledger's entries whose commit is on no branch now, marked `rewritten` (B-9v5xj). Only commits that cite the card,
+ *   so a lower bound.
  */
 export type Brief =
   | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; assumed: string; decided: string; at: string }
-  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: { commit?: string; branch: string }[]; at: string };
+  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: BriefCommit[]; at: string };
+
+/** A commit an `answer-changed` brief lists. `rewritten`: the ledger has it, but it's on no branch now (B-9v5xj). */
+export interface BriefCommit {
+  commit?: string;
+  branch: string;
+  rewritten?: true;
+}
 
 /** One card as the client sees it: its latest revision, and everything the store computes about it. */
 export interface ApiCard {

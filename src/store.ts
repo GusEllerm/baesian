@@ -27,6 +27,7 @@ import {
   describeError,
 } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
+import { type History, readHistory } from "./trailers.js";
 
 /** The live layer, inside git's common directory: shared by every worktree of a clone, never committed (D34). */
 export const LIVE_DIR = "baesian";
@@ -35,8 +36,8 @@ export const RECORD_DIR = ".baesian";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
 
-export type { Brief, Status } from "./api.js";
-import type { Brief, Status } from "./api.js";
+export type { Brief, BriefCommit, Status } from "./api.js";
+import type { Brief, BriefCommit, Status } from "./api.js";
 
 /** Statuses that still need the reviewer. */
 export const PENDING: ReadonlySet<Status> = new Set(["open", "returned", "rerouted", "deferred"]);
@@ -209,6 +210,8 @@ export class Store {
     cards?: Card[];
     verdictFiles?: Map<string, string[]>;
     claims?: Map<string, Card[]>;
+    /** The history's trailers (B-9v5xj), searched once per view. */
+    history?: History;
     report: ((path: string, error: string) => void) | undefined;
   };
 
@@ -832,10 +835,41 @@ export class Store {
     if (!last || !earlier) return undefined;
     const was = answerOf(earlier)!, now = answerOf(last);
     if (now !== undefined && normalise(now) === normalise(was)) return undefined;
-    const commits = this.ledger(card.meta.id)
-      .filter((e) => e.meta.at < last.at)
-      .map((e) => ({ ...(e.meta.commit ? { commit: e.meta.commit } : {}), branch: e.meta.branch }));
-    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits, at: last.at };
+    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
+  }
+
+  /**
+   * The commits built on a card before `before` (B-9v5xj). First those on a branch whose trailers cite it, found by
+   * searching the history, so a rebase, or a squash that keeps the trailer, doesn't lose them; then the ledger's
+   * entries whose commit is on no branch now, marked rewritten. A commit in both is named by the branch the ledger
+   * says it was made on, unless that was a detached HEAD (as during a rebase).
+   */
+  private builtOn(id: string, before: string): BriefCommit[] {
+    const history = this.history();
+    const ledger = this.ledger(id).filter((e) => e.meta.at < before);
+    const madeOn = new Map(ledger.flatMap((e) => (e.meta.commit && !e.meta.branch.startsWith("detached-") ? [[e.meta.commit, e.meta.branch] as const] : [])));
+    // When the work was done: a rebase keeps the author's date, and a commit made after the change built on the new answer.
+    const found = (history.citing.get(id) ?? []).filter((c) => c.authored < Date.parse(before));
+    const listed = new Set(found.map((c) => c.commit));
+    const out: BriefCommit[] = found.map((c) => ({ commit: c.commit, branch: madeOn.get(c.commit) ?? c.branch }));
+    for (const e of ledger) {
+      const commit = e.meta.commit;
+      if (!commit) {
+        out.push({ branch: e.meta.branch });
+      } else if (!listed.has(commit)) {
+        listed.add(commit);
+        out.push({ commit, branch: e.meta.branch, ...(history.onBranch(commit) ? {} : { rewritten: true as const }) });
+      }
+    }
+    return out;
+  }
+
+  /** The history's `Baesian-Card` trailers (B-9v5xj): searched once per view, and cached per process while the branches stay put. */
+  private history(): History {
+    if (this.session?.history) return this.session.history;
+    const history = readHistory(this.repo.toplevel);
+    if (this.session) this.session.history = history;
+    return history;
   }
 
   /** What an agent should be told about a card now, beyond its verdict (D80, D81). */

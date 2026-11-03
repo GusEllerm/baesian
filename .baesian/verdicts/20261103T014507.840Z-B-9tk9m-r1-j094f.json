@@ -1,0 +1,10 @@
+{
+  "type": "verdict",
+  "card": "B-9tk9m",
+  "revision": 1,
+  "response": "question",
+  "comment": "What about globus auth? Is it a risk factor to manage our own auth service? If we use Globus Auth, users could use SSO from their respective organisations.",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-03T01:45:07.840Z"
+}

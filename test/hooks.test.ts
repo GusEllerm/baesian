@@ -156,6 +156,31 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     expect(sh(dir, "ls-tree", "-r", "--name-only", "HEAD")).toMatch(new RegExp(`\\.baesian/ledger/${id}-`));
   });
 
+  it("finds the card's commits after a rebase rewrites them, by their trailers (B-9v5xj)", async () => {
+    const { dir, store } = repo();
+    await init(dir);
+    put(dir, "README.md", "hi\n");
+    expect(commit(dir, "Set up Baesian\n").code).toBe(0);
+    const id = store.fileCard(draft({ touches: ["schema"] }), BODY, { agent: "a" }).card.meta.id;
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    sh(dir, "checkout", "-q", "-b", "feat");
+    put(dir, "migrations/1.sql", "create table runs();");
+    expect(commit(dir, `Runs table\n\nBaesian-Card: ${id}\n`).code).toBe(0);
+    const old = sh(dir, "rev-parse", "HEAD");
+    sh(dir, "checkout", "-q", "main");
+    put(dir, "notes.txt", "meanwhile\n");
+    expect(commit(dir, "Meanwhile on main\n").code).toBe(0);
+    // With the hooks live: git runs post-commit for each commit a rebase makes, on a detached HEAD.
+    const rebase = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "rebase", "-q", "main", "feat"], { cwd: dir, encoding: "utf8", env: ENV });
+    expect(rebase.status).toBe(0);
+    const rebased = sh(dir, "rev-parse", "HEAD");
+    expect(store.ledger(id).map((e) => [e.meta.commit, e.meta.branch])).toEqual([[old, "feat"], [rebased, `detached-${rebased.slice(0, 7)}`]]);
+
+    store.addVerdict({ card: id, revision: 1, response: "alternative", choice: "Postgres", ...REVIEWER });
+    const brief = store.briefs(id)[0];
+    expect(brief).toMatchObject({ kind: "answer-changed", commits: [{ commit: rebased, branch: "feat" }, { commit: old, branch: "feat", rewritten: true }] });
+  });
+
   it("blocks building on a rejected card, and delivers new verdicts", async () => {
     const { dir, store } = repo();
     await init(dir);

@@ -1,5 +1,5 @@
 import type { Level, Verdict } from "./schema.js";
-import { type Brief, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
+import { type Brief, type BriefCommit, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
 
 /** The client beats every 30 s; three missed beats means the reviewer has stepped away (D41). */
 export const PRESENCE_STALE_MS = 90_000;
@@ -146,10 +146,19 @@ export function describeBrief(b: Brief): string[] {
     ];
   }
   const now = b.now !== undefined ? `"${b.now}"` : `not a go-ahead (${b.response})`;
-  const commits = b.commits.length
-    ? `  Commits that cite ${b.card}, built on the old answer: ${b.commits.map((c) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`).join(", ")}. Rework them to match. Only commits that cite the card are listed: check for other work built on it.`
-    : `  No commit cites ${b.card} yet; check for work built on the old answer all the same.`;
-  return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits];
+  const name = (c: BriefCommit) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`;
+  const live = b.commits.filter((c) => !c.rewritten);
+  const gone = b.commits.filter((c) => c.rewritten);
+  const commits = live.length
+    ? `  Commits that cite ${b.card}, built on the old answer: ${live.map(name).join(", ")}. Rework them to match. Only commits that cite the card are listed: check for other work built on it.`
+    : gone.length
+      ? `  No commit on a branch cites ${b.card} now; check for work built on the old answer all the same.`
+      : `  No commit cites ${b.card} yet; check for work built on the old answer all the same.`;
+  // B-9v5xj: the ledger's commits that a rebase or a squash took off every branch.
+  const rewritten = gone.length
+    ? [`  Rewritten since, and on no branch now: ${gone.map(name).join(", ")}. Their work may be in ${live.length ? "the commits above, or in ones" : "commits"} that don't cite ${b.card}.`]
+    : [];
+  return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits, ...rewritten];
 }
 
 /** What an agent is told when the reviewer asked for a rule from a decision (D16, D109, D110). */
