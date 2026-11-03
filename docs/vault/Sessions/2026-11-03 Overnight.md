@@ -40,7 +40,7 @@ Five agents in parallel, each writing a report with its sources:
 Then:
 
 - [x] B6. A synthesis agent writes `Research/Preference Sliders and the Gate.md`: candidate axes for software and for research, ways the gate could work, how sliders, the gate, audit cards and convention cards fit together, and the evidence for each.
-- [ ] B7. A fresh reviewer agent checks the synthesis against the reports; I fix what it finds. Start further research agents where the review finds gaps.
+- [x] B7. A fresh reviewer agent checks the synthesis against the reports; I fix what it finds. Start further research agents where the review finds gaps.
 
 ### C. Code, while the research runs (about 3 hours)
 
@@ -79,7 +79,8 @@ Then:
 - 7:00pm: C4 done. Card B-ghhym filed (provisional, deck `stability`): every session on a branch hears each verdict once. Built: `Store.inbox` takes a `session` with its own cursor (`cursors/<branch>/<session>.json`), `baesian inbox --session`, and a new hook script, `new-verdicts.mjs`, for `SessionStart` and `UserPromptSubmit`, with `turn-ended.mjs` passing the session too. Five new unit tests; 252 pass. The hooks changed, so rehearse is to be told. Committed as `aaef34d`; rehearse told.
 - 7:10pm: C5 done: card B-9v5xj (provisional, deck `stability`, design only) on finding a card's commits after a rebase or squash: search the history for the trailer, or keep a patch-id fingerprint in each ledger entry. GitHub's docs don't say whether a default squash message keeps trailers; the card says so.
 - 7:20pm–8:00pm: all five strand reports in (B1 52 sources, B2 43, B3, B4, B5 35); the synthesis written (B6), and reviewed by a fresh agent (B7), which found must-fix problems in fidelity, omissions, neutrality and contradictions with the user's decisions (D86 keeps an audit card's built option visible; holding cards back would revise D31 and D32). Sent back to the synthesis agent to revise.
-- 8:10pm: C6 done. Every command was quadratic in the cards: `baesian list` took about 11 minutes at 2,000. Fixed: a loud `Store.view`, used by `list`, `show`, `inbox`, `topics`, each `wait` poll and filing's checks, building the card list, verdict files by card and claimants once. At 10,000 cards: `list` 1.6 s, the server's state 1.5 s (was 21.5 s), the client's first card 3.3 s (was 45 s). Report: [[2026-11-03 Scale Test]]. Two new unit tests; 254 pass.
+- 8:10pm: C6 done. Every command was quadratic in the cards: `baesian list` took about 11 minutes at 2,000. Fixed: a loud `Store.view`, used by `list`, `show`, `inbox`, `topics`, each `wait` poll and filing's checks, building the card list, verdict files by card and claimants once. At 10,000 cards: `list` 1.6 s, the server's state 1.5 s (was 21.5 s), the client's first card 3.3 s (was 45 s). Report: [[2026-11-03 Scale Test]]. Two new unit tests; 254 pass. Committed as `264dada`; all 41 browser tests pass.
+- 8:20pm: B7 done. The synthesis agent fixed every must-fix item from the review (now 16 decisions for the user) and noted where it partly disagreed, in "Review notes"; B4's reading of Ancker ("not volume") is flagged there as reading more than the figures show.
 
 ## Debrief
 
