@@ -231,16 +231,16 @@ Following D128, D153 and P15 sections 2, 3 and 5:
 
 ## Decisions for the user
 
-Drafted as cards for deck mcp-server (the deck doesn't exist yet):
+Filed as cards in deck mcp-server on 2026-11-03:
 
 | Card | Topic | Question | Recommended | Strongest alternative |
 |---|---|---|---|---|
-| MCP-1 | mcp/protocol-library | The official SDK, or the protocol by hand? | the SDK, v2 | by hand, no new dependency |
-| MCP-2 | mcp/registration | How are Claude Code and Codex told to start the server? | the plugin registers it | each person adds it |
-| MCP-3 | mcp/tool-set | Which commands become tools? | all twelve agent commands | the design's three |
-| MCP-4 | mcp/card-input | In what form does file_card take a card? | fields, with a schema | one Markdown document |
-| MCP-5 | mcp/wait-length | How long does one waiting call last? | 100 seconds, as the CLI | the whole budget |
-| MCP-6 | mcp/foreign-text | How does text others wrote appear to agents? | quoted, author named, CLI too | raw after a label |
+| MCP-1, B-xqwrk | mcp/protocol-library | The official SDK, or the protocol by hand? | the SDK, v2 | by hand, no new dependency |
+| MCP-2, B-06r0a | mcp/registration | How are Claude Code and Codex told to start the server? | the plugin registers it | each person adds it |
+| MCP-3, B-r78qy | mcp/tool-set | Which commands become tools? | all twelve agent commands | the design's three |
+| MCP-4, B-sq20r | mcp/card-input | In what form does file_card take a card? | fields, with a schema | one Markdown document |
+| MCP-5, B-3njn3 | mcp/wait-length | How long does one waiting call last? | 100 seconds, as the CLI | the whole budget |
+| MCP-6, B-cq80s | mcp/foreign-text | How does text others wrote appear to agents? | quoted, author named, CLI too | raw after a label |
 
 MCP-2 and MCP-6 touch security, so they're hard. The rest are blocking. MCP-1, MCP-3 and MCP-4 shape the code first, so they're best settled first.
 

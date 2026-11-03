@@ -1,0 +1,7 @@
+{
+  "type": "withdrawal",
+  "card": "B-9h3ra",
+  "reason": "Filed through a stale build that predates D144, so it wasn't raised to hard for touching security; refiled",
+  "by": "claude-code",
+  "at": "2026-11-03T03:52:46.077Z"
+}

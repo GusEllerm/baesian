@@ -32,9 +32,9 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `verdicts/<at>-<id>-r<n>-<suffix>.json` | `Verdict` | yes | on sync | the client only (D32); named timestamp first, so a listing is in order (D107) |
 | `ledger/<id>-<suffix>.md` | `LedgerMeta` + body | yes | on sync | the git gate (M3) |
 | `decks/<deck>.md` | `DeckMeta` + body | yes | yes, with its cards | `baesian deck`; the branch deck on first use |
-| `rules/<id>.md` | `RuleMeta` + body | yes | yes | the client (M4) |
-| `rules/<id>-retired.json` | `RuleRetirement` | yes | yes | the client, with an answer that breaks the rule (D119) |
-| `topics/alias-<suffix>.json` | `TopicAlias` | yes | yes | the client (M4) |
+| `rules/<id>.md` | `RuleMeta` + body | yes | yes, at once in the client's worktree, and on sync in every other | the client (M4) |
+| `rules/<id>-retired.json` | `RuleRetirement` | yes | yes, as rules | the client, with an answer that breaks the rule (D119) |
+| `topics/alias-<suffix>.json` | `TopicAlias` | yes | yes, as rules | the client (M4) |
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
 | `cursors/<branch>.json` | — (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
 | `cursors/<branch>/<session>.json` | — (`at`): one session's own place in the branch's inbox (B-ghhym, provisional) | yes (mutable) | no | `baesian inbox --session`, run by the plugin's hooks |

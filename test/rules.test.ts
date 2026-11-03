@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
+import { Store } from "../src/store.js";
 import { describeOutcome, waitForVerdict } from "../src/wait.js";
-import { BODY, REVIEWER, cleanup, draft, fakeClock, repo } from "./helpers.js";
+import { BODY, REVIEWER, cleanup, draft, fakeClock, repo, worktree } from "./helpers.js";
 
 // A rule from an answer (D16): the reviewer ticks "make this a rule", the agent drafts it with the gate patterns
 // it covers, and it comes back as a card; accepting it saves the rule (D109, D110).
@@ -132,6 +133,41 @@ describe("telling the agent (D109)", () => {
     expect((await run(dir, ["inbox", "--peek"])).out).not.toContain("baesian rule");
     const { AGENTS_BLOCK } = await import("../src/agents.js");
     expect(AGENTS_BLOCK).toContain('baesian rule <id> "<the rule>"');
+  });
+});
+
+describe("a rule in every branch's record", () => {
+  it("reaches a branch's record at its next sync, wherever the client saved it, with its retirement and topic aliases", async () => {
+    const { evaluate } = await import("../src/gate.js");
+    const { parseTrailers } = await import("../src/trailers.js");
+    // The server runs in main's worktree, so the rule is saved into main's record; the agent commits on another branch.
+    const { store, dir, id } = asked();
+    const feat = worktree(dir, "feat/other");
+    const draftCard = store.draftRule(id, RULE, ["dep:pytest*"], AGENT);
+    store.addVerdict({ card: draftCard.meta.id, revision: 1, response: "accept", ...REVIEWER, at: later(1) });
+    const rule = store.rules()[0]!.meta.id;
+    store.fileCard(draft({ title: "Test fixtures", question: "Where should fixtures live?", topic: "testing/fixtures" }), BODY, AGENT);
+    store.mergeTopics("testing/fixtures", "testing/runner", "gus");
+    expect(existsSync(join(feat.store.record, "rules"))).toBe(false);
+
+    const added = feat.store.syncRecord();
+    expect(added).toContain(join("rules", `${rule}.md`));
+    expect(added.filter((f) => f.startsWith("topics/"))).toHaveLength(1);
+    // CI checks each commit against its own record, so the rule must cover the fact there as it does locally.
+    const fact = { id: "dep:pytest-cov", kind: "dep" as const, path: "package.json", detail: "added to package.json" };
+    const recorded = Store.overRecord(feat.store.repo, feat.store.record);
+    expect(evaluate(recorded, { facts: [fact], warnings: [] }, parseTrailers("Add pytest-cov\n", feat.dir)).covered[0]?.cover).toEqual({ by: "rule", rule });
+    expect(recorded.aliases()).toHaveLength(1);
+
+    const breaker = store.fileCard(
+      draft({ title: "The CLI's smoke tests", question: "How should the CLI's smoke tests run?", topic: "testing/smoke", proposal: "A shell script", alternative: "pytest", proposal_breaks: [rule] }),
+      BODY,
+      AGENT,
+    ).card.meta.id;
+    store.addVerdict({ card: breaker, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER, at: later(2) });
+    expect(feat.store.syncRecord()).toEqual([join("rules", `${rule}-retired.json`)]);
+    expect(evaluate(recorded, { facts: [fact], warnings: [] }, parseTrailers("Add pytest-cov\n", feat.dir)).uncovered).toEqual([fact]);
+    expect(feat.store.syncRecord()).toEqual([]);
   });
 });
 

@@ -1082,14 +1082,23 @@ export class Store {
   // ---------------------------------------------------------------- record
 
   /**
-   * Copy verdicts and ledger entries for the cards this worktree's record holds (D37). Run by
-   * `baesian sync`, and by the pre-commit hook. Returns the files it added.
+   * Copy verdicts and ledger entries for the cards this worktree's record holds (D37), and every rule, retirement
+   * and topic alias, which apply to the whole repo. Run by `baesian sync`, and by the pre-commit hook. Returns the
+   * files it added.
    */
   syncRecord(): string[] {
     this.requireInit();
     const recordCards = join(this.record, "cards");
     const held = existsSync(recordCards) ? readdirSync(recordCards) : [];
     const added: string[] = [];
+    // The client saves a rule into the record of the worktree it runs in. The local gate reads every rule from the
+    // live layer, but CI reads each commit's own record, so every branch's record must hold them too.
+    for (const kind of ["rules", "topics"] as const) {
+      for (const f of this.list(kind)) {
+        const rel = join(kind, f);
+        if (this.toRecord(rel)) added.push(rel);
+      }
+    }
     for (const id of held) {
       // Everything in the card's directory: revisions, a withdrawal, fallbacks.
       for (const f of this.list("cards", id)) {
