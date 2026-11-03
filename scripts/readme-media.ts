@@ -298,7 +298,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 function panelHtml(p: Panel): string {
   const line = (l: string) => {
-    if (/ resolved: /.test(l)) return `<span class="ok">${esc(l)}</span>`;
+    if (/^B-\w{5} resolved\b/.test(l)) return `<span class="ok">${esc(l)}</span>`;
     if (l.startsWith("It went against your pick")) return `<span class="against">${esc(l)}</span>`;
     return esc(l);
   };

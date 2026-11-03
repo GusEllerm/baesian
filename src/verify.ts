@@ -210,7 +210,7 @@ export function describeVerify(r: VerifyResult): string[] {
     for (const p of r.merge.problems) out.push(`  FAIL ${p.message}`);
     for (const c of r.merge.conflicts) {
       out.push(
-        `  FAIL conflict on ${c.topic}: ${c.base.id} on the base decided "${c.base.decision}", ${c.branch.id} here decided "${c.branch.decision}".`,
+        `  FAIL conflict on ${c.topic}: ${c.base.id} on the base decided ${q(c.base.decision)}, ${c.branch.id} here decided ${q(c.branch.decision)}.`,
       );
     }
     if (r.merge.conflicts.length) {

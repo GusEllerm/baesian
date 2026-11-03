@@ -933,7 +933,7 @@ sig = "64c108b9fb042ce0"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/verify.ts"
-sig = "8b5ce75ecd145a9d"
+sig = "094b9c1eabecedd8"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
