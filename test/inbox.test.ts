@@ -68,3 +68,45 @@ describe("verdicts that wait delivered", () => {
     expect(store.inbox({ advance: false }).map((i) => i.card)).toEqual([parent]);
   });
 });
+
+describe("two sessions on one branch (B-ghhym)", () => {
+  const second = { title: "Where run files are kept", question: "Where should the run files go?", topic: "storage/run-files" };
+
+  it("each hear a verdict once, whatever the other or a plain inbox has read", () => {
+    const { store } = repo();
+    const a = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER });
+    // A session that has never read starts where the branch is: here, before a's verdict.
+    expect(store.inbox({ advance: true, session: "one" }).map((i) => i.card)).toEqual([a]);
+    store.inbox({ advance: true, session: "two" });
+
+    const b = store.fileCard(draft(second), BODY, AGENT).card.meta.id;
+    store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER, at: later(2) });
+    expect(store.inbox({ advance: true }).map((i) => i.card)).toEqual([b]); // a plain `baesian inbox`, with no session
+    expect(store.inbox({ advance: true, session: "one" }).map((i) => i.card)).toEqual([b]);
+    expect(store.inbox({ advance: true, session: "one" })).toEqual([]);
+    expect(store.inbox({ advance: true, session: "two" }).map((i) => i.card)).toEqual([b]);
+  });
+
+  it("don't take each other's verdicts", () => {
+    const { store } = repo();
+    const a = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    store.inbox({ advance: true, session: "one" });
+    store.inbox({ advance: true, session: "two" });
+    store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER, at: later(2) });
+    expect(store.inbox({ advance: true, session: "one" }).map((i) => i.card)).toEqual([a]);
+    expect(store.inbox({ advance: true, session: "two" }).map((i) => i.card)).toEqual([a]);
+    expect(store.inbox({ advance: true, session: "two" })).toEqual([]);
+    // A session that starts later begins at the newest any session read, so it isn't handed old verdicts.
+    expect(store.inbox({ advance: true, session: "three" })).toEqual([]);
+  });
+
+  it("leave a verdict that wait delivered delivered, for every session", async () => {
+    const { dir, store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    store.inbox({ advance: true, session: "one" });
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER, at: later(2) });
+    expect((await run(dir, ["wait", id])).code).toBe(0);
+    expect((await run(dir, ["inbox", "--quiet", "--session", "one"])).out).toBe("");
+  });
+});

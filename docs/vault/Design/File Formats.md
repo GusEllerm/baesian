@@ -37,6 +37,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `topics/alias-<suffix>.json` | `TopicAlias` | yes | yes | the client (M4) |
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
 | `cursors/<branch>.json` | — (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
+| `cursors/<branch>/<session>.json` | — (`at`): one session's own place in the branch's inbox (B-ghhym, provisional) | yes (mutable) | no | `baesian inbox --session`, run by the plugin's hooks |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |

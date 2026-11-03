@@ -363,12 +363,13 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--peek", "don't mark them as seen")
     .option("--json", "print as JSON")
     .option("--quiet", "for a harness hook: print nothing when there's nothing new, or the repo doesn't use Baesian")
-    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean }) => {
+    .option("--session <id>", "for a harness hook: the session reading, which keeps its own place, so every session on the branch hears each verdict once")
+    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
       let s: Store;
       let items: InboxItem[];
       try {
         s = store();
-        items = s.inbox({ advance: !opts.peek });
+        items = s.inbox({ advance: !opts.peek, ...(opts.session ? { session: opts.session } : {}) });
       } catch (e) {
         // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
         if (opts.quiet) return;

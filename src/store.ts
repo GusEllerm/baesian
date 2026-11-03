@@ -870,14 +870,29 @@ export class Store {
   /**
    * Verdicts on this branch's cards newer than its inbox cursor, less those `baesian wait` has already delivered.
    * The cursor is local state, not a record.
+   *
+   * With a `session` (a harness's session id, which the plugin's hooks pass), the session keeps a cursor of its own, so
+   * every session on the branch hears each verdict once (B-ghhym). A new session starts from the branch's cursor, the
+   * newest any session has read, so it isn't handed old verdicts. What `wait` delivered stays delivered for all.
    */
-  inbox(opts: { advance: boolean }): InboxItem[] {
+  inbox(opts: { advance: boolean; session?: string }): InboxItem[] {
     this.requireInit();
-    const cursor = this.readCursor();
-    const all = this.inboxSince(cursor.at);
-    const delivered = new Set(cursor.delivered);
-    // Once everything newer than the cursor has been seen, here or through `wait`, the cursor moves past all of it.
-    if (opts.advance && all.length > 0) this.writeCursor({ at: all.at(-1)!.verdict.at });
+    const branch = this.readCursor();
+    const saved = opts.session ? this.readCursor(opts.session) : branch;
+    const own = saved ?? { at: branch.at, delivered: [] };
+    const all = this.inboxSince(own.at);
+    const delivered = new Set([...own.delivered, ...branch.delivered]);
+    const latest = all.at(-1)?.verdict.at;
+    if (opts.advance && !opts.session && latest) {
+      // Once everything newer than the cursor has been seen, here or through `wait`, the cursor moves past all of it.
+      this.writeCursor({ at: latest });
+    } else if (opts.advance && opts.session) {
+      // A session's first read keeps its place even with nothing new, so another session reading first can't move it.
+      if (latest || !saved) this.writeCursor({ at: latest ?? own.at }, opts.session);
+      // The branch's cursor keeps up with the newest any session has read; what `wait` delivered stays listed, for
+      // sessions still behind it.
+      if (latest && latest > branch.at) this.writeCursor({ at: latest, ...(branch.delivered.length ? { delivered: branch.delivered } : {}) });
+    }
     return all.filter((i) => !delivered.has(inboxKey(i)));
   }
 
@@ -897,19 +912,23 @@ export class Store {
     this.writeCursor({ at: cursor.at, delivered: [...new Set([...cursor.delivered, ...keys])] });
   }
 
-  private cursorPath(): string {
-    return join(this.live, "cursors", `${slug(this.repo.branch)}.json`);
+  /** The branch's cursor, or a session's own: `cursors/<branch>.json`, `cursors/<branch>/<session>.json`. */
+  private cursorPath(session?: string): string {
+    const branch = slug(this.repo.branch);
+    return session ? join(this.live, "cursors", branch, `${slug(session)}.json`) : join(this.live, "cursors", `${branch}.json`);
   }
 
-  private readCursor(): { at: string; delivered: string[] } {
-    const path = this.cursorPath();
-    if (!existsSync(path)) return { at: "", delivered: [] };
+  private readCursor(): { at: string; delivered: string[] };
+  private readCursor(session: string): { at: string; delivered: string[] } | undefined;
+  private readCursor(session?: string): { at: string; delivered: string[] } | undefined {
+    const path = this.cursorPath(session);
+    if (!existsSync(path)) return session ? undefined : { at: "", delivered: [] };
     const c = JSON.parse(readFileSync(path, "utf8"));
     return { at: c.at ?? "", delivered: c.delivered ?? [] };
   }
 
-  private writeCursor(c: { at: string; delivered?: string[] }): void {
-    const path = this.cursorPath();
+  private writeCursor(c: { at: string; delivered?: string[] }, session?: string): void {
+    const path = this.cursorPath(session);
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${JSON.stringify(c)}\n`);
   }
