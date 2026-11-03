@@ -663,7 +663,7 @@ sig = "1fd0df270d6858a2"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/notify.ts"
-sig = "05b55556cc78786b"
+sig = "6081954164a384ab"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"

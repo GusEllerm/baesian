@@ -59,8 +59,8 @@ Then:
 
 ### E. Reviews before release (about 1 hour)
 
-- [ ] E1. **Privacy:** what the committed record exposes (reviewer and agent names, comments, branch names, anything about the machine). A report in `Reviews/`.
-- [ ] E2. **Security:** the local server (token, Host check, CSP), the hooks (the fallback's `eval`), the `notify` command, and stdin handling. A report in `Reviews/`; fix clear bugs with tests, and file cards for the rest.
+- [x] E1. **Privacy:** what the committed record exposes (reviewer and agent names, comments, branch names, anything about the machine). A report in `Reviews/`.
+- [x] E2. **Security:** the local server (token, Host check, CSP), the hooks (the fallback's `eval`), the `notify` command, and stdin handling. A report in `Reviews/`; fix clear bugs with tests, and file cards for the rest.
 
 ### F. The morning (about 30 minutes)
 
@@ -81,6 +81,8 @@ Then:
 - 7:20pm–8:00pm: all five strand reports in (B1 52 sources, B2 43, B3, B4, B5 35); the synthesis written (B6), and reviewed by a fresh agent (B7), which found must-fix problems in fidelity, omissions, neutrality and contradictions with the user's decisions (D86 keeps an audit card's built option visible; holding cards back would revise D31 and D32). Sent back to the synthesis agent to revise.
 - 8:10pm: C6 done. Every command was quadratic in the cards: `baesian list` took about 11 minutes at 2,000. Fixed: a loud `Store.view`, used by `list`, `show`, `inbox`, `topics`, each `wait` poll and filing's checks, building the card list, verdict files by card and claimants once. At 10,000 cards: `list` 1.6 s, the server's state 1.5 s (was 21.5 s), the client's first card 3.3 s (was 45 s). Report: [[2026-11-03 Scale Test]]. Two new unit tests; 254 pass. Committed as `264dada`; all 41 browser tests pass.
 - 8:20pm: B7 done. The synthesis agent fixed every must-fix item from the review (now 16 decisions for the user) and noted where it partly disagreed, in "Review notes"; B4's reading of Ancker ("not volume") is flagged there as reading more than the figures show.
+- 8:30pm: D1 and D2 handed to the synthesis agent and the B5 agent, who each have their research in context: a design note and card drafts each, which I review and file.
+- 8:45pm: E1 and E2 done: [[2026-11-03 Privacy and Security]]. The local server holds up. Fixed: `notify-send` now gets `--` before the agent-written question. Two hard cards in a new deck, `release`: B-7sjec (keep the hooks committed and gate changes to them, or install them per clone) and B-vqn69 (a public repo's record: full text, or only what was decided). Other findings: agents can act as the user (D62, known), agent text reaches other agents through briefs, and the preference file must not be editable by the agent it governs.
 
 ## Debrief
 
