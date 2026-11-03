@@ -752,6 +752,11 @@ sig = "9f8bbe9695c33412"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
+target = "plugins/baesian/hooks/baesian.mjs"
+sig = "4724db53562a6d66"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
 target = "src/schema.ts#CardMeta"
 sig = "7d0dd5446592dd32"
 

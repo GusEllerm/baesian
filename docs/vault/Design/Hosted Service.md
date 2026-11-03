@@ -281,14 +281,18 @@ Filed as cards in deck `hosted` (2026-11-03, overnight), in the order they're be
 
 **Answered on 2026-11-03** (all as recommended, but H2): H1 as D137, H3 as D138, H4 as D139, H5 as D143, H6 as D140, H7 as D141, H8 as D142. **H2 came back with a question** (whether to use Globus Auth, for single sign-on through people's own organisations, and whether running our own accounts is a risk); after research ([[Sign-in for the Hosted Service]]), its revision was answered as D153: passkey accounts, with Globus as a way in.
 
-Decisions in this note that aren't drafted as cards yet:
-- whether the relay serves the same API as `baesian serve` (section 1, after H1);
-- one grant per machine and project, or per machine (section 2);
-- where the machine's token is kept (section 2);
-- the signature's encoding (section 4);
-- the retention periods (section 1);
-- what a notification says (section 7);
-- whether a card records its machine's name (section 10).
+The rest of this note's choices, carded on 2026-11-03 for M9, in deck `hosted`:
+- whether the relay serves the same API as `baesian serve` (section 1): **B-17wn9**;
+- one grant per machine and project, or per machine (section 2): **B-84e0d**;
+- where the machine's token is kept (section 2): **B-gq8j1**;
+- the retention periods (section 1), as two questions: an answered card's text (**B-9jqt4**), since D137 says "once answered" without saying how soon, and a held-back card's (**B-ec3kj**), since a held card is never answered;
+- what a notification says (section 7): **B-mjf3g**;
+- account recovery when every passkey is lost (open questions): **B-jzgy4**;
+- settled by P16: the signature's encoding (D160) and whether a card records its machine (D162).
+
+Still to card before M9 is built: spending on Workers Paid (D140 says it gets its own card), the email sender, the service's libraries (a WebAuthn library on Workers, `oauth4webapi`), and where the service's code lives and how it's deployed. Needing research first: the repo's identity under forks and copies (and whether a change to the config's service address should be a gate fact), abuse of open sign-up, and data residency (Durable Objects can be held to the EU, fixed when an object is created).
+
+**Since this note was written, later decisions changed:** the signature format (D160: OpenSSH, namespace `baesian`, not `baesian-verdict`); the passkey challenge (the SHA-256 of the verdict, with no nonce, P16 §7); where passkey keys are trusted (pinned in CI by hand, D159, not a key enrolled in the repo); sign-in (D153: a passkey and an email, or Globus); the machine's name (the relay's entry only, D162); what's signed (also preference files, the relay's gate records and passkey key files, P16); preferences (D147, with D163 for loosening); where the gate runs (D145, D158); the MCP tools (D166's twelve, not two); and what `baesian serve` offers in a hosted repo (D143). Where the sections below disagree with those, the decisions hold.
 
 Questions about existing decisions, not revisions: D62 (through H3), D63 (section 9), and D40 (section 7).
 
