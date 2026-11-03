@@ -131,6 +131,7 @@ for (const size of SIZES) {
     }
     await page.clock.fastForward(5100);
     await expect(page.locator(".empty")).toBeVisible();
+    await expect(page.locator(".empty")).toHaveCSS("opacity", "1"); // its fade in, or the check sees nothing
     await check("the empty desk");
 
     expect(problems).toEqual([]);

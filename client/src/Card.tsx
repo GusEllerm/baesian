@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 import type { ApiCard, ApiState } from "../../src/api";
 import { isOwnCard } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
@@ -59,6 +59,8 @@ export interface CardProps {
   onHover: (side: Side | undefined) => void;
   onHoldStart: () => void;
   onHoldEnd: () => void;
+  /** A screen you touch (D130): "press and hold", and a button back from the reveal, where there's no Esc. */
+  touch?: boolean;
 }
 
 export function Card(p: CardProps) {
@@ -289,11 +291,12 @@ function Foot(p: CardProps) {
       <span className="rule" data-testid="rule">
         {rule}
       </span>
+      {/* The arrows stay on a touch screen: they're the way to swipe, as well as the keys. */}
       <button type="button" className={p.armed === "up" ? "armed" : undefined} onClick={() => p.onReach("up")}>
-        <kbd>↑</kbd> Other answer
+        <kbd className="dir">↑</kbd> Other answer
       </button>
       <button type="button" className={p.armed === "down" ? "armed" : undefined} onClick={() => p.onReach("down")}>
-        <kbd>↓</kbd> Can't judge
+        <kbd className="dir">↓</kbd> Can't judge
       </button>
     </div>
   );
@@ -313,6 +316,9 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const switched = same && mode.first !== "proposal";
   const key = ARROW[mode.side];
   const confirmWords = held ? (same ? `Keep ${quoted(m.proposal)}` : `Overturn it: ${quoted(m.alternative)}`) : `Confirm ${quoted(m[mode.option])}`;
+  const overturn = held && !same ? `Overturning it sends ${agent} a brief of what to redo.` : "";
+  // On a touch screen, Esc's way back is a button.
+  const small = p.touch ? overturn : `${overturn ? `${overturn} ` : ""}Esc goes back to the choice.`;
   return (
     <div className="panel-in">
       <p className="verdict">
@@ -400,10 +406,17 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
       ))}
       <div className="reveal-row">
         {p.rarity === "mythic" ? (
-          <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd}>
+          // A long press on a touch screen mustn't open the page's menu, or end the hold by scrolling (style.css).
+          <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd} onPointerCancel={p.onHoldEnd} onContextMenu={(e) => e.preventDefault()}>
             <span className="fill" style={{ width: `${(p.hold ?? 0) * 100}%` }} />
             <span>
-              Hold <kbd>{key}</kbd> or click and hold to confirm
+              {p.touch ? (
+                "Press and hold to confirm"
+              ) : (
+                <>
+                  Hold <kbd>{key}</kbd> or click and hold to confirm
+                </>
+              )}
             </span>
           </button>
         ) : (
@@ -416,8 +429,14 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
             {held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
           </button>
         )}
+        {/* Esc's way back, where there's no Esc key. */}
+        {p.touch && (
+          <button type="button" className="cancel" onClick={p.onBack}>
+            Back to the choice
+          </button>
+        )}
       </div>
-      <p className="small">{held && !same ? `Overturning it sends ${agent} a brief of what to redo. ` : ""}Esc goes back to the choice.</p>
+      {small && <p className="small">{small}</p>}
     </div>
   );
 }
@@ -498,18 +517,30 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
   const up = mode.kind === "write";
   const chips = up ? WRITE_REASONS : PASS_REASONS;
   const placeholder = up ? (WRITE_REASONS.find((r) => r.reason === mode.reason)?.placeholder ?? `Goes back to ${agent} with this card.`) : "Optional: what would help you judge it?";
+  // On a touch screen, the keyboard would cover the reasons you choose from first: it comes up once you've chosen one
+  // that needs words, from the tap itself, as a phone requires (D130). With keys, the field has the focus at once.
+  const field = useRef<HTMLTextAreaElement>(null);
   return (
     <div className="panel-in">
       <h3>{up ? `Write to ${agent}` : "Why can't you judge it?"}</h3>
       <div className="chips" role="group">
         {chips.map((c) => (
-          <button type="button" key={c.reason} aria-pressed={mode.reason === c.reason} onClick={() => p.onMode({ ...mode, reason: c.reason } as Mode)}>
+          <button
+            type="button"
+            key={c.reason}
+            aria-pressed={mode.reason === c.reason}
+            onClick={() => {
+              p.onMode({ ...mode, reason: c.reason } as Mode);
+              if (p.touch && up) field.current?.focus();
+            }}
+          >
             {c.label}
           </button>
         ))}
       </div>
       <textarea
-        autoFocus
+        ref={field}
+        autoFocus={!p.touch}
         aria-label={up ? "Your answer" : "What would help"}
         placeholder={placeholder}
         value={mode.text}
@@ -534,9 +565,11 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
         <button type="button" className="send" disabled={!mode.reason} onClick={p.onSend}>
           {mode.reason === "not_my_area" ? `Ask ${agent} to find another reviewer` : `Send to ${agent}`}
         </button>
-        <span className="small">
-          <kbd>⌘</kbd> <kbd>Enter</kbd>
-        </span>
+        {!p.touch && (
+          <span className="small">
+            <kbd>⌘</kbd> <kbd>Enter</kbd>
+          </span>
+        )}
         <button type="button" className="cancel" onClick={p.onBack}>
           Cancel <kbd>Esc</kbd>
         </button>

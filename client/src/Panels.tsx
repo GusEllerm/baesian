@@ -11,12 +11,13 @@ import { Prose } from "./Prose";
 // deck's panel, opened from the breadcrumbs: its briefing, and its context notes from the vault. M8b adds the held-back
 // list, the record row by row beside your calibration, and your preferences (Preferences.tsx).
 
-export type PanelKind = "calibration" | "keys" | "deck" | "held" | "preferences";
+/** "path" is the path's sheet, on a phone (D130): it opens and closes as a panel does. */
+export type PanelKind = "calibration" | "keys" | "deck" | "held" | "preferences" | "path";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
 /** "More": the panels, and notifications. It closes on Esc, on a click elsewhere, and once you've picked. */
-export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number; onOpen: (open: boolean) => void; onPanel: (kind: PanelKind) => void; onNotify: () => void }) {
+export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number; touch: boolean; onOpen: (open: boolean) => void; onPanel: (kind: PanelKind) => void; onNotify: () => void }) {
   const menu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!p.open) return;
@@ -46,7 +47,13 @@ export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number;
             Held back <span className="state">{p.held || "none"}</span>
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("keys"))}>
-            Keyboard shortcuts <kbd>?</kbd>
+            {p.touch ? (
+              "Gestures"
+            ) : (
+              <>
+                Keyboard shortcuts <kbd>?</kbd>
+              </>
+            )}
           </button>
           {p.notify !== "unsupported" && (
             <button type="button" role="menuitemcheckbox" aria-checked={p.notify === "on"} onClick={pick(p.onNotify)}>
@@ -79,7 +86,34 @@ export function Panel({ label, onClose, children, id, wide }: { label: string; o
   );
 }
 
-export function KeysPanel({ onClose }: { onClose: () => void }) {
+/**
+ * The keys, or on a screen you touch, the gestures (D130): the same answers, by swipe and tap. The path's sheet is
+ * named only where there is one, on a phone.
+ */
+export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: boolean; onClose: () => void }) {
+  if (touch) {
+    return (
+      <Panel label="Gestures" onClose={onClose}>
+        <dl>
+          <dt>Swipe ← →</dt>
+          <dd>Choose an option, or tap it. Then confirm, once you've seen the agent's pick; on mythic cards, press and hold.</dd>
+          <dt>Swipe ↑</dt>
+          <dd>Write an answer</dd>
+          <dt>Swipe ↓</dt>
+          <dd>Say you can't judge it</dd>
+          <dt>Undo</dt>
+          <dd>In the note that comes up, for 5 seconds</dd>
+          {phone && (
+            <>
+              <dt>Your path</dt>
+              <dd>The bar at the foot of the screen: tap it, or pull it up</dd>
+            </>
+          )}
+        </dl>
+        <p className="sub after">On a card longer than the screen, swiping up or down scrolls it; Other answer and Can't judge, at the card's foot, do the same as those swipes.</p>
+      </Panel>
+    );
+  }
   return (
     <Panel label="Keyboard shortcuts" onClose={onClose}>
       <dl>

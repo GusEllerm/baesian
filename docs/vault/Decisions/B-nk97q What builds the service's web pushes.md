@@ -1,0 +1,94 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "What builds the service's web pushes: Baesian's own code on Web Crypto (B-nk97q)."
+created: 2026-11-03
+updated: 2026-11-03
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-nk97q
+card: B-nk97q
+revision: 1
+title: What builds the service's web pushes
+question: Should the service encrypt and sign its web pushes with a small library, @block65/webcrypto-web-push, or with Baesian's own code on Web Crypto?
+answer: Baesian's own code on Web Crypto
+response: accept
+not_chosen:
+  - "@block65/webcrypto-web-push"
+answered: 2026-11-03T17:00:23.444Z
+answered_by: Gus Ellerm
+topic: hosted/web-push-sender
+deck: hosted
+level: hard
+reverse: cheap
+touches:
+  - dependency
+  - security
+filed: 2026-11-03T16:57:17.522Z
+filed_by: claude-code
+branch: v1/next
+depends_on:
+  - "[[B-mjf3g What a phone notification says|B-mjf3g]]"
+  - "[[B-rca1z Where the hosted service runs|B-rca1z]]"
+---
+
+# What builds the service's web pushes
+
+Should the service encrypt and sign its web pushes with a small library, @block65/webcrypto-web-push, or with Baesian's own code on Web Crypto?
+
+**Decided:** Baesian's own code on Web Crypto, the agent's pick. About 200 lines of Baesian's own build each push: aes128gcm encryption (RFC 8291) and a VAPID token (RFC 8292), tested against the RFC's worked example and live pushes to Chrome, Firefox and an iPhone. No new dependency.
+
+**Not chosen:** @block65/webcrypto-web-push. A 230-line MIT library on Web Crypto, with one dependency of its own, builds each push, and Baesian sends it with fetch. It lists Workers, moved to RFC 8291's encoding in September 2026, and has one maintainer.
+
+**It turned on:** For about 200 lines of standard crypto, would you rather own the code or depend on a small library one person maintains? (a preference) Own the code: Baesian's own code on Web Crypto. Use the library: @block65/webcrypto-web-push.
+
+**The fact given:** A push to a phone needs two things: the payload encrypted to that browser (RFC 8291: ECDH, HKDF and AES-GCM) and a signed token naming the service (RFC 8292). Workers' Web Crypto has each of these, and RFC 8291 gives a worked example with every intermediate value to test against. Payloads hold counts and levels only (B-mjf3g), so a mistake under either option mostly shows up as pushes that fail to arrive. Candidates on npm, 2026-11-03: web-push (12.3 million downloads a week, last released January 2024, built on Node's crypto and https, five dependencies); @block65/webcrypto-web-push 2.0.0 (271,000 a week, Web Crypto, one dependency, lists Workers); @pushforge/builder 2.0.5 (134,000 a week, no dependencies, sends the older pre-RFC encoding). Any package bundled into a Worker can read that Worker's secrets, which in the service's Worker include its signing key.
+
+**First chose:** @block65/webcrypto-web-push, then switched once the agent's pick was shown.
+
+**The agent's case:** The work is small, fixed by two RFCs and checkable against RFC 8291's example, so owning it costs little, and it adds no package to the Worker that holds the signing key. The leading Workers library changed its encoding two months ago and has one maintainer.
+
+**Wrong if:** Baesian's pushes fail at one of the push services in ways the RFC's example doesn't catch, or the code grows well past a few hundred lines. **To check:** Test against RFC 8291's section 5 example, then send real pushes to Chrome on Android, to Firefox, and to an iPhone Home Screen app before M9's notifications are done.
+
+Answered by Gus Ellerm on 2026-11-03, through Baesian (card B-nk97q, revision 1). Filed by claude-code on v1/next, in the deck “The hosted service”.
+
+The record is in `.baesian/cards/B-nk97q/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+D130 puts web push in v1, and B-mjf3g settled what a push says: counts and levels only, such as "2 cards waiting in baesian (1 hard)". P15 section 7 and B5 F17 cover the rest: VAPID keys, Home Screen install on iPhone, no silent pushes, one topic per project. This card asks only what code builds each push on the service. A runtime dependency is a card under AGENTS.md.
+
+**What the code does** (RFC 8291 and RFC 8292; Apple's "Sending web push notifications in web apps and browsers"):
+- *Encrypt:* an ephemeral P-256 key pair, ECDH with the subscription's `p256dh` key, HKDF with its `auth` secret, then AES-128-GCM over one record. RFC 8291: "The Content-Encoding header field therefore has exactly one value, which is "aes128gcm""; "A push service is not required to support more than 4096 octets of payload body", which "equates to, at most, 3993 octets of plaintext". Section 5 is a worked example, with the intermediate values in Appendix A.
+- *Sign:* an ES256 JWT whose audience is the push service's origin, sent as `Authorization: vapid t=…, k=…`. Apple rejects a token whose "subject claim isn't a URL or `mailto:`" or whose expiry is "more than one day into the future", and asks: "Don't refresh your JWT more frequently than once per hour."
+- *Headers:* TTL, `Urgency` (very-low to high) and `Topic` ("a maximum of 32 characters"), which lets a newer push replace an older one.
+- *Primitives:* Workers' supported-algorithms table lists ECDH, ECDSA and HKDF, and its docs generate AES-GCM keys. No Node API is needed.
+
+**The candidates** (npm registry and GitHub, read 2026-11-03; downloads for the week to 2026-11-02):
+
+| | web-push | @block65/webcrypto-web-push | @pushforge/builder |
+|---|---|---|---|
+| Latest | 3.6.7, 2024-01-16 | 2.0.0, 2026-09-03 | 2.0.5, 2026-04-23 |
+| Licence | MPL-2.0 | MIT | MIT |
+| Dependencies | 5 (asn1.js, http_ece, https-proxy-agent, jws, minimist) | 1 (uint8array-extras) | none |
+| Downloads a week | 12,341,444 | 271,391 | 134,032 |
+| Runs on | Node's `crypto` and `https` | Web Crypto; lists Workers | Web Crypto; lists Workers |
+| Encoding | aes128gcm by default | aes128gcm (since 2.0.0) | aesgcm, the draft before RFC 8291 |
+| Maintainers | an organisation; 3,569 stars, 49 open issues | one person (120 of 121 commits); 48 stars | one person; 66 stars |
+
+- *web-push on Workers:* Workers turn on Node compatibility by default for compatibility dates from 2026-08-04, including `node:crypto` and the `node:https` client, so it may run; nobody has tried it for Baesian (*unverified*). Its last release is nearly three years old.
+- *@block65/webcrypto-web-push:* the agent read its published code, about 230 lines. Its 2.0.0 release notes say it was "verified against the RFC 8291 section 5 test vector" and by decrypting real pushes in Chrome and Firefox, that it pads every message to 4,096 octets so length leaks nothing, and that "Apple accepts neither of the old ones" (the `aesgcm` encoding and `WebPush` scheme). Apple's own page doesn't name an encoding, so that last claim is the library's. It signs a new token on every push; its exported `vapidHeaders` could be called once an hour instead, to follow Apple's guidance (the agent's reading).
+- *@pushforge/builder:* its code sets `Content-Encoding: aesgcm` and has no aes128gcm path. Its README says its playground works in "Safari 16+", which conflicts with @block65's claim about Apple; neither was tested here.
+
+**Packages and the signing key.** Cloudflare's docs: "you can access the bindings from anywhere in your codebase" by importing `env` from `cloudflare:workers`, secrets included. The service's Ed25519 signing key is a Workers secret (P15 section 4), so any package bundled into the same Worker could read it. B-bk20v's fact that deployed code can read the key is the same point.
+
+**Pushes with no payload** (also considered): a push without a body needs no encryption, only the VAPID token, and the service worker fetches the counts when it wakes. Safari requires a notification to be shown promptly for every push (B5 F17), and Declarative Web Push (iOS 18.4+, P15's "Later") carries the notification in the payload itself, so this would need replacing then (the agent's reading of WebKit's announcement).
+
+**Under either option:** the VAPID key pair is a Workers secret, and its public key is baked into every subscription, so switching code later doesn't touch subscriptions; changing the key would. A push service answering 404 or 410 means the subscription is gone and is deleted (the agent's knowledge of RFC 8030, *unverified* here). Where subscriptions are stored is hosted/account-store.
+
+Sources, all read 2026-11-03: RFC 8291 <https://www.rfc-editor.org/rfc/rfc8291.html>; RFC 8292 (not re-read; cited through Apple's page and the libraries); Apple, "Sending web push notifications in web apps and browsers" <https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers> (through Apple's JSON documentation endpoint); Cloudflare, Web Crypto (updated 2026-09-30) <https://developers.cloudflare.com/workers/runtime-apis/web-crypto/>, "Node.js compatibility is now enabled by default" (2026-08-04), Bindings, "Importing env as a global" <https://developers.cloudflare.com/workers/runtime-apis/bindings/>; npm registry entries and download counts for web-push, @block65/webcrypto-web-push, @pushforge/builder, webpush-webcrypto and web-push-browser; the published packages of @block65/webcrypto-web-push 2.0.0 and @pushforge/builder 2.0.5 (read as code); @block65's 2.0.0 release <https://github.com/block65/webcrypto-web-push/releases/tag/v2.0.0>; PushForge docs <https://github.com/draphy/pushforge> and web-push docs <https://github.com/web-push-libs/web-push> (through Context7); GitHub's API for stars, issues and contributors. Also looked at and set aside: webpush-webcrypto 1.0.5 (4,140 downloads a week) and web-push-browser 1.4.2 (4,319 a week).

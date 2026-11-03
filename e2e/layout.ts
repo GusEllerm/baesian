@@ -9,7 +9,11 @@
 // 3. text overlapping text;
 // 4. the path's lines crossing text;
 // 5. anything off the window;
-// 6. text hidden under something painted over it (added in 5f).
+// 6. text hidden under something painted over it (added in 5f);
+// 7. anything that scrolls sideways: the page, or a box that scrolls (added for the phone layout, D130).
+//
+// With a modal open (the path's sheet on a phone), only the modal is checked: the rest is behind it on purpose.
+// `smallTargets` checks, for a touch screen, that everything you can tap is at least 44 px each way.
 //
 // Self-contained, so `page.evaluate` can send it to the page.
 
@@ -19,6 +23,8 @@ export function layoutProblems(): string[] {
   const H = window.innerHeight;
   const TOL = 0.75;
   const OVERLAY = ".menu, .panel, .toast, .fly";
+  const TRANSIENT = ".toast, .fly";
+  const modal = document.querySelector('[aria-modal="true"]');
 
   type Box = { l: number; t: number; r: number; b: number };
   const box = (r: DOMRect): Box => ({ l: r.left, t: r.top, r: r.right, b: r.bottom });
@@ -29,6 +35,7 @@ export function layoutProblems(): string[] {
   };
   const shown = (el: Element): boolean => {
     if (el.closest("[data-leaving]")) return false;
+    if (modal && !modal.contains(el) && !el.contains(modal)) return false;
     // A closed <details> hides all but its summary, without display: none.
     const d = el.closest("details");
     if (d && !d.open && !el.closest("summary")) return false;
@@ -106,14 +113,25 @@ export function layoutProblems(): string[] {
     }
   }
 
-  // Text, as the rectangles of its lines.
+  // Text, as the rectangles of its lines. A line scrolled out of a box that scrolls (a long card on a phone's desk) isn't
+  // on screen, so it can't overlap or be covered: it's skipped.
+  const scrolledAway = (el: Element, r: Box): boolean => {
+    const y = (r.t + r.b) / 2;
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowY !== "auto" && cs.overflowY !== "scroll") continue;
+      const ar = a.getBoundingClientRect();
+      if (y < ar.top + a.clientTop || y > ar.top + a.clientTop + a.clientHeight) return true;
+    }
+    return false;
+  };
   const runs: { el: Element; r: Box; over: boolean }[] = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     if (!n.textContent?.trim() || !n.parentElement || !shown(n.parentElement)) continue;
     const range = document.createRange();
     range.selectNodeContents(n);
-    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) runs.push({ el: n.parentElement, r: box(r), over: overlay(n.parentElement) });
+    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1 && !scrolledAway(n.parentElement, box(r))) runs.push({ el: n.parentElement, r: box(r), over: overlay(n.parentElement) });
   }
 
   // 3. Text overlapping text, from different elements. An overlay may cover the desk. Text inside one tilted element
@@ -132,6 +150,8 @@ export function layoutProblems(): string[] {
     for (let j = i + 1; j < runs.length; j++) {
       const a = runs[i]!, b = runs[j]!;
       if (a.el === b.el || a.over !== b.over || !hit(a.r, b.r)) continue;
+      // The toast and your choice's flight come and go over everything, a panel filling a phone's screen included.
+      if (a.el.closest(TRANSIENT) || b.el.closest(TRANSIENT)) continue;
       const turned = tilted(a.el);
       if (turned && turned === tilted(b.el)) continue;
       // Glyph boxes overlap by a hair between lines; count it only when the lines really collide.
@@ -193,6 +213,50 @@ export function layoutProblems(): string[] {
     })();
     const off = [r.l < -TOL && "left", r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
     if (off.length) out.push(`off the window: ${name(el)} goes past the ${off.join(" and ")}`);
+  }
+
+  // 7. Nothing scrolls sideways: not the page, and not a box that scrolls.
+  const page = document.scrollingElement ?? document.documentElement;
+  if (page.scrollWidth > W + 1) out.push(`scrolls sideways: the page is ${page.scrollWidth - W}px wider than the window`);
+  for (const el of all) {
+    const cs = getComputedStyle(el);
+    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1) out.push(`scrolls sideways: ${name(el)} is ${el.scrollWidth - el.clientWidth}px wider than its box`);
+  }
+  return out;
+}
+
+/**
+ * Everything you can tap that's smaller than `min` px either way (the phone layout, D130): buttons, links, fields,
+ * disclosures and menu items. A box or a radio button inside a label is measured by its label, which is what you tap.
+ * Hidden things, a card that's leaving, and with a modal open everything behind it, are skipped. Self-contained.
+ */
+export function smallTargets(min = 44): string[] {
+  const out: string[] = [];
+  const modal = document.querySelector('[aria-modal="true"]');
+  const name = (el: Element) => {
+    const cls = typeof el.className === "string" && el.className ? `.${el.className.trim().split(/\s+/).join(".")}` : "";
+    const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
+    return `<${el.tagName.toLowerCase()}${cls}>${text ? ` “${text}”` : ""}`;
+  };
+  const shown = (el: Element): boolean => {
+    if (el.closest("[data-leaving], [inert]")) return false;
+    if (modal && !modal.contains(el)) return false;
+    const d = el.closest("details");
+    if (d && !d.open && !el.closest("summary")) return false;
+    for (let e: Element | null = el; e; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.display === "none" || cs.visibility === "hidden") return false;
+    }
+    return true;
+  };
+  const seen = new Set<Element>();
+  for (const el of document.querySelectorAll('button, a[href], input, select, textarea, summary, [role^="menuitem"], [tabindex="0"]')) {
+    const target = el instanceof HTMLInputElement && el.closest("label") ? el.closest("label")! : el;
+    if (seen.has(target) || !shown(target)) continue;
+    seen.add(target);
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    if (r.width < min - 0.5 || r.height < min - 0.5) out.push(`small target: ${name(target)} is ${Math.round(r.width)}×${Math.round(r.height)} px`);
   }
   return out;
 }
