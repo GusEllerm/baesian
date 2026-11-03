@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baesian: the drum, C (a reel you can spin)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <span class="wordmark">Baesian</span>
+  <p class="summary" id="summary"></p>
+  <p class="proto">Drum C: a reel you can spin</p>
+</header>
+<main class="desk" id="desk">
+  <svg class="join" id="join" aria-hidden="true"><path id="join-line" d=""/></svg>
+  <section class="reel-col">
+    <div class="reel" id="reel" tabindex="0" role="group" aria-roledescription="drum" aria-label="Your path: answers above, the card in play at the front, what's next below. Scroll or drag to spin it, or Up and Down; Enter opens the row at the front."></div>
+    <p class="aim-chip" id="aim-chip" hidden><span class="what"><kbd>Enter</kbd><span>opens <b id="aim-name"></b></span></span><span class="drain" id="drain"></span></p>
+    <p class="reel-hint" id="reel-hint">Scroll or drag the drum to spin it through your answers and what's next; <kbd>↑</kbd> <kbd>↓</kbd> once it has focus. <kbd>Enter</kbd> opens the row at the pointer; let go and it turns back.</p>
+  </section>
+  <section class="stage" id="stage" aria-live="polite">
+    <article class="card" id="card"></article>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
