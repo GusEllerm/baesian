@@ -1,12 +1,14 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import type { ApiCard } from "../../src/api";
+import type { ApiCard, ApiState } from "../../src/api";
 import { type Spent, seconds, timeSpent } from "./calibration";
 import type { NotifyStatus } from "./notify";
+import { Prose } from "./Prose";
 
 // M4 step 5e: the menu in the header, its two panels (your calibration, and the keys), and the empty desk.
-// Round 5's, ported: design/explorations/round5/app.js (renderKeys, renderMirror, the menu, next()).
+// Round 5's, ported: design/explorations/round5/app.js (renderKeys, renderMirror, the menu, next()). M6 adds the
+// deck's panel, opened from the breadcrumbs: its briefing, and its context notes from the vault.
 
-export type PanelKind = "calibration" | "keys";
+export type PanelKind = "calibration" | "keys" | "deck";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
@@ -56,9 +58,9 @@ export function moveInMenu(dir: "up" | "down") {
   items[(i + (dir === "down" ? 1 : items.length - 1) + items.length) % items.length]!.focus();
 }
 
-function Panel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+function Panel({ label, onClose, children, id }: { label: string; onClose: () => void; children: ReactNode; id?: string }) {
   return (
-    <aside className="panel" aria-label={label}>
+    <aside className="panel" aria-label={label} {...(id ? { id } : {})}>
       <button type="button" className="panel-close" onClick={onClose}>
         Close <kbd>Esc</kbd>
       </button>
@@ -139,6 +141,50 @@ export function CalibrationPanel({ spent, superseded, onClose }: { spent: Spent[
         </dd>
       </dl>
       <p className="sub after">Time spent is counted in this browser only.</p>
+    </Panel>
+  );
+}
+
+/** A card ID in text from the vault, which becomes a link to its card (P17 §8). */
+const CARD_ID = /\b(B-[0-9a-hjkmnp-tv-z]{5})\b/;
+
+/** Text with the IDs of cards the client knows as links to them. */
+function withCardLinks(text: string, known: (id: string) => boolean, onOpen: (id: string) => void): ReactNode[] {
+  return text.split(CARD_ID).map((part, i) =>
+    i % 2 === 1 && known(part) ? (
+      <button type="button" key={i} className="card-link" onClick={() => onOpen(part)}>
+        {part}
+      </button>
+    ) : (
+      part
+    ),
+  );
+}
+
+/**
+ * The work a card belongs to: its deck's briefing, then the vault notes the deck links to, each with its summary line
+ * (M6, P17 §8). Without a vault the links are plain text; with one, a note that isn't there says so.
+ */
+export function DeckPanel(p: { deck: ApiState["decks"][number]; known: (id: string) => boolean; onOpen: (id: string) => void; onClose: () => void }) {
+  const { deck } = p;
+  return (
+    <Panel label={deck.meta.title} onClose={p.onClose} id="deck-panel">
+      <p className="sub">The briefing for this work.</p>
+      {deck.body.trim() ? <div className="briefing"><Prose text={deck.body} /></div> : <p className="sub">It has no briefing.</p>}
+      {deck.notes.length > 0 && (
+        <div className="context-notes">
+          <h5>Context</h5>
+          <ul>
+            {deck.notes.map((n) => (
+              <li key={n.link} title={n.path}>
+                <b>{n.text}</b>
+                {n.summary && <span className="note-summary">{withCardLinks(n.summary, p.known, p.onOpen)}</span>}
+                {n.missing && <span className="missing">Not in the vault.</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Panel>
   );
 }

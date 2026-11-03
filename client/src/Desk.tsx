@@ -11,7 +11,7 @@ import { addSpent, loadSpent, useSeen } from "./local";
 import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
-import { CalibrationPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
+import { CalibrationPanel, DeckPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
 import { type CardMotion, Path } from "./Path";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
@@ -458,6 +458,17 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       </header>
       {panel === "keys" && <KeysPanel onClose={() => setPanel(undefined)} />}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} onClose={() => setPanel(undefined)} />}
+      {panel === "deck" && deck && (
+        <DeckPanel
+          deck={deck}
+          known={(id) => cards.has(id)}
+          onOpen={(id) => {
+            setPanel(undefined);
+            goTo(id);
+          }}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
       <main className="desk">
         <Path
           trail={trail}
@@ -476,7 +487,15 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           <p className="crumbs">
             {current && (
               <>
-                {areaOf(current)} › <b>{deck?.meta.title ?? current.meta.deck}</b>
+                {areaOf(current)} ›{" "}
+                {/* The deck's briefing and its context notes open from its name (M6). */}
+                {deck && (deck.body.trim() || deck.notes.length) ? (
+                  <button type="button" className="crumb-deck" aria-expanded={panel === "deck"} aria-controls="deck-panel" title="The briefing" onClick={() => showPanel("deck")}>
+                    <b>{deck.meta.title}</b>
+                  </button>
+                ) : (
+                  <b>{deck?.meta.title ?? current.meta.deck}</b>
+                )}
               </>
             )}
           </p>

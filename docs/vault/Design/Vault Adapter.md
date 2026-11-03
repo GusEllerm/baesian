@@ -392,5 +392,6 @@ M6 builds this proposal in `src/vault.ts` ([[src-vault]]); the formats are in [[
 - **A rule note's body names the card it came from by ID,** not as a link: every branch's record holds the rule, but not always that card, and the body must be the same bytes everywhere. Its frontmatter links it.
 - **Frontmatter links** go only to cards that have a note, or are the bare ID; body links are built from the card's first revision, as names are.
 - **`init --vault`** also refuses a vault outside the repo, leaves a vault with `.obsidian/` but no `core-plugins.json` alone, and writes no notes: the next commit, or `baesian sync`, does.
+- **The client shows the context notes in a panel** opened from the deck's name in the breadcrumbs, with the briefing, which it didn't show before ([[Client Build]], step 12). A card ID in a summary there links to the card.
 - **Not built:** finding hand-written mentions of card IDs (§8, optional).
 - **Still to check by hand:** the query's three views in Obsidian 1.12, and their `sort` key (§5).

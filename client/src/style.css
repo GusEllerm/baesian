@@ -262,6 +262,18 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .panel .tiers { display: flex; flex-direction: column; gap: 1px; }
 .panel .tiers b { font-weight: 700; }
 .panel dt kbd { margin-right: 3px; }
+.panel .briefing { font: var(--t-body); font-size: 15px; max-height: 40vh; overflow-y: auto; }
+.panel .briefing p, .panel .briefing ul { margin: 0 0 8px; }
+.panel .briefing ul { padding-left: 18px; }
+.panel .briefing code, .panel .context-notes code { font: 600 0.88em/1 var(--ui); }
+.panel .context-notes h5 { margin: 12px 0 6px; font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink-soft); }
+.panel .context-notes ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.panel .context-notes li { display: flex; flex-direction: column; gap: 1px; font: var(--t-body); font-size: 15px; }
+.panel .context-notes b { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
+.panel .context-notes .missing { font: var(--t-small); font-stretch: 90%; color: var(--ink-faint); }
+.card-link { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.crumb-deck { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.crumb-deck:hover b, .crumb-deck:focus-visible b { text-decoration: underline; }
 .panel-close { position: absolute; right: 12px; top: 12px; display: inline-flex; gap: 6px; align-items: center; border: 0; background: none; cursor: pointer; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .new-tag { display: inline-block; margin-right: 6px; padding: 0 5px 1px; border-radius: 3px; background: var(--right); color: #fff; font: 700 10.5px/1.4 var(--ui); vertical-align: 2px; }
 
