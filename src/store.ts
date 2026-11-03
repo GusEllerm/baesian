@@ -1,7 +1,9 @@
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
+import { FolderStorage } from "./folder-storage.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Repo, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
@@ -60,6 +62,7 @@ import {
 import { proofProblem } from "./passkey.js";
 import { byLine, cardAuthor } from "./quote.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
+import { type Storage, alreadyExists } from "./storage.js";
 import { type History, readHistory } from "./trailers.js";
 import { type TrustRoot, checkSigned, pinnedTrust, readTrustFile } from "./trust.js";
 
@@ -253,6 +256,16 @@ export class NoDeck extends Error {}
 export class StalePreferences extends Error {}
 
 /**
+ * What was asked needs git or the record, and this store runs over storage alone, as the relay's does (B-0ag7h): setting
+ * up, the record, the vault, a document's path in the repo. Nothing is written when it's raised.
+ */
+export class NeedsRepo extends Error {
+  constructor(what: string) {
+    super(`${what} needs the repository and its record, and this store has neither: it runs over the live layer's storage alone`);
+  }
+}
+
+/**
  * Where a store's pinned keys come from (D142): undefined reads CI's settings (`BAESIAN_TRUST`, `BAESIAN_TRUST_FILE`) the
  * first time they're needed; `null` means none are pinned; a root means these.
  */
@@ -260,9 +273,35 @@ export interface StoreTrust {
   pinned?: TrustRoot | null;
 }
 
+/** A store over storage alone, with no repo and no record (B-0ag7h): what it takes in their place. */
+export interface StorageOptions {
+  /** The branch it files on, for the cards and decks it writes and the inbox it reads. */
+  branch: string;
+  /** The repo's `.baesian/config.json`, which a store with no record can't read: its `project`, in a hosted repo. */
+  config?: Config;
+  /** The keys it pins. It never reads CI's settings: none are pinned unless given. */
+  trust?: StoreTrust;
+}
+
+/** On your machine: the repo, the live layer's folder, and the worktree's record. */
+interface Local {
+  repo: Repo;
+  live: string;
+  record: string;
+}
+
 function now(): string {
   return new Date().toISOString();
 }
+
+const encoder = new TextEncoder();
+const encode = (text: string): Uint8Array => encoder.encode(text);
+/** A file's bytes as a Buffer, without copying them: signatures and digests read them this way. */
+const asBuffer = (bytes: Uint8Array): Buffer => (Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+const decode = (bytes: Uint8Array): string => asBuffer(bytes).toString("utf8");
+
+/** With no git to search, no commit is found by its trailers, and none is said to be rewritten. */
+const NO_HISTORY: History = { citing: new Map(), onBranch: () => true };
 
 /** Compare decisions loosely: case and spacing don't make two answers different. */
 export function normalise(text: string): string {
@@ -284,23 +323,22 @@ function readAs<T extends z.ZodType>(kind: FileKindName, schema: T, fields: unkn
 }
 
 export class Store {
-  readonly live: string;
-  readonly record: string;
   /** A read-only store over one directory, e.g. a commit's record in CI (M3b). */
   readonly readOnly: boolean;
 
-  constructor(
-    readonly repo: Repo,
-    layers?: { dir: string },
-    private readonly trustOpts: StoreTrust = {},
+  private constructor(
+    /** The live layer (B-0ag7h): a folder on your machine, the relay's table, or memory. */
+    readonly storage: Storage,
+    private readonly local: Local | undefined,
+    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean },
   ) {
-    this.live = layers ? layers.dir : join(repo.commonDir, LIVE_DIR);
-    this.record = layers ? layers.dir : join(repo.toplevel, RECORD_DIR);
-    this.readOnly = layers !== undefined;
+    this.readOnly = options.readOnly;
   }
 
   static open(cwd?: string, trust?: StoreTrust): Store {
-    return new Store(openRepo(cwd), undefined, trust);
+    const repo = openRepo(cwd);
+    const live = join(repo.commonDir, LIVE_DIR);
+    return new Store(new FolderStorage(live), { repo, live, record: join(repo.toplevel, RECORD_DIR) }, { trust: trust ?? {}, readOnly: false });
   }
 
   /**
@@ -308,40 +346,82 @@ export class Store {
    * live layer, only what was committed (D34).
    */
   static overRecord(repo: Repo, dir: string, trust?: StoreTrust): Store {
-    return new Store(repo, { dir }, trust);
+    return new Store(new FolderStorage(dir), { repo, live: dir, record: dir }, { trust: trust ?? {}, readOnly: true });
+  }
+
+  /**
+   * A store over the live layer's storage alone (B-0ag7h), as the relay runs it: no repo, no record, no git. It files,
+   * answers and checks as any store does; what needs git or the record throws `NeedsRepo`, and nothing touches a disk.
+   */
+  static over(storage: Storage, options: StorageOptions): Store {
+    return new Store(storage, undefined, { branch: options.branch, config: options.config, trust: { pinned: options.trust?.pinned ?? null }, readOnly: false });
   }
 
   // ---------------------------------------------------------------- layers
 
+  /** The repo, the live layer's folder and the record, or `NeedsRepo` for a store over storage alone. */
+  private need(what: string): Local {
+    if (!this.local) throw new NeedsRepo(what);
+    return this.local;
+  }
+
+  /** The git repository. A store over storage alone has none (`NeedsRepo`). */
+  get repo(): Repo {
+    return this.need("the repository").repo;
+  }
+
+  /** The live layer's folder, on your machine; a store over storage alone has none (`NeedsRepo`). */
+  get live(): string {
+    return this.need("the live layer's folder").live;
+  }
+
+  /** The worktree's record, `.baesian/`, or the directory a read-only store reads. */
+  get record(): string {
+    return this.need("the record").record;
+  }
+
+  /** Whether this store has a repo and a record, as it does on your machine; the relay's has neither (B-0ag7h). */
+  get hasRepo(): boolean {
+    return this.local !== undefined;
+  }
+
+  /** The branch it files on: the checked-out one, or the one a store over storage alone was given. */
+  private get branch(): string {
+    return this.local ? this.local.repo.branch : this.options.branch!;
+  }
+
   /**
    * Set up means the shared live layer exists. A worktree's record is created on first write: a new
-   * worktree has no `.baesian/` until the branch it came from committed one.
+   * worktree has no `.baesian/` until the branch it came from committed one. A store over storage alone is set up.
    */
   isInitialised(): boolean {
-    return existsSync(this.live);
+    return this.local ? existsSync(this.local.live) : true;
   }
 
   /** Create both layers. Safe to run again. Returns the paths it created. */
   init(config: Config = {}): string[] {
+    const { live, record } = this.need("setting up (`baesian init`)");
     const created: string[] = [];
     for (const kind of KINDS) {
-      const dir = join(this.live, kind);
+      const dir = join(live, kind);
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
         created.push(dir);
       }
     }
-    const configPath = join(this.record, "config.json");
+    const configPath = join(record, "config.json");
     if (!existsSync(configPath)) {
-      mkdirSync(this.record, { recursive: true });
+      mkdirSync(record, { recursive: true });
       writeFileSync(configPath, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
       created.push(configPath);
     }
     return created;
   }
 
+  /** The repo's config, from the record; for a store over storage alone, the one it was given. */
   config(): Config {
-    const path = join(this.record, "config.json");
+    if (!this.local) return this.options.config ?? {};
+    const path = join(this.local.record, "config.json");
     return existsSync(path) ? readAs("config", Config, JSON.parse(readFileSync(path, "utf8")), "config.json") : {};
   }
 
@@ -350,11 +430,12 @@ export class Store {
    * `init --vault` in a repo already set up comes here. Returns whether it changed anything.
    */
   setVault(vault: string): boolean {
+    const { record } = this.need("recording the vault");
     if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
     const { vault: was, ...rest } = this.config();
     if (was === vault) return false;
-    mkdirSync(this.record, { recursive: true });
-    writeFileSync(join(this.record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), vault }, "config"), null, 2)}\n`);
+    mkdirSync(record, { recursive: true });
+    writeFileSync(join(record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), vault }, "config"), null, 2)}\n`);
     return true;
   }
 
@@ -363,45 +444,39 @@ export class Store {
     if (!this.isInitialised()) throw new NotSetUp();
   }
 
-  /**
-   * Write a file that must never change (D34). Fails if it exists. It's written whole to a temporary file first, then
-   * linked into place, which fails if the name is taken: so another process never reads it half-written. An exclusive
-   * create alone made the file visible empty for a moment, which the server's four-writer test caught once the gate
-   * made filing read more of the layer. Where hard links aren't supported, it falls back to the exclusive create.
-   */
-  private writeOnce(path: string, text: string): void {
+  /** Write a file that must never change (D34), through the storage's `create`: it fails if the file exists. */
+  private writeOnce(rel: string, text: string): void {
     if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
-    mkdirSync(dirname(path), { recursive: true });
-    const tmp = `${path}.${randomSuffix()}.tmp`;
-    writeFileSync(tmp, text, { flag: "wx" });
-    try {
-      linkSync(tmp, path);
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code;
-      if (code !== "EPERM" && code !== "ENOTSUP" && code !== "EXDEV" && code !== "ENOSYS") throw e;
-      writeFileSync(path, text, { flag: "wx" });
-    } finally {
-      rmSync(tmp, { force: true });
-    }
+    this.storage.create(rel, encode(text));
   }
 
-  /** Copy a live file into this worktree's record, unless it's already there (D37). */
+  /**
+   * Copy a live file into this worktree's record, unless it's already there (D37). A store with no record has nowhere
+   * to copy it: the record is your machine's, and it pulls what the relay holds (P15).
+   */
   private toRecord(rel: string): boolean {
-    const target = join(this.record, rel);
+    if (!this.local) return false;
+    const target = join(this.local.record, ...rel.split("/"));
     if (existsSync(target)) return false;
+    const bytes = this.storage.read(rel);
+    if (!bytes) throw new Error(`${rel} isn't in the live layer, so it can't be copied into the record`);
     mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(join(this.live, rel), target);
+    writeFileSync(target, bytes);
     return true;
   }
 
-  private list(kind: string, sub = ""): string[] {
-    const dir = join(this.live, kind, sub);
+  /** A folder's names, sorted. In a view, each folder is listed once. */
+  private list(dir: string): string[] {
     const cached = this.session?.lists.get(dir);
     if (cached) return cached;
-    // A temporary file is a write in progress (`writeOnce`, presence, waiting markers): never listed.
-    const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.endsWith(".tmp")).sort() : [];
+    const names = this.storage.list(dir).sort();
     this.session?.lists.set(dir, names);
     return names;
+  }
+
+  /** A card ID no card has yet (D51). */
+  private freeCardId(): string {
+    return newId("B", (candidate) => this.storage.list(`cards/${candidate}`).length > 0);
   }
 
   /** One consistent read of the live layer, while `view` runs. */
@@ -438,23 +513,35 @@ export class Store {
     }
   }
 
-  /** Read and parse one live file: throws, unless a view is reporting problems instead. */
-  private read<T>(path: string, parseText: (text: string) => T): T | undefined {
-    if (this.session?.files.has(path)) return this.session.files.get(path) as T | undefined;
+  /**
+   * Read and parse one live file, or undefined if there's none: a file that can't be parsed throws, unless a view is
+   * reporting problems instead.
+   */
+  private read<T>(rel: string, parseText: (text: string) => T): T | undefined {
+    if (this.session?.files.has(rel)) return this.session.files.get(rel) as T | undefined;
     let value: T | undefined;
     try {
-      value = parseText(readFileSync(path, "utf8"));
+      const bytes = this.storage.read(rel);
+      value = bytes === undefined ? undefined : parseText(decode(bytes));
     } catch (e) {
       if (!this.session?.report) throw e;
-      this.session.report(relative(this.live, path), e instanceof Error ? e.message : String(e));
+      this.session.report(rel, e instanceof Error ? e.message : String(e));
     }
-    this.session?.files.set(path, value);
+    this.session?.files.set(rel, value);
     return value;
   }
 
   /** A file's bytes as written, from the layer: a signature covers these, never the parsed fields (P15). */
   bytes(rel: string): Buffer {
-    return readFileSync(join(this.live, rel));
+    const bytes = this.storage.read(rel);
+    if (!bytes) throw Object.assign(new Error(`${rel} isn't in the live layer`), { code: "ENOENT" });
+    return asBuffer(bytes);
+  }
+
+  /** A file's text, read afresh, or undefined if there's none. */
+  private text(rel: string): string | undefined {
+    const bytes = this.storage.read(rel);
+    return bytes && decode(bytes);
   }
 
   // ---------------------------------------------------------------- the hosted service's proof (M9a: D138, D139, D142, D158–D160, D163)
@@ -462,7 +549,7 @@ export class Store {
   /** CI's pinned keys, read once: from the options, or from CI's settings. A pin that can't be read throws (`BadTrust`). */
   private pinnedRoot(): TrustRoot | undefined {
     if (this.pinCache) return this.pinCache.value;
-    const value = this.trustOpts.pinned !== undefined ? (this.trustOpts.pinned ?? undefined) : pinnedTrust();
+    const value = this.options.trust.pinned !== undefined ? (this.options.trust.pinned ?? undefined) : pinnedTrust();
     this.pinCache = { value };
     return value;
   }
@@ -473,7 +560,7 @@ export class Store {
     const out: TrustFiles = { service: [], revoked: [], passkeys: [] };
     for (const f of this.list("trust").filter((n) => n.endsWith(".json"))) {
       const rel = `trust/${f}`;
-      const t = this.read(join(this.live, rel), (text) => readTrustFile(JSON.parse(text), rel));
+      const t = this.read(rel, (text) => readTrustFile(JSON.parse(text), rel));
       if (!t) continue;
       if (t.type === "service-key") out.service.push({ file: rel, key: t });
       else if (t.type === "service-key-revocation") out.revoked.push({ file: rel, key: t });
@@ -507,9 +594,9 @@ export class Store {
 
   /** Whether a file has its signature, by a key in `root` that was valid at `at` (D160). */
   private signedBy(rel: string, at: string, root: Pick<TrustRoot, "service" | "revoked">): Judgement & { key?: ServiceKey } {
-    const sig = join(this.live, `${rel}.sig`);
-    if (!existsSync(sig)) return doesnt("it has no signature, so the service didn't write it (D138)");
-    const r = checkSigned(root, this.bytes(rel), readFileSync(sig, "utf8"), at, rel);
+    const sig = this.text(`${rel}.sig`);
+    if (sig === undefined) return doesnt("it has no signature, so the service didn't write it (D138)");
+    const r = checkSigned(root, this.bytes(rel), sig, at, rel);
     return "problem" in r ? doesnt(r.problem) : { ok: true, key: r.key };
   }
 
@@ -567,11 +654,11 @@ export class Store {
       if (a !== `${r.id}.md`) return elsewhere(`it's ${r.id}`);
       claim = { at: r.created, account: r.account, project: r.project };
     } else if (dir === "topics" && a?.endsWith(".json")) {
-      const t = this.read(join(this.live, rel), (x) => readAs("topic-alias", TopicAlias, JSON.parse(x), rel));
+      const t = this.read(rel, (x) => readAs("topic-alias", TopicAlias, JSON.parse(x), rel));
       if (!t) return doesnt("it can't be read");
       claim = { at: t.at, account: t.account, project: t.project };
     } else if (dir === "cards" && b && RELAY_GATE.test(b)) {
-      const g = this.read(join(this.live, rel), (t) => readAs("gate", GateRecord, JSON.parse(t), rel));
+      const g = this.read(rel, (t) => readAs("gate", GateRecord, JSON.parse(t), rel));
       if (!g) return doesnt("it can't be read");
       if (g.by !== "relay") return doesnt("it's named for the relay, but says it ran elsewhere");
       if (g.card !== a || b !== `gate-r${g.revision}-relay.json`) return elsewhere(`it gated ${g.card} r${g.revision}`);
@@ -597,20 +684,22 @@ export class Store {
       const { card, revision, digest } = claim.answers;
       if (!digest) return doesnt("it doesn't name the digest of the card it answers, so what was answered can't be checked (B-f571v)");
       const cardRel = `cards/${card}/r${revision}.md`;
-      if (!existsSync(join(this.live, cardRel))) return doesnt(`${card} r${revision} isn't here, so what was answered can't be checked`);
-      if (createHash("sha256").update(this.bytes(cardRel)).digest("hex") !== digest) return doesnt(`${card} r${revision} has changed since it was answered: it isn't the text the answer names (B-f571v)`);
+      const answered = this.storage.read(cardRel);
+      if (!answered) return doesnt(`${card} r${revision} isn't here, so what was answered can't be checked`);
+      if (createHash("sha256").update(answered).digest("hex") !== digest) return doesnt(`${card} r${revision} has changed since it was answered: it isn't the text the answer names (B-f571v)`);
     }
     if (!claim.proof) return COUNTS;
     const proofRel = proofPath(rel);
-    if (!existsSync(join(this.live, proofRel))) return doesnt(`${claim.proof}, and has no passkey proof`);
+    const proofText = this.text(proofRel);
+    if (proofText === undefined) return doesnt(`${claim.proof}, and has no passkey proof`);
     let proof: PasskeyProof;
     try {
-      proof = readAs("passkey-proof", PasskeyProof, JSON.parse(readFileSync(join(this.live, proofRel), "utf8")), proofRel);
+      proof = readAs("passkey-proof", PasskeyProof, JSON.parse(proofText), proofRel);
     } catch (e) {
       if (e instanceof NewerFormat) throw e;
       return doesnt(`its passkey proof can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`);
     }
-    if (proof.file !== basename(rel)) return doesnt(`its passkey proof is for ${proof.file}`);
+    if (proof.file !== rel.slice(rel.lastIndexOf("/") + 1)) return doesnt(`its passkey proof is for ${proof.file}`);
     if (!claim.account) return doesnt(`${claim.proof}, but names no account to check its passkey against`);
     const key = h.root.passkeys.find((k) => k.account === claim.account && k.credential === proof.credential);
     if (!key) return doesnt(`${claim.proof}, and its proof was made with a passkey that isn't trusted for account ${claim.account} (D159)`);
@@ -678,7 +767,7 @@ export class Store {
       ...this.list("rules").filter((f) => RULE_FILE.test(f)).map((f) => `rules/${f}`),
       ...this.list("topics").filter((f) => f.startsWith("alias-") && f.endsWith(".json")).map((f) => `topics/${f}`),
       ...this.list("preferences").filter((f) => PREFERENCE_FILE.test(f)).map((f) => `preferences/${f}`),
-      ...this.cardIds().flatMap((id) => this.list("cards", id).filter((f) => RELAY_GATE.test(f)).map((f) => `cards/${id}/${f}`)),
+      ...this.cardIds().flatMap((id) => this.list(`cards/${id}`).filter((f) => RELAY_GATE.test(f)).map((f) => `cards/${id}/${f}`)),
     ];
     const out = rels.flatMap((file) => {
       const j = this.judge(file);
@@ -700,9 +789,9 @@ export class Store {
   }
 
   revisions(id: string): Card[] {
-    return this.list("cards", id)
+    return this.list(`cards/${id}`)
       .filter((f) => /^r\d+\.md$/.test(f))
-      .flatMap((f) => this.read(join(this.live, "cards", id, f), (text) => {
+      .flatMap((f) => this.read(`cards/${id}/${f}`, (text) => {
         const { meta, body } = parseDoc(text);
         return { meta: readAs("card", CardMeta, meta, `cards/${id}/${f}`), body };
       }) ?? [])
@@ -793,9 +882,9 @@ export class Store {
 
   /** A card's gate records, every revision's and every writer's; in a hosted repo, the relay's only once signed (D158). */
   gateRecords(id: string): GateRecord[] {
-    return this.list("cards", id)
+    return this.list(`cards/${id}`)
       .filter((f) => /^gate-r\d+-(cli|relay)\.json$/.test(f) && (!RELAY_GATE.test(f) || this.judge(`cards/${id}/${f}`).ok))
-      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => readAs("gate", GateRecord, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
+      .flatMap((f) => this.read(`cards/${id}/${f}`, (t) => readAs("gate", GateRecord, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
   }
 
   /**
@@ -823,8 +912,8 @@ export class Store {
   private writeGated(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string, source: GateSource): { card: Card; gate: GateRecord; hardBecause?: string[]; warnings: string[] } {
     const gate = this.view(() => this.runGate(id, revision, draft, source));
     const card = this.writeRevision(id, revision, { ...draft, level: gate.level }, body, agent);
-    const rel = join("cards", id, `gate-r${revision}-cli.json`);
-    this.writeOnce(join(this.live, rel), `${JSON.stringify(gate.record, null, 2)}\n`);
+    const rel = `cards/${id}/gate-r${revision}-cli.json`;
+    this.writeOnce(rel, `${JSON.stringify(gate.record, null, 2)}\n`);
     this.toRecord(rel);
     const hard = this.hardBecause(draft, gate.level);
     return { card, gate: gate.record, ...(hard ? { hardBecause: hard } : {}), warnings: gate.warnings };
@@ -869,7 +958,7 @@ export class Store {
       return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
     });
     if (matches.length > 0) throw new PossibleDuplicate(matches);
-    const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
+    const id = this.freeCardId();
     // Baesian's own cards always reach you; the store files them under its name (conflict cards, D35).
     const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : "agent");
     return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
@@ -885,12 +974,12 @@ export class Store {
       try {
         this.createDeck({ id: deck.id, title: deck.title }, deck.brief);
       } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        if (!alreadyExists(e)) throw e;
       }
     }
     const { convention, pref_row, pref_from, pref_to, ...rest } = draft;
     const prep = this.view(() => this.prepare({ ...rest, deck: deck.id }, body));
-    const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
+    const id = this.freeCardId();
     const own = { ...(convention ? { convention } : {}), ...(pref_row ? { pref_row, pref_from, pref_to } : {}) };
     return this.writeGated(id, 1, { ...prep.draft, ...own }, body, BAESIAN, "baesian").card;
   }
@@ -996,7 +1085,7 @@ export class Store {
       crux_alternative: "If it depends",
       depends_on: [id],
     });
-    const newCard = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
+    const newCard = this.freeCardId();
     // A rule draft is Baesian's own card, filed by an agent: the gate always shows it.
     return this.writeGated(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts.agent, "baesian").card;
   }
@@ -1009,14 +1098,14 @@ export class Store {
     if (card.meta.rule === undefined || (v.response !== "accept" && v.response !== "correction")) return;
     const from = card.meta.depends_on[0];
     if (from && this.rules().some((r) => r.meta.from_card === from)) return;
-    const ruleId = newId("R", (candidate) => existsSync(join(this.live, "rules", `${candidate}.md`)));
+    const ruleId = newId("R", (candidate) => this.storage.read(`rules/${candidate}.md`) !== undefined);
     const meta = parse(
       RuleMeta,
       { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, ...(v.account ? { account: v.account } : {}), created: v.at },
       "the rule",
     );
-    const rel = join("rules", `${ruleId}.md`);
-    this.writeOnce(join(this.live, rel), renderDoc(meta, `${v.response === "correction" ? v.choice : card.meta.rule}\n`));
+    const rel = `rules/${ruleId}.md`;
+    this.writeOnce(rel, renderDoc(meta, `${v.response === "correction" ? v.choice : card.meta.rule}\n`));
     this.toRecord(rel);
   }
 
@@ -1033,15 +1122,15 @@ export class Store {
         revision,
         deck,
         source_agent: agent,
-        source_branch: this.repo.branch,
+        source_branch: this.branch,
         created: now(),
       },
       "the card",
     );
-    const rel = join("cards", id, `r${revision}.md`);
-    this.writeOnce(join(this.live, rel), renderDoc(meta, body));
+    const rel = `cards/${id}/r${revision}.md`;
+    this.writeOnce(rel, renderDoc(meta, body));
     this.toRecord(rel);
-    this.toRecord(join("decks", `${deck}.md`));
+    this.toRecord(`decks/${deck}.md`);
     return { meta, body };
   }
 
@@ -1054,10 +1143,10 @@ export class Store {
     // this guards against mistakes, not against an agent set on it.
     const mine = card.meta.source_agent === by || this.attachments().some((a) => a.card === id && a.agent === by);
     if (!mine) throw new NotAllowed(`${id} was filed by ${byLine(cardAuthor(card.meta))}: only the agent that filed it, or one attached to it, may withdraw it`);
-    if (existsSync(join(this.live, "cards", id, "withdrawn.json"))) throw new NotAllowed(`${id} is already withdrawn`);
+    if (this.storage.read(`cards/${id}/withdrawn.json`) !== undefined) throw new NotAllowed(`${id} is already withdrawn`);
     const w = parse(Withdrawal, { type: "withdrawal", format: newestFormat("withdrawal"), card: id, reason, by, at: now() }, "the withdrawal");
-    const rel = join("cards", id, "withdrawn.json");
-    this.writeOnce(join(this.live, rel), `${JSON.stringify(w, null, 2)}\n`);
+    const rel = `cards/${id}/withdrawn.json`;
+    this.writeOnce(rel, `${JSON.stringify(w, null, 2)}\n`);
     this.toRecord(rel);
     return w;
   }
@@ -1069,26 +1158,24 @@ export class Store {
     if (!card) throw new NoCard(id);
     const a = parse(
       Attachment,
-      { type: "attachment", format: newestFormat("attachment"), card: id, agent, branch: this.repo.branch, at: now() },
+      { type: "attachment", format: newestFormat("attachment"), card: id, agent, branch: this.branch, at: now() },
       "the attachment",
     );
-    this.writeOnce(join(this.live, "attachments", `${id}-${randomSuffix()}.json`), `${JSON.stringify(a, null, 2)}\n`);
-    for (const r of this.revisions(id)) this.toRecord(join("cards", id, `r${r.meta.revision}.md`));
-    this.toRecord(join("decks", `${card.meta.deck}.md`));
+    this.writeOnce(`attachments/${id}-${randomSuffix()}.json`, `${JSON.stringify(a, null, 2)}\n`);
+    for (const r of this.revisions(id)) this.toRecord(`cards/${id}/r${r.meta.revision}.md`);
+    this.toRecord(`decks/${card.meta.deck}.md`);
     return a;
   }
 
   /** The card's withdrawal by its agent, if it has one. */
   withdrawal(id: string): Withdrawal | undefined {
-    const path = join(this.live, "cards", id, "withdrawn.json");
-    if (!existsSync(path)) return undefined;
-    return this.read(path, (t) => readAs("withdrawal", Withdrawal, JSON.parse(t), `cards/${id}/withdrawn.json`));
+    return this.read(`cards/${id}/withdrawn.json`, (t) => readAs("withdrawal", Withdrawal, JSON.parse(t), `cards/${id}/withdrawn.json`));
   }
 
   attachments(id?: string): Attachment[] {
     return this.list("attachments")
       .filter((f) => !id || f.startsWith(`${id}-`))
-      .flatMap((f) => this.read(join(this.live, "attachments", f), (t) => readAs("attachment", Attachment, JSON.parse(t), `attachments/${f}`)) ?? []);
+      .flatMap((f) => this.read(`attachments/${f}`, (t) => readAs("attachment", Attachment, JSON.parse(t), `attachments/${f}`)) ?? []);
   }
 
   /** How many agents are waiting on a card: its filer plus every attachment (D36). */
@@ -1106,16 +1193,16 @@ export class Store {
       { type: "fallback", format: newestFormat("fallback"), card: id, revision: card.meta.revision, reason, agent, at: now() },
       "the fallback",
     );
-    const rel = join("cards", id, `fallback-${randomSuffix()}.json`);
-    this.writeOnce(join(this.live, rel), `${JSON.stringify(f, null, 2)}\n`);
+    const rel = `cards/${id}/fallback-${randomSuffix()}.json`;
+    this.writeOnce(rel, `${JSON.stringify(f, null, 2)}\n`);
     this.toRecord(rel);
     return f;
   }
 
   fallbacks(id: string): Fallback[] {
-    return this.list("cards", id)
+    return this.list(`cards/${id}`)
       .filter((f) => f.startsWith("fallback-"))
-      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => readAs("fallback", Fallback, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
+      .flatMap((f) => this.read(`cards/${id}/${f}`, (t) => readAs("fallback", Fallback, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
   }
 
   // ---------------------------------------------------------------- ledger and rules
@@ -1126,17 +1213,17 @@ export class Store {
     if (!this.card(id)) throw new NoCard(id);
     const meta = parse(
       LedgerMeta,
-      { type: "ledger", format: newestFormat("ledger"), card: id, branch: entry.branch ?? this.repo.branch, commit: entry.commit, at: now() },
+      { type: "ledger", format: newestFormat("ledger"), card: id, branch: entry.branch ?? this.branch, commit: entry.commit, at: now() },
       "the ledger entry",
     );
-    this.writeOnce(join(this.live, "ledger", `${id}-${randomSuffix()}.md`), renderDoc(meta, body));
+    this.writeOnce(`ledger/${id}-${randomSuffix()}.md`, renderDoc(meta, body));
     return id;
   }
 
   ledger(id: string): { meta: LedgerMeta; body: string }[] {
     return this.list("ledger")
       .filter((f) => f.startsWith(`${id}-`))
-      .flatMap((f) => this.read(join(this.live, "ledger", f), (text) => {
+      .flatMap((f) => this.read(`ledger/${f}`, (text) => {
         const { meta, body } = parseDoc(text);
         return { meta: readAs("ledger", LedgerMeta, meta, `ledger/${f}`), body };
       }) ?? [])
@@ -1159,46 +1246,40 @@ export class Store {
 
   /** One rule file, read whether or not it counts. A view caches it by path, so it's read the same way everywhere. */
   private ruleFile(name: string): { meta: RuleMeta; body: string } | undefined {
-    return this.read(join(this.live, "rules", name), (text) => {
+    return this.read(`rules/${name}`, (text) => {
       const { meta, body } = parseDoc(text);
       return { meta: readAs("rule", RuleMeta, meta, `rules/${name}`), body };
     });
   }
 
   private retirementFile(name: string): RuleRetirement | undefined {
-    return this.read(join(this.live, "rules", name), (t) => readAs("rule-retirement", RuleRetirement, JSON.parse(t), `rules/${name}`));
+    return this.read(`rules/${name}`, (t) => readAs("rule-retirement", RuleRetirement, JSON.parse(t), `rules/${name}`));
   }
 
   // ---------------------------------------------------------------- presence
 
   /** The client's last heartbeat, if it has ever run (D41). */
   presence(): Presence | undefined {
-    const path = join(this.live, "presence.json");
-    if (!existsSync(path)) return undefined;
     try {
-      return readAs("presence", Presence, JSON.parse(readFileSync(path, "utf8")), "presence.json");
+      const text = this.text("presence.json");
+      return text === undefined ? undefined : readAs("presence", Presence, JSON.parse(text), "presence.json");
     } catch {
       return undefined; // a half-written or foreign file, or one in a newer format (D157), means "unknown", never a crash
     }
   }
 
-  /** The client's heartbeat. Written to a temporary file and renamed, so readers never see half a file. */
+  /** The client's heartbeat, a mutable file replaced whole (`Storage.replace`), so readers never see half a file. */
   touchPresence(client: string, at: string = now()): Presence {
     this.requireInit();
     const p = parse(Presence, { type: "presence", format: newestFormat("presence"), client, at }, "presence");
-    const path = join(this.live, "presence.json");
-    const tmp = `${path}.${randomSuffix()}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(p)}\n`);
-    renameSync(tmp, path);
+    this.storage.replace("presence.json", encode(`${JSON.stringify(p)}\n`));
     return p;
   }
 
   // ---------------------------------------------------------------- decks
 
   deck(id: string): Deck | undefined {
-    const path = join(this.live, "decks", `${id}.md`);
-    if (!existsSync(path)) return undefined;
-    return this.read(path, (text) => {
+    return this.read(`decks/${id}.md`, (text) => {
       const { meta, body } = parseDoc(text);
       return { meta: readAs("deck", DeckMeta, meta, `decks/${id}.md`), body };
     });
@@ -1214,7 +1295,7 @@ export class Store {
   createDeck(input: { id: string; title: string; from?: string; context_notes?: string[] }, body: string): Deck {
     this.requireInit();
     // Only a document in the repo is named: a path outside it would show the machine's folders in the record (D105).
-    const from = input.from ? relative(this.repo.toplevel, input.from) : undefined;
+    const from = input.from ? relative(this.need("naming the document a deck came from").repo.toplevel, input.from) : undefined;
     const inRepo = from !== undefined && from !== "" && from !== ".." && !from.startsWith(`..${sep}`) && !isAbsolute(from);
     const meta = parse(
       DeckMeta,
@@ -1223,7 +1304,7 @@ export class Store {
         format: newestFormat("deck"),
         id: input.id,
         title: input.title,
-        branch: this.repo.branch,
+        branch: this.branch,
         ...(inRepo ? { from } : {}),
         context_notes: input.context_notes ?? [],
         created: now(),
@@ -1231,9 +1312,9 @@ export class Store {
       "the deck",
     );
     try {
-      this.writeOnce(join(this.live, "decks", `${meta.id}.md`), renderDoc(meta, body));
+      this.writeOnce(`decks/${meta.id}.md`, renderDoc(meta, body));
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      if (!alreadyExists(e)) throw e;
       throw Object.assign(new Error(`there's already a deck "${meta.id}"`), { code: "EEXIST" });
     }
     return { meta, body };
@@ -1241,7 +1322,7 @@ export class Store {
 
   /** The branch's default deck (D29), created on first use. */
   branchDeckId(): string {
-    return `branch-${slug(this.repo.branch)}`;
+    return `branch-${slug(this.branch)}`;
   }
 
   ensureBranchDeck(): string {
@@ -1249,13 +1330,13 @@ export class Store {
     if (!this.deck(id)) {
       try {
         this.createDeck(
-          { id, title: `Decisions on ${this.repo.branch}` },
-          `Decisions filed while working on the branch \`${this.repo.branch}\`.\n`,
+          { id, title: `Decisions on ${this.branch}` },
+          `Decisions filed while working on the branch \`${this.branch}\`.\n`,
         );
       } catch (e) {
         // Another agent on this branch created it at the same moment: the exclusive create lost the race,
         // and the deck it wanted exists. Found by the server's concurrency test.
-        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        if (!alreadyExists(e)) throw e;
       }
     }
     return id;
@@ -1275,7 +1356,7 @@ export class Store {
 
   /** One verdict file, by name, read whether or not it counts. */
   private verdictFile(name: string): Verdict | undefined {
-    return this.read(join(this.live, "verdicts", name), (t) => readAs("verdict", Verdict, JSON.parse(t), `verdicts/${name}`));
+    return this.read(`verdicts/${name}`, (t) => readAs("verdict", Verdict, JSON.parse(t), `verdicts/${name}`));
   }
 
   /** A card's verdict files, oldest first by name. In a view, every card's are sorted out once. */
@@ -1330,7 +1411,7 @@ export class Store {
       throw new ValidationError(`${card.meta.id} wasn't held back: "you should have asked me" is only for a card the gate held, or in shadow would have`);
     }
     const name = `${compactAt(v.at)}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
-    this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
+    this.writeOnce(`verdicts/${name}`, `${JSON.stringify(v, null, 2)}\n`);
     this.saveRule(card, v);
     this.retireRules(card, v);
     this.moveSlider(card, v);
@@ -1364,9 +1445,8 @@ export class Store {
 
   /** One preference file, read whether or not it counts. */
   private preferenceRaw(name: string): Preferences | undefined {
-    const path = join(this.live, "preferences", name);
-    if (!PREFERENCE_FILE.test(name) || !existsSync(path)) return undefined;
-    return this.read(path, (t) => readAs("preferences", Preferences, JSON.parse(t), `preferences/${name}`));
+    if (!PREFERENCE_FILE.test(name)) return undefined;
+    return this.read(`preferences/${name}`, (t) => readAs("preferences", Preferences, JSON.parse(t), `preferences/${name}`));
   }
 
   /**
@@ -1429,8 +1509,8 @@ export class Store {
       "the preferences",
     );
     const name = `${compactAt(at)}-${randomSuffix()}.json`;
-    const rel = join("preferences", name);
-    this.writeOnce(join(this.live, rel), `${JSON.stringify(file, null, 2)}\n`);
+    const rel = `preferences/${name}`;
+    this.writeOnce(rel, `${JSON.stringify(file, null, 2)}\n`);
     this.toRecord(rel);
     return { name, file };
   }
@@ -1449,8 +1529,8 @@ export class Store {
   private retireRules(card: Card, v: Verdict): void {
     for (const id of v.retire_rules ?? []) {
       const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, ...(v.account ? { account: v.account } : {}), at: v.at }, "the retirement");
-      const rel = join("rules", `${id}-retired.json`);
-      this.writeOnce(join(this.live, rel), `${JSON.stringify(r, null, 2)}\n`);
+      const rel = `rules/${id}-retired.json`;
+      this.writeOnce(rel, `${JSON.stringify(r, null, 2)}\n`);
       this.toRecord(rel);
     }
   }
@@ -1461,7 +1541,8 @@ export class Store {
   status(id: string, seen: Set<string> = new Set()): Status {
     const card = this.card(id);
     if (!card) throw new NoCard(id);
-    if (existsSync(join(this.live, "cards", id, "withdrawn.json"))) return "withdrawn";
+    // Listed, not read: in a view, the card's folder is listed once.
+    if (this.list(`cards/${id}`).includes("withdrawn.json")) return "withdrawn";
     seen.add(id);
     // Rejecting a parent withdraws the cards that depend on it (D14). `>=`, not `>`: timestamps have
     // millisecond resolution, and a rejection in the same millisecond as the filing still counts.
@@ -1598,7 +1679,7 @@ export class Store {
   /** The history's `Baesian-Card` trailers (B-9v5xj): searched once per view, and cached per process while the branches stay put. */
   private history(): History {
     if (this.session?.history) return this.session.history;
-    const history = readHistory(this.repo.toplevel);
+    const history = this.local ? readHistory(this.local.repo.toplevel) : NO_HISTORY;
     if (this.session) this.session.history = history;
     return history;
   }
@@ -1633,7 +1714,7 @@ export class Store {
   aliases(): TopicAlias[] {
     return this.list("topics")
       .filter((f) => f.startsWith("alias-") && f.endsWith(".json") && this.judge(`topics/${f}`).ok)
-      .flatMap((f) => this.read(join(this.live, "topics", f), (t) => readAs("topic-alias", TopicAlias, JSON.parse(t), `topics/${f}`)) ?? []);
+      .flatMap((f) => this.read(`topics/${f}`, (t) => readAs("topic-alias", TopicAlias, JSON.parse(t), `topics/${f}`)) ?? []);
   }
 
   /**
@@ -1646,8 +1727,8 @@ export class Store {
     if (source === target) throw new ValidationError(`"${from}" and "${to}" are already the same topic`);
     if (!this.topics().has(target)) throw new ValidationError(`no card uses the topic "${to}": merge into a topic that's in use`);
     const alias = parse(TopicAlias, { type: "topic-alias", format: newestFormat("topic-alias"), from: source, to: target, by, at: now() }, "the alias");
-    const rel = join("topics", `alias-${randomSuffix()}.json`);
-    this.writeOnce(join(this.live, rel), `${JSON.stringify(alias, null, 2)}\n`);
+    const rel = `topics/alias-${randomSuffix()}.json`;
+    this.writeOnce(rel, `${JSON.stringify(alias, null, 2)}\n`);
     this.toRecord(rel);
     return alias;
   }
@@ -1672,7 +1753,7 @@ export class Store {
   // ---------------------------------------------------------------- inbox
 
   /** Cards this branch filed or attached to. */
-  branchCards(branch: string = this.repo.branch): Card[] {
+  branchCards(branch: string = this.branch): Card[] {
     const attached = new Set(this.attachments().filter((a) => a.branch === branch).map((a) => a.card));
     return this.cards().filter((c) => c.meta.source_branch === branch || attached.has(c.meta.id));
   }
@@ -1724,25 +1805,25 @@ export class Store {
 
   /** The branch's cursor, or a session's own: `cursors/<branch>.json`, `cursors/<branch>/<session>.json`. */
   private cursorPath(session?: string): string {
-    const branch = slug(this.repo.branch);
-    return session ? join(this.live, "cursors", branch, `${slug(session)}.json`) : join(this.live, "cursors", `${branch}.json`);
+    const branch = slug(this.branch);
+    return session ? `cursors/${branch}/${slug(session)}.json` : `cursors/${branch}.json`;
   }
 
   private readCursor(): { at: string; delivered: string[] };
   private readCursor(session: string): { at: string; delivered: string[] } | undefined;
   private readCursor(session?: string): { at: string; delivered: string[] } | undefined {
-    const path = this.cursorPath(session);
-    if (!existsSync(path)) return session ? undefined : { at: "", delivered: [] };
-    const c = readAs("cursor", Cursor, JSON.parse(readFileSync(path, "utf8")), relative(this.live, path));
+    const rel = this.cursorPath(session);
+    const text = this.text(rel);
+    if (text === undefined) return session ? undefined : { at: "", delivered: [] };
+    const c = readAs("cursor", Cursor, JSON.parse(text), rel);
     return { at: c.at, delivered: c.delivered ?? [] };
   }
 
-  /** A cursor is mutable: it's rewritten in place, in the newest format (D156). */
+  /** A cursor is mutable: it's replaced whole (`Storage.replace`), in the newest format (D156). */
   private writeCursor(c: { at: string; delivered?: string[] }, session?: string): void {
-    const path = this.cursorPath(session);
+    const rel = this.cursorPath(session);
     const cursor = parse(Cursor, { type: "cursor", format: newestFormat("cursor"), at: c.at, ...(c.delivered?.length ? { delivered: c.delivered } : {}) }, "the cursor");
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(cursor)}\n`);
+    this.storage.replace(rel, encode(`${JSON.stringify(cursor)}\n`));
   }
 
   /** Every inbox item newer than `since`, delivered or not, oldest first. */
@@ -1787,30 +1868,28 @@ export class Store {
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
       .flatMap((f) => {
         try {
-          return [{ f, w: readAs("waiting", Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), `waiting/${f}`) }];
+          const text = this.text(`waiting/${f}`);
+          return text === undefined ? [] : [{ f, w: readAs("waiting", Waiting, JSON.parse(text), `waiting/${f}`) }];
         } catch {
           return [];
         }
       })
       .find(({ w }) => w.agent === agent && w.revision === card.meta.revision && atMs - Date.parse(w.at) <= WAITING_STALE_MS);
-    const path = join(this.live, "waiting", mine ? mine.f : `${id}-${randomSuffix()}.json`);
+    const rel = `waiting/${mine ? mine.f : `${id}-${randomSuffix()}.json`}`;
     const since = mine ? mine.w.since : at;
-    mkdirSync(dirname(path), { recursive: true });
     const write = (beat: string) => {
       const w = parse(Waiting, { type: "waiting", format: newestFormat("waiting"), card: id, revision: card.meta.revision, agent, since, at: beat }, "the waiting marker");
-      const tmp = `${path}.${randomSuffix()}.tmp`;
-      writeFileSync(tmp, `${JSON.stringify(w)}\n`);
-      renameSync(tmp, path);
+      this.storage.replace(rel, encode(`${JSON.stringify(w)}\n`));
     };
     write(at);
-    return { since, refresh: (beat = now()) => write(beat), stop: () => rmSync(path, { force: true }) };
+    return { since, refresh: (beat = now()) => write(beat), stop: () => this.storage.remove(rel) };
   }
 
   /** The agents waiting on a card, and whether each has gone quiet: stopped waiting without returning (D90). */
   waitingOn(id: string, nowMs: number = Date.now()): { marker: Waiting; stale: boolean }[] {
     return this.list("waiting")
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
-      .flatMap((f) => this.read(join(this.live, "waiting", f), (t) => readAs("waiting", Waiting, JSON.parse(t), `waiting/${f}`)) ?? [])
+      .flatMap((f) => this.read(`waiting/${f}`, (t) => readAs("waiting", Waiting, JSON.parse(t), `waiting/${f}`)) ?? [])
       .map((marker) => ({ marker, stale: nowMs - Date.parse(marker.at) > WAITING_STALE_MS }));
   }
 
@@ -1823,7 +1902,7 @@ export class Store {
    */
   syncRecord(): string[] {
     this.requireInit();
-    const recordCards = join(this.record, "cards");
+    const recordCards = join(this.need("syncing the record").record, "cards");
     const held = existsSync(recordCards) ? readdirSync(recordCards) : [];
     const added: string[] = [];
     const copy = (rel: string) => {
@@ -1834,7 +1913,7 @@ export class Store {
     const hosted = this.hosted() !== undefined;
     const signed = (rel: string) => {
       if (hosted && !this.judge(rel).ok) return;
-      for (const extra of [`${rel}.sig`, proofPath(rel)]) if (extra !== rel && existsSync(join(this.live, extra))) copy(extra);
+      for (const extra of [`${rel}.sig`, proofPath(rel)]) if (extra !== rel && this.storage.read(extra) !== undefined) copy(extra);
       copy(rel);
     };
     // The service's keys, revocations and passkey keys: every branch's record keeps the copy that checks on your machine
@@ -1848,12 +1927,12 @@ export class Store {
     }
     for (const id of held) {
       // Everything in the card's directory: revisions, gate records, a withdrawal, fallbacks; the relay's gate record as signed.
-      for (const f of this.list("cards", id)) {
+      for (const f of this.list(`cards/${id}`)) {
         if (RELAY_GATE.test(f)) signed(`cards/${id}/${f}`);
-        else if (!isCompanion(f)) copy(join("cards", id, f));
+        else if (!isCompanion(f)) copy(`cards/${id}/${f}`);
       }
       for (const f of this.list("verdicts").filter((name) => verdictFileCard(name) === id)) signed(`verdicts/${f}`);
-      for (const f of this.list("ledger").filter((name) => name.startsWith(`${id}-`))) copy(join("ledger", f));
+      for (const f of this.list("ledger").filter((name) => name.startsWith(`${id}-`))) copy(`ledger/${f}`);
     }
     return added;
   }

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PossibleDuplicate, ValidationError } from "../src/store.js";
-import { BODY, REVIEWER, cleanup, draft, repo, worktree } from "./helpers.js";
+import { BODY, LAYERS, REVIEWER, cleanup, draft, repo, worktree } from "./helpers.js";
 
 afterEach(cleanup);
 
@@ -34,18 +34,34 @@ describe("layers", () => {
   });
 });
 
-describe("filing", () => {
+describe("filing into a repo", () => {
   it("files a card into both layers, in the branch's default deck", () => {
+    const { store } = repo();
+    const { card } = store.fileCard(draft(), BODY, AGENT);
+    const rel = join("cards", card.meta.id, "r1.md");
+    expect(existsSync(join(store.live, rel))).toBe(true);
+    expect(existsSync(join(store.record, rel))).toBe(true);
+    expect(existsSync(join(store.record, "decks", "branch-main.md"))).toBe(true);
+  });
+
+  it("records the document a deck came from only when it's in the repo, so the record shows no machine's folders (D105)", () => {
+    const { store, dir } = repo();
+    expect(store.createDeck({ id: "plan", title: "The plan", from: join(dir, "docs", "plan.md") }, "").meta.from).toBe("docs/plan.md");
+    expect(store.createDeck({ id: "scratch", title: "A scratch plan", from: join(dir, "..", "elsewhere", "plan.md") }, "").meta).not.toHaveProperty("from");
+    expect(store.createDeck({ id: "tmp", title: "A temp plan", from: "/tmp/plan.md" }, "").meta).not.toHaveProperty("from");
+  });
+});
+
+// The store's behaviour holds over both kinds of storage (B-0ag7h): a repo's folder, and memory with no repo, as the relay's.
+describe.each(LAYERS)("filing, over %s", (_, repo) => {
+  it("files a card in the branch's default deck", () => {
     const { store } = repo();
     const { card } = store.fileCard(draft(), BODY, AGENT);
     expect(card.meta.revision).toBe(1);
     expect(card.meta.deck).toBe("branch-main");
     expect(card.meta.source_branch).toBe("main");
     expect(card.meta.level).toBe("provisional");
-    const rel = join("cards", card.meta.id, "r1.md");
-    expect(existsSync(join(store.live, rel))).toBe(true);
-    expect(existsSync(join(store.record, rel))).toBe(true);
-    expect(existsSync(join(store.record, "decks", "branch-main.md"))).toBe(true);
+    expect(store.deck("branch-main")?.meta.branch).toBe("main");
     expect(store.status(card.meta.id)).toBe("open");
   });
 
@@ -138,16 +154,9 @@ describe("filing", () => {
     store.createDeck({ id: "storage-layer", title: "Storage" }, "## Goal\nPersist runs.\n");
     expect(store.fileCard(draft({ deck: "storage-layer" }), BODY, AGENT).card.meta.deck).toBe("storage-layer");
   });
-
-  it("records the document a deck came from only when it's in the repo, so the record shows no machine's folders (D105)", () => {
-    const { store, dir } = repo();
-    expect(store.createDeck({ id: "plan", title: "The plan", from: join(dir, "docs", "plan.md") }, "").meta.from).toBe("docs/plan.md");
-    expect(store.createDeck({ id: "scratch", title: "A scratch plan", from: join(dir, "..", "elsewhere", "plan.md") }, "").meta).not.toHaveProperty("from");
-    expect(store.createDeck({ id: "tmp", title: "A temp plan", from: "/tmp/plan.md" }, "").meta).not.toHaveProperty("from");
-  });
 });
 
-describe("the filing check (D36, D38)", () => {
+describe.each(LAYERS)("the filing check (D36, D38), over %s", (_, repo) => {
   it("stops a second card on the same topic", () => {
     const { store } = repo();
     const first = store.fileCard(draft(), BODY, AGENT).card;
@@ -189,9 +198,9 @@ describe("the filing check (D36, D38)", () => {
     store.fileCard(draft({ title: "Timestamp format?", topic: "time/format" }), BODY, AGENT);
     const near = store.fileCard(draft({ title: "Clock source?", topic: "time/formats" }), BODY, { ...AGENT, force: true });
     expect(near.nearTopics).toEqual(["time/format"]);
-    writeFileSync(
-      join(store.live, "topics", "alias-aaaaa.json"),
-      JSON.stringify({ type: "topic-alias", from: "timestamps/format", to: "time/format", by: "gus", at: new Date().toISOString() }),
+    store.storage.create(
+      "topics/alias-aaaaa.json",
+      Buffer.from(JSON.stringify({ type: "topic-alias", from: "timestamps/format", to: "time/format", by: "gus", at: new Date().toISOString() })),
     );
     expect(store.canonicalTopic("timestamps/format")).toBe("time/format");
     expect(() => store.fileCard(draft({ title: "Epoch ints?", topic: "timestamps/format" }), BODY, AGENT)).toThrow(
@@ -206,7 +215,8 @@ describe("the filing check (D36, D38)", () => {
     const alias = store.mergeTopics("time/formats", "time/format", "gus");
     expect(alias).toMatchObject({ from: "time/formats", to: "time/format", by: "gus" });
     expect(store.canonicalTopic("time/formats")).toBe("time/format");
-    expect(readdirSync(join(store.record, "topics")).filter((f) => f.startsWith("alias-"))).toHaveLength(1);
+    expect(store.storage.list("topics").filter((f) => f.startsWith("alias-"))).toHaveLength(1);
+    if (store.hasRepo) expect(readdirSync(join(store.record, "topics")).filter((f) => f.startsWith("alias-"))).toHaveLength(1);
     // Merging again, or into a topic nobody uses, is refused.
     expect(() => store.mergeTopics("time/formats", "time/format", "gus")).toThrow(/already the same topic/);
     expect(() => store.mergeTopics("time/format", "clocks/source", "gus")).toThrow(/no card uses the topic "clocks\/source"/);
@@ -222,15 +232,19 @@ describe("the filing check (D36, D38)", () => {
   });
 });
 
-describe("filing at the same moment as another agent", () => {
+describe.each(LAYERS)("filing at the same moment as another agent, over %s", (_, repo) => {
   it("doesn't fail when another agent creates the branch deck first", () => {
     const { store } = repo();
     store.fileCard(draft(), BODY, AGENT); // the deck exists now
     // This agent looked before the other one wrote it, so it tries to create the deck too.
     vi.spyOn(store, "deck").mockReturnValueOnce(undefined);
     expect(() => store.fileCard(draft({ title: "Another store", topic: "storage/other" }), BODY, AGENT)).not.toThrow();
+    // A second write of the same file still fails.
+    expect(() => store.createDeck({ id: store.branchDeckId(), title: "Again" }, "")).toThrow(/already a deck/);
   });
+});
 
+describe("filing at the same moment as another agent, in a folder", () => {
   it("never shows another agent a file half-written: each is linked into place whole, and a write in progress isn't listed", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
@@ -246,7 +260,7 @@ describe("filing at the same moment as another agent", () => {
   });
 });
 
-describe("verdicts", () => {
+describe.each(LAYERS)("verdicts, over %s", (_, repo) => {
   it("returns a card on \"I need to see it run\" (D85)", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
@@ -271,7 +285,7 @@ describe("verdicts", () => {
     const first = store.addVerdict({ card: b, revision: 1, response: "question", comment: "Why there?", ...REVIEWER, at: "2026-11-01T09:30:12.345Z" });
     const second = store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER, at: "2026-11-01T09:31:00.000Z" });
     const third = store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER, at: "2026-11-01T09:32:00.000Z" });
-    const names = readdirSync(join(store.live, "verdicts")).sort();
+    const names = store.storage.list("verdicts").sort();
     expect(names.map((n) => n.slice(0, 20))).toEqual(["20261101T093012.345Z", "20261101T093100.000Z", "20261101T093200.000Z"]);
     expect(names[0]).toMatch(new RegExp(`^20261101T093012\\.345Z-${b}-r1-[0-9a-z]+\\.json$`));
     // Each card still finds its own, whatever the order of the names.
@@ -280,7 +294,7 @@ describe("verdicts", () => {
   });
 });
 
-describe("cards don't record the folder they were filed from (D105)", () => {
+describe.each(LAYERS)("cards don't record the folder they were filed from (D105), over %s", (_, repo) => {
   it("leaves the path out of the record, and refuses a draft that carries one", () => {
     const { store } = repo();
     const { card } = store.fileCard(draft(), BODY, AGENT);
@@ -290,7 +304,7 @@ describe("cards don't record the folder they were filed from (D105)", () => {
   });
 });
 
-describe("status (computed, never stored)", () => {
+describe.each(LAYERS)("status (computed, never stored), over %s", (_, repo) => {
   it("resolves on accept, an alternative or a correction", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
@@ -420,7 +434,7 @@ describe("the record (D37)", () => {
   });
 });
 
-describe("reading through a view", () => {
+describe.each(LAYERS)("reading through a view, over %s", (_, repo) => {
   it("gives the statuses reading afresh does, and the next view sees what changed in this one", () => {
     const { store } = repo();
     const ids = [0, 1, 2].map((i) => store.fileCard(draft({ title: `Card ${i}`, question: `Question ${i}?`, topic: `area${i}/x` }), BODY, { agent: "a", force: true }).card.meta.id);
@@ -440,7 +454,7 @@ describe("reading through a view", () => {
   it("stays loud without a report: a bad file throws, as the CLI needs", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, { agent: "a" }).card.meta.id;
-    writeFileSync(join(store.live, "cards", id, "r1.md"), "---\nnot: a card\n---\n");
+    store.storage.replace(`cards/${id}/r1.md`, Buffer.from("---\nnot: a card\n---\n"));
     expect(() => store.view(() => store.cards())).toThrow(/is not valid/);
     const skipped: string[] = [];
     expect(store.view(() => store.cards(), (path) => skipped.push(path))).toEqual([]);

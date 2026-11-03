@@ -6,7 +6,7 @@ import { AGENTS_BLOCK } from "../src/agents.js";
 import { main } from "../src/cli.js";
 import { parseDoc } from "../src/frontmatter.js";
 import { openRepo } from "../src/git.js";
-import { snapshot } from "../src/server.js";
+import { serverState } from "../src/server.js";
 import { Store } from "../src/store.js";
 import { verify } from "../src/verify.js";
 import { DECISION_LOG_SECTION, cleanName, decisionNoteName, enableBases, insertLogQuery, listNotes, parseWikilink, resolveWikilink, writeNotes } from "../src/vault.js";
@@ -621,7 +621,7 @@ describe("links from decks (P17 §8)", () => {
     put(".obsidian/Hidden.md", "---\nsummary: hidden\n---\n");
     expect(listNotes(join(dir, VAULT))).toEqual(["Design/Vault Adapter", "Home"]);
     store.createDeck({ id: "vault", title: "The vault adapter", context_notes: ["[[Vault Adapter#Links|the links]]", "[[Home]]", "[[Nowhere]]"] }, "The briefing.\n");
-    const state = snapshot(store, { version: 1, started: new Date().toISOString(), watch: "poll" });
+    const state = serverState(store, { version: 1, started: new Date().toISOString(), watch: "poll" });
     expect(state.decks.find((d) => d.meta.id === "vault")!.notes).toEqual([
       { link: "[[Vault Adapter#Links|the links]]", text: "the links", path: `${VAULT}/Design/Vault Adapter.md`, summary: "How the adapter writes notes." },
       { link: "[[Home]]", text: "Home", path: `${VAULT}/Home.md` },
@@ -629,7 +629,7 @@ describe("links from decks (P17 §8)", () => {
     ]);
     const plain = repo();
     plain.store.createDeck({ id: "vault", title: "The vault adapter", context_notes: ["[[Design/Vault Adapter#Links]]"] }, "");
-    const without = snapshot(plain.store, { version: 1, started: new Date().toISOString(), watch: "poll" });
+    const without = serverState(plain.store, { version: 1, started: new Date().toISOString(), watch: "poll" });
     expect(without.decks.find((d) => d.meta.id === "vault")!.notes).toEqual([{ link: "[[Design/Vault Adapter#Links]]", text: "Vault Adapter › Links" }]);
   });
 });

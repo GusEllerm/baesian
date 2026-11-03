@@ -60,7 +60,7 @@ The gate never reads the vault: its rules come only from the store (`Store.rules
 ## Links from decks (P17 §8)
 
 `contextNotes` gives the server ([[src-server]]) a deck's context notes as `ApiContextNote`s.
-- **`parseWikilink`** splits `[[Folder/Name#Heading|text]]`; a bare name is a target.
+- **`parseWikilink`** splits `[[Folder/Name#Heading|text]]`; a bare name is a target. It and `linkText()` are in `src/wikilinks.ts`, which imports nothing from Node, so the relay's state shows links as text with the same words ([[src-server]]).
 - **`resolveWikilink`** matches as Obsidian does: `[[Name]]` by file name anywhere in the vault, `[[Folder/Name]]` by path, ignoring case; the shortest path if several match.
 - **`listNotes`** lists the vault's Markdown notes, skipping hidden folders and symlinks.
 - Each link resolves to its note's path and its `summary:` line, or is `missing`. Without a vault, it's plain text.

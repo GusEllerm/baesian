@@ -3,7 +3,8 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderDoc } from "../src/frontmatter.js";
-import { Store } from "../src/store.js";
+import { MemoryStorage } from "../src/storage.js";
+import { Store, type StorageOptions } from "../src/store.js";
 
 // Tests never pop OS notifications, and never read the developer's own ~/.config/baesian.
 process.env.BAESIAN_OS_NOTIFY = "0";
@@ -63,6 +64,21 @@ export function worktree(dir: string, branch: string): { dir: string; store: Sto
   sh(dir, "worktree", "add", "-q", "-b", branch, wt);
   return { dir: wt, store: Store.open(wt) };
 }
+
+/**
+ * A store with no repo and no record, over memory (B-0ag7h): the relay's store, with memory standing in for its Durable
+ * Object's table. It files on `main`, as `repo()`'s store does.
+ */
+export function memory(options: Partial<StorageOptions> = {}): { store: Store; storage: MemoryStorage } {
+  const storage = new MemoryStorage();
+  return { store: Store.over(storage, { branch: "main", ...options }), storage };
+}
+
+/** The two kinds of storage the store runs over (B-0ag7h), for tests that hold for both: a repo's folder, and memory. */
+export const LAYERS: [string, () => { store: Store }][] = [
+  ["a repo's folder", () => repo()],
+  ["memory, with no repo", () => memory()],
+];
 
 export function cleanup(): void {
   for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });

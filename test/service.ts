@@ -1,6 +1,6 @@
 import { type KeyObject, createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderDoc } from "../src/frontmatter.js";
 import { randomSuffix } from "../src/ids.js";
 import { GATE_VERSION, type GateSource, TODAY, route } from "../src/routing.js";
@@ -21,11 +21,9 @@ const sha256 = (b: Buffer | string) => createHash("sha256").update(b).digest();
 const json = (x: object) => `${JSON.stringify(x, null, 2)}\n`;
 const compact = (at: string) => at.replace(/[-:]/g, "");
 
-/** Write a file into the live layer once, as a pull from the relay would. */
+/** Write a file into the live layer once, as a pull from the relay would: through its storage, a folder or memory. */
 export function put(store: Store, rel: string, text: string | Buffer): void {
-  const path = join(store.live, rel);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, text, { flag: "wx" });
+  store.storage.create(rel, typeof text === "string" ? Buffer.from(text) : text);
 }
 
 /** A reviewer's passkey: a key pair the authenticator holds, and the assertions it makes (D139). */
@@ -115,10 +113,17 @@ export class TestService {
     return parseTrust(this.pin(...passkeys), "the test pin");
   }
 
-  /** Link a repo, as the CLI will at sign-in (M9d): the service and project in its config, and the service's key in the live layer. */
+  /**
+   * Link a repo, as the CLI will at sign-in (M9d): the service and project in its config, and the service's key in the live
+   * layer. A store with no record, as the relay's, is given its config when it's made: `config()` says what it was given.
+   */
   link(store: Store): void {
-    const config = join(store.record, "config.json");
-    writeFileSync(config, json({ ...JSON.parse(readFileSync(config, "utf8")), service: ORIGIN, project: this.project }));
+    if (store.hasRepo) {
+      const config = join(store.record, "config.json");
+      writeFileSync(config, json({ ...JSON.parse(readFileSync(config, "utf8")), service: ORIGIN, project: this.project }));
+    } else if (store.config().project !== this.project) {
+      throw new Error(`a store with no record takes its project when it's made: Store.over(storage, { config: { service, project: "${this.project}" } })`);
+    }
     put(store, `trust/service-${this.keyId}.json`, json(this.serviceKey()));
   }
 
