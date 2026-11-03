@@ -15,7 +15,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-11-02.*
+*As of 2026-11-02, evening.*
+
+- **The overnight run (2026-11-02 to 11-03) is done, on the branch `overnight/2026-11-03`:** the plan, its log and a debrief for the user are in [[2026-11-03 Overnight]]. Twenty cards wait in four decks (`stability`, `hosted`, `routing`, `release`); two proposals, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15); the research behind them, [[Preference Sliders and the Gate]]; a [[2026-11-03 Scale Test]] whose fix made every command linear in the cards; and a [[2026-11-03 Privacy and Security]] review. On the branch, 254 unit tests and 41 browser tests pass. `main` is unchanged.
 
 - **Development is under way. M1–M3 are done** ([[Implementation Plan]]), with 247 passing tests, plus 38 browser tests, after M4's steps 2 to 5f, and D101 and D102 (`wait` in short runs that loop; agents named by their harness):
   - **M1:** the store and the core CLI;

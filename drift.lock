@@ -942,6 +942,21 @@ sig = "a447468bd84edc1d"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = "design/explorations/round3/app.js#release"
+sig = "a2674fcd9981a618"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "design/explorations/round4/app.js#release"
+sig = "8d8589916533282a"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "design/explorations/round5/app.js#release"
+sig = "8d8589916533282a"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "docs/handoffs/scenario-harness-extraction.md"
 sig = "e0fbb29477bf0c92"
 
