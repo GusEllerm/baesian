@@ -114,6 +114,7 @@ test("a mythic card is held to confirm, and letting go early doesn't answer (D67
 test("↑ writes to the agent, and a question needs its words", async ({ page }) => {
   const { store, ids } = await open(page, [{}]);
   await page.keyboard.press("ArrowUp");
+  await expect(page.locator(CARD)).toContainText("What you write is committed with the code.");
   await page.locator(CARD).getByRole("button", { name: "Ask a question" }).click();
   await page.locator(CARD).getByRole("button", { name: "Send to claude-code" }).click();
   await expect(page.getByRole("alert")).toHaveText("Write your question first.");

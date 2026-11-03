@@ -77,6 +77,7 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 - when to file a card, and that every card states its strongest alternative and its crux;
 - that a topic names one question, so a follow-on gets its own, narrower topic (D112);
 - that the reviewer chooses before seeing the agent's pick, case or body, so what they need in order to choose goes in `crux_fact`, kept neutral (provisional, on the finding 2 card);
+- that the decision record is committed with the code, so secrets, credentials and private output stay out of cards (B-vqn69). The plugin's skill says the same, and `baesian file` warns on text that looks like a secret ([[src-store]]);
 - the commit gate: card or ack trailers, and `baesian check`;
 - `wait`'s exit codes, with the one reply to an answer against the agent's pick (D104);
 - drafting a rule when an answer asks for one, with `baesian rule` (D110);

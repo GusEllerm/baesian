@@ -16,8 +16,8 @@ tags: [baesian, module]
 ## Writing
 
 - **`Store.fileCard`** validates a draft, checks for possible duplicates, assigns an ID and writes revision 1. It writes into the live layer and copies the card and its deck into the worktree's record.
-  - **The filing rules:** `filingProblems()` rejects a draft whose two options are really one, whose crux doesn't decide between them (D74), that lacks `wrong_if` and `check` when a facet asks for them (D77), or that has half a facet (D75). The store also rejects IDs in `depends_on`, `rules` or the `_breaks` lists that don't exist. The body is optional context, and nothing in it is checked (D92).
-  - **Warnings:** `filingWarnings()` notes long fields in the result's `warnings`. The card is filed anyway.
+  - **The filing rules:** `filingProblems()` rejects a draft whose two options are really one, whose crux doesn't decide between them (D74), that lacks `wrong_if` and `check` when a facet asks for them (D77), or that has half a facet (D75). The store also rejects IDs in `depends_on`, `rules` or the `_breaks` lists that don't exist. The body is optional context, and none of these rules apply to it (D92).
+  - **Warnings:** `filingWarnings()` notes long fields in the result's `warnings`, and any field, or the body, that looks like it holds a secret (B-vqn69), naming the field and what the text looks like, never the text. The card is filed anyway. `Store.reviseCard` warns the same way.
   - **The filing check:** `Store.matches` returns open cards and resolved decisions with the same canonical topic, or a title similar enough (`SIMILAR_TITLE`). Any match raises `PossibleDuplicate` unless the caller forces it.
   - **Hard by default:** a draft without a `level` whose facts include one of `HARD_BY_DEFAULT` becomes `hard`.
 - **`Store.reviseCard`** writes the next revision, and only for a card whose status is `returned`.

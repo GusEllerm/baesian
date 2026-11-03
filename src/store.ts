@@ -280,7 +280,7 @@ export class Store {
    * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
-  private prepare(draft: unknown): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
+  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
     const parsed = parse(CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -298,7 +298,7 @@ export class Store {
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
     }
-    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed) };
+    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed, body) };
   }
 
   /** Cards and rules a draft names that don't exist. */
@@ -336,7 +336,7 @@ export class Store {
     this.requireInit();
     // The checks read every card: once, in a view, which ends before anything is written.
     const { prep, matches } = this.view(() => {
-      const prep = this.prepare(draft);
+      const prep = this.prepare(draft, body);
       return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
     });
     if (matches.length > 0) throw new PossibleDuplicate(matches);
@@ -352,7 +352,7 @@ export class Store {
     if (!latest) throw new Error(`no card ${id}`);
     const status = this.status(id);
     if (status !== "returned") throw new Error(`${id} is ${status}; only a returned card takes a new revision`);
-    const prep = this.prepare(draft);
+    const prep = this.prepare(draft, body);
     const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }

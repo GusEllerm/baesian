@@ -165,6 +165,12 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-03 `[agent decision]` The details of B-vqn69, a warning on likely secrets (accepted by the user through Baesian, 2026-11-03; [[File Formats]], [[src-store]], [[Client Build]]):
+  - **Every text field is scanned, lists included, and the body,** on filing and on revising, which share the check. One note per field, naming what the text looks like ("an AWS access key ID"), never the text.
+  - **An assignment counts only with a long value of letters and digits,** so `process.env.API_KEY` and prose about tokens don't warn. GitHub's `ghu_` and `ghr_` tokens count beside the four named.
+  - **The note says to check it before the next commit,** since a card can't be edited once filed.
+  - **This repo's own `AGENTS.md` block was refreshed** with the new sentence, as `baesian init` would.
+
 - 2026-11-03 `[agent decision]` The details of B-9v5xj, finding a card's commits by its trailer (accepted by the user through Baesian, 2026-11-03; [[src-store]], [[src-gate]]):
   - **The search covers local and remote-tracking branches,** not tags or stashes: a squash merged on GitHub reaches `origin/main` before the local branch. A ledger commit on none of them counts as rewritten, whether a rebase, a squash or a deleted branch took it off.
   - **A commit is listed when it was authored before the answer changed.** A rebase keeps the author's date, and a rework committed after the change is built on the new answer.

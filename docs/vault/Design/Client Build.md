@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "M4 step 5: building the client in React, Vite and Motion (D50) from the round 5 prototype (D91), on the local server's API (D96). Where it lives, what it depends on, how it's served and developed, how it's tested, and the order it's ported in. Its open points were decided as D98 (where it lives), D99 (bundled fonts) and D100 (Playwright, run locally)."
 created: 2026-10-31
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-31
 tags: [baesian, design, client, m4]
 ---
@@ -102,6 +102,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - the facets, and the footer with its reading-time rule.
    - **Every card goes through the reveal** (D86). On a disagreement it offers an optional reason and the switch (D87, D88). A mythic card is held to confirm (D67).
    - **↑ writes:** a question, a correction or a rejection. **↓ can't judge:** more context, outside my expertise, or see it run (D85).
+   - **Comments are public with the code (B-vqn69, 2026-11-03).** The reveal's reason line ends "It's committed with the code.", and under the written answer's box, "What you write is committed with the code." Browser tests check both.
    - **The desk** (`client/src/Desk.tsx`) holds:
      - the queue for this session;
      - the reading time (D91);
