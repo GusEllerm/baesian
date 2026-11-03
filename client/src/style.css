@@ -265,13 +265,22 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .panel .briefing { font: var(--t-body); font-size: 15px; max-height: 40vh; overflow-y: auto; }
 .panel .briefing p, .panel .briefing ul { margin: 0 0 8px; }
 .panel .briefing ul { padding-left: 18px; }
-.panel .briefing code, .panel .context-notes code { font: 600 0.88em/1 var(--ui); }
-.panel .context-notes h5 { margin: 12px 0 6px; font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink-soft); }
-.panel .context-notes ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.panel .context-notes li { display: flex; flex-direction: column; gap: 1px; font: var(--t-body); font-size: 15px; }
-.panel .context-notes b { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
-.panel .context-notes .missing { font: var(--t-small); font-stretch: 90%; color: var(--ink-faint); }
+:is(.panel, .briefing-card) .briefing code, :is(.panel, .briefing-card) .context-notes code { font: 600 0.88em/1 var(--ui); }
+:is(.panel, .briefing-card) .context-notes h5 { margin: 12px 0 6px; font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink-soft); }
+:is(.panel, .briefing-card) .context-notes ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+:is(.panel, .briefing-card) .context-notes li { display: flex; flex-direction: column; gap: 1px; font: var(--t-body); font-size: 15px; }
+:is(.panel, .briefing-card) .context-notes b { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
+:is(.panel, .briefing-card) .context-notes .missing { font: var(--t-small); font-stretch: 90%; color: var(--ink-faint); }
 .card-link { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+/* A deck's briefing card (B-j6b75): plain card stock, no rarity, before the deck's first card */
+.briefing-card { --c: var(--ink); background: #c9c2b1; }
+.briefing-card .briefing { font: var(--t-body); font-size: 16.5px; max-width: 62ch; }
+.briefing-card .briefing p, .briefing-card .briefing ul { margin: 0 0 10px; }
+.briefing-card .briefing ul { padding-left: 20px; }
+.briefing-card .context-notes h5 { margin-top: 0; }
+.briefing-foot { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 4px; }
+.briefing-foot .confirm { padding: 0 18px; }
+.briefing-foot .confirm:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .crumb-deck { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .crumb-deck:hover b, .crumb-deck:focus-visible b { text-decoration: underline; }
 .panel-close { position: absolute; right: 12px; top: 12px; display: inline-flex; gap: 6px; align-items: center; border: 0; background: none; cursor: pointer; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }

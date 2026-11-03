@@ -64,3 +64,27 @@ export function useSeen(state: ApiState) {
   );
   return { isNew: (k: string) => !seen.has(k), mark };
 }
+
+/**
+ * The decks whose briefing card you've been shown (B-j6b75): each comes once, before the first of its cards you
+ * reach. Unlike "seen", nothing counts as briefed the first time a browser opens a project: you haven't read them.
+ */
+export function useBriefed(state: ApiState) {
+  const key = storageKey(state.project.name, "briefed");
+  const latest = useRef(state);
+  latest.current = state;
+  const [briefed, setBriefed] = useState<ReadonlySet<string>>(() => new Set(load<string[]>(key, [])));
+  const mark = useCallback(
+    (deck: string) =>
+      setBriefed((s) => {
+        if (s.has(deck)) return s;
+        const next = new Set(s).add(deck);
+        // Kept to the decks that still exist.
+        const live = new Set(latest.current.decks.map((d) => d.meta.id));
+        save(key, [...next].filter((x) => live.has(x)));
+        return next;
+      }),
+    [key],
+  );
+  return { has: (deck: string) => briefed.has(deck), mark };
+}

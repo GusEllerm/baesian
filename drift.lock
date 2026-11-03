@@ -38,7 +38,7 @@ sig = "f0c5bcbcabb5efbd"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -48,7 +48,7 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "8e07a21ebdf838e2"
+sig = "4566f74c349c5397"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -84,6 +84,11 @@ sig = "38356e23dd280553"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/local.ts#addSpent"
 sig = "b57ce241bb0fb3a7"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/local.ts#useBriefed"
+sig = "9a73c19fe22aed99"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -393,7 +398,7 @@ sig = "f0c5bcbcabb5efbd"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -613,7 +618,7 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -733,7 +738,7 @@ sig = "46475140bde00362"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -1023,7 +1028,7 @@ sig = "ec736e31a7e47a83"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1293,7 +1298,7 @@ sig = "6630c9e2a119bb76"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1403,7 +1408,7 @@ sig = "52dbd59da072b726"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -2208,7 +2213,7 @@ sig = "ec736e31a7e47a83"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "8e1278f9695ab96e"
+sig = "ead35025b848dc51"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

@@ -170,7 +170,22 @@ export function DeckPanel(p: { deck: ApiState["decks"][number]; known: (id: stri
   return (
     <Panel label={deck.meta.title} onClose={p.onClose} id="deck-panel">
       <p className="sub">The briefing for this work.</p>
-      {deck.body.trim() ? <div className="briefing"><Prose text={deck.body} /></div> : <p className="sub">It has no briefing.</p>}
+      {!deck.body.trim() && <p className="sub">It has no briefing.</p>}
+      <DeckBriefing deck={deck} known={p.known} onOpen={p.onOpen} />
+    </Panel>
+  );
+}
+
+/** A deck's briefing and its context notes, each with its summary line: in its panel, and on its briefing card. */
+export function DeckBriefing(p: { deck: ApiState["decks"][number]; known: (id: string) => boolean; onOpen: (id: string) => void }) {
+  const { deck } = p;
+  return (
+    <>
+      {deck.body.trim() && (
+        <div className="briefing">
+          <Prose text={deck.body} />
+        </div>
+      )}
       {deck.notes.length > 0 && (
         <div className="context-notes">
           <h5>Context</h5>
@@ -185,9 +200,16 @@ export function DeckPanel(p: { deck: ApiState["decks"][number]; known: (id: stri
           </ul>
         </div>
       )}
-    </Panel>
+    </>
   );
 }
+
+/**
+ * Whether a deck gets a briefing card before its first card (B-j6b75): it has a briefing or context notes, and
+ * isn't a branch's default deck, whose briefing is one generated line (D29).
+ */
+export const hasBriefing = (deck: ApiState["decks"][number] | undefined): deck is ApiState["decks"][number] =>
+  !!deck && !deck.meta.id.startsWith("branch-") && (deck.body.trim() !== "" || deck.notes.length > 0);
 
 const PARKED_WORDS: Partial<Record<ApiCard["status"], string>> = { rerouted: "You said it's outside your expertise.", deferred: "You deferred it." };
 

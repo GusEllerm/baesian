@@ -7,11 +7,11 @@ import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFo
 import { laterSuperseded, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
 import { usePresence } from "./live";
-import { addSpent, loadSpent, useSeen } from "./local";
+import { addSpent, loadSpent, useBriefed, useSeen } from "./local";
 import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
-import { CalibrationPanel, DeckPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
+import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path } from "./Path";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
@@ -104,6 +104,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const project = state.project.name;
   usePresence();
   const seen = useSeen(state);
+  const briefed = useBriefed(state);
 
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
@@ -118,6 +119,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick)) : undefined;
   const current = reviewCard ?? picked ?? staying ?? ordered[0];
   const key = current ? keyOf(current) : "";
+  const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
+  // The first card you reach from a deck with a briefing comes after its briefing card, once per deck (B-j6b75).
+  // A card reopened from the path is one you've already reached.
+  const briefing = !reviewCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
   const sides = current ? sidesFor(current.meta.id, salt) : { left: "alternative" as const, right: "proposal" as const };
@@ -135,10 +140,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     setHover(undefined);
     setShownAt(performance.now());
   }
-  // A card counts as seen once it's been on the desk: it loses its "new" tag.
+  // A card counts as seen once it's been on the desk, not behind its deck's briefing: it loses its "new" tag.
   useEffect(() => {
-    if (key) seen.mark(key);
-  }, [key, seen.mark]);
+    if (key && !briefing) seen.mark(key);
+  }, [key, briefing, seen.mark]);
   const dwell = r && mode.kind !== "review" ? READ_FIRST_MS[r.rarity] : 0;
   const [, setFrame] = useState(0);
   const readLeft = Math.max(0, dwell - (performance.now() - shownAt));
@@ -304,6 +309,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     else if (was === "on") say("Notifications are off.");
   };
   const showPanel = (kind: PanelKind) => setPanel((p) => (p === kind ? undefined : kind));
+  /** On from the briefing to the deck's card, whose reading time starts now (D91). */
+  const dismissBriefing = () => {
+    if (!briefing) return;
+    briefed.mark(briefing.meta.id);
+    setShownAt(performance.now());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".stage article.card:not([data-leaving])")?.focus({ preventScroll: true }));
+  };
 
   // A mythic card is held to confirm (D67): the bar fills over HOLD_MS; letting go early starts again.
   const holdStart = useRef<number>(undefined);
@@ -331,8 +343,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   };
 
   // The keys, read through a ref so the listeners always see the latest state.
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel };
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
@@ -350,6 +362,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       }
       if (e.key === "Escape") {
         if (h.panel) setPanel(undefined);
+        else if (h.briefing) h.dismissBriefing();
         else if (h.mode.kind !== "live" || reviewingRef.current) h.back();
         else if (keyHeld.current) {
           keyHeld.current = undefined;
@@ -370,6 +383,14 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         return setPick(next?.meta.id);
       }
       const dir = ARROWS[e.key];
+      // A briefing card: any arrow, or Enter, goes on to the card. A focused button takes its own Enter.
+      if (h.briefing) {
+        if (dir || (e.key === "Enter" && !(e.target instanceof HTMLButtonElement))) {
+          e.preventDefault();
+          if (!e.repeat) h.dismissBriefing();
+        }
+        return;
+      }
       if (!dir || !h.current) return;
       e.preventDefault();
       if (e.repeat) return;
@@ -429,7 +450,6 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
 
   // The pile: the rest of this card's area, slightly messy, under it.
   const pile = current ? ahead.filter((c) => areaOf(c) === areaOf(current)).slice(0, 4) : [];
-  const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
 
   const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
   const summary = ordered.length ? (
@@ -509,7 +529,19 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
             {/* Not mode="popLayout": that injects a <style> element, which the page's policy refuses (D99). A leaving
                 card is taken out of the flow by style.css instead, through its data-leaving mark. */}
             <AnimatePresence custom={exitDir.current} initial={false}>
-              {current && r ? (
+              {briefing ? (
+                <BriefingCard
+                  key={`brief:${briefing.meta.id}`}
+                  deck={briefing}
+                  waiting={ordered.filter((c) => c.meta.deck === briefing.meta.id).length}
+                  known={(id) => cards.has(id)}
+                  onOpen={(id) => {
+                    dismissBriefing();
+                    goTo(id);
+                  }}
+                  onDone={dismissBriefing}
+                />
+              ) : current && r ? (
                 <LiveCard
                   key={key}
                   exit={exitDir.current}
@@ -726,6 +758,82 @@ function LiveCard(p: {
     >
       <div className="frame" aria-hidden="true" />
       <Card {...p.card} {...(armed && live ? { armed } : {})} />
+    </motion.article>
+  );
+}
+
+/**
+ * A deck's briefing, before the first of its cards you reach (B-j6b75): its briefing and context notes, then on to
+ * the card with any arrow, Enter, a drag or a two-finger swipe. A vertical swipe scrolls a long briefing.
+ */
+function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; known: (id: string) => boolean; onOpen: (id: string) => void; onDone: () => void }) {
+  const reduced = useReducedMotion();
+  const present = useIsPresent();
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, (v) => v * 0.06);
+  const el = useRef<HTMLElement>(null);
+  const done = useRef(p.onDone);
+  done.current = p.onDone;
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    let sum = 0;
+    let idle = 0;
+    const wheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      sum -= e.deltaX;
+      x.set(Math.max(-LEAN_X, Math.min(LEAN_X, sum * DRAG_ELASTIC)));
+      clearTimeout(idle);
+      idle = window.setTimeout(() => {
+        const far = Math.abs(sum) >= THRESH_X;
+        sum = 0;
+        animate(x, 0, reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 34 });
+        if (far) done.current();
+      }, SWIPE_IDLE_MS);
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", wheel);
+      clearTimeout(idle);
+    };
+  }, [x, reduced]);
+  const cards = `${p.waiting} ${p.waiting === 1 ? "card" : "cards"}`;
+  return (
+    <motion.article
+      ref={el}
+      tabIndex={-1}
+      className="card briefing-card"
+      data-leaving={present ? undefined : true}
+      inert={!present}
+      aria-label={`The briefing for ${p.deck.meta.title}`}
+      style={{ x, rotate, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
+      exit={{ opacity: 0, y: -16, transition: { duration: reduced ? 0 : 0.2, ease: "easeIn" } }}
+      drag={present ? "x" : false}
+      dragSnapToOrigin
+      dragElastic={DRAG_ELASTIC}
+      dragConstraints={{ left: 0, right: 0 }}
+      onDragEnd={(_e, info) => {
+        const far = Math.abs(info.offset.x) >= THRESH_X;
+        if (far || (Math.abs(info.velocity.x) > 900 && Math.abs(info.offset.x) > THRESH_X * 0.3)) p.onDone();
+      }}
+    >
+      <div className="frame" aria-hidden="true" />
+      <div className="face">
+        <p className="doing">
+          <b>{cards}</b> in this work {p.waiting === 1 ? "is" : "are"} waiting for you.
+        </p>
+        <h1>{p.deck.meta.title}</h1>
+        <DeckBriefing deck={p.deck} known={p.known} onOpen={p.onOpen} />
+        <div className="briefing-foot">
+          <button type="button" className="confirm" onClick={p.onDone}>
+            Go to its cards <kbd>→</kbd>
+          </button>
+          <p className="small">Shown once. The deck's name above each card opens it again.</p>
+        </div>
+      </div>
     </motion.article>
   );
 }
