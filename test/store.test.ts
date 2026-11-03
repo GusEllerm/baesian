@@ -113,13 +113,17 @@ describe("filing", () => {
     expect(() => store.fileCard(draft({ topic: "Not A Topic" }), BODY, AGENT)).toThrow(/topic/);
   });
 
-  it("makes cards that spend money or delete data hard by default (D42)", () => {
+  it("makes cards that spend money or delete data hard, whatever level the agent asks for (D42, D144)", () => {
     const { store } = repo();
     const result = store.fileCard(draft({ title: "Delete old runs?", topic: "retention", touches: ["data-loss"] }), BODY, AGENT);
     expect(result.card.meta.level).toBe("hard");
     expect(result.hardBecause).toEqual(["data-loss"]);
-    const explicit = store.fileCard(draft({ title: "Buy a domain?", topic: "domain", touches: ["money"], level: "blocking" }), BODY, AGENT);
-    expect(explicit.card.meta.level).toBe("blocking");
+    // An agent may raise a card's level, never lower it: asking for less than hard doesn't take.
+    const lower = store.fileCard(draft({ title: "Buy a domain?", topic: "domain", touches: ["money"], level: "blocking" }), BODY, AGENT);
+    expect(lower.card.meta.level).toBe("hard");
+    expect(lower.hardBecause).toEqual(["money"]);
+    const security = store.fileCard(draft({ title: "Where the token lives", question: "Where should the token live?", topic: "auth/token", touches: ["security"], level: "provisional", wrong_if: "a page script reads it", check: "the client's scripts" }), BODY, AGENT);
+    expect(security.card.meta.level).toBe("hard");
   });
 
   it("refuses an unknown named deck, and accepts a created one", () => {
@@ -378,5 +382,33 @@ describe("the record (D37)", () => {
     expect(added).toHaveLength(1);
     expect(added[0]).toMatch(new RegExp(`^verdicts/\\d{8}T\\d{6}\\.\\d{3}Z-${id}-r1-[0-9a-z]+\\.json$`));
     expect(store.syncRecord()).toEqual([]);
+  });
+});
+
+describe("reading through a view", () => {
+  it("gives the statuses reading afresh does, and the next view sees what changed in this one", () => {
+    const { store } = repo();
+    const ids = [0, 1, 2].map((i) => store.fileCard(draft({ title: `Card ${i}`, question: `Question ${i}?`, topic: `area${i}/x` }), BODY, { agent: "a", force: true }).card.meta.id);
+    store.addVerdict({ card: ids[0]!, revision: 1, response: "accept", ...REVIEWER });
+    const statuses = (s: typeof store) => s.cards().map((c) => s.status(c.meta.id));
+    const outside = statuses(store);
+    expect(store.view(() => statuses(store))).toEqual(outside);
+    // A verdict written during a view is seen by the next read.
+    store.view(() => {
+      statuses(store);
+      store.addVerdict({ card: ids[1]!, revision: 1, response: "reject", comment: "No.", ...REVIEWER });
+    });
+    expect(store.status(ids[1]!)).toBe("returned");
+    expect(store.view(() => store.status(ids[1]!))).toBe("returned");
+  });
+
+  it("stays loud without a report: a bad file throws, as the CLI needs", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, { agent: "a" }).card.meta.id;
+    writeFileSync(join(store.live, "cards", id, "r1.md"), "---\nnot: a card\n---\n");
+    expect(() => store.view(() => store.cards())).toThrow(/is not valid/);
+    const skipped: string[] = [];
+    expect(store.view(() => store.cards(), (path) => skipped.push(path))).toEqual([]);
+    expect(skipped).toEqual([`cards/${id}/r1.md`]);
   });
 });

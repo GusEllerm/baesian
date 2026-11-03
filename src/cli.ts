@@ -187,7 +187,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .command("topics")
     .description("list the topics in use, to reuse rather than invent near-duplicates")
     .action(() => {
-      const topics = [...store().topics()].sort();
+      const s = store();
+      const topics = [...s.view(() => s.topics())].sort();
       io.out(topics.length ? topics.join("\n") : "no topics yet");
     });
 
@@ -228,7 +229,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (opts.json) return json(result);
       const { id, level, deck } = result.card.meta;
       io.out(`filed ${id} (${level}, deck ${deck})`);
-      if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42)`);
+      if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42; an agent can raise a card's level, never lower it: D144)`);
       if (result.nearTopics.length) io.out(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
       for (const w of result.warnings) io.out(`  note: ${w}`);
       if (level === "blocking") io.out(`  run \`baesian wait ${id}\` before building on it`);
@@ -324,12 +325,13 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--json", "print as JSON")
     .action((opts: { all?: boolean; branch?: boolean; json?: boolean }) => {
       const s = store();
-      const cards = (opts.branch ? s.branchCards() : s.cards()).filter(
-        (c) => opts.all || PENDING.has(s.status(c.meta.id)),
-      );
-      if (opts.json) return json(cards.map((c) => ({ ...c.meta, status: s.status(c.meta.id) })));
-      if (!cards.length) return io.out(opts.all ? "no cards" : "nothing waiting on the reviewer");
-      for (const c of cards) io.out(cardLine(s, c));
+      // A card's status reads the others: read the live layer once (Store.view), not once per card.
+      s.view(() => {
+        const cards = (opts.branch ? s.branchCards() : s.cards()).filter((c) => opts.all || PENDING.has(s.status(c.meta.id)));
+        if (opts.json) return json(cards.map((c) => ({ ...c.meta, status: s.status(c.meta.id) })));
+        if (!cards.length) return io.out(opts.all ? "no cards" : "nothing waiting on the reviewer");
+        for (const c of cards) io.out(cardLine(s, c));
+      });
     });
 
   program
@@ -339,6 +341,11 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--json", "print as JSON")
     .action((id: string, opts: { json?: boolean }) => {
       const s = store();
+      s.view(() => show(s, id, opts));
+    });
+  /** `baesian show`, inside one view of the live layer. */
+  const show = (s: Store, id: string, opts: { json?: boolean }) => {
+    {
       const card = s.card(id);
       if (!card) throw new Error(`no card ${id}`);
       const verdicts = s.verdicts(id);
@@ -355,7 +362,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         io.out("\nverdicts:");
         for (const v of verdicts) io.out(`  ${verdictLine(s, v)}`);
       }
-    });
+    }
+  };
 
   program
     .command("inbox")
@@ -363,30 +371,39 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--peek", "don't mark them as seen")
     .option("--json", "print as JSON")
     .option("--quiet", "for a harness hook: print nothing when there's nothing new, or the repo doesn't use Baesian")
-    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean }) => {
+    .option("--session <id>", "for a harness hook: the session reading, which keeps its own place, so every session on the branch hears each verdict once")
+    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
+      // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
       let s: Store;
-      let items: InboxItem[];
       try {
         s = store();
-        items = s.inbox({ advance: !opts.peek });
       } catch (e) {
-        // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
         if (opts.quiet) return;
         throw e;
       }
-      if (opts.json) return json(items);
-      if (!items.length) return opts.quiet ? undefined : io.out("no new verdicts");
-      if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
-      for (const item of items) {
-        // A dependent returned by its parent's verdict (D80) is listed under its own ID.
-        io.out(item.verdict.card === item.card ? verdictLine(s, item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
-        if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
-        // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
-        const latest = s.card(item.card);
-        const standing = item.verdict.card === item.card && latest !== undefined && item.verdict.revision === latest.meta.revision;
-        if (standing && item.verdict.make_rule && s.ruleAsked(item.card)) for (const line of ruleHint(item.card)) io.out(`  ${line}`);
-        if (standing && s.canReply(item.card)) for (const line of replyHint(item.card)) io.out(`  ${line}`);
-      }
+      // Read the live layer once for the whole listing (Store.view), not once per card.
+      s.view(() => {
+        let items: InboxItem[];
+        try {
+          items = s.inbox({ advance: !opts.peek, ...(opts.session ? { session: opts.session } : {}) });
+        } catch (e) {
+          if (opts.quiet) return;
+          throw e;
+        }
+        if (opts.json) return json(items);
+        if (!items.length) return opts.quiet ? undefined : io.out("no new verdicts");
+        if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
+        for (const item of items) {
+          // A dependent returned by its parent's verdict (D80) is listed under its own ID.
+          io.out(item.verdict.card === item.card ? verdictLine(s, item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
+          if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
+          // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
+          const latest = s.card(item.card);
+          const standing = item.verdict.card === item.card && latest !== undefined && item.verdict.revision === latest.meta.revision;
+          if (standing && item.verdict.make_rule && s.ruleAsked(item.card)) for (const line of ruleHint(item.card)) io.out(`  ${line}`);
+          if (standing && s.canReply(item.card)) for (const line of replyHint(item.card)) io.out(`  ${line}`);
+        }
+      });
     });
 
   program

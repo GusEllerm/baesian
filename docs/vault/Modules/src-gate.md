@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/facts.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, reads the trailers, decides coverage, and installs and runs the git hooks."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -23,7 +23,7 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 |---|---|---|
 | `dep` | runtime dependencies added to or removed from `package.json`, `pyproject.toml` (PEP 621 and Poetry), `requirements*.txt`. Not dev dependencies, version bumps or lockfiles | Python names normalised (`normalisePython`) |
 | `schema` | paths matching `DEFAULT_SCHEMA`, or `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL |
-| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify |
+| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135) |
 
 **`api:` facts (M3c; D56, D58, D59).** The detector is off unless `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
 - Only breaking changes count (`BREAKING`: a changed signature, or a removed export), and only in the listed modules. A new export is additive.
@@ -37,6 +37,8 @@ What counts as a signature is livedocs' rule: parameters, defaults, return types
 ## src/trailers.ts (D52)
 
 `parseTrailers` runs `git interpret-trailers --parse` on the message after `cleanMessage`, which drops comment lines and the `--verbose` scissors section. It returns the cards, the acks (fact ID → reason), and any malformed Baesian trailers, which block the commit rather than being ignored.
+
+`readHistory` searches the history of every branch, local and remote-tracking, for `Baesian-Card` trailers (B-9v5xj), so a changed answer's brief finds a card's commits after a rebase, or a squash that keeps the trailer, rewrote them ([[src-store]]). One `git log` reads each commit that mentions the trailer, with git's own trailer rules, as `parseTrailers` does: only the message's last paragraph counts, so a squash message that lists each commit's message, trailers and all, isn't read as citing anything. It returns a `History`: the `CitingCommit`s for each card, oldest first, and `History.onBranch`, which says whether a commit is on a branch at all (false once it's rewritten, or if it never existed). It's cached per process for as long as the branches point where they did.
 
 ## src/gate.ts
 

@@ -93,10 +93,11 @@ describe("a changed answer comes with a rework brief (D81)", () => {
 
   it("lists the commits that cite the card, as a lower bound", () => {
     const { store, id } = accepted();
+    // A ledger entry for a commit that isn't in the repo: it's marked rewritten (B-9v5xj; real commits in history.test.ts).
     store.writeLedger(id, { commit: "abc1234def5678", branch: "main" }, "");
     store.addVerdict({ card: id, revision: 1, response: "alternative", choice: "Postgres", ...REVIEWER, at: later(1) });
     expect(store.briefs(id)).toEqual([
-      expect.objectContaining({ kind: "answer-changed", was: "SQLite (WAL mode)", now: "Postgres", commits: [{ commit: "abc1234def5678", branch: "main" }] }),
+      expect.objectContaining({ kind: "answer-changed", was: "SQLite (WAL mode)", now: "Postgres", commits: [{ commit: "abc1234def5678", branch: "main", rewritten: true }] }),
     ]);
     const item = store.inbox({ advance: true }).at(-1);
     expect(item?.brief).toMatchObject({ kind: "answer-changed" });

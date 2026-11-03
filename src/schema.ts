@@ -171,16 +171,54 @@ export function filingProblems(d: CardDraft): string[] {
   return out;
 }
 
-/** Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn. */
-export function filingWarnings(d: CardDraft): string[] {
+/**
+ * Text that looks like a secret (B-vqn69): the record is committed with the code, so a card shouldn't carry one. Each
+ * says what it looks like, for the warning, which never quotes the text.
+ */
+const SECRET_PATTERNS: readonly { looksLike: string; pattern: RegExp }[] = [
+  { looksLike: "a private key", pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/ },
+  { looksLike: "an AWS access key ID", pattern: /\b(?:AKIA|ASIA|ABIA|ACCA|A3T[A-Z0-9])[A-Z0-9]{16}\b/ },
+  { looksLike: "a GitHub token", pattern: /\b(?:gh[opsur]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/ },
+  { looksLike: "a Slack token", pattern: /\b(?:xox[abposr]-[A-Za-z0-9-]{10,}|xapp-\d-[A-Za-z0-9-]{10,})/ },
+  { looksLike: "a JWT", pattern: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/ },
+  { looksLike: "a token in a URL", pattern: /[?&][\w-]*(?:token|key|secret)=[^\s&#"'<>]{16,}/i },
+  // `api_key = …`, `"client_secret": "…"`: a long value with letters and digits, so `process.env.API_KEY` and prose don't count.
+  {
+    looksLike: "a key, token or password",
+    pattern: /\b[\w-]*(?:api[_-]?key|access[_-]?key|secret|token|passw(?:or)?d)[\w-]*["']?\s*[:=]\s*["']?(?=[A-Za-z0-9_\-+/=]*[0-9])(?=[A-Za-z0-9_\-+/=]*[A-Za-z])[A-Za-z0-9_\-+/=]{16,}/i,
+  },
+];
+
+/** What a text looks like it holds, if it looks like a secret. */
+function looksLikeSecret(text: string): string | undefined {
+  return SECRET_PATTERNS.find((s) => s.pattern.test(text))?.looksLike;
+}
+
+/**
+ * Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn; and a field,
+ * or the body, that looks like it holds a secret (B-vqn69), named without quoting it.
+ */
+export function filingWarnings(d: CardDraft, body = ""): string[] {
   const long: [string, string | undefined, number][] = [
     ["title", d.title, 60], ["proposal", d.proposal, 60], ["alternative", d.alternative, 60],
     ["question", d.question, 160], ["crux", d.crux, 160], ["doing", d.doing, 160],
     ["proposal_then", d.proposal_then, 240], ["alternative_then", d.alternative_then, 240],
   ];
-  return long
-    .filter(([, v, max]) => v !== undefined && v.length > max)
-    .map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`);
+  const texts: [string, string][] = [
+    ...Object.entries(d).flatMap(([name, v]): [string, string][] =>
+      typeof v === "string" ? [[name, v]] : Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => [name, x]) : [],
+    ),
+    ["the body", body],
+  ];
+  const secrets = new Map<string, string>();
+  for (const [name, text] of texts) {
+    const kind = secrets.has(name) ? undefined : looksLikeSecret(text);
+    if (kind) secrets.set(name, kind);
+  }
+  return [
+    ...long.filter(([, v, max]) => v !== undefined && v.length > max).map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`),
+    ...[...secrets].map(([name, kind]) => `${name} looks like it holds a secret (${kind}): the record is committed with the code, so check it before the next commit`),
+  ];
 }
 
 const same = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, " ").trim() === b.toLowerCase().replace(/\s+/g, " ").trim();

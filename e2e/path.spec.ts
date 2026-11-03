@@ -80,6 +80,101 @@ test("leaning toward an option lights what it would do to a rule (D79)", async (
   await expect(rule).toContainText("✓ Keeps to it");
 });
 
+/** Where the line into the card ends, and the card's left edge, in the desk's coordinates. */
+const joinAndCard = (page: Page) =>
+  page.evaluate(() => {
+    const desk = document.querySelector(".desk")!.getBoundingClientRect();
+    const d = document.querySelector(".path-lines .join")?.getAttribute("d") ?? "";
+    const card = document.querySelector("article.card:not([data-leaving])")!.getBoundingClientRect();
+    return { end: Number(d.match(/H ([\d.-]+)/)?.[1] ?? NaN), card: card.left - desk.left };
+  });
+/** Drag the card sideways from its crux by `dx`, in steps, with the clock running. */
+async function drag(page: Page, dx: number, release = true) {
+  const box = (await page.locator(`${CARD} .crux`).boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(x + (dx * i) / 10, y);
+    await page.clock.runFor(16);
+  }
+  if (release) await page.mouse.up();
+}
+
+test("the line into the card follows it as it's dragged, and meets it again once it's back at rest", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+  });
+  await drag(page, -120, false);
+  const held = await joinAndCard(page);
+  expect(held.end - held.card).toBeGreaterThan(-8); // the card is turned a little, so its box is wider than its edge
+  expect(held.end - held.card).toBeLessThan(8);
+  await page.mouse.up();
+  await page.clock.runFor(1000);
+  const rest = await joinAndCard(page);
+  expect(Math.abs(rest.end - rest.card - 2)).toBeLessThan(1.5);
+
+  // Past the threshold the drag chooses, and the card springs back for the reveal: the line comes back with it.
+  await drag(page, -900);
+  await page.clock.runFor(1000);
+  await expect(page.locator(CARD)).toHaveAttribute("data-mode", "reveal");
+  const after = await joinAndCard(page);
+  expect(Math.abs(after.end - after.card - 2)).toBeLessThan(1.5);
+});
+
+test("dragging the card toward an option lights the path as holding an arrow does", async ({ page }) => {
+  await open(page, (s) => {
+    mkdirSync(join(s.live, "rules"), { recursive: true });
+    writeFileSync(join(s.live, "rules", "R-7f3kq.md"), renderDoc({ type: "rule", id: "R-7f3kq", covers: [], accepted_by: "gus", created: new Date().toISOString() }, "Never put secrets in URLs.\n"));
+    file(s, { title: "Where the token lives", question: "Where should the token live?", topic: "client/auth", proposal: "In the URL fragment", alternative: "In a cookie", proposal_breaks: ["R-7f3kq"] });
+  });
+  const rule = page.locator(".path .row.rel", { hasText: "Never put secrets in URLs" });
+  const side = await page.locator(`${CARD} .opt[data-kind="proposal"]`).getAttribute("data-side");
+  await drag(page, side === "left" ? -100 : 100, false);
+  await expect(rule).toHaveClass(/fx-bad/);
+  await page.mouse.up();
+  await page.clock.runFor(1000);
+  await expect(rule).not.toHaveClass(/fx-bad/);
+});
+
+/** The animations running in the path's rows (the glide and fades), not the flight or anything on the card. */
+const pathAnimations = (page: Page) =>
+  page.evaluate(() => document.getAnimations().filter((a) => (a.effect as KeyframeEffect | null)?.target instanceof Element && ((a.effect as KeyframeEffect).target as Element).matches(".path [data-flip]")).length);
+
+test("answering glides the path into its new places, and with reduced motion it changes at once", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+    file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
+    file(s, { title: "Run retention", question: "How long are runs kept?", topic: "alpha/c" });
+  });
+  await choose(page, "proposal");
+  expect(await pathAnimations(page)).toBeGreaterThan(0);
+  await expect.poll(() => pathAnimations(page)).toBe(0); // the glide is over in well under a second
+  await expect(page.locator(".path .row.past")).toHaveText(/The run store/);
+
+  // A changed setting takes effect when the page loads again (the flight reads it once, as Motion does).
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Where do files go?" })).toBeVisible();
+  await choose(page, "proposal");
+  expect(await pathAnimations(page)).toBe(0);
+  await expect(page.locator(".path .row.past")).toHaveText(/Run file layout/);
+});
+
+test("going to a card from the path moves the focus to it, and the path's rows show a focus ring", async ({ page }) => {
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+    file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
+  });
+  const next = page.locator(".path .row.next", { hasText: "Run file layout" });
+  await next.focus();
+  expect(await next.evaluate((r) => getComputedStyle(r).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Enter");
+  await page.clock.runFor(100);
+  await expect(page.getByRole("heading", { name: "Where do files go?" })).toBeVisible();
+  await expect(page.locator(CARD)).toBeFocused();
+});
+
 test("an answered card reopens from the path, and a changed answer is recorded with a brief (D81)", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });

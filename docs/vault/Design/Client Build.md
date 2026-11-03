@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "M4 step 5: building the client in React, Vite and Motion (D50) from the round 5 prototype (D91), on the local server's API (D96). Where it lives, what it depends on, how it's served and developed, how it's tested, and the order it's ported in. Its open points were decided as D98 (where it lives), D99 (bundled fonts) and D100 (Playwright, run locally)."
 created: 2026-10-31
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-31
 tags: [baesian, design, client, m4]
 ---
@@ -102,6 +102,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - the facets, and the footer with its reading-time rule.
    - **Every card goes through the reveal** (D86). On a disagreement it offers an optional reason and the switch (D87, D88). A mythic card is held to confirm (D67).
    - **↑ writes:** a question, a correction or a rejection. **↓ can't judge:** more context, outside my expertise, or see it run (D85).
+   - **Comments are public with the code (B-vqn69, 2026-11-03).** The reveal's reason line ends "It's committed with the code.", and under the written answer's box, "What you write is committed with the code." Browser tests check both.
    - **The desk** (`client/src/Desk.tsx`) holds:
      - the queue for this session;
      - the reading time (D91);
@@ -122,8 +123,11 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
      - the current card's node, joined to the card;
      - the card's relationships hanging off the node, worded from its side;
      - what's next, and how many more.
-   - **Leaning toward an option, or hovering over it,** lights what it would do to each relationship (✓ kept or keeps to it, ✗ replaced or may break it), from the `_breaks` fields. An earlier answer that's related is joined to the node by an arc.
+   - **Leaning toward an option, or hovering over it,** lights what it would do to each relationship (✓ kept or keeps to it, ✗ replaced or may break it), from the `_breaks` fields. Leaning counts however it's done: a held arrow, or a drag or swipe that moves the card more than 8 px (`LEAN_LIGHT`, past the 6 px shake), which `<LiveCard />` reports from its own motion. An earlier answer that's related is joined to the node by an arc.
    - **The lines are SVG elements,** measured from the layout, and drawn again on resize and when the fonts arrive. The path lines the node up with the card's question, and folds the oldest answers away when it would fall below the card.
+   - **The card is measured where it rests** (`restRect`, `offsetIn`: layout offsets, which transforms don't move), never where a drag or its entrance has carried it. **The line into the card follows it** frame by frame: the card in play hands the path its motion (`CardMotion`: `x`, `y`, `rotate`), and `joinPath()` draws the line to the card's turned left edge at the node's height, outside React. It never runs backwards; with the card over the node, there's no line. Found by the user (2026-11-02): after a drag, the line stayed where the card had been mid-drag. Two browser tests.
+   - **The path glides into each new arrangement** (2026-11-02), instead of jumping. Each row and heading carries a `data-flip` key; once a change settles, a row that moved glides from where it sat (by layout) to where it now sits, over `GLIDE_MS` (380 ms, landing before your choice's flight does), and a new row fades in. The answered card's row glides from its node's old place (`data-from`), and the next card's node from its row in Next. The path's shift eases too, once the path has settled for the first time (`data-glide`). The lines are measured again on every frame of a glide, and your choice's flight aims at where its row settles. With reduced motion, read live, it all changes at once. Rows are measured by layout (`offsetIn`), so the shift no longer creeps in steps as the next card settles. One browser test.
+   - **Focus on the path** (2026-11-03): its rows had lost the focus ring (their `all: unset` removed the global one), and going to a card from the path left the focus on the page, since the row you came from unmounts; both fixed, with a browser test. Found by a usability critique of the drum (D152), which was then removed (D155).
    - **Clicking an answered decision reopens it.** "Change your answer" sends a new verdict, which brings the agent a brief (D81), and the decision keeps its place on the path.
    - **Under the card,** the rest of its area lies in a slightly messy pile. **Above it,** the breadcrumbs name the area and the work.
    - **Your choice flies from the card into its row on the path,** and the next card arrives once it lands (round 5's one sequenced movement). It uses Web Animations, so it needs nothing the page's policy forbids.

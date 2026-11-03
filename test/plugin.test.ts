@@ -6,6 +6,8 @@ import { main } from "../src/cli.js";
 // @ts-expect-error: the hook is plain JavaScript, so it runs with Node alone wherever the plugin is installed
 import { contextFor, deckFor, onPlanApproved } from "../plugins/baesian/hooks/plan-approved.mjs";
 // @ts-expect-error: plain JavaScript, as above
+import { newVerdicts } from "../plugins/baesian/hooks/new-verdicts.mjs";
+// @ts-expect-error: plain JavaScript, as above
 import { onTurnEnded } from "../plugins/baesian/hooks/turn-ended.mjs";
 import { REVIEWER, cleanup, draftFile, repo } from "./helpers.js";
 
@@ -45,7 +47,7 @@ describe("the plugin's files", () => {
   it("bring new verdicts in at stopping points only, and never decide whether a plan is approved", () => {
     const { hooks } = readJson(join(PLUGIN, "hooks", "hooks.json"));
     for (const event of ["SessionStart", "UserPromptSubmit"]) {
-      expect(hooks[event][0].hooks[0].command).toMatch(/^command -v baesian .*\|\| exit 0; baesian inbox --quiet$/);
+      expect(hooks[event][0].hooks[0].command).toContain("hooks/new-verdicts.mjs");
     }
     expect(hooks.Stop[0].hooks[0].command).toContain("hooks/turn-ended.mjs");
     expect(hooks.PostToolUse).toEqual([expect.objectContaining({ matcher: "ExitPlanMode" })]);
@@ -106,6 +108,28 @@ describe("the hook on an approved plan", () => {
   it("reports any other failure, for Claude Code to show", async () => {
     const broken = async () => ({ status: 1, stderr: "the deck is invalid" });
     await expect(onPlanApproved(approved("/"), broken)).rejects.toThrow("the deck is invalid");
+  });
+});
+
+describe("the hooks when a session starts and with your next message", () => {
+  const started = (cwd: string, session: string) => ({ hook_event_name: "SessionStart", session_id: session, source: "startup", cwd });
+
+  it("bring in new verdicts as plain text, once for each session on the branch (B-ghhym)", async () => {
+    const { dir, store } = repo();
+    const filed = await cli(["--agent", "claude-code", "file"], draftFile(), dir);
+    const id = /filed (B-\w{5})/.exec(filed.stdout)![1]!;
+    expect(await newVerdicts(started(dir, "s-1"), cli)).toBe("");
+    expect(await newVerdicts(started(dir, "s-2"), cli)).toBe("");
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    const one = await newVerdicts({ hook_event_name: "UserPromptSubmit", session_id: "s-1", prompt: "go on", cwd: dir }, cli);
+    expect(one).toContain(`${id} r1  accept`);
+    expect(await newVerdicts(started(dir, "s-1"), cli)).toBe(""); // seen by this session
+    expect(await onTurnEnded({ hook_event_name: "Stop", session_id: "s-2", cwd: dir }, cli)).toMatchObject({ hookSpecificOutput: { additionalContext: expect.stringContaining(`${id} r1  accept`) } });
+  });
+
+  it("say nothing without the CLI", async () => {
+    const missing = async () => ({ missing: true, status: 1, stdout: "", stderr: "spawnSync baesian ENOENT" });
+    expect(await newVerdicts(started("/", "s-1"), missing)).toBe("");
   });
 });
 

@@ -75,7 +75,8 @@ function osNotification(p: NotifyPayload): void {
       message,
     ]);
   } else if (process.platform === "linux") {
-    fire("notify-send", [title, message]);
+    // `--` first: a question an agent wrote that starts with "-" must not be read as an option.
+    fire("notify-send", ["--", title, message]);
   }
 }
 

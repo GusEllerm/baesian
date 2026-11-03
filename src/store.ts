@@ -27,6 +27,7 @@ import {
   describeError,
 } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
+import { type History, readHistory } from "./trailers.js";
 
 /** The live layer, inside git's common directory: shared by every worktree of a clone, never committed (D34). */
 export const LIVE_DIR = "baesian";
@@ -35,8 +36,8 @@ export const RECORD_DIR = ".baesian";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
 
-export type { Brief, Status } from "./api.js";
-import type { Brief, Status } from "./api.js";
+export type { Brief, BriefCommit, Status } from "./api.js";
+import type { Brief, BriefCommit, Status } from "./api.js";
 
 /** Statuses that still need the reviewer. */
 export const PENDING: ReadonlySet<Status> = new Set(["open", "returned", "rerouted", "deferred"]);
@@ -202,14 +203,27 @@ export class Store {
   }
 
   /** One consistent read of the live layer, while `view` runs. */
-  private session?: { files: Map<string, unknown>; lists: Map<string, string[]>; report: (path: string, error: string) => void };
+  private session?: {
+    files: Map<string, unknown>;
+    lists: Map<string, string[]>;
+    /** Built once per view, since every card's status asks: all the cards, verdict files by card, and claimants. */
+    cards?: Card[];
+    verdictFiles?: Map<string, string[]>;
+    claims?: Map<string, Card[]>;
+    /** The history's trailers (B-9v5xj), searched once per view. */
+    history?: History;
+    report: ((path: string, error: string) => void) | undefined;
+  };
 
   /**
-   * Run `fn` over one consistent view of the live layer: each file is read once, and a file that can't be read
-   * (half-written, or invalid) is reported and skipped instead of thrown. The server reads through this (D84).
+   * Run `fn` over one consistent view of the live layer: each file is read once. With `report`, a file that can't be
+   * read (half-written, or invalid) is reported and skipped instead of thrown; the server reads that way (D84).
+   * Without it, a bad file still throws, so the CLI stays loud: commands that read every card read through a view,
+   * since a card's status reads the others, and reading them afresh each time made a listing quadratic.
    */
-  view<T>(fn: () => T, report: (path: string, error: string) => void): T {
+  view<T>(fn: () => T, report?: (path: string, error: string) => void): T {
     const outer = this.session;
+    if (outer && !report) return fn(); // already inside one: share it
     this.session = { files: new Map(), lists: new Map(), report };
     try {
       return fn();
@@ -225,7 +239,7 @@ export class Store {
     try {
       value = parseText(readFileSync(path, "utf8"));
     } catch (e) {
-      if (!this.session) throw e;
+      if (!this.session?.report) throw e;
       this.session.report(relative(this.live, path), e instanceof Error ? e.message : String(e));
     }
     this.session?.files.set(path, value);
@@ -253,23 +267,29 @@ export class Store {
   }
 
   cards(): Card[] {
-    return this.cardIds()
+    // In a view, the list is built once: a card's status reads every other card, so a listing asks for it per card.
+    if (this.session?.cards) return this.session.cards;
+    const all = this.cardIds()
       .map((id) => this.card(id))
       .filter((c): c is Card => c !== undefined);
+    if (this.session) this.session.cards = all;
+    return all;
   }
 
   /**
    * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
-  private prepare(draft: unknown): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
+  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
     const parsed = parse(CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
     let hardBecause: string[] | undefined;
     const hardFacts = parsed.touches.filter((f) => HARD_BY_DEFAULT.has(f));
     let level: Level = parsed.level ?? "provisional";
-    if (parsed.level === undefined && hardFacts.length > 0) {
+    // An agent may raise a card's level, never lower it (D144): a hard-by-default fact makes it hard, whatever
+    // level the draft asks for. Only the repo's settings may lower it (D146), once they exist.
+    if (level !== "hard" && hardFacts.length > 0) {
       level = "hard";
       hardBecause = hardFacts;
     }
@@ -280,7 +300,7 @@ export class Store {
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
     }
-    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed) };
+    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed, body) };
   }
 
   /** Cards and rules a draft names that don't exist. */
@@ -316,11 +336,12 @@ export class Store {
    */
   fileCard(draft: unknown, body: string, opts: { agent: string; force?: boolean }): FileResult {
     this.requireInit();
-    const prep = this.prepare(draft);
-    if (!opts.force) {
-      const matches = this.matches(prep.draft);
-      if (matches.length > 0) throw new PossibleDuplicate(matches);
-    }
+    // The checks read every card: once, in a view, which ends before anything is written.
+    const { prep, matches } = this.view(() => {
+      const prep = this.prepare(draft, body);
+      return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
+    });
+    if (matches.length > 0) throw new PossibleDuplicate(matches);
     const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
     const card = this.writeRevision(id, 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
@@ -333,7 +354,7 @@ export class Store {
     if (!latest) throw new Error(`no card ${id}`);
     const status = this.status(id);
     if (status !== "returned") throw new Error(`${id} is ${status}; only a returned card takes a new revision`);
-    const prep = this.prepare(draft);
+    const prep = this.prepare(draft, body);
     const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }
@@ -652,10 +673,38 @@ export class Store {
   // ---------------------------------------------------------------- verdicts
 
   verdicts(id: string): Verdict[] {
-    return this.list("verdicts")
-      .filter((f) => verdictFileCard(f) === id)
+    return this.verdictFilesOf(id)
       .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => parse(Verdict, JSON.parse(t), f)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /** A card's verdict files, oldest first by name. In a view, every card's are sorted out once. */
+  private verdictFilesOf(id: string): string[] {
+    if (!this.session) return this.list("verdicts").filter((f) => verdictFileCard(f) === id);
+    if (!this.session.verdictFiles) {
+      const byCard = new Map<string, string[]>();
+      for (const f of this.list("verdicts")) {
+        const card = verdictFileCard(f);
+        if (card) (byCard.get(card) ?? byCard.set(card, []).get(card)!).push(f);
+      }
+      this.session.verdictFiles = byCard;
+    }
+    return this.session.verdictFiles.get(id) ?? [];
+  }
+
+  /** The cards that supersede `id`, or name it in `conflict_of` (D35). In a view, found once for every card. */
+  private claimants(id: string): Card[] {
+    const build = () => {
+      const by = new Map<string, Card[]>();
+      for (const c of this.cards()) {
+        for (const target of [c.meta.supersedes, ...(c.meta.conflict_of ?? [])]) {
+          if (target) (by.get(target) ?? by.set(target, []).get(target)!).push(c);
+        }
+      }
+      return by;
+    };
+    const by = this.session ? (this.session.claims ??= build()) : build();
+    return by.get(id) ?? [];
   }
 
   /** Record a verdict. Only the client calls this: agents never resolve cards (D32). */
@@ -717,7 +766,7 @@ export class Store {
       const rejectedAfter = this.verdicts(parent).some((v) => v.response === "reject" && v.at >= card.meta.created);
       if (rejectedAfter) return "withdrawn";
     }
-    for (const other of this.cards()) {
+    for (const other of this.claimants(id)) {
       if (seen.has(other.meta.id)) continue;
       const supersedes = other.meta.supersedes === id;
       // A resolved conflict card supersedes the decisions it names that it didn't choose (D35).
@@ -788,10 +837,41 @@ export class Store {
     if (!last || !earlier) return undefined;
     const was = answerOf(earlier)!, now = answerOf(last);
     if (now !== undefined && normalise(now) === normalise(was)) return undefined;
-    const commits = this.ledger(card.meta.id)
-      .filter((e) => e.meta.at < last.at)
-      .map((e) => ({ ...(e.meta.commit ? { commit: e.meta.commit } : {}), branch: e.meta.branch }));
-    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits, at: last.at };
+    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
+  }
+
+  /**
+   * The commits built on a card before `before` (B-9v5xj). First those on a branch whose trailers cite it, found by
+   * searching the history, so a rebase, or a squash that keeps the trailer, doesn't lose them; then the ledger's
+   * entries whose commit is on no branch now, marked rewritten. A commit in both is named by the branch the ledger
+   * says it was made on, unless that was a detached HEAD (as during a rebase).
+   */
+  private builtOn(id: string, before: string): BriefCommit[] {
+    const history = this.history();
+    const ledger = this.ledger(id).filter((e) => e.meta.at < before);
+    const madeOn = new Map(ledger.flatMap((e) => (e.meta.commit && !e.meta.branch.startsWith("detached-") ? [[e.meta.commit, e.meta.branch] as const] : [])));
+    // When the work was done: a rebase keeps the author's date, and a commit made after the change built on the new answer.
+    const found = (history.citing.get(id) ?? []).filter((c) => c.authored < Date.parse(before));
+    const listed = new Set(found.map((c) => c.commit));
+    const out: BriefCommit[] = found.map((c) => ({ commit: c.commit, branch: madeOn.get(c.commit) ?? c.branch }));
+    for (const e of ledger) {
+      const commit = e.meta.commit;
+      if (!commit) {
+        out.push({ branch: e.meta.branch });
+      } else if (!listed.has(commit)) {
+        listed.add(commit);
+        out.push({ commit, branch: e.meta.branch, ...(history.onBranch(commit) ? {} : { rewritten: true as const }) });
+      }
+    }
+    return out;
+  }
+
+  /** The history's `Baesian-Card` trailers (B-9v5xj): searched once per view, and cached per process while the branches stay put. */
+  private history(): History {
+    if (this.session?.history) return this.session.history;
+    const history = readHistory(this.repo.toplevel);
+    if (this.session) this.session.history = history;
+    return history;
   }
 
   /** What an agent should be told about a card now, beyond its verdict (D80, D81). */
@@ -870,14 +950,29 @@ export class Store {
   /**
    * Verdicts on this branch's cards newer than its inbox cursor, less those `baesian wait` has already delivered.
    * The cursor is local state, not a record.
+   *
+   * With a `session` (a harness's session id, which the plugin's hooks pass), the session keeps a cursor of its own, so
+   * every session on the branch hears each verdict once (B-ghhym). A new session starts from the branch's cursor, the
+   * newest any session has read, so it isn't handed old verdicts. What `wait` delivered stays delivered for all.
    */
-  inbox(opts: { advance: boolean }): InboxItem[] {
+  inbox(opts: { advance: boolean; session?: string }): InboxItem[] {
     this.requireInit();
-    const cursor = this.readCursor();
-    const all = this.inboxSince(cursor.at);
-    const delivered = new Set(cursor.delivered);
-    // Once everything newer than the cursor has been seen, here or through `wait`, the cursor moves past all of it.
-    if (opts.advance && all.length > 0) this.writeCursor({ at: all.at(-1)!.verdict.at });
+    const branch = this.readCursor();
+    const saved = opts.session ? this.readCursor(opts.session) : branch;
+    const own = saved ?? { at: branch.at, delivered: [] };
+    const all = this.inboxSince(own.at);
+    const delivered = new Set([...own.delivered, ...branch.delivered]);
+    const latest = all.at(-1)?.verdict.at;
+    if (opts.advance && !opts.session && latest) {
+      // Once everything newer than the cursor has been seen, here or through `wait`, the cursor moves past all of it.
+      this.writeCursor({ at: latest });
+    } else if (opts.advance && opts.session) {
+      // A session's first read keeps its place even with nothing new, so another session reading first can't move it.
+      if (latest || !saved) this.writeCursor({ at: latest ?? own.at }, opts.session);
+      // The branch's cursor keeps up with the newest any session has read; what `wait` delivered stays listed, for
+      // sessions still behind it.
+      if (latest && latest > branch.at) this.writeCursor({ at: latest, ...(branch.delivered.length ? { delivered: branch.delivered } : {}) });
+    }
     return all.filter((i) => !delivered.has(inboxKey(i)));
   }
 
@@ -897,19 +992,23 @@ export class Store {
     this.writeCursor({ at: cursor.at, delivered: [...new Set([...cursor.delivered, ...keys])] });
   }
 
-  private cursorPath(): string {
-    return join(this.live, "cursors", `${slug(this.repo.branch)}.json`);
+  /** The branch's cursor, or a session's own: `cursors/<branch>.json`, `cursors/<branch>/<session>.json`. */
+  private cursorPath(session?: string): string {
+    const branch = slug(this.repo.branch);
+    return session ? join(this.live, "cursors", branch, `${slug(session)}.json`) : join(this.live, "cursors", `${branch}.json`);
   }
 
-  private readCursor(): { at: string; delivered: string[] } {
-    const path = this.cursorPath();
-    if (!existsSync(path)) return { at: "", delivered: [] };
+  private readCursor(): { at: string; delivered: string[] };
+  private readCursor(session: string): { at: string; delivered: string[] } | undefined;
+  private readCursor(session?: string): { at: string; delivered: string[] } | undefined {
+    const path = this.cursorPath(session);
+    if (!existsSync(path)) return session ? undefined : { at: "", delivered: [] };
     const c = JSON.parse(readFileSync(path, "utf8"));
     return { at: c.at ?? "", delivered: c.delivered ?? [] };
   }
 
-  private writeCursor(c: { at: string; delivered?: string[] }): void {
-    const path = this.cursorPath();
+  private writeCursor(c: { at: string; delivered?: string[] }, session?: string): void {
+    const path = this.cursorPath(session);
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${JSON.stringify(c)}\n`);
   }

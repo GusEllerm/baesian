@@ -240,7 +240,7 @@ An agent can't fudge these the way it can fudge a number, and the reviewer can a
 - **Choose a level (D42):**
   - **provisional** (the default): the agent proceeds on its proposal, and the card waits in the queue, grouped by deck (by default one per branch; D29);
   - **blocking**, when proceeding would be expensive to undo: it notifies at once, at most four at a time. The agent waits while you're there, and proceeds provisionally if you're away;
-  - **hard**, when the decision must never proceed without a verdict. Spending money, touching security or privacy, deleting or overwriting stored data, and publishing make a card hard by default.
+  - **hard**, when the decision must never proceed without a verdict. Spending money, touching security or privacy, deleting or overwriting stored data, and publishing make a card hard, whatever level the agent asks for: an agent may raise a card's level, never lower it (D144).
 
 **Priority, in order:**
 1. blocking cards;
@@ -453,7 +453,7 @@ The personal-website and live-docs vaults already run this decision process by h
 - **Every harness (tiers 0 and 1):** the CLI, the git gate, CI, and the `AGENTS.md` block. This is the whole product; everything below only makes it faster.
 - **The plugin, for Claude Code and Codex (tier 2),** in this repo at `plugins/baesian/` (renamed from `plugins/claude-code/` by D118), with the marketplace file at the root (D114):
   - a skill that teaches the agent to file good cards, reading the project's rules;
-  - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn. When `Stop` brings in a verdict, Claude Code sends one more request on its own, so the agent acts on the answer in a turn of its own;
+  - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116), passing the harness's session id so each session on a branch hears each verdict once (B-ghhym): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn. When `Stop` brings in a verdict, Claude Code sends one more request on its own, so the agent acts on the answer in a turn of its own;
   - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115). A plan sent back with feedback fires no `PostToolUse`, so it makes no deck (rehearse's probe, Claude Code 2.1.316);
   - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin, and takes `/baesian` when no other command has the name), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
   - the MCP server.
@@ -489,7 +489,7 @@ The personal-website and live-docs vaults already run this decision process by h
     - D90's marker belongs to the shell that's waiting;
     - the "next session" of D81 and D90 is the next shell.
 
-    One gap: the inbox cursor is kept per branch, so if two shells of one agent share a branch, the first to read the inbox takes its verdicts.
+    One gap, closed provisionally on 2026-11-02 (B-ghhym): the inbox cursor was kept per branch, so if two shells of one agent shared a branch, the first to read the inbox took its verdicts. Now each session the plugin's hooks name keeps its own place.
   - **To settle,** as a decision card, once the cluster's storage, networking and agents are clearer. Meanwhile:
     - M4's server makes polling a mode of its own beside watching;
     - its API is shaped around the store's operations, so agents' commands could later go through it.

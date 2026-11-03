@@ -177,7 +177,7 @@ test("an answer against the pick may get one reply, and the card comes back with
     id = file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
   });
   await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
-  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer, and claude-code may reply once, with a new fact or a check.");
+  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer, and claude-code may reply once, with a new fact or a check. It's committed with the code.");
   await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
   await page.clock.fastForward(5100);
   await expect.poll(() => store.status(id)).toBe("resolved");
@@ -187,7 +187,7 @@ test("an answer against the pick may get one reply, and the card comes back with
   await expect(reply).toHaveText("claude-code repliedYou chose “Postgres”. Only the CI runner writes runs.");
   // It has had its reply: answering against its pick again promises nothing more.
   await page.locator(`${CARD} .opt[data-kind="alternative"]`).click();
-  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer.");
+  await expect(page.locator(CARD)).toContainText("It goes to claude-code with your answer. It's committed with the code.");
   await expect(page.locator(CARD)).not.toContainText("may reply once");
 });
 

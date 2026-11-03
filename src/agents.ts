@@ -21,7 +21,8 @@ reverse. Otherwise decide yourself. Every card states its strongest alternative,
 the choice turns on (the crux). A topic names one question: reuse one from \`baesian topics\` only for the
 same question, and give a follow-on question its own, narrower topic. The reviewer chooses before seeing
 your pick, your case or the card's body; put what they need in order to choose, kept neutral, in
-\`crux_fact\`, and background in the body.
+\`crux_fact\`, and background in the body. The decision record is committed with the code, so don't paste
+secrets, credentials or private output into a card.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose \`touches\`

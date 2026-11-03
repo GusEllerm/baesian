@@ -292,7 +292,7 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
             Why?{" "}
             <span className="soft">
               Optional. It goes to {m.source_agent} with your answer
-              {card.replied ? "." : `, and ${m.source_agent} may reply once, with a new fact or a check.`}
+              {card.replied ? "." : `, and ${m.source_agent} may reply once, with a new fact or a check.`} It's committed with the code.
             </span>
           </span>
           <input
@@ -446,6 +446,7 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
           }
         }}
       />
+      <p className="small">What you write is committed with the code.</p>
       {mode.kind === "write" && (mode.reason === "correction" || mode.reason === "reject") && (
         <RuleToggle card={p.card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
       )}
