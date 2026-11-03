@@ -1,10 +1,10 @@
 ---
 type: decision
 format: 1
-status: reopened
+status: active
 authority: log
 livedocs: snapshot
-summary: "What a vertical swipe does on a long card, on a phone: It should scroll until the top or bottom is fully in view. Once it is fully in view you should be able to drag further to initiate that action. For example take a long card - I scroll to the bottom. I am at the bottom, I scroll further, and it enters the more context flow ect. If I scroll to the top, then pull further, it enters the question, correction, rejection flow etc (B-k7xac)."
+summary: "What a vertical swipe does on a long card, on a phone: Scroll it, only when the card is longer than the screen (B-k7xac)."
 created: 2026-11-03
 updated: 2026-11-03
 tags:
@@ -13,15 +13,14 @@ tags:
 aliases:
   - B-k7xac
 card: B-k7xac
-revision: 1
+revision: 2
 title: What a vertical swipe does on a long card, on a phone
 question: On a phone, what should swiping up or down on a card longer than the screen do?
-answer: It should scroll until the top or bottom is fully in view. Once it is fully in view you should be able to drag further to initiate that action. For example take a long card - I scroll to the bottom. I am at the bottom, I scroll further, and it enters the more context flow ect. If I scroll to the top, then pull further, it enters the question, correction, rejection flow etc.
-response: correction
+answer: Scroll it, only when the card is longer than the screen
+response: accept
 not_chosen:
-  - Scroll it, only when the card is longer than the screen
   - Always scroll, on every card
-answered: 2026-11-03T17:45:37.644Z
+answered: 2026-11-03T17:58:39.124Z
 answered_by: Gus Ellerm
 topic: client/phone-vertical-swipe
 deck: hosted
@@ -65,3 +64,7 @@ A third option was set aside: keep all four swipes on every card, and scroll a l
 claude-code replied to the answer, once: "On a card that fits the screen, pushing the card up opens Other answer (question, correction, rejection) and pulling it down opens Can't judge (more context). Under this answer, on a long card, pushing up past the bottom opens more context and pulling down past the top opens Other answer, so the same finger movement does opposite things depending on the card's length. Keeping the short card's directions at a long card's edges (push up past the bottom for Other answer, pull down past the top for Can't judge) would avoid that."
 
 Until the card is answered again, this decision isn't in force.
+
+## Changed on 2026-11-03
+
+**Now:** Scroll it, only when the card is longer than the screen, the agent's pick. **Was:** It should scroll until the top or bottom is fully in view. Once it is fully in view you should be able to drag further to initiate that action. For example take a long card - I scroll to the bottom. I am at the bottom, I scroll further, and it enters the more context flow ect. If I scroll to the top, then pull further, it enters the question, correction, rejection flow etc. Answered by Gus Ellerm.
