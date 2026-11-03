@@ -19,7 +19,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 
 | Command | Does |
 |---|---|
-| `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]) |
+| `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]). `--vault` records the vault, in a config that may already exist, turns Obsidian's Bases on and adds the Decision Log's query (`initVault`, [[src-vault]]); it refuses a path outside the repo |
 | `template` | prints a card draft. Unfilled, it fails validation |
 | `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards, and prints notes on long fields |
 | `revise <id> [path]` | the next revision of a returned card |
@@ -32,7 +32,7 @@ All output goes through an `Io` object, and Commander's own output and exits are
 | `list [--all] [--branch]`, `show <id>`, `topics` | read. `show` prints the card as the client shows it: the question, the trigger, the stakes, the crux and the two options, then any context |
 | `inbox [--peek] [--quiet] [--session <id>]` | new verdicts on this branch's cards, less those `wait` already delivered. `--session` is for a harness's hooks: that session keeps its own place, so every session on the branch hears each verdict once (B-ghhym). Without it, an agent's own `baesian inbox` reads the session its harness names (`harnessSession()`: `CLAUDE_CODE_SESSION_ID` in Claude Code, `CODEX_THREAD_ID` in Codex, the same IDs the hooks receive), so the agent and its hooks share one place and nothing is handed over twice. Each names what it decided, as `wait` does: an accept names the proposal (`accept: SQLite (WAL mode)`), as `show` does too. A verdict that retired a rule says so (D119). `--quiet` is for a harness's hooks (M5): a heading and the verdicts, or nothing at all when there's nothing new or the repo doesn't use Baesian, and never a failure |
 | `serve [--port <n>] [--no-open] [--poll]` | serves the client on 127.0.0.1 and opens it ([[src-server]]), on the last server's port when it's free (D103). If this repo's server is already running, it prints its address and opens that instead |
-| `sync` | copies new verdicts and ledger entries into the record |
+| `sync` | copies new verdicts and ledger entries into the record, and, with a vault, writes its notes (`writeNotes`, D170) without staging them |
 | `check [--message <file>] [--json]` | previews the commit gate on the staged changes: the decisions found, and what covers them. Exits 1 when the commit would be blocked, with `--json` too |
 | `verify [--base <ref>] [--merge] [--file-conflicts]` | CI: reruns the gate on every commit since the base, against its own committed record. `--merge` adds the merge gate and conflicting decisions ([[src-verify]]) |
 | `hook <name> [args…]` | hidden; what the installed git hooks call (`runHook`) |
@@ -73,7 +73,7 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 
 ## src/agents.ts
 
-`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`, or Codex's `CODEX_THREAD_ID`), then `agent`. `AGENTS_BLOCK` covers:
+`writeAgentsBlock` keeps `AGENTS_BLOCK` between `BEGIN` and `END` in `AGENTS.md`, and leaves everything else in the file alone. With a vault, `agentsBlock` adds one sentence pointing agents to the vault's routing notes and its rules in force, to read as guidance when deciding whether to file (D173); the gate never reads them. `claudeMdMissesAgents` warns when `CLAUDE.md` doesn't import `AGENTS.md`. `CARD_TEMPLATE` is the draft that `baesian template` prints: the required fields of [[File Formats#Card revision]] to fill in, and the optional ones commented out. Its `touches` list includes `infra`. `agentName` names whoever runs a command (D102): `--agent`, then `$BAESIAN_AGENT`, then the harness's own name (`harnessName`, from variables such as Claude Code's `AI_AGENT`, or Codex's `CODEX_THREAD_ID`), then `agent`. `AGENTS_BLOCK` covers:
 - when to file a card, and that every card states its strongest alternative and its crux;
 - that a topic names one question, so a follow-on gets its own, narrower topic (D112);
 - that the reviewer chooses before seeing the agent's pick, case or body, so what they need in order to choose goes in `crux_fact`, kept neutral (provisional, on the finding 2 card);

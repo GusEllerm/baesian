@@ -136,12 +136,47 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 - **Waiting marker** (`Waiting`, D90): `card`, `revision`, `agent`, `since`, `at`. `baesian wait` writes it when it starts, and rewrites it every 30 seconds (with a temporary file and a rename, as presence does). A run that ends with exit 7 (D101) leaves it for the next run to pick up; any other ending removes it. `since` is when the wait first began, across runs. A marker more than 90 seconds old means the agent stopped waiting: the card says so, and drops back to its place in the queue. Several agents can wait on one card, each with its own marker. `baesian wait` writes it from M4 step 3.
 - **Server file** (`ServerInfo`, D97): `pid`, `port`, `token`, `started`. `baesian serve` writes it atomically, readable only by the user, and removes it when it stops. The token is new on every start. Another `serve` uses it to find a running server, and ignores it if that process has gone or doesn't answer.
 - **Last port** (`LastPort`, D103): `port`. The port the last server listened on, kept after it stops so the next one can start on the same address, and the browser keeps what it stored for that address. No secret. An unreadable file is ignored, and a port in use falls back to one the system picks.
-- **Config** (`Config`): optional `vault`, and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
+- **Config** (`Config`): optional `vault` (the vault adapter's folder, relative to the repo root and inside it, set by `baesian init --vault`; M6), and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
 - **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;
   - a phone-push token would be in the repo.
 
   This is a change from the first draft, part of P12.
+
+## Vault notes (M6)
+
+With `vault` set, the vault adapter writes two more files, in the vault rather than in Baesian's layers ([[Vault Adapter]], D170–D175; `src/vault.ts`, [[src-vault]]). They're views of the record: the pre-commit hook and `baesian sync` write them, from the branch's record and nothing else, and the gate never reads them (D173).
+
+| File | One per | Written |
+|---|---|---|
+| `<vault>/Decisions/<card ID> <title>.md` | card that is or was resolved (`accept`, `alternative`, `correction`), conflict cards included; not a rule draft | when its card first resolves, and extended as it changes |
+| `<vault>/Rules/<rule ID> <first words>.md` | rule, retired or not | when the rule is saved, and extended when it's retired |
+
+**Names (D171).** The card's first revision's title, or the rule's first words, with `* " \ / < > : | ? # ^ [ ]` removed, spacing collapsed, and cut at a word boundary to 80 characters for a title and 60 for a rule; a trailing dot or space is dropped. A note is found by the ID at the start of its name, anywhere under its folder, so one renamed or moved by hand keeps its ID and isn't written again.
+
+**How a note changes (D172).** The body is rendered once, from the card's first resolving answer, and never rewritten. The frontmatter is rendered afresh from the record each time: the keys below, in this order, then any key a person added, whose value is kept; a person's own `tags` and `aliases` are kept beside Baesian's. Each change adds one section at the end, `## <What> on <YYYY-MM-DD>`, the date in UTC: `Changed`, `Reopened`, `Answered again`, `Superseded`, `Withdrawn`; for a rule, `Retired`. A section already there is found by its heading. Everything is rendered from immutable files, so a note written fresh is the same bytes as one written earlier and extended since. Lists of links (`depends_on` and the like) hold wikilinks, `"[[<card ID> <title>|<card ID>]]"`, or the bare ID for a card with no note.
+
+**Decision note frontmatter:**
+
+| Key | Value |
+|---|---|
+| `type`, `status` | `decision`; `active` (resolved), `superseded`, `withdrawn`, or `reopened` (open again: returned, deferred, rerouted, or replied to) |
+| `authority`, `livedocs` | `log`; `snapshot`, so livedocs binds nothing in it (D175) |
+| `summary` | `<title>: <answer> (<card ID>).` |
+| `created`, `updated` | the date of the first answer, and of the latest change |
+| `tags`, `aliases` | `[baesian, decision]`; `[<card ID>]` |
+| `card`, `revision`, `title`, `question` | the card, and the revision the latest resolving answer was on, with its title and question |
+| `answer`, `response`, `not_chosen` | what was decided, how (`accept`, `alternative`, `correction`), and the options not chosen: one, or both for a `correction` |
+| `answered`, `answered_by` | the latest resolving verdict's time (ISO, as text) and reviewer |
+| `topic`, `deck`, `level`, `reverse`, `touches` | as on that revision; the topic canonical |
+| `filed`, `filed_by`, `branch` | the first revision's time, agent and branch |
+| `depends_on`, `supersedes`, `superseded_by`, `conflict_of` | links to those decisions' notes |
+
+**Decision note body:** the title, the question, then one paragraph each, only when set: **Decided** (with what follows from it), **Not chosen** (one or two), **It turned on** (the crux, and the answer that leads to each option), **The fact given**, **Comment**, **First chose** (when the reviewer switched after the agent's pick was shown, D88), **The agent's case**, **The agent's reply**. Then who answered, when, and on which card and revision; who filed it, on which branch and in which deck, and the deck's context notes as links; where the record is, and that editing the note changes nothing. Last, `## Background`, the card's body.
+
+**Rule note frontmatter:** `type: rule`; `status` (`active` or `retired`); `authority: specifies`; `livedocs: snapshot`; `summary` (the rule's first sentence); `created`, `updated`; `tags: [baesian, rule]`; `aliases: [<rule ID>]`; then `rule` (the rule ID), `topic`, `covers`, `from_card` (a link), `accepted_by`, `accepted` (ISO); and once retired, `retired` (ISO), `retired_by`, `retired_on` (a link to the card it was retired on).
+
+**Rule note body:** the rule's first words as a heading, the rule as a quote, who accepted it and when and from which decision (by ID, since every branch's record holds the rule but not always that card), the gate facts it lets through without a card, and that editing the note changes no rule.
 
 ## Commit trailers (D52)
 

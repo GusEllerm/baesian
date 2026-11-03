@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Baesian's build plan: the stack (D47–D51), the repo layout, and milestones M1–M7 following the D33 order, with what each delivers and how it is tested. M1 (store and core CLI) is done."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, design, plan]
 ---
@@ -31,6 +31,7 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 | `src/facts.ts`, `src/trailers.ts`, `src/gate.ts`, `src/hooks.ts`, `src/globs.ts` | the commit gate ([[src-gate]]) |
 | `src/verify.ts` | `baesian verify`: CI and the merge gate ([[src-verify]]) |
 | `src/server.ts`, `src/api.ts` | the local server and its API types, which the client shares ([[src-server]]) |
+| `src/vault.ts` | the vault adapter: decision and rule notes, `init --vault`, and a deck's wikilinks ([[src-vault]]) |
 | `client/` | the React client (D98): its own TypeScript and Vite configs; builds into `dist/client/` ([[Client Build]]) |
 | `e2e/` | the client's browser tests, Playwright (D100), run with `npm run e2e` |
 | `src/frontmatter.ts`, `src/git.ts`, `src/ids.ts`, `src/similarity.ts` | helpers |
@@ -51,7 +52,7 @@ Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run baesian -- <c
 | **M3c** | The exported-signature detector (`api:` facts): `livedocs signatures` (livedocs 0.2.1, D56), breaking changes only (D58), opt-in through `gate_api` (D59) | **done** (2026-10-23), 107 tests in total |
 | **M4** | The client: a local server (API plus live updates), the React app (desktop first, arrow-key and swipe gestures), decks, the response panel, rules, topic merging, conflict links, presence | |
 | **M5** | Harness adapters: the Claude Code plugin (skill, `SessionStart`, `ExitPlanMode`), Codex hooks | **under way** (2026-11-01): the plugin is built in `plugins/baesian/` (D114–D116), provisionally tested in Claude Code in a real session, then tested there by rehearse's free probe (2026-11-02): every hook, both skill names, verdicts at each stopping point, and the plan hook, including a rejected plan. Codex (2026-11-02, D118): it installs the same plugin unchanged, and the `Stop` hook answers it in its own form. Since then, rehearse's three live scenarios run it in interactive Claude Code with graders (pinned at `29be803`), and its probe ran every hook but the plan hook in real Codex 0.166.0 sessions (2026-11-02): all work once trusted. To come: rehearse's Codex scenarios |
-| **M6** | The vault adapter: decision and rule notes, the Decision Log's `base` query | |
+| **M6** | The vault adapter ([[Vault Adapter]], P17; D170–D175): decision and rule notes written from the record by the pre-commit hook and `baesian sync`, changed only by their frontmatter and dated sections, livedocs snapshots by their own flag; `init --vault` (the Decision Log's `base` query, Bases turned on); `verify` warning on missing notes; a deck's context notes resolved for the client, with their summaries beside the briefing ([[src-vault]]) | **built** (2026-11-03), 307 unit tests in total, not yet turned on in this repo. To check by hand: the query's three views, and their `sort`, in Obsidian 1.12 |
 | **M7** | The MCP server: local, over stdio, the same operations as the CLI, and the way in to the hosted service with the CLI (D128) | |
 | **M8** | Routing and preferences ([[Routing and Preferences]], P14, proposed): the per-repo preference sliders (D131), the gate that checks cards against them, audit cards and convention cards (D126) | proposed (2026-11-03); its cards are in deck `routing` |
 | **M9** | The hosted service ([[Hosted Service]], P15, proposed; in v1 by D132): the relay (D127), accounts and the one-time sign-in (D128), answers the service vouches for, usage counts (D129), the phone layout and web push (D130), hosting | proposed (2026-11-03); its cards are in deck `hosted` |

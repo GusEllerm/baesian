@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "The Baesian design (v0.5): git as the state machine; cards, decks and responses; one client; routing on impact and reversibility; where cards come from (documents, mid-task, the commit gate); verdict delivery and the merge gate; parallel agents; two-layer storage and the vault adapter; open questions and the v1 order."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, design]
 ---
@@ -399,17 +399,17 @@ Nothing outside these two directories is needed. A repo with no vault, no livedo
 
 `baesian init --vault docs/vault` records the vault in `.baesian/config.json`. The adapter then does the following:
 
-- **Reads routing rules and conventions** from the vault's `specifies` notes (by default the Working Agreement and Code Conventions) and its `Rules/` notes.
+- **Points agents to the routing rules and conventions** in the vault's `specifies` notes (by default the Working Agreement and Code Conventions) and its `Rules/` notes, as guidance: one sentence in the `AGENTS.md` block names them (D173). The gate's rules come only from the store: a rule note shows a rule accepted in the client, and a note edited or added by hand changes nothing.
 - **Writes one note per item, never an aggregate (D43).** This applies the store's immutable-file approach (D34) to the vault. Each item note is written on whichever branch it belongs to:
   - **each resolved decision** becomes a note in `Decisions/` (`B-7f3k Use SQLite for run metadata.md`);
   - **each accepted rule** becomes a note in `Rules/`, which the Working Agreement links to.
 
-  The names are unique, and two branches adding the identical note merge cleanly, so nothing conflicts and nothing needs regenerating after a merge, even a GitHub one. The adapter never edits hand-written prose. Marking a decision superseded is the one edit to an existing note. It's rare, and two branches superseding the same decision at once is a real conflict worth seeing.
+  The names are unique, and two branches adding the identical note merge cleanly, so nothing conflicts and nothing needs regenerating after a merge, even a GitHub one. The adapter never edits hand-written prose. A written note changes only by its frontmatter and a dated section added at the end, when its decision is superseded, its answer changes, it's reopened or withdrawn, or a rule is retired (D172, widening D43's one edit). Each is rendered from the record, so two branches that extend a note the same way write the same bytes, and two branches superseding the same decision at once is a real conflict worth seeing.
 - **The Decision Log embeds a query** instead of owning a generated block (D43, revising D17). An Obsidian Bases `base` code block, roughly `file.inFolder("Decisions")` shown as a table, renders the current decisions whenever the note is opened. Hand-written rows elsewhere in the log stay as they are, so existing vaults need no migration.
   - Bases must be enabled in the vault: `baesian init --vault` turns it on in `.obsidian/core-plugins.json`.
   - Outside Obsidian, the `Decisions/` folder is still a readable set of notes.
   - Source: <https://github.com/obsidianmd/obsidian-help> ("Bases syntax", "Create a base"), checked 2026-10-23.
-- **Decision and rule notes are livedocs snapshots** (a `Decisions/*` and `Rules/*` snapshot glob), so they never create acks.
+- **Decision and rule notes are livedocs snapshots** by their own frontmatter (`livedocs: snapshot`, D175), so they never create acks, and Baesian never edits livedocs' config.
 - **Resolves links both ways.**
   - A deck's `context_notes` are vault wikilinks, and the client shows each linked note's `summary:` line.
   - Vault notes cite cards by ID, and the client links each ID to its card.

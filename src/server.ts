@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import type { ApiCard, ApiState, ApiVerdictInput } from "./api.js";
 import { LastPort, ServerInfo } from "./schema.js";
 import { type Store, ValidationError } from "./store.js";
+import { contextNotes } from "./vault.js";
 
 // The local server (M4 step 4): the client's API over the live layer. docs/vault/Design/Local Server.md is
 // the design. Node's own HTTP server (D49), bound to 127.0.0.1 (D63), hardened as D62 says: a token traded
@@ -138,12 +139,14 @@ export function snapshot(store: Store, extra: { version: number; started: string
       }
     }
     const presence = store.presence();
+    // A deck's context notes, resolved in the vault (M6): the vault is listed once per snapshot, and only if a deck has any.
+    const vaultNotes: { notes?: string[] } = {};
     return {
       version: extra.version,
       server: { pid: process.pid, started: extra.started, now: new Date(nowMs).toISOString(), watch: extra.watch },
       project: { name: basename(store.repo.toplevel), branch: store.repo.branch },
       ...(presence ? { presence } : {}),
-      decks: store.decks(),
+      decks: store.decks().map((d) => ({ ...d, notes: contextNotes(store, d.meta.context_notes, vaultNotes) })),
       rules: store.rules(),
       cards,
       problems,

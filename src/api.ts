@@ -54,13 +54,27 @@ export interface ApiCard {
   attachments: number;
 }
 
+/**
+ * One of a deck's context notes (M6, P17 §8): the wikilink as the deck holds it, and what to show for it. With a
+ * vault, the note it resolves to, relative to the repo root, and its `summary:` line; or `missing`, when no note in
+ * the vault matches. Without a vault, neither: the link is plain text.
+ */
+export interface ApiContextNote {
+  link: string;
+  text: string;
+  path?: string;
+  summary?: string;
+  missing?: true;
+}
+
 export interface ApiState {
   /** Changes whenever the live layer does; `/api/events` announces each new one. */
   version: number;
   server: { pid: number; started: string; now: string; watch: "events" | "poll" };
   project: { name: string; branch: string };
   presence?: Presence;
-  decks: { meta: DeckMeta; body: string }[];
+  /** Every deck; the body is its briefing, and `notes` its context notes, resolved in the vault. */
+  decks: { meta: DeckMeta; body: string; notes: ApiContextNote[] }[];
   /** Every rule; a retired one carries its retirement (D119). */
   rules: { meta: RuleMeta; body: string; retired?: RuleRetirement }[];
   cards: ApiCard[];

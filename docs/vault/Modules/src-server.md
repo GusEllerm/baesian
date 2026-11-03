@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/server.ts and src/api.ts: the local server the client talks to (M4 step 4). How it signs a browser in (D62, D97), its API (a snapshot plus change events, D96), how it watches the live layer (D84), how it reads the live layer without failing on a bad file, and the server file."
 created: 2026-10-24
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-24
 tags: [baesian, module]
 ---
@@ -31,7 +31,7 @@ The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127
 The types are in `src/api.ts`, which imports no Node modules, so the client can share them.
 - **`GET /api/state`** returns `snapshot`, an `ApiState`.
   - **The project:** its name and branch, and the server's pid, start time, clock and watch mode.
-  - **Presence, decks and rules,** each rule with its retirement if it has one (D119).
+  - **Presence, decks and rules,** each rule with its retirement if it has one (D119). Each deck carries its context notes, resolved in the vault (`contextNotes`, [[src-vault]]; M6): each `ApiContextNote` has the link, what to show, and, with a vault, the note's path and `summary:` line, or that it's missing. The vault is listed once per snapshot, and only when a deck has context notes.
   - **One `ApiCard` per card:** the latest revision and its body, the number of revisions, whether its agent has had its reply (`replied`, D104), status, decision, canonical topic, verdicts, dependents, briefs, waiting markers, fallbacks and the number of attachments.
   - **`problems`:** files that couldn't be read.
 - **`GET /api/events`** is a Server-Sent Events stream. It sends `changed` with the new `version` whenever the live layer changes, gathering changes over 100 ms, and a keep-alive comment every 15 seconds.

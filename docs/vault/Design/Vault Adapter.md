@@ -382,3 +382,15 @@ Filed as cards in deck vault-adapter on 2026-11-03.
 | (no card) | Where does the query live? | a `base` code block in the Decision Log | a `.base` file, embedded |
 
 The rest is the agent's to decide while building, and will be logged as agent decisions: the exact sanitising, the section wording, the column choice, and the order of the frontmatter keys.
+
+## As built (M6, 2026-11-03)
+
+M6 builds this proposal in `src/vault.ts` ([[src-vault]]); the formats are in [[File Formats#Vault notes (M6)]]. Where the build goes beyond the text above, or differs from it:
+- **One more section, `Answered again`,** for a decision reopened and then resolved with the same answer, so the note doesn't say "reopened" with nothing after it. A reopening also comes from the agent's one reply (D89) and from the card it builds on being decided otherwise (D80), besides an answer that sends it back.
+- **Sections are found by their heading,** so a person may edit the text under one without Baesian adding it again. A missing section goes in its place among those already there, or at the end.
+- **The pre-commit hook leaves a note with someone's unstaged edit as it is,** and says so, since staging it would commit their unfinished edit. A note whose only unstaged change is Baesian's own (after a blocked commit, or `baesian sync`) is staged as usual.
+- **A rule note's body names the card it came from by ID,** not as a link: every branch's record holds the rule, but not always that card, and the body must be the same bytes everywhere. Its frontmatter links it.
+- **Frontmatter links** go only to cards that have a note, or are the bare ID; body links are built from the card's first revision, as names are.
+- **`init --vault`** also refuses a vault outside the repo, leaves a vault with `.obsidian/` but no `core-plugins.json` alone, and writes no notes: the next commit, or `baesian sync`, does.
+- **Not built:** finding hand-written mentions of card IDs (§8, optional).
+- **Still to check by hand:** the query's three views in Obsidian 1.12, and their `sort` key (§5).

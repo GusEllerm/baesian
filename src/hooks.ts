@@ -6,6 +6,7 @@ import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
 import { type Store } from "./store.js";
 import { parseTrailers } from "./trailers.js";
+import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
 
 // D54: Baesian's hooks are a marked block inside whatever hook files the repo already uses, placed
 // right after the shebang, because livedocs' pre-commit ends in `exec`.
@@ -138,15 +139,15 @@ function mergeInProgress(store: Store): boolean {
   }
 }
 
-/** The record's entries in `git status`: each path, and its index column (`X`; `?` when untracked). */
-function recordStatus(top: string, rel: string): { x: string; path: string }[] {
-  const out = execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all", "--", rel], { cwd: top, encoding: "utf8" });
+/** The entries in `git status` under some paths: each path, its index column (`X`; `?` when untracked) and its worktree column (`Y`). */
+function recordStatus(top: string, rel: string | string[]): { x: string; y: string; path: string }[] {
+  const out = execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all", "--", ...[rel].flat()], { cwd: top, encoding: "utf8" });
   const parts = out.split("\0");
-  const entries: { x: string; path: string }[] = [];
+  const entries: { x: string; y: string; path: string }[] = [];
   for (let i = 0; i < parts.length; i++) {
     const e = parts[i]!;
     if (e.length < 4) continue;
-    entries.push({ x: e[0]!, path: e.slice(3) });
+    entries.push({ x: e[0]!, y: e[1]!, path: e.slice(3) });
     if (e[0] === "R" || e[0] === "C") i++; // the old path of a rename or copy comes next
   }
   return entries;
@@ -179,6 +180,62 @@ function unstageOurs(top: string): void {
   git(top, ["reset", "-q", "--", ...paths]);
 }
 
+/**
+ * Write the vault's notes for the commit and stage them (D170). A note with changes nobody has staged is left as it
+ * is: staging it would commit someone's unfinished edit. Returns the notes it staged that nobody had staged before,
+ * for a blocked commit to unstage (D122). A missing vault is a warning, never a block.
+ */
+function stageNotes(store: Store, io: HookIo): string[] {
+  const top = store.repo.toplevel;
+  const v = vaultOf(store);
+  if (!v) return [];
+  const folders = "problem" in v ? [] : [DECISIONS, RULES].map((f) => relative(top, join(v.dir, f))).filter((f) => existsSync(join(top, f)));
+  const before = new Map(folders.length ? recordStatus(top, folders).map((e) => [e.path, e]) : []);
+  const unstaged = (n: PlannedNote) => {
+    const e = before.get(n.path);
+    return e !== undefined && e.x !== "?" && (e.y === "M" || e.y === "T");
+  };
+  // A note's unstaged change is Baesian's own when bringing the index's version up to date gives the same note: as
+  // after a blocked commit unstaged it, or `baesian sync` extended it. Otherwise it's someone's edit.
+  const ours = new Map<string, boolean>();
+  const onlyOurs = (n: PlannedNote): boolean => {
+    let same = ours.get(n.path);
+    if (same === undefined) {
+      try {
+        const index = execFileSync("git", ["show", `:${n.path}`], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+        same = n.update(index) === n.next;
+      } catch {
+        same = false;
+      }
+      ours.set(n.path, same);
+    }
+    return same;
+  };
+  const r = writeNotes(store, { mayWrite: (n) => !unstaged(n) || onlyOurs(n) });
+  for (const w of r.warnings) io.err(`baesian: ${w}`);
+  for (const path of r.skipped) io.err(`baesian: left ${path} as it is: it has changes you haven't staged. Stage them, and the next commit brings it up to date.`);
+  const written = new Set(r.written);
+  const planned = new Map(r.planned.map((n) => [n.path, n]));
+  // What this commit should carry: the notes written now, any written earlier (by `baesian sync`) and never added, and
+  // those whose only unstaged change is Baesian's.
+  const toStage = r.notes.filter((p) => {
+    const n = planned.get(p);
+    return written.has(p) || before.get(p)?.x === "?" || (n !== undefined && unstaged(n) && onlyOurs(n));
+  });
+  if (!toStage.length) return [];
+  try {
+    execFileSync("git", ["add", "--", ...toStage], { cwd: top, stdio: ["ignore", "ignore", "pipe"] });
+  } catch (e) {
+    io.err(`baesian: couldn't stage the vault's notes (${e instanceof Error ? e.message.split("\n")[0] : String(e)}); they're written, so add them yourself`);
+    return [];
+  }
+  io.err(`baesian: staged ${toStage.length} vault note${toStage.length === 1 ? "" : "s"} (${v.rel}/)`);
+  return toStage.filter((p) => {
+    const e = before.get(p);
+    return !e || e.x === " " || e.x === "?";
+  });
+}
+
 /** Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. */
 export function runHook(store: Store, name: string, args: string[], io: HookIo): number {
   if (!store.isInitialised()) return 0;
@@ -195,11 +252,14 @@ export function runHook(store: Store, name: string, args: string[], io: HookIo):
       const rel = relative(top, store.record);
       const pending = recordStatus(top, rel);
       // What this hook stages that nobody had staged, so a blocked commit can unstage it again (D122).
-      writeStaged(top, pending.filter((p) => p.x === " " || p.x === "?").map((p) => p.path));
+      const ours = pending.filter((p) => p.x === " " || p.x === "?").map((p) => p.path);
       if (pending.length) {
         execFileSync("git", ["add", "--", rel], { cwd: top });
         io.err(`baesian: staged ${pending.length} record file${pending.length === 1 ? "" : "s"} (${rel}/)`);
       }
+      // M6 (D170): then the vault's notes, from the record just updated, staged with it.
+      ours.push(...stageNotes(store, io));
+      writeStaged(top, ours);
       return 0;
     }
     case "commit-msg": {

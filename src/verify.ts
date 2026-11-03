@@ -7,6 +7,7 @@ import { type GateReport, describeReport, detectStaged, evaluate } from "./gate.
 import { type Repo, git } from "./git.js";
 import { type Card, RECORD_DIR, Store, normalise } from "./store.js";
 import { parseTrailers } from "./trailers.js";
+import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 
 // M3b: `baesian verify`, the same gate in CI, plus the merge gate (D31) and conflicts (D35, D38).
 // CI has no live layer, so everything here reads committed records (D34).
@@ -74,7 +75,21 @@ export interface VerifyResult {
   base: string;
   commits: CommitCheck[];
   merge?: MergeCheck;
+  /** Advice that doesn't fail the check: the vault's missing notes (M6). */
+  warnings?: string[];
   ok: boolean;
+}
+
+/** Whether a commit has the configured vault, and the paths of its decision and rule notes, relative to the vault. */
+function vaultFilesAt(repo: Repo, record: Store, rev: string): { vaultExists: boolean; paths: string[] } {
+  const vault = record.config().vault;
+  if (!vault) return { vaultExists: false, paths: [] };
+  const rel = cleanVaultPath(vault);
+  const prefix = rel === "." ? "" : `${rel}/`;
+  const exists = rel === "." || git(repo.toplevel, ["ls-tree", "-d", "--name-only", rev, "--", rel]) === rel;
+  if (!exists) return { vaultExists: false, paths: [] };
+  const out = git(repo.toplevel, ["ls-tree", "-r", "--name-only", "-z", rev, "--", `${prefix}${DECISIONS}`, `${prefix}${RULES}`]);
+  return { vaultExists: true, paths: out.split("\0").filter(Boolean).map((p) => p.slice(prefix.length)) };
 }
 
 function commitsIn(repo: Repo, base: string): string[] {
@@ -174,14 +189,17 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean }): Veri
   }
   try {
     const commits = commitsIn(repo, base).map((sha) => checkCommit(repo, records, sha));
+    const head = records.store("HEAD");
     let merge: MergeCheck | undefined;
     if (opts.merge) {
       const cited = [...new Set(commits.flatMap((c) => c.cards))];
-      merge = checkMerge(records.store("HEAD"), records.store(base), cited);
+      merge = checkMerge(head, records.store(base), cited);
     }
     const ok =
       commits.every((c) => c.report.ok) && (!merge || (merge.problems.length === 0 && merge.conflicts.length === 0));
-    return { base, commits, ...(merge ? { merge } : {}), ok };
+    // M6: the vault's notes are a view, so a missing note or vault is a warning, never a failure.
+    const warnings = vaultWarnings(head, vaultFilesAt(repo, head, "HEAD"));
+    return { base, commits, ...(merge ? { merge } : {}), ...(warnings.length ? { warnings } : {}), ok };
   } finally {
     records.dispose();
   }
@@ -218,6 +236,7 @@ export function describeVerify(r: VerifyResult): string[] {
     }
     for (const n of r.merge.notes) out.push(`  note: ${n}`);
   }
+  for (const w of r.warnings ?? []) out.push(`warning: ${w}`);
   out.push(r.ok ? "baesian verify: ok" : "baesian verify: failed");
   return out;
 }

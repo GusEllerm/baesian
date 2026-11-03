@@ -83,21 +83,33 @@ export function harnessName(env: NodeJS.ProcessEnv): string | undefined {
 
 export type BlockResult = "created" | "appended" | "updated" | "unchanged";
 
+/**
+ * The block for a repo, with its vault's guidance (M6, D173): with a vault, one sentence points agents to its routing
+ * notes and its rules, to read when deciding whether to file. They're guidance: the gate takes rules only from the store.
+ */
+export function agentsBlock(vault?: { rules: string; notes: string[] }): string {
+  if (!vault) return AGENTS_BLOCK;
+  const read = [...vault.notes.map((n) => `\`${n}\``), `the rules in force, in \`${vault.rules}\``];
+  const sentence = `Before deciding whether to file, read this repo's guidance in its vault: ${read.length > 2 ? `${read.slice(0, -1).join(", ")} and ${read.at(-1)}` : read.join(" and ")}.`;
+  return AGENTS_BLOCK.replace("\n\n**The commit gate**", `\n\n${sentence}\n\n**The commit gate**`);
+}
+
 /** Write or refresh the Baesian block in `AGENTS.md`, leaving everything outside the markers alone. */
-export function writeAgentsBlock(toplevel: string): BlockResult {
+export function writeAgentsBlock(toplevel: string, vault?: { rules: string; notes: string[] }): BlockResult {
   const path = join(toplevel, "AGENTS.md");
+  const block = agentsBlock(vault);
   if (!existsSync(path)) {
-    writeFileSync(path, `# Agent instructions\n\n${AGENTS_BLOCK}\n`);
+    writeFileSync(path, `# Agent instructions\n\n${block}\n`);
     return "created";
   }
   const text = readFileSync(path, "utf8");
   const start = text.indexOf(BEGIN);
   const end = text.indexOf(END);
   if (start < 0 || end < start) {
-    writeFileSync(path, `${text.replace(/\s*$/, "")}\n\n${AGENTS_BLOCK}\n`);
+    writeFileSync(path, `${text.replace(/\s*$/, "")}\n\n${block}\n`);
     return "appended";
   }
-  const next = text.slice(0, start) + AGENTS_BLOCK + text.slice(end + END.length);
+  const next = text.slice(0, start) + block + text.slice(end + END.length);
   if (next === text) return "unchanged";
   writeFileSync(path, next);
   return "updated";

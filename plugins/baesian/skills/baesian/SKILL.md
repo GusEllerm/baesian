@@ -18,6 +18,8 @@ File one when the decision changes a schema or an on-disk format, a public API, 
 
 Run `baesian inbox` first: an earlier verdict may already decide it.
 
+If `AGENTS.md` points to the repo's vault, read the notes it names (a Working Agreement, the rules in force in `Rules/`) when deciding: they're guidance, and only rules accepted in the client change what the gate lets through.
+
 ## Write it for someone choosing before they see your pick
 
 The reviewer chooses between your two options before seeing which is yours, your reasoning, or the card's body. So:

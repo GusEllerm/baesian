@@ -173,6 +173,19 @@ export class Store {
     return existsSync(path) ? parse(Config, JSON.parse(readFileSync(path, "utf8")), "config.json") : {};
   }
 
+  /**
+   * Record the vault in this worktree's config (M6), keeping its other keys: `init` writes a config only once, so
+   * `init --vault` in a repo already set up comes here. Returns whether it changed anything.
+   */
+  setVault(vault: string): boolean {
+    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
+    const { vault: was, ...rest } = this.config();
+    if (was === vault) return false;
+    mkdirSync(this.record, { recursive: true });
+    writeFileSync(join(this.record, "config.json"), `${JSON.stringify(parse(Config, { vault, ...rest }, "config"), null, 2)}\n`);
+    return true;
+  }
+
   private requireInit(): void {
     if (!this.isInitialised()) throw new Error("Baesian is not set up in this repository: run `baesian init`");
   }
@@ -513,6 +526,13 @@ export class Store {
     for (const r of this.revisions(id)) this.toRecord(join("cards", id, `r${r.meta.revision}.md`));
     this.toRecord(join("decks", `${card.meta.deck}.md`));
     return a;
+  }
+
+  /** The card's withdrawal by its agent, if it has one. */
+  withdrawal(id: string): Withdrawal | undefined {
+    const path = join(this.live, "cards", id, "withdrawn.json");
+    if (!existsSync(path)) return undefined;
+    return this.read(path, (t) => parse(Withdrawal, JSON.parse(t), `${id}/withdrawn.json`));
   }
 
   attachments(id?: string): Attachment[] {

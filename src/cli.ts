@@ -14,6 +14,7 @@ import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import type { Verdict } from "./schema.js";
 import { type Card, type InboxItem, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { cleanVaultPath, initVault, vaultGuidance, vaultPathProblem, writeNotes } from "./vault.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
@@ -156,13 +157,20 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--no-hooks", "don't install the git gate")
     .action((opts: { vault?: string; agents: boolean; hooks: boolean }) => {
       const s = store();
-      const created = s.init(opts.vault ? { vault: opts.vault } : {});
+      const vault = opts.vault === undefined ? undefined : cleanVaultPath(opts.vault);
+      if (vault !== undefined) {
+        const problem = vaultPathProblem(s.repo.toplevel, vault);
+        if (problem) throw new ValidationError(problem);
+      }
+      const created = s.init();
       if (created.length) {
         io.out(`live layer:  ${relative(s.repo.toplevel, s.live)}/  (shared by every worktree, not committed)`);
         io.out(`record:      ${relative(s.repo.toplevel, s.record)}/  (commit this)`);
       } else {
         io.out("already set up");
       }
+      // M6: the vault adapter. An existing config gains the vault; Bases is turned on, and the Decision Log gets its query.
+      if (vault !== undefined) for (const line of initVault(s, vault)) io.out(line);
       if (opts.hooks) {
         const r = installHooks(s, io.hookFallback ?? selfCommand());
         const changed = Object.entries(r.files).filter(([, v]) => v !== "unchanged");
@@ -172,7 +180,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         if (!r.versioned) io.out(`note: ${where} isn't versioned, so other clones won't get the gate; CI still checks.`);
       }
       if (opts.agents) {
-        const result = writeAgentsBlock(s.repo.toplevel);
+        const result = writeAgentsBlock(s.repo.toplevel, vaultGuidance(s));
         if (result !== "unchanged") io.out(`AGENTS.md:   instructions ${result}`);
         if (claudeMdMissesAgents(s.repo.toplevel)) {
           io.out("note: CLAUDE.md doesn't import AGENTS.md. Add a line `@AGENTS.md` so Claude Code reads the instructions.");
@@ -438,10 +446,17 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
 
   program
     .command("sync")
-    .description("copy new verdicts and ledger entries into this branch's record (.baesian/)")
+    .description("copy new verdicts and ledger entries into this branch's record (.baesian/), and write the vault's notes")
     .action(() => {
-      const added = store().syncRecord();
+      const s = store();
+      const added = s.syncRecord();
       io.out(added.length ? `added to the record:\n${added.map((p) => `  ${p}`).join("\n")}` : "record is up to date");
+      // M6 (D170): the vault's notes too, for verdicts that came after the branch's last commit. Not staged.
+      const notes = writeNotes(s);
+      for (const w of notes.warnings) io.err(`warning: ${w}`);
+      if (notes.vault && !notes.unusable) {
+        io.out(notes.written.length ? `wrote in the vault:\n${notes.written.map((p) => `  ${p}`).join("\n")}` : "vault notes are up to date");
+      }
     });
 
   program

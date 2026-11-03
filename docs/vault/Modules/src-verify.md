@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/verify.ts: baesian verify, the commit gate rerun in CI against committed records, plus the merge gate and conflicting decisions. Includes a GitHub Actions example."
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -23,6 +23,10 @@ CI has no live layer, only what was committed. `RecordAt` reads `.baesian/` from
 - **its own record and config**, for the cards, verdicts and detector paths.
 
 That is the same view the local `commit-msg` hook had, so CI repeats the local check rather than applying today's state to old commits. A commit from before the repo adopted Baesian has no record, and the default detectors still apply; verify from a later `--base`.
+
+## The vault's notes (M6)
+
+With a vault in the record's config, `verify` warns, without failing, when the record at HEAD holds decisions or rules with no note in the vault at HEAD, or the vault isn't in the commit (`vaultWarnings`, [[src-vault]]). The notes are a view of the record, so a lagging vault is advice: `baesian sync`, then commit. `VerifyResult.warnings` holds them, and `describeVerify` prints them last.
 
 ## The merge gate
 
