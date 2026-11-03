@@ -28,17 +28,17 @@ sig = "fe0d16f8f81e9c45"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/index.html"
-sig = "795cd7a903f0614c"
+sig = "34e03dcb6c10d5a0"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "766d66328c95f46c"
+sig = "db0877c8ab91531e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -48,12 +48,12 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "2a1d171bf7e684b6"
+sig = "20e599ca0bafdd63"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -64,6 +64,11 @@ sig = "477a455fef010a75"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Prose.tsx"
 sig = "5d09af9e7d7b28d6"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Sheet.tsx"
+sig = "c58bef63d2dffc40"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -104,6 +109,26 @@ sig = "1f8c7c02469d986e"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/local.ts#useSetupOffered"
 sig = "63ab0b190051c370"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/media.ts"
+sig = "f42786b6abf8d851"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/media.ts#PHONE"
+sig = "98291db114a649df"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/media.ts#TOUCH"
+sig = "bf75a497c69bf27d"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/media.ts#useMedia"
+sig = "47d63df37ed0ca65"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -398,7 +423,7 @@ sig = "fe0d16f8f81e9c45"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/Card.tsx"
-sig = "766d66328c95f46c"
+sig = "db0877c8ab91531e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -563,12 +588,12 @@ sig = "b346b2b146c7c63e"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Card.tsx"
-sig = "766d66328c95f46c"
+sig = "db0877c8ab91531e"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -908,12 +933,12 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1083,12 +1108,12 @@ sig = "46475140bde00362"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -1393,12 +1418,12 @@ sig = "ce1621a5d523883f"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1688,12 +1713,12 @@ sig = "bd19b17e8241ca42"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Panels.tsx"
-sig = "2a1d171bf7e684b6"
+sig = "20e599ca0bafdd63"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1808,12 +1833,12 @@ sig = "52dbd59da072b726"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -2863,12 +2888,12 @@ sig = "c6d222583ded5802"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "949a7cb59526b89f"
+sig = "912d5458f4fc6e49"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "9689f37777c5be2d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

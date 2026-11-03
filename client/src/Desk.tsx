@@ -12,8 +12,10 @@ import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./loc
 import { type Rarity, agentOf, areaOf, byId, heldBack, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
+import { PHONE, TOUCH, useMedia } from "./media";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
-import { type CardMotion, Path } from "./Path";
+import { type CardMotion, Path, type PathProps, flyToBar } from "./Path";
+import { PathSheet } from "./Sheet";
 import { POSITION_NAMES, ROW_NAMES, type Draft, pastCards, replacesOf, rowInSentence, surveyAnswersOf, surveyChange } from "./prefs";
 import { PreferencesPanel, postPreferences, usePresets } from "./Preferences";
 import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Survey";
@@ -25,7 +27,8 @@ import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Surv
 // (Path.tsx); under it, the pile of the rest of its area. In the header, the menu and its panels (Panels.tsx,
 // Preferences.tsx). While it's open, it says you're there
 // (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
-// design/explorations/round5/app.js.
+// design/explorations/round5/app.js. On a phone (D130), the card fills the screen and the path folds into a sheet you
+// pull up (Sheet.tsx); a card longer than the screen scrolls, so a vertical swipe on it scrolls rather than answers.
 
 /** How far a drag must go to choose: sideways, and up or down. */
 const THRESH_X = 150, THRESH_Y = 110;
@@ -44,6 +47,11 @@ const NUMBER = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
 /** The flight of your choice into the path, and the pause before the next card arrives. */
 const MOVE_MS = 700;
 type Dir = Side | "up" | "down";
+/**
+ * Which ways the card can be dragged: all four, or, on a phone whose desk scrolls, only sideways, so a vertical swipe
+ * scrolls the card as the two-finger swipe already does on a desktop (5f).
+ */
+type Axis = true | "x";
 /** How the card on the desk leaves: toward the answer you gave, or, moving between cards or undoing, just fading. */
 type Leave = Dir | "fade";
 
@@ -132,6 +140,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   /** A draft for the preferences panel to open with: the survey's suggestion, to adjust. */
   const [prefsInitial, setPrefsInitial] = useState<Draft>();
   const project = state.project.name;
+  /** The phone layout (D130), and a screen you touch: see media.ts. */
+  const phone = useMedia(PHONE);
+  const touch = useMedia(TOUCH);
+  const deskRef = useRef<HTMLElement>(null);
   usePresence();
   const seen = useSeen(state);
   const briefed = useBriefed(state);
@@ -492,7 +504,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       }
       // Typing goes to the field, and a radio button keeps its arrows; a ticked box (make this a rule) leaves the keys
       // to the card. Inside a panel, the keys are the panel's.
-      if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea, .panel')) return;
+      if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea, .panel, .sheet')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "z" || e.key === "Z") return h.undo();
       if (e.key === "?") return setPanel((p) => (p === "keys" ? undefined : "keys"));
@@ -580,6 +592,73 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const leaning = lean ?? handLean ?? hover;
   const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
 
+  // On a phone (D130). Whether the desk has somewhere to scroll: then a vertical swipe on the card scrolls it.
+  const [deskScrolls, setDeskScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const desk = deskRef.current;
+    if (!phone || !desk) return setDeskScrolls(false);
+    const check = () => setDeskScrolls(desk.scrollHeight > desk.clientHeight + 1);
+    const ro = new ResizeObserver(check);
+    ro.observe(desk);
+    for (const child of desk.children) ro.observe(child);
+    check();
+    return () => ro.disconnect();
+  }, [phone]);
+  const axis: Axis = phone && deskScrolls ? "x" : true;
+  // Each new card, survey step or briefing starts at its top.
+  const faceKey = setup ? `setup:${setup.step}:${setup.step === "ask" ? setup.i : ""}` : briefing ? `brief:${briefing.meta.id}` : current ? key : "empty";
+  useLayoutEffect(() => {
+    if (phone) deskRef.current?.scrollTo({ top: 0 });
+  }, [faceKey, phone]);
+  // The reveal and the written answers open under the options: brought into view, with their buttons if they fit.
+  useEffect(() => {
+    if (!phone || (mode.kind !== "reveal" && mode.kind !== "write" && mode.kind !== "pass")) return;
+    const desk = deskRef.current;
+    const inner = desk?.querySelector<HTMLElement>(".stage article.card:not([data-leaving]) .panel-in");
+    if (!desk || !inner) return;
+    const d = desk.getBoundingClientRect(), r = inner.getBoundingClientRect();
+    const by = r.height <= d.height - 24 ? r.bottom - d.bottom + 12 : r.top - d.top - 12;
+    if (by > 0) desk.scrollBy({ top: by, behavior: reduced ? "auto" : "smooth" });
+  }, [phone, mode.kind, key]);
+  // The keyboard coming up shrinks the page (index.html: resizes-content): the field you're writing in stays in view.
+  useEffect(() => {
+    if (!phone) return;
+    const keep = () => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el.matches('.stage textarea, .stage input[type="text"]')) el.scrollIntoView({ block: "nearest" });
+    };
+    const vv = window.visualViewport;
+    addEventListener("resize", keep);
+    vv?.addEventListener("resize", keep);
+    return () => {
+      removeEventListener("resize", keep);
+      vv?.removeEventListener("resize", keep);
+    };
+  }, [phone]);
+  // With the path folded away, your choice flies into the sheet's bar instead of into its row.
+  const sheetOpen = phone && panel === "path";
+  useLayoutEffect(() => {
+    if (!phone || !fly || sheetOpen) return;
+    const bar = document.querySelector<HTMLElement>(".sheet-peek");
+    if (bar) flyToBar(fly, bar);
+    setFly(undefined);
+  }, [fly, phone, sheetOpen]);
+  useEffect(() => {
+    if (!phone) setPanel((p) => (p === "path" ? undefined : p));
+  }, [phone]);
+  const openSheet = (open: boolean) => setPanel((p) => (open ? "path" : p === "path" ? undefined : p));
+  const pathProps: PathProps = {
+    trail,
+    current: inPlay && r ? { id: inPlay.meta.id, name: inPlay.meta.title, rarity: r.rarity, stopped: waitState(inPlay, now) === "waiting", conflict: (inPlay.meta.conflict_of?.length ?? 0) > 0 } : undefined,
+    relations,
+    upcoming: nextUp,
+    more: Math.max(0, ahead.length - NEXT_MAX),
+    lean: leanKind,
+    optionLabel: (k) => `${ARROW[sideOf(k)]} ${quoted(current?.meta[k] ?? "")}`,
+    onGoTo: goTo,
+    layoutKey: `${key}:${mode.kind}`,
+  };
+
   // The pile: the rest of this card's area, slightly messy, under it; under the survey, the examples still to come.
   const surveyLeft = !setup || !survey ? 0 : setup.step === "offer" ? survey.items.length : setup.step === "ask" ? survey.items.length - setup.i - 1 : 0;
   const pile = setup
@@ -610,9 +689,9 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         <p className="summary" aria-live="polite">
           {summary}
         </p>
-        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
+        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} touch={touch} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
-      {panel === "keys" && <KeysPanel onClose={() => setPanel(undefined)} />}
+      {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
       {panel === "held" && (
         <HeldPanel
@@ -647,20 +726,9 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           onClose={() => setPanel(undefined)}
         />
       )}
-      <main className="desk">
-        <Path
-          trail={trail}
-          current={inPlay && r ? { id: inPlay.meta.id, rarity: r.rarity, stopped: waitState(inPlay, now) === "waiting", conflict: (inPlay.meta.conflict_of?.length ?? 0) > 0 } : undefined}
-          relations={relations}
-          upcoming={nextUp}
-          more={Math.max(0, ahead.length - NEXT_MAX)}
-          lean={leanKind}
-          optionLabel={(k) => `${ARROW[sideOf(k)]} ${quoted(current?.meta[k] ?? "")}`}
-          onGoTo={goTo}
-          layoutKey={`${key}:${mode.kind}`}
-          {...(cardMotion ? { card: cardMotion } : {})}
-          {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
-        />
+      <main className="desk" ref={deskRef} inert={sheetOpen}>
+        {/* On a phone, the path is in the sheet, below. */}
+        {!phone && <Path {...pathProps} {...(cardMotion ? { card: cardMotion } : {})} {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})} />}
         <section className="stage" aria-label="The card to answer">
           <p className="crumbs">
             {setup ? (
@@ -698,6 +766,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   key={setup.step === "ask" ? `setup:ask:${setup.i}` : `setup:${setup.step}`}
                   label={setup.step === "offer" ? "Setting up your preferences" : setup.step === "ask" && survey ? survey.items[setup.i]!.question : "The preset your answers suggest"}
                   exit={exitDir.current}
+                  axis={axis}
                   {...(setup.step === "ask" ? { onSwipe: (dir: Side | "down") => setupAnswer(dir) } : {})}
                 >
                   {(armed) =>
@@ -739,6 +808,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                 <LiveCard
                   key={key}
                   exit={exitDir.current}
+                  axis={axis}
                   arriveAfter={fly && fly.key !== key ? MOVE_MS * 0.65 : 0}
                   lean={lean}
                   onMotion={showMotion}
@@ -773,10 +843,11 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                     onHover: setHover,
                     onHoldStart: beginHold,
                     onHoldEnd: endHold,
+                    touch,
                   }}
                 />
               ) : (
-                <motion.div key="empty" className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <motion.div key="empty" className="empty" initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
                   <EmptyDesk
                     recap={recap([...answered.values()].map((a) => a.answer))}
                     parked={aside}
@@ -792,6 +863,19 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           </div>
         </section>
       </main>
+      {phone && (
+        <PathSheet open={sheetOpen} answered={trail.length} connected={relations} next={ahead.length} lean={leanKind} onOpen={openSheet}>
+          <Path
+            {...pathProps}
+            sheet
+            onGoTo={(id) => {
+              openSheet(false);
+              goTo(id);
+            }}
+            {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
+          />
+        </PathSheet>
+      )}
       <ToastView toast={toast} onUndo={undo} onDone={() => setToast(undefined)} />
     </>
   );
@@ -814,6 +898,7 @@ function LiveCard(p: {
   nudged: number;
   locked: boolean;
   exit: Leave;
+  axis: Axis;
   rarity: string;
   arriveAfter: number;
 }) {
@@ -940,14 +1025,15 @@ function LiveCard(p: {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24, delay: reduced ? 0 : arriveAfter / 1000 } }}
       exit={out(p.exit)}
-      drag={live}
+      drag={live ? p.axis : false}
       dragSnapToOrigin
       dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      onDrag={(_e, info) => arm(info.offset.x, info.offset.y)}
+      // Sideways only, a vertical drag is the desk's to scroll: it never answers.
+      onDrag={(_e, info) => arm(info.offset.x, p.axis === "x" ? 0 : info.offset.y)}
       onDragEnd={(_e, info) => {
         arm(0, 0);
-        const { dir, progress } = gesture(info.offset.x, info.offset.y);
+        const { dir, progress } = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
         const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
         if (progress >= 1 || (speed > 900 && progress > 0.3)) p.card.onReach(dir);
       }}
@@ -1039,7 +1125,7 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; kno
  * two-finger swipe, sideways for its two answers or down for "not sure", as well as by the arrows and by clicking. The
  * offer and the suggestion are read and clicked.
  */
-function SetupCard(p: { label: string; exit: Leave; onSwipe?: (dir: Side | "down") => void; children: (armed: Dir | undefined) => ReactNode }) {
+function SetupCard(p: { label: string; exit: Leave; axis: Axis; onSwipe?: (dir: Side | "down") => void; children: (armed: Dir | undefined) => ReactNode }) {
   const reduced = useReducedMotion();
   const present = useIsPresent();
   const x = useMotionValue(0);
@@ -1098,17 +1184,17 @@ function SetupCard(p: { label: string; exit: Leave; onSwipe?: (dir: Side | "down
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
       exit={out(p.exit)}
-      drag={draggable}
+      drag={draggable ? p.axis : false}
       dragSnapToOrigin
       dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       onDrag={(_e, info) => {
-        const g = gesture(info.offset.x, info.offset.y);
+        const g = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
         setArmed(g.progress >= 1 && g.dir !== "up" ? g.dir : undefined);
       }}
       onDragEnd={(_e, info) => {
         setArmed(undefined);
-        const { dir, progress } = gesture(info.offset.x, info.offset.y);
+        const { dir, progress } = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
         const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
         if (progress >= 1 || (speed > 900 && progress > 0.3)) answer(dir);
       }}

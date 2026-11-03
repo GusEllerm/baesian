@@ -1,0 +1,11 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-k7xac",
+  "revision": 1,
+  "response": "correction",
+  "choice": "It should scroll until the top or bottom is fully in view. Once it is fully in view you should be able to drag further to initiate that action. For example take a long card - I scroll to the bottom. I am at the bottom, I scroll further, and it enters the more context flow ect. If I scroll to the top, then pull further, it enters the question, correction, rejection flow etc.",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-03T17:45:37.644Z"
+}

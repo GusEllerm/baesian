@@ -1,0 +1,20 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-np56n",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T170137.174Z-b64z9.json",
+  "touches": [],
+  "reverse": "cheap",
+  "asked": "provisional",
+  "source": "baesian",
+  "row": "other",
+  "position": "sample",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "baesian",
+  "at": "2026-11-03T17:45:37.829Z"
+}

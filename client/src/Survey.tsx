@@ -103,7 +103,7 @@ export function AskFace(p: {
           </button>
         )}
         <button type="button" className={p.armed === "down" ? "armed" : undefined} onClick={p.onSkip}>
-          <kbd>↓</kbd> Not sure
+          <kbd className="dir">↓</kbd> Not sure
         </button>
         <button type="button" onClick={p.onAway}>
           Not now <kbd>Esc</kbd>

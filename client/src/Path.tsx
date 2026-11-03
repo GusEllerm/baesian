@@ -9,7 +9,8 @@ import type { Rarity, Relation } from "./model";
 // joined to the card; its relationships hanging off that node, worded from its side; then what's next. Lines are
 // measured from the layout and drawn as SVG elements. Leaning toward an option lights what it would do to each
 // relationship. The card is measured where it rests, never where its motion has carried it, and the line into it
-// follows the card frame by frame as it's dragged, leans, shakes or springs back.
+// follows the card frame by frame as it's dragged, leans, shakes or springs back. On a phone (D130), the same path
+// lies in a sheet you pull up (Sheet.tsx): nothing beside it to line up with, so it names the card in play instead.
 
 export interface TrailStep {
   key: string;
@@ -39,7 +40,8 @@ export interface CardMotion {
 }
 export interface PathProps {
   trail: TrailStep[];
-  current: { id: string; rarity: Rarity; stopped: boolean; conflict: boolean } | undefined;
+  /** The card in play. Its name shows only in the sheet, where the card isn't beside it. */
+  current: { id: string; name?: string; rarity: Rarity; stopped: boolean; conflict: boolean } | undefined;
   relations: Relation[];
   upcoming: NextStep[];
   more: number;
@@ -55,6 +57,8 @@ export interface PathProps {
   /** Your choice, flying from the card into its new row on the path. */
   fly?: { key: string; from: { x: number; y: number }; text: string };
   onFlown?: () => void;
+  /** In the phone's sheet (D130): no card beside it, so nothing to line up with, fold for, or join. */
+  sheet?: boolean;
 }
 
 const TRAIL_MAX = 8;
@@ -101,9 +105,10 @@ export function Path(p: PathProps) {
   const [tick, setTick] = useState(0);
   useLayoutEffect(() => {
     const el = path.current, h = hood.current;
-    if (!el || !h) return;
-    const desk = h.closest(".desk") as HTMLElement | null;
-    const card = desk?.querySelector<HTMLElement>(".stage article.card:not([data-leaving])");
+    // The lines are drawn over what holds the path: the desk beside the card, or the sheet on a phone.
+    const root = h?.parentElement;
+    if (!el || !h || !root) return;
+    const card = p.sheet ? null : document.querySelector<HTMLElement>(".stage article.card:not([data-leaving])");
     const h1 = card?.querySelector("h1");
     const now = el.querySelector<HTMLElement>(".row.now .node");
     let next = 0;
@@ -143,7 +148,7 @@ export function Path(p: PathProps) {
     tops.current = settled;
     if (!reduced && (glides.length || shift !== lastShift.current)) glide(glides);
     lastShift.current = shift;
-    const measured = desk ? measure(desk, el, card ?? undefined) : undefined;
+    const measured = measure(root, el, card ?? undefined);
     if (JSON.stringify(measured) !== JSON.stringify(lines)) setLines(measured);
     if (p.fly) {
       const row = el.querySelector<HTMLElement>(`.row.past[data-key="${CSS.escape(p.fly.key)}"]`);
@@ -166,11 +171,11 @@ export function Path(p: PathProps) {
   };
   useEffect(() => () => cancelAnimationFrame(glideFrame.current), []);
   useLayoutEffect(() => {
-    const desk = hood.current?.closest(".desk");
-    if (!desk) return;
+    const root = hood.current?.parentElement;
+    if (!root) return;
     const again = () => setTick((t) => t + 1);
     const ro = new ResizeObserver(() => requestAnimationFrame(again));
-    ro.observe(desk);
+    ro.observe(root);
     addEventListener("resize", again);
     void document.fonts?.ready.then(again);
     return () => {
@@ -234,7 +239,14 @@ export function Path(p: PathProps) {
           ))}
           {p.current && (
             <div className="row now" data-id={p.current.id} data-flip={`id:${p.current.id}`}>
-              <span className="lbl" />
+              <span className="lbl">
+                {p.sheet && p.current.name && (
+                  <>
+                    <span className="nm">{p.current.name}</span>
+                    <span className="st">the card you're on</span>
+                  </>
+                )}
+              </span>
               <span className="node">
                 <Mark kind={p.current.rarity} size={22} stopped={p.current.stopped} />
               </span>
@@ -311,6 +323,32 @@ function flyInto(fly: { from: { x: number; y: number }; text: string }, row: HTM
     .finished.then(() => chip.remove(), () => chip.remove());
 }
 
+/**
+ * On a phone, with the path folded into its sheet (D130): your choice flies from the card down into the sheet's bar,
+ * where its row now is, and the bar's grip pulses as it lands. The same one sequenced movement, aimed at the sheet.
+ */
+export function flyToBar(fly: { from: { x: number; y: number }; text: string }, bar: HTMLElement) {
+  const MOVE = 700;
+  const chip = document.createElement("span");
+  chip.className = "fly";
+  chip.textContent = fly.text;
+  document.body.append(chip);
+  const r = bar.getBoundingClientRect(), w = Math.min(chip.offsetWidth, r.width - 24);
+  const end = { x: r.left + (r.width - w) / 2, y: r.top + 8 };
+  bar.querySelector(".grip")?.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(1)", offset: 0.4 }, { transform: "scaleX(1.8)", offset: 0.5 }, { transform: "scaleX(1)", offset: 0.65 }], { duration: MOVE });
+  chip
+    .animate(
+      [
+        { transform: `translate(${fly.from.x}px, ${fly.from.y}px) scale(1.1)`, opacity: 1 },
+        { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 1, offset: 0.45 },
+        { transform: `translate(${end.x}px, ${end.y + 10}px) scale(.7)`, opacity: 0, offset: 0.6 },
+        { transform: `translate(${end.x}px, ${end.y + 10}px) scale(.7)`, opacity: 0 },
+      ],
+      { duration: MOVE, easing: "cubic-bezier(.3,.7,.3,1)" },
+    )
+    .finished.then(() => chip.remove(), () => chip.remove());
+}
+
 /** How an earlier answer on the path relates to this card, worded on that answer's row. */
 function linkWords(rel: Relation): string {
   if (rel.kind === "builds-on") return "this card builds on it";
@@ -372,8 +410,8 @@ export function joinPath(g: Join, dx: number, dy: number, deg: number): string {
 }
 
 /** The spine (solid through your answers, dotted through what's next), the line into the card, and the arcs. */
-function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undefined): Lines {
-  const base = desk.getBoundingClientRect();
+function measure(root: HTMLElement, path: HTMLElement, card: HTMLElement | undefined): Lines {
+  const base = root.getBoundingClientRect();
   const at = (el: Element) => {
     const r = el.getBoundingClientRect();
     return { x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2 };
@@ -391,10 +429,13 @@ function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undef
     return out;
   };
   const lines: Lines = { width: Math.round(base.width), height: Math.round(base.height), done: segments([...past, ...(now ? [now] : [])]), ahead: segments([...(now ? [now] : []), ...ahead]), arcs: [] };
-  if (now && card) {
-    const n = at(now), c = restRect(card);
-    const r1 = (v: number) => Math.round(v * 10) / 10;
-    lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
+  if (now) {
+    const n = at(now);
+    if (card) {
+      const c = restRect(card);
+      const r1 = (v: number) => Math.round(v * 10) / 10;
+      lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
+    }
     // A link back to an earlier answer: an arc to the right of the spine, into this card's ring from above.
     for (const row of path.querySelectorAll<HTMLElement>(".row.past")) {
       const tag = row.querySelector(".tag.link");
