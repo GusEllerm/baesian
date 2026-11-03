@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The drum: three prototypes</title>
+<style>
+@font-face { font-family: "Alegreya"; src: url(../../../node_modules/@fontsource-variable/alegreya/files/alegreya-latin-wght-normal.woff2) format("woff2"); font-weight: 400 900; }
+@font-face { font-family: "Archivo"; src: url(../../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(120% 90% at 50% 0%, #d9d0da 0%, #cbc0cd 100%); color: #2e2343; font: 16px/1.45 "Alegreya", Georgia, serif; }
+main { max-width: 760px; margin: 0 auto; padding: 56px 28px; }
+h1 { font-size: 34px; line-height: 1.1; margin: 0 0 10px; }
+p.lead { color: #5a4d6e; margin: 0 0 36px; max-width: 60ch; }
+a.option { display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start; padding: 20px 22px; margin-bottom: 14px; border-radius: 14px; background: #f7eed3; box-shadow: inset 0 0 0 1.5px #d9c68e; color: inherit; text-decoration: none; }
+a.option:hover, a.option:focus-visible { box-shadow: inset 0 0 0 2px #2e2343; outline: none; }
+.letter { font: 700 28px/1 "Archivo", sans-serif; }
+.name { font: 700 21px/1.2 "Alegreya", serif; margin-bottom: 4px; }
+.what { color: #5a4d6e; }
+.keys { margin-top: 28px; font: 500 13.5px/1.5 "Archivo", sans-serif; color: #5a4d6e; }
+kbd { font: 600 12px "Archivo", sans-serif; border: 1.5px solid #8c809b; border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The drum</h1>
+  <p class="lead">Three takes on the path as a rotating cylinder, after the first one in the client didn't get there. Same cards in each: eight answered, the ninth in play.</p>
+  <a class="option" href="a-reel/"><span class="letter">A</span><span><span class="name">A real reel</span><span class="what">The drum is an object you can see: its surface, curve, light and shade. Rows tilt with it and roll over the edges, and answering turns it a step.</span></span></a>
+  <a class="option" href="b-deck/"><span class="letter">B</span><span><span class="name">The drum is the deck</span><span class="what">The card you're answering is on the drum's front face. Answering rolls it up and over the top, and the next decision rolls up from below.</span></span></a>
+  <a class="option" href="c-spin/"><span class="letter">C</span><span><span class="name">A reel you can spin</span><span class="what">A's drum, and you can turn it yourself: scroll or drag to spin through your history, with momentum and detents, then Enter to open a row.</span></span></a>
+  <p class="keys"><kbd>←</kbd> <kbd>→</kbd> choose a side, the same key again to confirm (hold it on a crowned card). <kbd>Z</kbd> undoes. The brief is in <code>BRIEF.md</code>.</p>
+</main>
+</body>
+</html>

@@ -279,7 +279,7 @@ Filed as cards in deck `hosted` (2026-11-03, overnight), in the order they're be
 | H7 (B-7bk6y) | `hosted/usage-data` | Usage counts from everyone with an opt-out, or opt-in only? | everyone, with an opt-out | opt-in only |
 | H8 (B-vbqdy) | `hosted/ci-trust-root` | Where does CI get the key it checks answers with? | pinned outside the repo | a file in the repo |
 
-**Answered on 2026-11-03** (all as recommended, but H2): H1 as D137, H3 as D138, H4 as D139, H5 as D143, H6 as D140, H7 as D141, H8 as D142. **H2 came back with a question:** whether to use Globus Auth, so people can sign in with their own organisation's single sign-on, and whether running Baesian's own accounts is a risk; a revised card follows research.
+**Answered on 2026-11-03** (all as recommended, but H2): H1 as D137, H3 as D138, H4 as D139, H5 as D143, H6 as D140, H7 as D141, H8 as D142. **H2 came back with a question** (whether to use Globus Auth, for single sign-on through people's own organisations, and whether running our own accounts is a risk); after research ([[Sign-in for the Hosted Service]]), its revision was answered as D153: passkey accounts, with Globus as a way in.
 
 Decisions in this note that aren't drafted as cards yet:
 - whether the relay serves the same API as `baesian serve` (section 1, after H1);
