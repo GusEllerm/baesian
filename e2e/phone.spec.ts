@@ -137,6 +137,9 @@ for (const size of PHONES) {
       await expect(bar).toContainText("1 answered");
       await bar.tap();
       await expect(sheet).toBeVisible();
+      // The undo toast waits above the sheet, not over its rows.
+      const toast = (await page.getByRole("status").boundingBox())!;
+      expect(toast.y + toast.height).toBeLessThanOrEqual((await sheet.boundingBox())!.y);
       await check(page, problems, "the path's sheet");
       await shot(page, "09-sheet");
       const conflict = sheet.locator(".row.next", { hasText: "Which time format the record uses" });

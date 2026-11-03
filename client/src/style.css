@@ -427,6 +427,8 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
   /* the toast, above the path's bar; the empty desk */
   .toast { left: max(var(--gutter), env(safe-area-inset-left)); right: max(var(--gutter), env(safe-area-inset-right)); bottom: calc(var(--peek) + env(safe-area-inset-bottom) + 10px); max-width: none; }
   .toast .undo, .empty .ghost { min-height: 44px; min-width: 44px; }
+  /* With the path's sheet open, the toast waits at the top, over the dimmed desk, not over the sheet's rows. */
+  #root:has(.sheet) .toast { top: calc(env(safe-area-inset-top) + 8px); bottom: auto; }
   .empty { padding: 28px 0; }
 
   /* the panels fill the screen, and scroll */
