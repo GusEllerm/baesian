@@ -4,7 +4,11 @@ import type { ApiVerdictInput } from "../../src/api";
 // the page closing, sends it at once. One answer waits at a time. A plain class, so its timing is tested with fake
 // timers (outbox.test.ts); the desk holds one for the session.
 
-export type Post = (verdict: ApiVerdictInput, opts: { keepalive: boolean }) => Promise<void>;
+/** What the server said once it recorded an answer: `filed`, the cards Baesian proposed from it (M8: D161, B-y6jn6). */
+export interface Posted {
+  filed?: string[];
+}
+export type Post = (verdict: ApiVerdictInput, opts: { keepalive: boolean }) => Promise<Posted | void>;
 
 export interface Held {
   card: string;
@@ -19,7 +23,7 @@ export class Outbox {
   constructor(
     private readonly post: Post,
     private readonly ms: number,
-    private readonly events: { sent: (card: string) => void; failed: (card: string, error: string) => void },
+    private readonly events: { sent: (card: string, posted?: Posted) => void; failed: (card: string, error: string) => void },
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -52,7 +56,7 @@ export class Outbox {
     const { card, verdict } = this.held;
     this.held = undefined;
     this.post(verdict, { keepalive }).then(
-      () => this.events.sent(card),
+      (posted) => (posted ? this.events.sent(card, posted) : this.events.sent(card)),
       (e: unknown) => this.events.failed(card, e instanceof Error ? e.message : String(e)),
     );
   }
@@ -67,7 +71,10 @@ export const postVerdict: Post = async (verdict, { keepalive }) => {
     credentials: "same-origin",
     keepalive,
   });
-  if (r.ok) return;
+  if (r.ok) {
+    const { filed } = (await r.json().catch(() => ({}))) as Posted;
+    return filed?.length ? { filed } : {};
+  }
   let reason = `the server answered ${r.status}`;
   try {
     reason = ((await r.json()) as { error?: string }).error ?? reason;

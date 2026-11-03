@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "What the client may show and where each piece comes from: every element of the round 4 prototype mapped to its source in the store (exists, a new card field, or a new subsystem) and how far it can be trusted; the hard problems the backend must solve; and the rule that anything we can't show reliably is dropped (D71). Proposed for M4a; the new fields are part of P12. The user decided all ten of its open questions in a dry run of the round 5 prototype (D77–D85, D90)."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, design, client, m4]
 ---
@@ -84,6 +84,24 @@ So every element below has a standing:
 | Disagreeing: an optional one-line reason, and switching to the agent's pick after the reveal (D87, D88) | The reason is the `Verdict` comment. **New:** the verdict records the option chosen before the reveal (P12) | Reliable |
 | The agent's one reply to a disagreement (D89) | **Built (D104):** a revision carrying `reply`, filed by `baesian reply` | Declared |
 | "Retire this rule", when the option you choose breaks one of your rules (D119) | **Built:** the verdict's `retire_rules`; `Store.addVerdict` writes a `RuleRetirement` beside each rule, and `Store.rules` returns it with the rule | Reliable |
+
+## Routing and preferences (M8b)
+
+What the client shows of the gate ([[Routing and Preferences]], [[src-routing]]), and where it comes from. All of it is computed from records Baesian writes, so all of it is Reliable; the one estimate, the audits a setting would bring back, isn't shown.
+
+| Element | Source | Standing |
+|---|---|---|
+| The "Held back" list, and audits in the queue | Each card's `status` (`held`) and `audit`, from its gate record (`ApiCard.gate`) | Reliable |
+| Why a held card was held back: its row and that row's setting | The gate record's `row`, `position` and `mode`, shown only once you've chosen (D151) | Reliable |
+| What's built, on a held card | The agent's `acted`, as on any card, shown only once you've chosen | Declared |
+| "You should have asked me" | `should_have_asked` on the verdict, offered only where the gate record says held | Reliable |
+| Your preferences, the presets, and which rows are fixed or have a floor | `routing` in the state (`ApiRouting`), and `GET /api/presets` (`ApiPresets`) | Reliable |
+| What a preset, or your draft, would have held of past cards | The rules re-run over past cards (`replay()`), on the server for the presets and in the client for a draft | Reliable: the same rules the gate runs. The audits it would have drawn are an expectation, so they're not shown |
+| The record row by row: shown, held, would-have-held, audits, misses and the bound | `routing.report` (`RoutingReport`) | Reliable. The bound is a statistical upper bound, and says so ("under about 1 in 9") |
+| A slider proposal's evidence | Its `crux_fact`, which Baesian writes from the record, with card IDs turned into titles | Reliable |
+| The setup survey's example decisions | `GET /api/presets` (`survey`), example cards, not your own | Reliable: they're labelled as examples |
+
+Saving preferences sends a change over the file in force (`POST /api/preferences` with `replaces`); a stale one is refused, and the client says so rather than retrying.
 
 ## Practice cards and calibration
 

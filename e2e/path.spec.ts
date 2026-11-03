@@ -5,6 +5,7 @@ import { renderDoc } from "../src/frontmatter.js";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { skipSetup } from "./setup.js";
 
 // M4 step 5d: the path beside the card, the pile under it, and changing an answer. A real server and browser.
 
@@ -23,6 +24,7 @@ async function open(page: Page, setup: (store: Store) => void) {
   const r = repo();
   setup(r.store);
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await skipSetup(page, r.dir);
   await page.clock.install();
   await page.goto(server.url);
   await expect(page.locator(CARD)).toBeVisible();

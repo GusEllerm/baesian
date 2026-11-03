@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { skipSetup } from "./setup.js";
 
 // M4 step 5a: the scaffold, end to end. A real server over a fixture repo, a real browser.
 
@@ -21,7 +22,8 @@ async function serveWithOneCard() {
 }
 
 test("signs in through the address serve opens, and shows the first card", async ({ page }) => {
-  const { server } = await serveWithOneCard();
+  const { server, dir } = await serveWithOneCard();
+  await skipSetup(page, dir);
   await page.goto(server.url);
   await expect(page).toHaveURL(`http://127.0.0.1:${server.port}/`);
   await expect(page.getByRole("heading", { name: "Which store should hold run metadata?" })).toBeVisible();
@@ -36,7 +38,8 @@ test("refuses a browser that hasn't signed in", async ({ page }) => {
 });
 
 test("shows a card an agent files while the page is open", async ({ page }) => {
-  const { store, server } = await serveWithOneCard();
+  const { store, server, dir } = await serveWithOneCard();
+  await skipSetup(page, dir);
   await page.goto(server.url);
   await expect(page.getByText("1 to answer.")).toBeVisible();
   store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files" }), BODY, AGENT);
@@ -44,7 +47,8 @@ test("shows a card an agent files while the page is open", async ({ page }) => {
 });
 
 test("asks nothing of any other server, and breaks none of its own rules", async ({ page }) => {
-  const { server } = await serveWithOneCard();
+  const { server, dir } = await serveWithOneCard();
+  await skipSetup(page, dir);
   const elsewhere: string[] = [];
   const fonts: string[] = [];
   const problems: string[] = [];
@@ -71,8 +75,10 @@ test("asks nothing of any other server, and breaks none of its own rules", async
 
 test("two projects served at once each keep their own sign-in", async ({ context }) => {
   // Browsers don't keep cookies apart by port, so two servers on this machine share one cookie jar.
-  const { server: first } = await serveWithOneCard();
+  const { server: first, dir } = await serveWithOneCard();
   const other = repo();
+  await skipSetup(context, dir);
+  await skipSetup(context, other.dir);
   other.store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files" }), BODY, AGENT);
   const second = await startServer(other.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
   try {

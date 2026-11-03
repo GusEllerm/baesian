@@ -6,6 +6,7 @@ import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
 import { layoutProblems } from "./layout.js";
+import { skipSetup } from "./setup.js";
 
 // M4 step 5e: what's around the card. The presence heartbeat (D41), notifications (D40), the menu and its panels,
 // the empty desk, and the "new" tag. A real server and browser.
@@ -59,6 +60,7 @@ async function open(page: Page, setup: (store: Store) => void, opts: { empty?: b
   setup(r.store);
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
   await page.addInitScript(FAKE_NOTIFICATIONS);
+  await skipSetup(page, r.dir);
   await page.clock.install();
   await page.goto(server.url);
   await expect(page.locator(opts.empty ? ".empty" : CARD)).toBeVisible();
@@ -110,7 +112,7 @@ test("the keys and your calibration open from the menu; ? and Esc open and close
   // The menu takes the arrow keys while it's open, so they don't move the card.
   await page.getByRole("button", { name: "More" }).click();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("menuitem", { name: /Keyboard shortcuts/ })).toBeFocused();
+  await expect(page.getByRole("menuitem", { name: "Your preferences" })).toBeFocused();
   await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);

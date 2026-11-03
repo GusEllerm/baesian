@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
-import { areaOf, byId, liveDependents, parked, queue, rarityOf, relationsOf, replyOf, sidesFor, stakesLine, waitState } from "./model";
+import { agentOf, areaOf, byId, heldBack, isHeld, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
 
@@ -99,6 +99,52 @@ describe("the queue", () => {
     const s = snapshot([open, resolved, passed, deferred]);
     expect(queue(s, T0).map((c) => c.meta.id)).toEqual([open.meta.id]);
     expect(parked(s).map((c) => c.meta.id)).toEqual([passed.meta.id, deferred.meta.id]);
+  });
+});
+
+describe("held cards and audits (M8b: D150, D151)", () => {
+  const held = (over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "meta">> = {}) => card(over, { status: "held", ...rest });
+
+  it("keeps held cards out of the queue, in their own list, newest first; audits come through the queue", () => {
+    const open = card();
+    const old = held({ created: at(1) });
+    const recent = held({ created: at(50) });
+    const audit = held({}, { audit: true });
+    const s = snapshot([open, old, recent, audit]);
+    expect(queue(s, T0).map((c) => c.meta.id)).toEqual([open.meta.id, audit.meta.id]);
+    expect(heldBack(s).map((c) => c.meta.id)).toEqual([recent.meta.id, old.meta.id]);
+    expect([open, old, audit].map(isHeld)).toEqual([false, true, true]);
+  });
+
+  it("spaces audits out among the other cards, one after every two, never first, and the rest at the end", () => {
+    const others = [card({ topic: "a/1" }), card({ topic: "b/1" }), card({ topic: "c/1" }), card({ topic: "d/1" }), card({ topic: "e/1" })];
+    const audits = [held({ topic: "z/1" }, { audit: true }), held({ topic: "z/2" }, { audit: true }), held({ topic: "z/3" }, { audit: true })];
+    const ids = queue(snapshot([...audits, ...others]), T0).map((c) => c.meta.id);
+    const o = others.map((c) => c.meta.id), a = audits.map((c) => c.meta.id);
+    expect(ids).toEqual([o[0], o[1], a[0], o[2], o[3], a[1], o[4], a[2]]);
+    expect(spaceOut([], audits).map((c) => c.meta.id)).toEqual(a);
+  });
+});
+
+describe("Baesian's own cards (M8b)", () => {
+  it("are filed by Baesian, by name, and a slider proposal says it changes your preferences", () => {
+    expect(agentOf(card({ source_agent: "baesian" }))).toBe("Baesian");
+    expect(agentOf(card())).toBe("claude-code");
+    expect(stakesLine(card({ pref_row: "dependency", pref_from: "tell-me", pref_to: "sample" }), 0)).toBe("Easy to undo, a change to your preferences");
+  });
+
+  it("name decisions by title, not ID, and drop their references in brackets (D69)", () => {
+    const known = card({ id: "B-x1y2z", title: "The run store" });
+    const cards = byId(snapshot([known]));
+    expect(ownText("On B-x1y2z, “The run store”, you chose “SQLite”.", cards)).toBe("On “The run store”, you chose “SQLite”.");
+    expect(ownText("B-x1y2z, “The run store”: you chose “SQLite”; B-zzzzz, “Gone”: you chose “A”", cards)).toBe("“The run store”: you chose “SQLite”; “Gone”: you chose “A”");
+    expect(ownText("It builds on B-x1y2z and B-zzzzz.", cards)).toBe("It builds on “The run store” and another decision.");
+    expect(ownText("Baesian files this itself, with no model (B-y6jn6): one stop up (D161, B-87tkc).", cards)).toBe("Baesian files this itself, with no model: one stop up.");
+  });
+
+  it("quote an option's name once, even when it quotes something itself", () => {
+    expect(quoted("SQLite")).toBe("“SQLite”");
+    expect(quoted("Move it to “stop and ask”")).toBe("Move it to “stop and ask”");
   });
 });
 

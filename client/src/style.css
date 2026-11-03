@@ -297,3 +297,75 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .empty .parked-row .nm, .empty .parked-row .st { grid-column: 1; }
 .empty .parked-row .go { grid-column: 2; grid-row: 1 / span 2; font: var(--t-meta); font-stretch: 88%; color: var(--right); }
 .empty .ghost { margin-top: 8px; padding: 9px 14px; border: 2px solid var(--ink); background: transparent; border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
+
+/* ------------------------------------------------------------ M8b: held cards, the record, your preferences, the setup survey */
+/* A held card, once you've chosen (D151): why it was held back, beside what's built */
+.facet.held { background: #e7e4f3; }
+.facet.held b { background: var(--ink); color: #fff; }
+
+/* Wide panels: your calibration beside the record by row, and your preferences. They scroll when the window is short. */
+.panel.wide { width: min(880px, calc(100vw - 48px)); max-height: calc(100vh - 74px); overflow-y: auto; }
+.panel h5 { margin: 14px 0 6px; font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink-soft); }
+.panel .problem { margin: 6px 0; }
+.panel-cols { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 0 28px; align-items: start; }
+.panel .record h5 { margin-top: 0; }
+.panel .record dl { grid-template-columns: minmax(130px, auto) 1fr; gap: 7px 12px; font-size: 14px; }
+.panel .record dt { display: flex; flex-direction: column; gap: 1px; }
+.panel .record dt .pos { font: var(--t-small); font-stretch: 88%; color: var(--ink-faint); }
+.panel .lines { display: flex; flex-direction: column; gap: 1px; }
+
+/* The held-back list, in its panel and on the empty desk */
+.held-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
+.held-list .parked-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; padding: 8px 12px; border: 0; border-radius: 8px; background: #f1e9cf; text-align: left; cursor: pointer; }
+.held-list .parked-row:hover { background: #ebe0bf; }
+.held-list .parked-row .nm { grid-column: 1; font: var(--t-option); font-size: 16px; }
+.held-list .parked-row .st { grid-column: 1; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
+.held-list .parked-row .go { grid-column: 2; grid-row: 1 / span 2; font: var(--t-meta); font-stretch: 88%; color: var(--right); }
+.empty .more-held { align-self: flex-start; border: 0; background: none; padding: 4px 2px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Your preferences: each row as five stops in words (P14), the two lowest holding cards back */
+.pref-mode { display: grid; grid-template-columns: auto minmax(0, 260px) 1fr; gap: 6px 14px; align-items: center; padding: 10px 12px; border-radius: 9px; background: #ffffff70; }
+.pref-label { font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; }
+.pref-mode .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
+.stops { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-radius: 8px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); overflow: hidden; }
+.stops.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stop { position: relative; display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 4px 6px; border-left: 1.5px solid var(--line); text-align: center; font: var(--t-small); font-stretch: 88%; line-height: 1.15; color: var(--ink-soft); cursor: pointer; }
+.stop:first-child { border-left: 0; }
+.stop input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: inherit; }
+.stop:hover { color: var(--ink); background: #fffaf0; }
+.stop.holds { background: #ece3c6; }
+.stop[data-on] { background: var(--ink); color: #fff; font-weight: 700; }
+.stop[data-off] { color: var(--ink-faint); cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 6px, #2e234312 6px 7px); }
+.stop[data-on][data-off] { background: var(--ink-soft); color: #fff; }
+.stop:has(input:focus-visible) { outline: 2px solid var(--right); outline-offset: -3px; }
+.presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.preset { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 0; border-radius: 9px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); text-align: left; cursor: pointer; font: var(--t-body); font-size: 14px; }
+.preset b { font: var(--t-option); font-size: 16.5px; }
+.preset .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
+.preset:hover { background: #fffaf0; }
+.preset[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--ink); }
+.pref-rows { display: flex; flex-direction: column; gap: 6px; }
+.pref-row { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; align-items: center; }
+.pref-name { display: flex; flex-direction: column; gap: 1px; }
+.pref-name b { font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink); }
+.pref-name .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
+.pref-row.legend { margin-bottom: -2px; }
+.stops-legend { display: grid; grid-template-columns: 2fr 3fr; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-faint); }
+.stops-legend span + span { padding-left: 8px; border-left: 1.5px solid var(--line); }
+.pref-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
+.pref-total { font: var(--t-body); font-size: 16px; }
+.pref-foot .why-line input { max-width: 460px; }
+.pref-foot .send:disabled + .cancel, .cancel:disabled { opacity: .5; cursor: default; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; font-weight: 700; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
+
+/* The setup survey (B-5na1k): plain card stock, as a deck's briefing card is */
+.setup-card { --c: var(--ink); background: #c9c2b1; }
+.setup-card .stakes .gone { margin-left: auto; }
+.setup-text { font: var(--t-body); font-size: 16.5px; max-width: 60ch; }
+.setup-text.soft { font-size: 15px; color: var(--ink-soft); }
+.example { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: -4px 0 -2px; }
+.example p { padding: 2px 0 2px 10px; border-left: 2px solid var(--line); font: var(--t-body); font-size: 14.5px; color: var(--ink-soft); }
+.example b { display: block; font: var(--t-option); font-size: 16px; color: var(--ink); }
+.setup-rows { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font: var(--t-body); font-size: 15.5px; }
+.setup-card .briefing-foot .row .confirm { padding: 0 18px; }
+.setup-card .confirm:disabled { opacity: .5; cursor: default; }

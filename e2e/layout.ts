@@ -98,7 +98,9 @@ export function layoutProblems(): string[] {
       const ar = a.getBoundingClientRect();
       const inner = { l: ar.left + a.clientLeft, t: ar.top + a.clientTop, r: ar.left + a.clientLeft + a.clientWidth, b: ar.top + a.clientTop + a.clientHeight };
       const scrolls = cs.overflowY === "auto" || cs.overflowY === "scroll";
-      const cut = [p.l < inner.l - TOL && "left", p.r > inner.r + TOL && "right", p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
+      // Scrolled down, it hides what's above on purpose (a long panel, M8b).
+      const scrolledUp = scrolls && a.scrollTop > 0;
+      const cut = [p.l < inner.l - TOL && "left", p.r > inner.r + TOL && "right", !scrolledUp && p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
       if (cut.length) out.push(`clipped: ${name(el)} is cut off at the ${cut.join(" and ")} by ${name(a).slice(0, 40)}`);
       break;
     }
@@ -174,14 +176,22 @@ export function layoutProblems(): string[] {
     }
   }
 
-  // 5. Off the window: sideways or above it, and below it for anything fixed in place.
+  // 5. Off the window: sideways or above it, and below it for anything fixed in place, unless it's in a scrolling box
+  // that fits the window (a long panel, M8b): scrolling reaches it, above or below.
+  const scrollsInWindow = (el: Element): boolean => {
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowY === "auto" || cs.overflowY === "scroll") return a.getBoundingClientRect().bottom <= H + TOL;
+    }
+    return false;
+  };
   for (const el of all) {
     const r = box(el.getBoundingClientRect());
     const fixed = (() => {
       for (let e: Element | null = el; e; e = e.parentElement) if (getComputedStyle(e).position === "fixed") return true;
       return false;
     })();
-    const off = [r.l < -TOL && "left", r.r > W + TOL && "right", r.t < -TOL && "top", fixed && r.b > H + TOL && "bottom"].filter(Boolean);
+    const off = [r.l < -TOL && "left", r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
     if (off.length) out.push(`off the window: ${name(el)} goes past the ${off.join(" and ")}`);
   }
   return out;

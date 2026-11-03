@@ -103,6 +103,9 @@ async function gif(): Promise<void> {
 
     await client.goto(url);
     await client.waitForSelector("article.card");
+    // The demo repo has no preferences, so the client first offers the setup survey (B-5na1k): the GIF is about cards.
+    const notNow = client.getByRole("button", { name: /^Not now/ });
+    if (await notNow.count()) await notNow.click();
     await drawPanel();
     const stop = await screencast(client, frames, shots);
     const start = Date.now();
