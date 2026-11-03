@@ -1,0 +1,22 @@
+{
+  "type": "preferences",
+  "format": 1,
+  "mode": "shadow",
+  "row_public_api": "stop-and-ask",
+  "row_schema": "tell-me",
+  "row_dependency": "sample",
+  "row_infra": "sample",
+  "row_user_facing": "tell-me",
+  "row_security": "never-without-me",
+  "row_privacy": "never-without-me",
+  "row_other": "sample",
+  "rate_agent_decides": 0.1,
+  "rate_sample": 0.3333333333333333,
+  "burn_in": 10,
+  "profile": "fewer-interruptions",
+  "replaces": "20261103T164913.864Z-fq8r2.json",
+  "from_card": "B-28hd7",
+  "by": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-03T17:01:16.057Z"
+}
