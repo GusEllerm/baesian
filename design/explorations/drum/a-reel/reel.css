@@ -1,0 +1,173 @@
+/* Direction A, a real reel: the path is a drum in true 3D, beside the card. The card's styles follow the client's
+   (client/src/style.css), simplified; the drum's are below them. */
+@font-face { font-family: "Alegreya"; src: url(../../../../node_modules/@fontsource-variable/alegreya/files/alegreya-latin-wght-normal.woff2) format("woff2"); font-weight: 400 900; font-display: block; }
+@font-face { font-family: "Archivo"; src: url(../../../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; font-display: block; }
+:root {
+  --desk: #d9d0da;
+  --desk-deep: #cbc0cd;
+  --face: #f0e4be;
+  --face-light: #f7eed3;
+  --line: #d9c68e;
+  --ink: #2e2343;
+  --ink-soft: #5a4d6e;
+  --ink-faint: #8c809b;
+  --chose: #225c38;
+  --wine: #8e3a5f;
+  --oxblood: #6e1f2e;
+  --ui: "Archivo", system-ui, sans-serif;
+  --prose: "Alegreya", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: radial-gradient(120% 90% at 50% 0%, var(--desk) 0%, var(--desk-deep) 100%);
+  color: var(--ink);
+  font: 400 15.5px/1.4 var(--prose);
+  font-variant-numeric: lining-nums;
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; }
+p { margin: 0; }
+kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padding: 2px 4px; text-align: center; border: 1.5px solid #b3a6b6; border-bottom-width: 2.5px; border-radius: 4px; background: #ffffff70; color: var(--ink); }
+
+/* ------------------------------------------------------------ the header */
+.bar { position: relative; z-index: 5; height: 56px; display: flex; align-items: center; gap: 20px; padding: 0 28px; }
+.wordmark { font: 800 22px/1 var(--ui); letter-spacing: -0.02em; }
+.summary { font: 600 13.5px/1.3 var(--ui); color: var(--ink-soft); }
+.summary b { color: var(--ink); }
+.stop-dot { display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 2px; border-radius: 50%; background: var(--wine); vertical-align: 1px; }
+.keys { margin-left: auto; font: 500 12.5px/1.3 var(--ui); color: var(--ink-soft); }
+
+/* ------------------------------------------------------------ the desk: the drum, then the card */
+.desk { position: absolute; left: 0; right: 0; top: 56px; bottom: 0; }
+.reel { position: absolute; inset: 0; pointer-events: none; }
+.stage { position: absolute; top: var(--card-top, 96px); left: var(--card-left, 640px); width: 640px; }
+
+/* ------------------------------------------------------------ the card (as the client draws it, simpler) */
+.deck { position: relative; }
+.pile { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.under { position: absolute; inset: 0; border-radius: 18px; background: #cdbe8c; transform: translate(var(--dx), var(--dy)) rotate(var(--r)); box-shadow: 0 12px 20px -16px #2e234370; }
+.under::after { content: ""; position: absolute; inset: 5px; border-radius: 13px; background: var(--face); }
+.card { position: relative; z-index: 1; display: flex; border-radius: 18px; padding: 5px; background: #cdbe8c; box-shadow: 0 24px 36px -24px #2e234380; user-select: none; will-change: transform, opacity; }
+.card.rarity-uncommon { padding: 6px; background: linear-gradient(135deg, #e6e9ee, #9aa1ad 38%, #f4f5f7 52%, #8e95a3 70%, #d5d9e0); }
+.card.rarity-rare { padding: 7px; background: linear-gradient(135deg, #f6dd91, #b8860b 36%, #ffecb0 52%, #9a6f08 70%, #e8c66a); }
+.card.rarity-mythic { padding: 6px; background: linear-gradient(135deg, #f6dd91, #b8860b 40%, #ffecb0 55%, #8a5f05); }
+.card.rarity-mythic .face { box-shadow: 0 0 0 2px var(--oxblood); }
+.card.leaving { position: absolute; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.face { position: relative; flex: 1; background: var(--face); border-radius: 13px; padding: 18px 24px 15px; display: flex; flex-direction: column; gap: 13px; }
+/* Where the line from the drum's front meets the card: a socket on its edge. */
+.socket { position: absolute; left: -11px; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--face); box-shadow: 0 0 0 2px var(--ink); z-index: 3; }
+.stakes { display: flex; gap: 9px; align-items: center; font: 600 13.5px/1.3 var(--ui); color: var(--ink-soft); }
+.stakes b { color: var(--ink); font-weight: 650; }
+.rmark { display: inline-grid; place-items: center; width: 26px; height: 26px; }
+.stopped { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; font-weight: 700; color: var(--wine); }
+.stopped::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--wine); box-shadow: 0 0 0 3px #8e3a5f30; }
+.doing { margin: -5px 0 -3px; font: 500 13.5px/1.3 var(--ui); color: var(--ink-soft); }
+.doing b { color: var(--ink); font-weight: 650; }
+.card h1 { margin: 0; font: 700 28px/1.14 var(--prose); max-width: 32ch; text-wrap: pretty; }
+.crux { display: flex; flex-direction: column; gap: 3px; margin: -2px 0 -3px; }
+.crux p { font-size: 16.5px; color: var(--ink); }
+.crux .lbl { margin-right: 6px; font: 600 13.5px/1.3 var(--ui); color: var(--ink-soft); }
+.crux .fact { font-size: 14.5px; color: var(--ink-soft); }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.opt { all: unset; box-sizing: border-box; position: relative; display: flex; flex-direction: column; gap: 5px; padding: 13px 16px 14px; border-radius: 12px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); cursor: pointer; transition: opacity 120ms, box-shadow 120ms; }
+.opt:hover { background: #fffaf0; }
+.opt:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.opt .key { position: absolute; top: 12px; right: 12px; color: var(--ink-soft); }
+.opt .ifans { font: 600 13px/1.3 var(--ui); color: var(--ink); }
+.opt h2 { margin: 0; padding-right: 30px; font: 700 19px/1.2 var(--prose); text-wrap: balance; }
+.opt .then { color: var(--ink-soft); }
+.opt .pickof { margin-top: auto; padding-top: 4px; font: 700 12.5px/1.3 var(--ui); color: var(--ink-soft); }
+.opt.chosen { box-shadow: inset 0 0 0 3px var(--ink); }
+.opt.unchosen { opacity: .62; }
+.card[data-mode="reveal"] .opt .then { display: none; }
+.foot { display: flex; gap: 14px; align-items: center; padding-top: 2px; font: 500 12.5px/1.3 var(--ui); color: var(--ink-soft); }
+.foot .rule { flex: 1; }
+.foot span.k { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+.panel-in { display: flex; flex-direction: column; gap: 10px; padding-top: 2px; }
+.verdict { font-size: 17px; }
+.reasoning { padding: 10px 13px; border-radius: 9px; background: #ffffff55; font-size: 15px; color: var(--ink-soft); }
+.hold, .confirm { position: relative; overflow: hidden; display: flex; gap: 8px; align-items: center; justify-content: center; height: 46px; border-radius: 10px; border: 2px solid var(--ink); cursor: pointer; font: 600 14.5px/1 var(--ui); }
+.confirm { background: var(--ink); color: #fff; }
+.confirm kbd { color: #fff; background: transparent; border-color: #ffffff90; }
+.hold { background: var(--face-light); color: var(--ink); }
+.hold .fill { position: absolute; inset: 0; width: 0; background: var(--ink); opacity: .3; }
+.hold > span:not(.fill) { position: relative; display: inline-flex; gap: 8px; align-items: center; }
+.small { font: 500 12.5px/1.3 var(--ui); color: var(--ink-soft); }
+.empty { padding: 60px 0; text-align: center; }
+.empty .big { font: 700 28px/1.2 var(--prose); margin-bottom: 8px; }
+
+/* ------------------------------------------------------------ the toast, with undo */
+.toast { position: fixed; left: 28px; bottom: 28px; z-index: 70; display: flex; gap: 12px; align-items: center; max-width: 360px; background: #fffbea; color: var(--ink); box-shadow: 0 10px 24px -14px #2e234360, 0 0 0 1px #d9cfe0; padding: 10px 10px 12px 14px; border-radius: 8px; font: 500 13.5px/1.35 var(--ui); }
+.toast[hidden] { display: none; }
+.toast .timer { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; background: #2e234330; transform-origin: left; }
+.toast .undo { flex: 0 0 auto; display: inline-flex; gap: 7px; align-items: center; padding: 6px 10px; border: 1.5px solid #c9bdcb; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 700; }
+
+/* ------------------------------------------------------------ the drum: one perspective for the whole desk */
+.scene { position: absolute; inset: 0; perspective: var(--persp, 1100px); }
+.drum { position: absolute; left: var(--cx); top: var(--cy); width: 0; height: 0; transform-style: preserve-3d; }
+/* Each piece of the drum is one flat plane in its 3D space: a slot's row and shade are painted into the slot. */
+.drum > * { position: absolute; backface-visibility: hidden; transform-style: flat; }
+/* The strip: one slot a row, a printed card-stock band between the rims, ribbed where the slots meet. */
+.slot { left: calc(var(--band) / -2); top: calc(var(--slot-h) / -2); width: var(--band); height: var(--slot-h); background:
+  linear-gradient(#b9a46a 0 1px, #fff6dc 1px 2.5px, transparent 2.5px calc(100% - 2px), #cdb87e calc(100% - 2px)),
+  linear-gradient(90deg, #efe4bf, #f5ebcc 26%, #f0e4bf 70%, #dfcf9f);
+}
+.slot .shade { position: absolute; inset: 0; pointer-events: none; background:
+  linear-gradient(rgb(255 252 240 / var(--h0, 0)), rgb(255 252 240 / var(--h1, 0)), rgb(255 252 240 / var(--h2, 0))),
+  linear-gradient(rgb(28 18 44 / var(--d0, 0)), rgb(28 18 44 / var(--d1, 0)), rgb(28 18 44 / var(--d2, 0)));
+}
+/* The rims: knurled flanges a little proud of the strip, one rib each, in the client's ink. */
+.rib { width: var(--rim-w); background:
+  linear-gradient(rgb(255 250 240 / var(--h, 0)), rgb(255 250 240 / var(--h, 0))),
+  linear-gradient(rgb(12 6 22 / var(--d, 0)), rgb(12 6 22 / var(--d, 0))),
+  linear-gradient(#6f6189, #514369 30%, #3d3055 62%, #2a1f3d);
+  background-color: #4a3c63;
+}
+.rib.groove { background:
+  linear-gradient(rgb(255 250 240 / calc(var(--h, 0) * .4)), rgb(255 250 240 / calc(var(--h, 0) * .4))),
+  linear-gradient(rgb(12 6 22 / var(--d, 0)), rgb(12 6 22 / var(--d, 0))),
+  linear-gradient(#241a36, #30254a 50%, #221832); }
+.rib.l { left: calc(var(--len) / -2); }
+.rib.r { left: calc(var(--len) / 2 - var(--rim-w)); }
+/* The end you can see, the one toward the card: a disc with an impeller's vanes, turning with the drum. */
+.cap { left: calc(var(--rim-r) * -1); top: calc(var(--rim-r) * -1); width: calc(var(--rim-r) * 2); height: calc(var(--rim-r) * 2); border-radius: 50%; }
+.cap.sheen { pointer-events: none; background: linear-gradient(140deg, #f6ecff55, #f6ecff12 32%, transparent 50%, #0a051440 82%); }
+.cap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* What's printed on a slot: a row of the path. The spine runs round the drum through the nodes. */
+.row { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 30px; column-gap: 9px; align-items: center; padding: 0 var(--node-pad) 0 20px; }
+.row::before { content: ""; position: absolute; right: calc(var(--node-pad) + 14px); width: 2px; top: 0; bottom: 0; background: var(--ink-soft); opacity: .75; }
+.row.next::before, .row.end::before { background: repeating-linear-gradient(var(--ink-faint) 0 2px, transparent 2px 7px); opacity: 1; }
+.row.now::before { background: linear-gradient(var(--ink-soft) 50%, transparent 50%); opacity: .75; }
+.row.now::after { content: ""; position: absolute; right: calc(var(--node-pad) + 14px); width: 2px; top: 50%; bottom: 0; background: repeating-linear-gradient(var(--ink-faint) 0 2px, transparent 2px 7px); }
+.row.start::before { top: 50%; }
+.row.end::before { bottom: 50%; }
+.row.blank::before { display: none; }
+.row .lbl { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 1px; }
+.row .nm { font: 500 15.5px/1.2 var(--prose); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+.row .st { font: 600 12.5px/1.25 var(--ui); color: var(--ink-soft); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+.row.past .st { color: var(--chose); }
+.row.now .nm { font-weight: 700; font-size: 17px; }
+.row.now .st { color: var(--wine); }
+.row.now .st.calm { color: var(--ink-soft); }
+.row.next .nm { color: var(--ink-soft); font-size: 15.5px; }
+.row .node { position: relative; z-index: 1; display: grid; place-items: center; width: 30px; height: 30px; }
+.row .note { grid-column: 1 / -1; justify-self: end; margin-right: 0; font: 700 11.5px/1.2 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.row.end .note, .row.start .note { padding-right: 40px; }
+
+/* Fixed in front of the drum (not turning): the payline into the card, and the pawl that clicks into each notch. */
+.over { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 2; }
+.over .pay { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; }
+/* The index: a ring fixed at the front, that each row's node turns into. */
+.over .index { fill: none; stroke: var(--ink); stroke-width: 2.2; }
+.over .pawl-arm { fill: #e3d29b; stroke: #2e2343; stroke-width: 1.4; stroke-linejoin: round; }
+.over .pawl-hi { stroke: #fff6d6; stroke-width: 1.2; stroke-linecap: round; }
+.over .pawl-pin { fill: #f0e4be; stroke: #2e2343; stroke-width: 1.6; }
+.over .tick { fill: var(--ink); }
+.over .count { font: 600 12.5px/1 var(--ui); fill: var(--ink-soft); }
+
+.cast { position: absolute; border-radius: 48px / 90px; background: #2e2343; opacity: .34; filter: blur(26px); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+@media (prefers-reduced-motion: reduce) { .opt { transition: none; } }
