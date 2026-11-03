@@ -36,7 +36,7 @@ Start from `baesian template`, which lists every field.
 ## Topics, levels and follow-ons
 
 - **A topic names one question.** Reuse a topic from `baesian topics` only for the same question. A decision that follows on from another gets its own, narrower topic (`client/rule-drafts` beside `client/rules`), and names what it builds on in `depends_on`.
-- **Levels:** `provisional` (carry on with your pick), `blocking` (wait before building on it), `hard` (never proceed without a verdict; the default for publishing, security, money and data loss).
+- **Levels:** `provisional` (carry on with your pick), `blocking` (wait before building on it), `hard` (never proceed without a verdict; the default for publishing, security, privacy, money and data loss).
 - **If `baesian file` exits 3,** the decision may already be on file: attach to an open card, follow a decided one, or, for a different question, use a narrower topic as above.
 
 ## Waiting and after

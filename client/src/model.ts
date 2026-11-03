@@ -16,7 +16,7 @@ export const RARITY: Record<Rarity, { name: string; rank: number; position: stri
 };
 
 /** Facts that make a card hard by default (D42), and mythic here. */
-const HARD_FACTS = new Set(["security", "money", "data-loss", "publishes"]);
+const HARD_FACTS = new Set(["security", "privacy", "money", "data-loss", "publishes"]);
 const OTHER: Record<OptionKind, OptionKind> = { proposal: "alternative", alternative: "proposal" };
 
 /** A card's area: the first segment of its canonical topic (Client Data Contract). */

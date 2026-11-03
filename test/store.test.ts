@@ -124,6 +124,12 @@ describe("filing", () => {
     expect(lower.hardBecause).toEqual(["money"]);
     const security = store.fileCard(draft({ title: "Where the token lives", question: "Where should the token live?", topic: "auth/token", touches: ["security"], level: "provisional", wrong_if: "a page script reads it", check: "the client's scripts" }), BODY, AGENT);
     expect(security.card.meta.level).toBe("hard");
+    // Privacy is a fact of its own (card B-z3agk), hard by default like security, and it needs a "wrong if" too.
+    const privacy = { title: "What the usage counts keep", question: "Should usage counts keep the account?", topic: "usage/accounts", touches: ["privacy"], level: "provisional" };
+    expect(() => store.fileCard(draft(privacy), BODY, AGENT)).toThrow(/it touches privacy/);
+    const kept = store.fileCard(draft({ ...privacy, wrong_if: "a count identifies someone", check: "the stored rows" }), BODY, AGENT);
+    expect(kept.card.meta.level).toBe("hard");
+    expect(kept.hardBecause).toEqual(["privacy"]);
   });
 
   it("refuses an unknown named deck, and accepts a created one", () => {

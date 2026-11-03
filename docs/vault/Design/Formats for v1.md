@@ -67,7 +67,7 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
 | type | preferences | yes | |
 | format | 1 | yes | |
 | mode | shadow or enforce | yes | shadow records what the gate would hold, and holds nothing (D148) |
-| row_public_api, row_schema, row_dependency, row_infra, row_user_facing, row_security, row_other | each one of agent-decides, sample, tell-me, stop-and-ask, never-without-me | yes, all seven | each row's position, on P14's scale. row_other is for cards with no fact. row_security may not be below tell-me (D146) |
+| row_public_api, row_schema, row_dependency, row_infra, row_user_facing, row_security, row_privacy, row_other | each one of agent-decides, sample, tell-me, stop-and-ask, never-without-me | yes, all eight (row_privacy since card B-z3agk) | each row's position, on P14's scale. row_other is for cards with no fact. row_security may not be below tell-me (D146) |
 | rate_agent_decides, rate_sample | number from 0 to 1 | yes | the chance that a held card at each of the two low positions is drawn for audit |
 | burn_in | integer ≥ 0 | yes | how many of each row's first held cards are all drawn |
 | profile | string | no | the preset it started from |

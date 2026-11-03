@@ -70,8 +70,8 @@ Frontmatter (`CardMeta`):
 | `doing` | string | yes | one short line, in the agent's voice, on what it was doing when the decision came up (D73) |
 | `topic` | slash-separated key | yes (D66) | `storage/run-metadata`; canonicalised through aliases (D38, D44). It names one question (D112): a second card on it is a possible duplicate, the earlier answer is its precedent, and two branches answering it differently conflict at merge. A follow-on question gets its own, narrower topic |
 | `deck` | deck ID | | defaults to the branch deck, `branch-<branch>` (D29) |
-| `level` | `provisional` \| `blocking` \| `hard` | | defaults to `hard` when `touches` includes `publishes`, `security`, `money` or `data-loss` (D42), otherwise `provisional` |
-| `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
+| `level` | `provisional` \| `blocking` \| `hard` | | defaults to `hard` when `touches` includes `publishes`, `security`, `privacy`, `money` or `data-loss` (D42; privacy since card B-z3agk), otherwise `provisional` |
+| `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `privacy` (personal data, split from security by card B-z3agk), `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
 | `reverse` | `cheap` \| `moderate` \| `one-way` | yes (D95) | how costly the decision is to undo. It decides the stakes line and feeds rarity |
 | `proposal`, `proposal_then` | strings | yes | the agent's pick, named in a few words, and what happens if it's chosen |
 | `alternative`, `alternative_then` | strings | yes | the strongest alternative (D12, D93), and what happens if it's chosen |
@@ -81,7 +81,7 @@ Frontmatter (`CardMeta`):
 | `crux_preference` | boolean | | the crux is about what the reviewer values, not a fact |
 | `crux_fact` | string | | a fact that bears on the crux |
 | `rationale` | string | | why the agent picks the proposal (D77) |
-| `wrong_if`, `check` | strings | when a facet asks | what would show the pick is wrong, and where to look. Required when `reverse` is `one-way`, when `touches` includes `security`, or when `premise` is set (D77) |
+| `wrong_if`, `check` | strings | when a facet asks | what would show the pick is wrong, and where to look. Required when `reverse` is `one-way`, when `touches` includes `security` or `privacy`, or when `premise` is set (D77) |
 | `premise`, `premise_option`, `premise_check` | string; `proposal` or `alternative`; string | all or none | a claim an option rests on that nobody has checked, which option, and the check (D75) |
 | `acted`, `acted_option` | string; `proposal` or `alternative` | both or neither | what the agent has already built, and for which option (D75) |
 | `serves` | string | | the criterion the agent's pick serves, for a preference crux (D75) |

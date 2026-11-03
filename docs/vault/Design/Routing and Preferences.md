@@ -55,7 +55,8 @@ A row is a kind of decision you'd recognise, named by its consequence in the cli
 | Runtime dependencies | `dependency` | packages added or removed (`dependencyFacts()`) | tell me but carry on | none |
 | Delivery and infrastructure | `infra` | CI, infra and deploy paths | tell me but carry on | none |
 | Product behaviour | `user-facing` | none | tell me but carry on | none |
-| Security and privacy | `security` | none | never without me (D42) | decision 7 |
+| Security | `security` | none | never without me (D42) | decision 7 |
+| Privacy | `privacy` | none | never without me (D42) | decision 7; its own fact and row since card B-z3agk |
 | Spending | `money` | none | never without me | fixed |
 | Destroying data | `data-loss` | none | never without me | fixed |
 | Publishing | `publishes` | none | never without me | fixed |
@@ -208,7 +209,8 @@ The reasons, from the synthesis: people make up preferences when asked in the ab
 | Delivery and infrastructure | tell me | sample | sample |
 | Product behaviour | tell me | tell me | sample |
 | Anything else | tell me | sample | agent decides |
-| Security and privacy | never | never | never |
+| Security | never | never | never |
+| Privacy | never | never | never |
 
 No preset lowers security; that takes a deliberate move by you.
 

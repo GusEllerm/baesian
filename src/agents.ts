@@ -32,7 +32,7 @@ include it, \`Baesian-Card: <id>\`, or, for a two-way door, acknowledge it with 
 line.
 
 - \`level: provisional\` (the default): carry on with your proposal. \`blocking\`: run \`baesian wait <id>\`
-  before building on it. \`hard\` (the default for publishing, security, money and data loss): never
+  before building on it. \`hard\` (the default for publishing, security, privacy, money and data loss): never
   proceed without a verdict.
 - \`baesian wait <id>\` exits 0 when resolved (use the decision. If it went against your pick and you hold
   a fact the reviewer lacked, or a check that would settle it, you may reply once:
@@ -155,7 +155,7 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "question", value: '""', note: "the decision, as a neutral question" },
   { field: "doing", value: '""', note: "what you were doing when it came up: \"writing the server's file watcher\"" },
   { field: "topic", value: '""', note: "area/subject, naming this one question; reuse one from `baesian topics` only for the same question" },
-  { field: "touches", value: "[]", note: "any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss" },
+  { field: "touches", value: "[]", note: "any of: schema, public-api, dependency, infra, user-facing, publishes, security, privacy, money, data-loss" },
   { field: "reverse", value: '""', note: "how costly it is to undo: cheap, moderate or one-way" },
   { field: "proposal", value: '""', note: "your pick, in a few words" },
   { field: "proposal_then", value: '""', note: "what happens if it's chosen" },
@@ -169,13 +169,13 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "rationale", value: '""', optional: true, note: "why you pick the proposal" },
   {
     field: "wrong_if", value: '""', optional: true,
-    note: "what would show your pick is wrong: required if reverse is one-way, touches includes security, or a premise is set",
+    note: "what would show your pick is wrong: required if reverse is one-way, touches includes security or privacy, or a premise is set",
     line: "(what would show your pick is wrong: required if reverse is one-way,",
   },
   {
     field: "check", value: '""', optional: true,
     note: "where to look to check wrong_if: required with it",
-    line: " touches includes security, or a premise is set; check says where to look)",
+    line: " touches includes security or privacy, or a premise is set; check says where to look)",
   },
   { field: "premise", value: '""', optional: true, note: "a claim an option rests on that nobody has checked; give premise_option and premise_check with it", line: "(a claim an option rests on that nobody has checked," },
   { field: "premise_option", value: "proposal", optional: true, note: "which option the premise rests on: proposal or alternative", line: " which option rests on it," },
@@ -187,7 +187,7 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "rules", value: "[R-xxxxx]", optional: true, note: "rules this decision bears on" },
   { field: "proposal_breaks", value: "[]", optional: true, note: "decisions or rules your pick would replace or break" },
   { field: "alternative_breaks", value: "[]", optional: true, note: "decisions or rules the alternative would replace or break", line: "" },
-  { field: "level", value: "blocking", optional: true, note: "provisional by default; hard by default for publishes, security, money, data-loss" },
+  { field: "level", value: "blocking", optional: true, note: "provisional by default; hard by default for publishes, security, privacy, money, data-loss" },
   { field: "depends_on", value: "[B-xxxxx]", optional: true, note: "the cards this decision builds on", line: "" },
   { field: "deck", value: "storage-layer", optional: true, note: "your branch's deck by default" },
   { field: "supersedes", value: "", template: false, note: "a decision this card argues against, filed with new; it becomes superseded once this card resolves" },

@@ -53,7 +53,7 @@ include it, `Baesian-Card: <id>`, or, for a two-way door, acknowledge it with a 
 line.
 
 - `level: provisional` (the default): carry on with your proposal. `blocking`: run `baesian wait <id>`
-  before building on it. `hard` (the default for publishing, security, money and data loss): never
+  before building on it. `hard` (the default for publishing, security, privacy, money and data loss): never
   proceed without a verdict.
 - `baesian wait <id>` exits 0 when resolved (use the decision. If it went against your pick and you hold
   a fact the reviewer lacked, or a check that would settle it, you may reply once:

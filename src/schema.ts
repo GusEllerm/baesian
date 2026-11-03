@@ -123,7 +123,8 @@ export const Fact = z.enum([
   "dependency", // adds a runtime dependency
   "user-facing", // is user-facing
   "publishes", // publishes something outside the project
-  "security", // touches security or privacy
+  "security", // touches security
+  "privacy", // touches personal data or privacy (split from security: card B-z3agk)
   "money", // spends money
   "data-loss", // deletes or overwrites stored data
   "infra", // changes CI, infrastructure or deployment (D53)
@@ -131,7 +132,7 @@ export const Fact = z.enum([
 export type Fact = z.infer<typeof Fact>;
 
 /** Facts that make a card hard unless the agent says otherwise (D42). */
-export const HARD_BY_DEFAULT: ReadonlySet<Fact> = new Set(["publishes", "security", "money", "data-loss"]);
+export const HARD_BY_DEFAULT: ReadonlySet<Fact> = new Set(["publishes", "security", "privacy", "money", "data-loss"]);
 
 export const CaughtAt = z.enum(["filing", "merge", "late"]);
 
@@ -255,6 +256,7 @@ export function filingProblems(d: CardDraft): string[] {
   const asks = [
     ...(d.reverse === "one-way" ? ["it's one-way"] : []),
     ...(d.touches.includes("security") ? ["it touches security"] : []),
+    ...(d.touches.includes("privacy") ? ["it touches privacy"] : []),
     ...(d.premise ? ["it rests on an unchecked premise"] : []),
   ];
   if (asks.length && !(d.wrong_if && d.check)) {

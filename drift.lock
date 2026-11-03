@@ -98,7 +98,7 @@ sig = "1f8c7c02469d986e"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/model.ts"
-sig = "2d5c740d23742506"
+sig = "ff9de227a3d56fa0"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -293,7 +293,7 @@ sig = "8929eb93dd817ba6"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -483,7 +483,7 @@ sig = "4fa0bca00ae04bb6"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -588,7 +588,7 @@ sig = "0220b67b630ed793"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#filingProblems"
-sig = "0fdd027ed5ff983e"
+sig = "f215c2c9d424e647"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -678,7 +678,7 @@ sig = "76837fce844f7733"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -903,7 +903,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/agents.ts"
-sig = "7e2e3ca4eb74a08e"
+sig = "48c9a68dccbd6dd5"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -988,7 +988,7 @@ sig = "1fd0df270d6858a2"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/mcp.ts"
-sig = "f8f393dfac346180"
+sig = "19280959b8f6e5eb"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1008,7 +1008,7 @@ sig = "c122e98d1397f13f"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1018,7 +1018,7 @@ sig = "72615353e26390ab"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts#filingProblems"
-sig = "0fdd027ed5ff983e"
+sig = "f215c2c9d424e647"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1158,12 +1158,12 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "75c4bb07787ee4e5"
+sig = "19efa956ec7853f5"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "68ffd4bb8b192e5a"
+sig = "42fba74b82891649"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1223,7 +1223,7 @@ sig = "534d657f6dd40528"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/schema.ts#HARD_BY_DEFAULT"
-sig = "5185dc6ddb8ddd60"
+sig = "d97b19df427586da"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1323,7 +1323,7 @@ sig = "8a539918aaa94533"
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -1338,12 +1338,12 @@ sig = "e23aabe831e4a55a"
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts#Fact"
-sig = "ae6e5f34ed2f2895"
+sig = "d5f9e8faf0d4651d"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts#HARD_BY_DEFAULT"
-sig = "5185dc6ddb8ddd60"
+sig = "d97b19df427586da"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -1543,7 +1543,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "75c4bb07787ee4e5"
+sig = "19efa956ec7853f5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1553,7 +1553,7 @@ sig = "77e1aaf4e49bee9b"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "68ffd4bb8b192e5a"
+sig = "42fba74b82891649"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -2003,7 +2003,7 @@ sig = "517284c2dd8a5ec6"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -2083,12 +2083,12 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "75c4bb07787ee4e5"
+sig = "19efa956ec7853f5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "68ffd4bb8b192e5a"
+sig = "42fba74b82891649"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2123,12 +2123,12 @@ sig = "cf1272a1a9a8c0a1"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts"
-sig = "f8f393dfac346180"
+sig = "19280959b8f6e5eb"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts#MCP_INSTRUCTIONS"
-sig = "f3b97ac6c7be8337"
+sig = "c71757695615e143"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2353,7 +2353,7 @@ sig = "dc0e03d3acfe3ad1"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2508,7 +2508,7 @@ sig = "089ba207d88e1c9a"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/schema.ts"
-sig = "e880164b343705bd"
+sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2528,7 +2528,7 @@ sig = "92df2786a85fc6c1"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/schema.ts#HARD_BY_DEFAULT"
-sig = "5185dc6ddb8ddd60"
+sig = "d97b19df427586da"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2553,7 +2553,7 @@ sig = "0220b67b630ed793"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/schema.ts#filingProblems"
-sig = "0fdd027ed5ff983e"
+sig = "f215c2c9d424e647"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2663,7 +2663,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/agents.ts"
-sig = "7e2e3ca4eb74a08e"
+sig = "48c9a68dccbd6dd5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"

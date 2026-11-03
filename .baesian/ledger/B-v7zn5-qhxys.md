@@ -1,0 +1,10 @@
+---
+type: ledger
+format: 1
+card: B-v7zn5
+branch: v1/next
+commit: b6e43da8c8f487f6646862a3dae536d0b06f6710
+at: 2026-11-03T13:42:32.687Z
+---
+
+Commit `b6e43da8c8f4` builds on B-v7zn5.
