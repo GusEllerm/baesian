@@ -622,8 +622,23 @@ sig = "f09f2ea133d765dc"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
+target = "design/explorations/round3/app.js#release"
+sig = "a2674fcd9981a618"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "design/explorations/round4/app.js#release"
+sig = "8d8589916533282a"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
 target = "design/explorations/round4/map.js#show"
 sig = "77f21c726a34fd5c"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "design/explorations/round5/app.js#release"
+sig = "8d8589916533282a"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"

@@ -55,7 +55,7 @@ Then:
 
 - [ ] D1. **Routing and preferences** (`Design/Routing and Preferences.md`, a proposal): sliders per repo (D131) and their axes; the classification gate, who runs it (the agent, rules, or a classifier such as Jev); audit cards and convention cards (D126); the config and card-format changes they need before v1. Cards for the cruxes (deck `routing`).
 - [x] D2. **The hosted service** (`Design/Hosted Service.md`, a proposal, v1 per D132): the relay (what goes up and down, and how write-once files sync); accounts and the one-time sign-in; the token's scope (file cards and hear answers, never answer); answers the website signs, which `baesian verify` checks; the local MCP server's security; what usage monitoring collects; the phone layout (D130); hosting options and their costs (no spending); the format changes before v1. Cards for the cruxes (deck `hosted`).
-- [ ] D3. **v1's plan:** add the hosted service and the designs to [[Implementation Plan]] as milestones, in order.
+- [x] D3. **v1's plan:** add the hosted service and the designs to [[Implementation Plan]] as milestones, in order.
 
 ### E. Reviews before release (about 1 hour)
 
@@ -84,6 +84,7 @@ Then:
 - 8:30pm: D1 and D2 handed to the synthesis agent and the B5 agent, who each have their research in context: a design note and card drafts each, which I review and file.
 - 8:45pm: E1 and E2 done: [[2026-11-03 Privacy and Security]]. The local server holds up. Fixed: `notify-send` now gets `--` before the agent-written question. Two hard cards in a new deck, `release`: B-7sjec (keep the hooks committed and gate changes to them, or install them per clone) and B-vqn69 (a public repo's record: full text, or only what was decided). Other findings: agents can act as the user (D62, known), agent text reaches other agents through briefs, and the preference file must not be editable by the agent it governs. Committed as `9d1ed6a`. All seven of the branch's commits pass `baesian verify --base main`; CI itself runs only on pushes to main and on pull requests, so the branch hasn't run there.
 - 9:05pm: D2 done: [[Hosted Service]] (P15, a proposal), by the B5 agent. Eight cards filed in a new deck, `hosted`: B-kypkm (can the service read card text), B-9tk9m (sign-in), B-sar41 (only signed answers count), B-na7je (a passkey on hard cards), B-k216t (the local client in a hosted repo; blocking), B-rca1z (platform), B-7bk6y (usage data), B-vbqdy (CI's trust root). All hard but B-k216t, so nothing is built on them.
+- 9:15pm: D3 done: M7's row now says it's the way in to the hosted service, and M8 (routing and preferences, P14), M9 (the hosted service, P15) and M10 (release) are in [[Implementation Plan]], with v1's order proposed for the user to confirm.
 
 ## Debrief
 
