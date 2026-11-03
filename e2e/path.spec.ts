@@ -137,20 +137,19 @@ test("dragging the card toward an option lights the path as holding an arrow doe
   await expect(rule).not.toHaveClass(/fx-bad/);
 });
 
-test("answering turns the drum to the next card, and with reduced motion it changes at once", async ({ page }) => {
+/** The animations running in the path's rows (the glide and fades), not the flight or anything on the card. */
+const pathAnimations = (page: Page) =>
+  page.evaluate(() => document.getAnimations().filter((a) => (a.effect as KeyframeEffect | null)?.target instanceof Element && ((a.effect as KeyframeEffect).target as Element).matches(".path [data-flip]")).length);
+
+test("answering glides the path into its new places, and with reduced motion it changes at once", async ({ page }) => {
   await open(page, (s) => {
     file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
     file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
     file(s, { title: "Run retention", question: "How long are runs kept?", topic: "alpha/c" });
   });
-  // Rows round the drum shrink with their distance from the front: the next card's row is smaller than the one after.
-  const scale = (sel: string) => page.locator(sel).evaluate((r) => new DOMMatrix(getComputedStyle(r).transform).a);
-  expect(await scale(".path .row.now")).toBe(1);
-  expect(await scale(".path .row.next >> nth=0")).toBeGreaterThan(await scale(".path .row.next >> nth=1"));
   await choose(page, "proposal");
-  await expect(page.locator(".path[data-turning]")).toHaveCount(1);
-  await page.clock.runFor(1000);
-  await expect(page.locator(".path[data-turning]")).toHaveCount(0);
+  expect(await pathAnimations(page)).toBeGreaterThan(0);
+  await expect.poll(() => pathAnimations(page)).toBe(0); // the glide is over in well under a second
   await expect(page.locator(".path .row.past")).toHaveText(/The run store/);
 
   // A changed setting takes effect when the page loads again (the flight reads it once, as Motion does).
@@ -158,33 +157,21 @@ test("answering turns the drum to the next card, and with reduced motion it chan
   await page.reload();
   await expect(page.getByRole("heading", { name: "Where do files go?" })).toBeVisible();
   await choose(page, "proposal");
-  await expect(page.locator(".path[data-turning]")).toHaveCount(0);
+  expect(await pathAnimations(page)).toBe(0);
   await expect(page.locator(".path .row.past")).toHaveText(/Run file layout/);
 });
 
-test("answers past the drum are counted, listed in a panel that takes the focus, and reopen with the focus on the card", async ({ page }) => {
+test("going to a card from the path moves the focus to it, and the path's rows show a focus ring", async ({ page }) => {
   await open(page, (s) => {
-    for (const [i, t] of ["The run store", "Run file layout", "Run retention", "Run labels", "Run export"].entries()) file(s, { title: t, question: `Question ${i}?`, topic: `alpha/q${i}` });
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+    file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
   });
-  for (let i = 0; i < 4; i++) {
-    await choose(page, "proposal");
-    await page.clock.runFor(1200);
-  }
-  // Folded: past the three the path shows, and any the drum turned past its top edge. The label counts them all.
-  const earlier = page.locator(".path button.earlier");
-  const shown = await page.locator(".path .row.past").count();
-  await expect(earlier).toHaveText(4 - shown === 1 ? "1 earlier answer" : `${4 - shown} earlier answers`);
-  await earlier.click();
-  const panel = page.getByRole("complementary", { name: "Your answers" });
-  await expect(panel.getByRole("button")).toHaveCount(5); // Close, and the four answers, oldest first
-  await expect(panel.locator(".answers button").first()).toContainText("The run store");
-  await expect(panel.locator(".answers button").first()).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
-  await expect(earlier).toBeFocused();
-  // Reopening an answer moves the focus to its card, not to the page.
-  await page.locator(".path .row.past").first().click();
+  const next = page.locator(".path .row.next", { hasText: "Run file layout" });
+  await next.focus();
+  expect(await next.evaluate((r) => getComputedStyle(r).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Enter");
   await page.clock.runFor(100);
+  await expect(page.getByRole("heading", { name: "Where do files go?" })).toBeVisible();
   await expect(page.locator(CARD)).toBeFocused();
 });
 

@@ -6,7 +6,7 @@ import type { NotifyStatus } from "./notify";
 // M4 step 5e: the menu in the header, its two panels (your calibration, and the keys), and the empty desk.
 // Round 5's, ported: design/explorations/round5/app.js (renderKeys, renderMirror, the menu, next()).
 
-export type PanelKind = "calibration" | "keys" | "answers";
+export type PanelKind = "calibration" | "keys";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
@@ -56,39 +56,15 @@ export function moveInMenu(dir: "up" | "down") {
   items[(i + (dir === "down" ? 1 : items.length - 1) + items.length) % items.length]!.focus();
 }
 
-function Panel({ id, label, onClose, children, at }: { id?: string; label: string; onClose: () => void; children: ReactNode; at?: { left: number; top: number } }) {
+function Panel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   return (
-    <aside id={id} className={`panel${at ? " anchored" : ""}`} aria-label={label} style={at ? { left: at.left, top: at.top } : undefined}>
+    <aside className="panel" aria-label={label}>
       <button type="button" className="panel-close" onClick={onClose}>
         Close <kbd>Esc</kbd>
       </button>
       <h4>{label}</h4>
       {children}
     </aside>
-  );
-}
-
-/** Every answer this session, oldest first as on the path, opened beside it: the path shows only the last few. */
-export function AnswersPanel({ answers, at, onOpen, onClose }: { answers: { key: string; id: string; name: string; state: string }[]; at?: { left: number; top: number }; onOpen: (id: string) => void; onClose: () => void }) {
-  // Opened from the path, it takes the focus to its first answer, and gives it back to the button when it closes.
-  useEffect(() => {
-    document.querySelector<HTMLElement>("#answers-panel .answers button")?.focus();
-    return () => document.querySelector<HTMLElement>(".path button.earlier")?.focus({ preventScroll: true });
-  }, []);
-  return (
-    <Panel id="answers-panel" label="Your answers" onClose={onClose} {...(at ? { at } : {})}>
-      <p className="sub">This session, oldest first, as on the path. Open one to see it, or change your answer.</p>
-      <ol className="answers">
-        {answers.map((a) => (
-          <li key={a.key}>
-            <button type="button" onClick={() => onOpen(a.id)}>
-              <span className="nm">{a.name}</span>
-              <span className="st">{a.state}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
-    </Panel>
   );
 }
 

@@ -191,32 +191,27 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .path-lines .conflict.hot { stroke: var(--left); }
 .hood { position: relative; z-index: 1; align-self: stretch; }
 .path { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
+.path[data-glide] { transition: transform 380ms cubic-bezier(.3,.7,.3,1); }
 .path .row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 30px; column-gap: 6px; align-items: center; min-height: 40px; padding: 3px 0 3px 6px; border-radius: 8px; }
-/* The drum (Path.tsx): every row shrinks about its node, so the spine stays straight. After `.path .row`, whose `all: unset` would reset it. */
-.path > [data-flip] { transform-origin: calc(100% - 15px) 50%; transform: translateY(var(--dy, 0px)) scale(var(--sx, 1), var(--sy, 1)); opacity: var(--o, 1); }
-/* Hover or focus lays a row flat, at full strength, where it sits on the drum; eased, except while the drum turns. */
-.path[data-placed]:not([data-turning]) > button.row { transition: transform 140ms ease-out, opacity 140ms ease-out, background-color 120ms; }
-.path > button.row:hover, .path > button.row:focus-visible { transform: translateY(var(--dy, 0px)); opacity: 1; z-index: 2; }
-.path > button.row:is(:hover, :focus-visible) :is(.st, .nm) { opacity: 1; }
 /* The rows unset everything, the global focus ring included: put it back. */
 .path button.row:focus-visible { outline: 2px solid var(--right); outline-offset: 2px; }
 .path button.row { cursor: pointer; }
 .path button.row:hover, .path button.row:focus-visible { background: #ffffff70; }
 .path .row .lbl { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 1px; }
-.path .row .nm { font: var(--t-body); font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: var(--name, 1); }
-.path .row .st { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); opacity: var(--chose, 1); }
+.path .row .nm { font: var(--t-body); font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.path .row .st { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .path .row .node { display: grid; place-items: center; width: 30px; height: 30px; }
 .path .row .node .mk { position: relative; z-index: 1; }
-.path .row.past .nm { color: var(--ink); }
-.path .row.past .st { color: #225c38; }
+.path .row.past .nm { color: var(--ink-soft); }
+.path .row.past .st { color: #2f7448; }
 .tag { font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-soft); }
 .tag.c { color: var(--left); }
 .tag.p { color: var(--ink-faint); }
 .path .row .tag.link { color: var(--ink); }
 .path .row .tag.link.c { color: var(--left); }
-.path .row.now { min-height: 44px; position: relative; }
+.path .row.now { min-height: 44px; }
 .path .row.now .node { border-radius: 50%; background: var(--face); box-shadow: 0 0 0 2px var(--ink); }
-.path .row.now .nm { opacity: var(--name, 0); color: var(--ink-soft); }
+.path .row.now .lbl { visibility: hidden; }
 .rels { display: flex; flex-direction: column; gap: 2px; margin: 2px 22px 6px 0; padding: 4px 0; }
 .path .row.rel { grid-template-columns: minmax(0, 1fr) 18px; min-height: 0; padding: 4px 0 4px 6px; transition: background 120ms, box-shadow 120ms; }
 .path .row.rel .nm { font-size: 14.5px; color: var(--ink-soft); }
@@ -231,16 +226,11 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .path .row.rel.fx-good .hurt, .row.rel.fx-bad .hurt { opacity: .5; }
 .hood[data-lean]:not([data-lean=""]) .path .row.rel:not(.fx-good):not(.fx-bad) { opacity: .55; }
 .group-h { margin: 0 24px 4px 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--left); }
-.next-h { margin: 6px 36px 0 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-soft); transition: opacity 120ms; }
-/* While the drum turns, "Next" steps aside: the rising card passes through where it sits. */
-.path[data-turning] .next-h { opacity: 0; transition: none; }
-.path .row.next { min-height: 34px; opacity: calc(var(--o, 1) * .8); }
+.next-h { margin: 6px 36px 0 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-faint); }
+.path .row.next { min-height: 32px; opacity: .75; }
 .path .row.next .nm { font-size: 14px; }
 .path .row.next:hover { opacity: 1; }
-.earlier { margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
-button.earlier { all: unset; box-sizing: border-box; min-height: 26px; display: flex; align-items: center; justify-content: flex-end; margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); cursor: pointer; border-radius: 4px; padding: 2px 4px; transform-origin: calc(100% - 15px) 50%; transform: translateY(var(--dy, 0px)) scale(var(--sx, 1), var(--sy, 1)); opacity: var(--o, 1); }
-button.earlier:hover { text-decoration: underline; }
-button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 2px; }
+.earlier { margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-faint); }
 .earlier.ahead { margin-top: 2px; }
 .fly { position: fixed; left: 0; top: 0; z-index: 90; pointer-events: none; white-space: nowrap; padding: 2px 8px 3px; border-radius: 6px; background: #e2eee5; color: #2f7448; box-shadow: 0 6px 16px -8px #2e234380, inset 0 0 0 1.5px #3f8f5a; font: 700 15px/1.2 var(--prose); transform-origin: right center; }
 
@@ -251,7 +241,7 @@ button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 0; text-align: center; }
 .empty .big { font: var(--t-question); }
 
-@media (prefers-reduced-motion: reduce) { .card { --px: .5 !important; --py: .5 !important; } .path > button.row { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .card { --px: .5 !important; --py: .5 !important; } .path[data-glide] { transition: none; } }
 
 /* ------------------------------------------------------------ the menu, its panels, and the "new" tag (step 5e) */
 .menu-wrap { position: relative; margin-left: auto; }
@@ -286,12 +276,3 @@ button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 
 .empty .parked-row .nm, .empty .parked-row .st { grid-column: 1; }
 .empty .parked-row .go { grid-column: 2; grid-row: 1 / span 2; font: var(--t-meta); font-stretch: 88%; color: var(--right); }
 .empty .ghost { margin-top: 8px; padding: 9px 14px; border: 2px solid var(--ink); background: transparent; border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
-
-/* The list of every answer this session (Panels.tsx), opened from "N earlier answers", in the path's column. */
-.panel.anchored { right: auto; width: 300px; z-index: 80; }
-.panel .answers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; }
-.panel .answers button { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
-.panel .answers button:hover { background: #00000008; }
-.panel .answers button:focus-visible { outline: 2px solid var(--right); outline-offset: 0; }
-.panel .answers .nm { font: var(--t-body); font-size: 15px; color: var(--ink); }
-.panel .answers .st { font: var(--t-small); font-stretch: 90%; color: #225c38; }

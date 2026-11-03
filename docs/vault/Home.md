@@ -17,7 +17,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-03.*
 
-- **After the overnight run (2026-11-03):** the user answered the twenty cards: nineteen accepts (D133–D151), and a question on sign-in, answered with research on Globus Auth and a revised card, B-9tk9m r2, which is the one card waiting. The path beside the card is now a rotating drum (D152), reviewed in two rounds by critique agents. The trail search (D134) and the secrets warning (D136) are built and merged. All on the branch `overnight/2026-11-03`, with 267 unit tests and 42 browser tests passing: [[2026-11-03 The Drum]].
+- **After the overnight run (2026-11-03):** the user answered the twenty cards: nineteen accepts (D133–D151), and a question on sign-in, answered with research on Globus Auth and a revised card, B-9tk9m r2, which is the one card waiting. A rotating-drum path (D152) was tried and then removed (D155), to be started again later; the path is the flat one, with its focus fixed. The trail search (D134) and the secrets warning (D136) are built and merged. All on the branch `overnight/2026-11-03`, with 267 unit tests and 42 browser tests passing: [[2026-11-03 The Drum]].
 
 - **The overnight run (2026-11-02 to 11-03) is done, on the branch `overnight/2026-11-03`:** the plan, its log and a debrief for the user are in [[2026-11-03 Overnight]]. Twenty cards wait in four decks (`stability`, `hosted`, `routing`, `release`); two proposals, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15); the research behind them, [[Preference Sliders and the Gate]]; a [[2026-11-03 Scale Test]] whose fix made every command linear in the cards; and a [[2026-11-03 Privacy and Security]] review. On the branch, 254 unit tests and 41 browser tests pass. `main` is unchanged.
 
@@ -32,7 +32,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 - **v1's scope** (2026-11-02): the vault adapter and the MCP server stay in it (D125), and audit and convention cards are designed before it (D126).
 - **A hosted service is the way to publish** (D127–D131, 2026-11-02): a website you sign up to and answer cards on, from a laptop or a phone (a phone layout, D130). The repo owns its decisions and the website relays them (D127); agents reach it through the CLI and a local MCP server after a one-time sign-in (D128); the user hosts it for others (D129); preference sliders are per repo (D131); and it's part of v1 (D132). Open: how the sliders work (deep research first), and what it collects.
 - **The file formats are accepted** (D124, 2026-11-02): P12 is closed. [[File Formats]] describes them; under D108 they stay free to change until a v1 is published.
-- **Decided by the user** (D1–D152 in [[Decision Log]]; D109–D116 and D118–D122 through Baesian itself, while dogfooding):
+- **Decided by the user** (D1–D155 in [[Decision Log]]; D109–D116 and D118–D122 through Baesian itself, while dogfooding):
   - **no compatibility between Baesian versions until a v1 is published** (D108): formats change freely until then;
   - **stack:** TypeScript end to end on Node LTS, npm; small vetted dependencies; React + Vite + Motion for the client; five-character card IDs (D47–D51);
   - **foundation:** git is the state machine; harness features are optional adapters, in three tiers (D27);
