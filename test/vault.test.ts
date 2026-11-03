@@ -96,6 +96,15 @@ describe("a decision note (D171, D172)", () => {
     expect(note.body).toContain("# The run-metadata store\n\nWhich store should hold run metadata?");
     expect(note.body).toContain("**Decided:** SQLite (WAL mode), the agent's pick. Then runs are recorded in one file next to the repo.");
     expect(note.body).toContain("**Not chosen:** Postgres. Then runs go to a database server that has to be running.");
+    // An option's consequence written as a sentence stands as one, not as "Then The…".
+    const capital = file(store, { title: "The cache", question: "Where should the cache live?", topic: "storage/cache", proposal_then: "Runs are cached in one file." });
+    store.addVerdict({ card: capital, revision: 1, response: "accept", ...REVIEWER });
+    write(store);
+    expect(noteFor(dir, capital).body).toContain("**Decided:** SQLite (WAL mode), the agent's pick. Runs are cached in one file.");
+    const risky = file(store, { title: "The queue", question: "Which queue?", topic: "storage/queue", wrong_if: "Jobs outgrow one machine", check: "Count jobs per hour" });
+    store.addVerdict({ card: risky, revision: 1, response: "accept", ...REVIEWER });
+    write(store);
+    expect(noteFor(dir, risky).body).toContain("**Wrong if:** Jobs outgrow one machine. **To check:** Count jobs per hour.");
     expect(note.body).toContain("**It turned on:** Will more than one machine write runs at once? If not: SQLite (WAL mode). If so: Postgres.");
     expect(note.body).toContain("**The fact given:** Two CI runners write at once.");
     expect(note.body).toContain("**The agent's case:** One file is simplest.");

@@ -1,4 +1,5 @@
 {
+  "vault": "docs/vault",
   "gate_schema": [
     "**/migrations/**",
     "**/*.sql",

@@ -93,6 +93,8 @@ const link = (name: string, id: string) => `[[${name}|${id}]]`;
 /** Text ending as a sentence: a full stop added unless it already ends in one. */
 const sentence = (s: string) => (/[.!?…]["”’)]?$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
 const withoutStop = (s: string) => s.trim().replace(/[.]+$/, "");
+/** What follows from an option: "Then runs are recorded…", or, when the agent wrote it as a sentence, that sentence. */
+const consequence = (s: string) => (/^\p{Lu}/u.test(s.trim()) ? sentence(s) : `Then ${sentence(s)}`);
 const quote = (s: string) => `"${s.trim()}"`;
 
 // ---------------------------------------------------------------- a decision's history (D172)
@@ -369,8 +371,8 @@ function decisionHead(read: Reading, id: string, r: Resolution): string {
   const how = HOW[v.response as keyof typeof HOW];
   const chosen = v.response === "accept" ? { then: m.proposal_then } : v.response === "alternative" && normalise(v.choice!) === normalise(m.alternative) ? { then: m.alternative_then } : {};
   const lines: string[] = [`# ${m.title}`, m.question];
-  lines.push(`**Decided:** ${sentence(`${withoutStop(r.answer)}, ${how}`)}${chosen.then ? ` Then ${sentence(chosen.then)}` : ""}`);
-  for (const o of notChosen(r)) lines.push(`**Not chosen:** ${sentence(o.pick ? `${withoutStop(o.name)}, the agent's pick` : o.name)} Then ${sentence(o.then)}`);
+  lines.push(`**Decided:** ${sentence(`${withoutStop(r.answer)}, ${how}`)}${chosen.then ? ` ${consequence(chosen.then)}` : ""}`);
+  for (const o of notChosen(r)) lines.push(`**Not chosen:** ${sentence(o.pick ? `${withoutStop(o.name)}, the agent's pick` : o.name)} ${consequence(o.then)}`);
   lines.push(
     `**It turned on:** ${m.crux}${m.crux_preference ? " (a preference)" : ""} ${withoutStop(m.crux_proposal)}: ${sentence(m.proposal)} ${withoutStop(m.crux_alternative)}: ${sentence(m.alternative)}`,
   );
@@ -378,8 +380,8 @@ function decisionHead(read: Reading, id: string, r: Resolution): string {
   if (v.comment) lines.push(`**Comment:** ${quote(v.comment)}`);
   const option = v.response === "accept" ? "proposal" : v.response === "alternative" ? "alternative" : undefined;
   if (v.first_choice && option && v.first_choice !== option) lines.push(`**First chose:** ${sentence(`${withoutStop(m[v.first_choice])}, then switched once the agent's pick was shown`)}`);
-  const why = [m.rationale && sentence(m.rationale), m.wrong_if ? `Wrong if ${withoutStop(m.wrong_if)} (check: ${withoutStop(m.check ?? "")}).` : undefined].filter(Boolean);
-  if (why.length) lines.push(`**The agent's case:** ${why.join(" ")}`);
+  if (m.rationale) lines.push(`**The agent's case:** ${sentence(m.rationale)}`);
+  if (m.wrong_if) lines.push(`**Wrong if:** ${sentence(m.wrong_if)}${m.check ? ` **To check:** ${sentence(m.check)}` : ""}`);
   if (m.reply) lines.push(`**The agent's reply:** ${sentence(m.reply)}`);
   const deck = read.record.deck(m.deck);
   const context = (deck?.meta.context_notes ?? []).map((n) => (n.startsWith("[[") ? n : `[[${n}]]`));

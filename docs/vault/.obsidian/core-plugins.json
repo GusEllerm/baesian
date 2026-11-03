@@ -12,5 +12,6 @@
   "command-palette": true,
   "outline": true,
   "word-count": true,
-  "file-recovery": true
+  "file-recovery": true,
+  "bases": true
 }

@@ -14,9 +14,67 @@ tags: [baesian, decisions]
 
 Newest first in each table. Only the user moves an item from **Proposed** to **Accepted**. Process: [[Working Agreement#Decision cards]].
 
-This vault uses D-numbers for the user's decisions and P-numbers for proposals until Baesian can run its own decisions (D21). After that, decisions carry card IDs (D18, D19).
+This vault uses D-numbers for decisions made in conversation, and P-numbers for proposals. Decisions made on cards carry their card IDs (D18, D19): since the vault adapter was turned on (2026-11-03), Baesian writes each as a note in `Decisions/`, listed by the query below, and they get no D-row (D174). Those made before then also have D-rows, from D109 to D175.
 
 "Decision card (dry run)" means the user answered a real card in the round 5 prototype (`design/explorations/round5/#dryrun`). The answers are kept in `design/dryrun/`, one file per answer, with the cards as shown in `design/explorations/round5/dryrun.js`.
+
+## Decided through Baesian
+
+One note per decision in `Decisions/`, and per rule in `Rules/`, written by Baesian from the record.
+
+```base
+filters:
+  or:
+    - file.inFolder("Decisions")
+    - file.inFolder("Rules")
+properties:
+  note.answer:
+    displayName: Decided
+  note.answered:
+    displayName: Answered
+  note.covers:
+    displayName: Gate facts
+views:
+  - type: table
+    name: Decisions in force
+    filters:
+      and:
+        - 'note.type == "decision"'
+        - 'note.status == "active"'
+    order:
+      - file.name
+      - note.answer
+      - note.answered
+      - note.topic
+    sort:
+      - property: note.answered
+        direction: DESC
+  - type: table
+    name: Rules in force
+    filters:
+      and:
+        - 'note.type == "rule"'
+        - 'note.status == "active"'
+    order:
+      - file.name
+      - note.summary
+      - note.covers
+      - note.accepted
+    sort:
+      - property: note.accepted
+        direction: DESC
+  - type: table
+    name: Everything
+    order:
+      - file.name
+      - note.type
+      - note.status
+      - note.answer
+      - note.updated
+    sort:
+      - property: note.updated
+        direction: DESC
+```
 
 ## Accepted (user)
 
@@ -212,6 +270,20 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-11-03 `[agent decision]` **M6, the vault adapter, as built** ([[src-vault]]; P17, D170–D175), by its builder:
+  - Sections are headed `## <What> on <YYYY-MM-DD>` (UTC), matched by heading, a missing one placed in time order. An "Answered again" section covers a decision reopened, then given the same answer; a note is also reopened by the agent's reply (D89) and by a parent decided otherwise (D80).
+  - Frontmatter keys follow P17's table, plus `conflict_of`; keys, tags and aliases a person adds are kept, last. Links in the frontmatter point only to cards that have a note; a rule note names its card by ID, since every record holds the rule but not always the card.
+  - Names drop control characters and a trailing dot or space; the 80 and 60 character limits apply to the title or words, not the ID. A decision's `summary:` is `<title>: <answer> (<ID>).`, a rule's its first sentence.
+  - The hook leaves alone a note someone has edited and not staged, and warns; a failed staging warns rather than blocks. `init --vault` refuses a path outside the repo, and leaves alone a vault with `.obsidian/` but no `core-plugins.json`.
+  - The server's vault listing skips hidden folders and symlinks; links match regardless of case; card IDs in a note's summary link to the card. The client opens a deck's briefing and its notes' summaries from the deck's name (card B-j6b75, provisional).
+  - Added by the main session, before any note was committed: an option's consequence written as a sentence stands as one ("The relay gates…", not "Then The relay gates…"), and the "wrong if" and its check get their own line.
+- 2026-11-03 `[agent decision]` **M7, the MCP server, as built** ([[src-mcp]]; P18, D164–D169), by its builder:
+  - Quoting (D169): `<what> by <author>: "<JSON string>"`, authors as `Gus Ellerm (a person)` or `claude-code on main (an agent)`, an unusual name JSON-quoted too; a verdict's choice and comment are the reviewer's. It reaches `wait`, `inbox`, `show`, `list`, the duplicate matches, the gate's report and `verify`, and so the hooks.
+  - `Brief` gains `reviewer`, `wasReviewer`, `parentAgent` and `parentBranch` (added to `/api/state`, nothing removed). `--json` on `revise`, `reply`, `rule`, `attach`, `withdraw`, `topics` and `template`; `show`, `wait` and `inbox` give more in theirs.
+  - `list`, `show` and `topics` say Baesian isn't set up in a repo without it, as the tools do; Ctrl-C stops `baesian wait`, removes its marker and exits 130; a second withdrawal is refused (`NotAllowed`).
+  - The filing tools' schema is `CardDraft` without `type`, `conflict_of` and `caught_at`, with each field's note from `CARD_FIELDS`, from which `CARD_TEMPLATE` is now generated, byte-identical. `card_template` takes no `cwd`; `slice_seconds` is capped at 100; IDs are checked as card IDs. No tool declares an output schema; lists come wrapped (`items`, `cards`, `topics`).
+  - MCP client names map `claude-code…` and `codex…` to `claude-code` and `codex`; `check_inbox` reads its `session` argument, else the server's harness session.
 
 - 2026-11-03 `[agent decision]` **A deck records the document it came from only when that document is in the repo** (`Store.createDeck`). A file outside the repo was recorded relative to it, climbing out with `../..`, so the decks `formats-v1` and `vault-adapter` name a scratchpad folder under `/private/tmp`, with the user's name in it. Found by M6's builder. Those two files stay as written (record files are written once, and the history has them); the throwaway rewrite of the record at v1 (P16) can drop the field.
 

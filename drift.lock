@@ -378,7 +378,7 @@ sig = "0f5663623f22de67"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = ".baesian/config.json"
-sig = "61bebe02a191a302"
+sig = "c72ade2acc7ce999"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2363,7 +2363,7 @@ sig = "a5d004d408ac99b1"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = ".baesian/config.json"
-sig = "61bebe02a191a302"
+sig = "c72ade2acc7ce999"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
