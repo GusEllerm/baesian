@@ -249,7 +249,7 @@ MCP-2 and MCP-6 touch security, so they're hard. The rest are blocking. MCP-1, M
 ## As built (M7, 2026-11-03)
 
 Built as above ([[src-mcp]]), with these choices the proposal left open, each the agent's:
-- **show_card names the card's author once,** on the line above its fields, and quotes each field on a line of its own; titles, options, comments and briefs elsewhere carry their author on the same line. Briefs now name who wrote their texts (`Brief`).
+- **Every quoted text carries its author on its own line,** as D169 says, in show_card too, where each field has a line: `question by claude-code on main (an agent): "…"`. Briefs now name who wrote their texts (`Brief`).
 - **card_template takes no cwd:** it reads no repo.
 - **The filing tools' schema leaves out** `type`, `conflict_of` and `caught_at`, which Baesian sets itself; `supersedes`, `confidence`, `domain`, `evidence` and `modules_touched` are in it, with notes of their own in `CARD_FIELDS`.
 - **wait_for_verdict's slice_seconds** is at most 100 (D168).

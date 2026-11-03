@@ -1,5 +1,5 @@
 import { CARD_TEMPLATE } from "./agents.js";
-import { agentLabel, answerLine, byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
+import { agentLabel, answerLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import type { Verdict, Withdrawal } from "./schema.js";
 import { type Brief, type Card, type FileResult, type InboxItem, NoCard, PENDING, type PossibleDuplicate, type Status, type Store } from "./store.js";
 import { type WaitOptions, type WaitOutcome, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
@@ -30,26 +30,26 @@ export function cardLine(s: Store, card: Card): string {
   return `${m.id}  ${s.status(m.id).padEnd(10)} ${m.level.padEnd(11)} ${said("title", cardAuthor(m), m.title)}  [${where}]`;
 }
 
-/** The card itself, each of its texts quoted, under the agent that wrote them: the question, the crux, the options. */
+/** The card itself: the question, the crux, the options, each text quoted with the agent that wrote it, line by line. */
 export function cardDetails(card: Card): string[] {
   const m = card.meta;
+  const by = (what: string, text: string) => `  ${said(what, cardAuthor(m), text)}`;
   const undo = { cheap: "easy", moderate: "costly", "one-way": "hard" }[m.reverse];
   const out = [
-    `Written by ${byLine(cardAuthor(m))}, each text quoted:`,
-    `  question: ${q(m.question)}`,
-    `  doing: ${q(m.doing)}`,
+    by("question", m.question),
+    by("doing", m.doing),
     `  stakes: ${undo} to undo${m.touches.length ? `; touches ${m.touches.join(", ")}` : ""}`,
     "",
-    `  crux: ${q(m.crux)}${m.crux_preference ? " (a preference)" : ""}`,
+    `${by("crux", m.crux)}${m.crux_preference ? " (a preference)" : ""}`,
   ];
-  if (m.crux_fact) out.push(`  crux_fact: ${q(m.crux_fact)}`);
-  out.push(`  ${q(m.crux_proposal)} → proposal (the agent's pick): ${q(m.proposal)}; then: ${q(m.proposal_then)}`);
-  out.push(`  ${q(m.crux_alternative)} → alternative: ${q(m.alternative)}; then: ${q(m.alternative_then)}`);
-  if (m.premise) out.push(`  premise, unverified, of the ${m.premise_option}: ${q(m.premise)} (check: ${q(m.premise_check ?? "")})`);
-  if (m.acted) out.push(`  acted, already built for the ${m.acted_option}: ${q(m.acted)}`);
-  if (m.rationale) out.push(`  rationale: ${q(m.rationale)}`);
-  if (m.wrong_if) out.push(`  wrong_if: ${q(m.wrong_if)} (check: ${q(m.check ?? "")})`);
-  if (card.body.trim()) out.push(`  body: ${q(card.body.trim())}`);
+  if (m.crux_fact) out.push(by("crux_fact", m.crux_fact));
+  out.push(`${by("proposal (the agent's pick)", m.proposal)}; if: ${q(m.crux_proposal)}; then: ${q(m.proposal_then)}`);
+  out.push(`${by("alternative", m.alternative)}; if: ${q(m.crux_alternative)}; then: ${q(m.alternative_then)}`);
+  if (m.premise) out.push(`${by(`premise, unverified, of the ${m.premise_option}`, m.premise)}; check: ${q(m.premise_check ?? "")}`);
+  if (m.acted) out.push(by(`acted, already built for the ${m.acted_option}`, m.acted));
+  if (m.rationale) out.push(by("rationale", m.rationale));
+  if (m.wrong_if) out.push(`${by("wrong_if", m.wrong_if)}; check: ${q(m.check ?? "")}`);
+  if (card.body.trim()) out.push(by("body", card.body.trim()));
   return out;
 }
 

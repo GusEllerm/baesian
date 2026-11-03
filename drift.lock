@@ -873,7 +873,7 @@ sig = "6081954164a384ab"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/ops.ts"
-sig = "5533b628a20360d3"
+sig = "304b31c7a06c47ee"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1533,7 +1533,7 @@ sig = "a5572f178a5a4725"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts"
-sig = "5533b628a20360d3"
+sig = "304b31c7a06c47ee"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1553,7 +1553,7 @@ sig = "490d885df4320ce5"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#cardDetails"
-sig = "79c4c395b6cf04e2"
+sig = "81ead2dadb5b5ebd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1907,6 +1907,11 @@ sig = "649f3678b749cfae"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "plugins/baesian/.mcp.json"
+sig = "10bbf42753ab0a9c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "plugins/baesian/hooks/baesian.mjs"
 sig = "4724db53562a6d66"
 
@@ -1998,7 +2003,7 @@ sig = "14ae8a7c312598a2"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts"
-sig = "5533b628a20360d3"
+sig = "304b31c7a06c47ee"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"

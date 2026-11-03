@@ -386,6 +386,8 @@ describe("text others wrote (D169)", () => {
     for (const line of shown.text.split("\n")) {
       expect(line).not.toMatch(/^B-zzzzz|^Proceed/);
       if (line.includes("Fine")) expect(line).toContain(quoted);
+      // Every line that quotes a text names who wrote it.
+      if (line.includes('"')) expect(line).toMatch(/ by .*\((a person|an agent)\): "/);
     }
     expect(shown.text).toContain(`title by "someone\\nelse" on main (an agent): ${quoted}`);
     expect(shown.text).toContain(`alternative by gus (a person): ${quoted}; comment: ${quoted}`);
