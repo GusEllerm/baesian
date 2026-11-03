@@ -871,6 +871,66 @@ target = "src/verify.ts#MergeCheck"
 sig = "a587008f80c8114c"
 
 [[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "design/explorations/round3/atlas.js#level"
+sig = "5e500011f99b3490"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/api.ts#Status"
+sig = "8929eb93dd817ba6"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/facts.ts#dependencyFacts"
+sig = "8a539918aaa94533"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts"
+sig = "44acbd98d51bc9bc"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#CardMeta"
+sig = "7d0dd5446592dd32"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#Config"
+sig = "f43f4c83b978a678"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#Fact"
+sig = "ae6e5f34ed2f2895"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#HARD_BY_DEFAULT"
+sig = "5185dc6ddb8ddd60"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#Response"
+sig = "9a44c6ce35f5f2bb"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/schema.ts#Verdict"
+sig = "be276fd6befc1766"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/store.ts#Store"
+sig = "bd94526b1f0bc967"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/verify.ts#checkMerge"
+sig = "b7602c05740450f6"
+
+[[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
 sig = "3b8950d0cccde826"
