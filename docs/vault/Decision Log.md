@@ -271,6 +271,11 @@ views:
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-03 `[agent decision]` **Format numbers, as built** (D156, D157; `FILE_KINDS`, `upgradeFile()`, `NewerFormat`):
+  - By the main session, replacing P16's plan to rewrite this repo's record at v1: **a file with no `format` was written before v1 and reads as format 1.** CI checks every commit against its own record, so old commits must stay readable as they are; no file is ever rewritten.
+  - By its builder: the refusal names the file (`cards/B-7f3kq/r1.md has card format 2; this Baesian reads up to 1: upgrade Baesian`), with kind names of its own (ledger entry, inbox cursor, personal config, server file, port file, card draft, decision note, rule note). Old cursors had no `type` either, so reading one adds `type: "cursor"`, the only kind where "none to 1" changes anything. Where an unreadable file already counts as unknown (presence, the server and port files, a waiting marker), a newer one is ignored rather than thrown. Files read carry `format: 1` in memory, so `--json`, MCP results and `/api/state` show it. A card draft's `format` is its own kind; decision and rule notes are numbered apart, and a note in a newer format is left alone, with a warning. No MCP error code for it: the SDK's error result carries the CLI's message. The hook's list of staged paths between pre-commit and commit-msg gets no format: it lasts one commit. Validation messages name files by their path in the layer.
+  - Whether `baesian init` writes the config's format is card B-xmwmq (provisional): built as it recommends.
+
 - 2026-11-03 `[agent decision]` **M6, the vault adapter, as built** ([[src-vault]]; P17, D170–D175), by its builder:
   - Sections are headed `## <What> on <YYYY-MM-DD>` (UTC), matched by heading, a missing one placed in time order. An "Answered again" section covers a decision reopened, then given the same answer; a note is also reopened by the agent's reply (D89) and by a parent decided otherwise (D80).
   - Frontmatter keys follow P17's table, plus `conflict_of`; keys, tags and aliases a person adds are kept, last. Links in the frontmatter point only to cards that have a note; a rule note names its card by ID, since every record holds the rule but not always the card.
