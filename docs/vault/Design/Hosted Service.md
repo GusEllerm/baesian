@@ -38,6 +38,8 @@ tags: [baesian, design]
 
 ## 1. The relay
 
+> **Built (M9b, 2026-11-03),** as the cards in deck `hosted` decided it ([[service]]): a Worker in `service/` that routes every address under `/v1/projects/{project}/` to the project's Durable Object on SQLite (D140, B-7z97x), where Baesian's own store runs over the project's files (B-0ag7h, `SqlFileStorage`). Uploads take only what an agent writes, as the table below says, each checked against the store's schemas; the same bytes again do nothing, other bytes at a path are refused, and waiting markers are mutable state. The log is P16 section 8's entries ([[File Formats#The relay (M9b)]]). The state is `snapshot()`'s, as `baesian serve` serves it (B-17wn9), and live updates are hibernating WebSockets saying `changed` (B-bv49e). Answers, topic merges, preference changes and presence come only from a person's session, never with an `Authorization` header (section 3); they're written through the store and signed with the service's key from a Worker secret, naming the account, the project and, on a verdict, the card's digest (section 4). The relay gates every card revision it accepts, signed, with its `draw_proof` (D158). What needs a passkey, an answer on a hard card or a change that loosens, is refused until sign-in (M9c), which has a seam (`Access`) and, until then, a stand-in for local runs and tests only; deployed, the relay refuses everything. Not built: the CLI's syncing (M9d), the website (M9e), retention and deploying (M9f).
+
 ### What goes up and what comes down
 
 | Live-layer file ([[File Formats]]) | Written by | Direction | On the relay |

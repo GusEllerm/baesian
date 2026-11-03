@@ -19,6 +19,7 @@ import {
   type Settings,
   TODAY,
   higherLevel,
+  isOwnCard,
   levelInForce,
   loosening,
   rowOf,
@@ -158,6 +159,23 @@ const isCompanion = (name: string) => name.endsWith(".sig") || name.endsWith(".p
 
 /** Where a file's passkey proof would be: beside it, `.passkey.json` for `.json` (P16 section 7). */
 export const proofPath = (rel: string) => rel.replace(/\.json$/, ".passkey.json");
+
+/**
+ * Whether a file in the live layer is of a kind the service signs (D138, P16 section 7): what a person writes, as
+ * `Store.judge` judges it (verdicts, rules and their retirements, topic aliases, preference files), the relay's gate
+ * records, and passkey keys. The relay signs each as it's written; a machine may upload none of them (P15 section 3).
+ */
+export function signedFile(rel: string): boolean {
+  const [dir, a, b, ...rest] = rel.split("/");
+  if (!a || rest.length) return false;
+  if (b !== undefined) return dir === "cards" && RELAY_GATE.test(b);
+  if (dir === "verdicts") return verdictFileCard(a) !== undefined;
+  if (dir === "rules") return RULE_FILE.test(a);
+  if (dir === "topics") return a.startsWith("alias-") && a.endsWith(".json");
+  if (dir === "preferences") return PREFERENCE_FILE.test(a);
+  if (dir === "trust") return a.startsWith("passkey-") && a.endsWith(".json");
+  return false;
+}
 
 /**
  * A hosted repo's keys (D138, D142): CI's pinned keys when it pins any, whatever the record says, so a commit that drops
@@ -871,13 +889,67 @@ export class Store {
     }
   }
 
-  /** How many held cards a row has had, enforcing, as the CLI's gate records say: the burn-in counts them (B-fgc4y). */
-  private heldBefore(row: AnyRow): number {
+  /**
+   * How many held cards a row has had, enforcing, as one writer's gate records say, the CLI's or the relay's: the burn-in
+   * counts them (B-fgc4y).
+   */
+  private heldBefore(row: AnyRow, by: GateRecord["by"] = "cli"): number {
     let n = 0;
     for (const id of this.cardIds()) {
-      for (const g of this.gateRecords(id)) if (g.by === "cli" && g.mode === "enforce" && g.outcome === "held" && g.row === row) n++;
+      for (const g of this.gateRecords(id)) if (g.by === by && g.mode === "enforce" && g.outcome === "held" && g.row === row) n++;
     }
     return n;
+  }
+
+  /**
+   * What a card revision is to the gate, as filing it decided (P16 section 3), worked out from the files alone for the
+   * relay, which receives revisions rather than files them: Baesian's own card; a revision that follows the reviewer's
+   * own answer, or the agent's one reply; or else the agent's.
+   */
+  private gateSourceOf(card: Card, previous: Card | undefined): GateSource {
+    if (!previous) return isOwnCard(card.meta) ? "baesian" : "agent";
+    if (card.meta.reply !== undefined && previous.meta.reply === undefined) return "answer";
+    const own = this.latestVerdict(previous);
+    return this.parentReturns(previous).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : "agent";
+  }
+
+  /**
+   * The relay's gate record for a card revision it accepts (D158), as the service writes it (`test/service.ts`'s
+   * `TestService.gate()`): the rules over the revision's facts, under the preferences in force, with the draw the service
+   * took from its own signature over the card (`draw_proof`, kept on a held card), the burn-in counted on the relay's
+   * records, and the project it was gated in (B-tf9fc). Written once, beside the CLI's, at
+   * `cards/<id>/gate-r<n>-relay.json`; the relay's storage signs it. The store never signs: it's given the draw.
+   */
+  relayGate(id: string, revision: number, drawn: { draw: number; draw_proof: string }, project: string): GateRecord {
+    this.requireInit();
+    const revs = this.revisions(id);
+    const card = revs.find((r) => r.meta.revision === revision);
+    if (!card) throw new NoCard(`${id} r${revision}`);
+    const m = card.meta;
+    const source = this.gateSourceOf(card, revs.find((r) => r.meta.revision === revision - 1));
+    const force = this.inForce();
+    const decision = route({ touches: m.touches, reverse: m.reverse, source, draw: drawn.draw, heldBefore: (row) => this.heldBefore(row, "relay") }, force.settings);
+    // Built in the stand-in's order, and checked by the schema, but written as built: the bytes are what's signed.
+    const record = {
+      type: "gate",
+      format: newestFormat("gate"),
+      card: id,
+      revision,
+      by: "relay",
+      gate: GATE_VERSION,
+      mode: force.settings.mode,
+      ...(force.name ? { preferences: force.name } : {}),
+      ...(m.touches.length ? { touches: m.touches } : {}),
+      reverse: m.reverse,
+      source,
+      ...decision,
+      ...(decision.outcome === "held" ? { draw_proof: drawn.draw_proof } : {}),
+      project,
+      at: now(),
+    };
+    const parsed = parse(GateRecord, record, "the relay's gate record");
+    this.writeOnce(`cards/${id}/gate-r${revision}-relay.json`, `${JSON.stringify(record, null, 2)}\n`);
+    return parsed;
   }
 
   /** A card's gate records, every revision's and every writer's; in a hosted repo, the relay's only once signed (D158). */
@@ -1101,7 +1173,7 @@ export class Store {
     const ruleId = newId("R", (candidate) => this.storage.read(`rules/${candidate}.md`) !== undefined);
     const meta = parse(
       RuleMeta,
-      { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, ...(v.account ? { account: v.account } : {}), created: v.at },
+      { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), created: v.at },
       "the rule",
     );
     const rel = `rules/${ruleId}.md`;
@@ -1427,7 +1499,7 @@ export class Store {
     if (!row || !from || !to || v.response !== "accept") return;
     const force = this.inForce();
     if (force.settings.rows[row] !== from) return;
-    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, ...(v.account ? { account: v.account } : {}), client: v.client, from_card: card.meta.id });
+    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), client: v.client, from_card: card.meta.id });
   }
 
   // ---------------------------------------------------------------- preferences (D147)
@@ -1471,7 +1543,7 @@ export class Store {
    * one the setup survey's answers suggest (B-5na1k). `replaces` must name the newest file, or be absent when there's
    * none: a change made from an older view is refused (`StalePreferences`), so two tabs can't undo each other.
    */
-  writePreferences(change: PreferenceChange, who: { by: string; account?: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
+  writePreferences(change: PreferenceChange, who: { by: string; account?: string; project?: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
     this.requireInit();
     const force = this.inForce();
     if ((change.replaces ?? undefined) !== force.name) {
@@ -1503,6 +1575,7 @@ export class Store {
         ...(who.from_card ? { from_card: who.from_card } : {}),
         by: who.by,
         ...(who.account ? { account: who.account } : {}),
+        ...(who.project ? { project: who.project } : {}),
         client: who.client,
         at,
       },
@@ -1528,7 +1601,7 @@ export class Store {
 
   private retireRules(card: Card, v: Verdict): void {
     for (const id of v.retire_rules ?? []) {
-      const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, ...(v.account ? { account: v.account } : {}), at: v.at }, "the retirement");
+      const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), at: v.at }, "the retirement");
       const rel = `rules/${id}-retired.json`;
       this.writeOnce(rel, `${JSON.stringify(r, null, 2)}\n`);
       this.toRecord(rel);
@@ -1719,14 +1792,19 @@ export class Store {
 
   /**
    * Merge two topics that mean the same thing (D44, D111): an alias from `from`'s canonical key to `to`'s. Aliases
-   * are immutable, so a merge can't be undone. Each always points at a canonical key, so no cycle can form.
+   * are immutable, so a merge can't be undone. Each always points at a canonical key, so no cycle can form. On the
+   * relay, `who` names the account and the project it was made in (P16 section 7, B-tf9fc).
    */
-  mergeTopics(from: string, to: string, by: string): TopicAlias {
+  mergeTopics(from: string, to: string, by: string, who: { account?: string; project?: string } = {}): TopicAlias {
     this.requireInit();
     const source = this.canonicalTopic(from), target = this.canonicalTopic(to);
     if (source === target) throw new ValidationError(`"${from}" and "${to}" are already the same topic`);
     if (!this.topics().has(target)) throw new ValidationError(`no card uses the topic "${to}": merge into a topic that's in use`);
-    const alias = parse(TopicAlias, { type: "topic-alias", format: newestFormat("topic-alias"), from: source, to: target, by, at: now() }, "the alias");
+    const alias = parse(
+      TopicAlias,
+      { type: "topic-alias", format: newestFormat("topic-alias"), from: source, to: target, by, ...(who.account ? { account: who.account } : {}), ...(who.project ? { project: who.project } : {}), at: now() },
+      "the alias",
+    );
     const rel = `topics/alias-${randomSuffix()}.json`;
     this.writeOnce(rel, `${JSON.stringify(alias, null, 2)}\n`);
     this.toRecord(rel);

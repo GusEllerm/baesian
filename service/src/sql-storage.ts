@@ -1,0 +1,235 @@
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
+import { parseDoc } from "../../src/frontmatter.js";
+import { type RelayEntry, readRelayEntry } from "../../src/schema.js";
+import { FileExists, type Storage, checkPath } from "../../src/storage.js";
+
+// The live layer in a Durable Object's SQLite (B-0ag7h, D140): one row per path, and beside it the relay's append-only
+// log of entries (P16 section 8), written in the same transaction. The store runs over it as over a folder.
+// docs/vault/Modules/service.md describes it.
+
+/** What signs a file as it's written: the service's signature for the kinds it signs, undefined for the rest. */
+export type Sign = (path: string, bytes: Uint8Array) => string | undefined;
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, bytes BLOB NOT NULL, once INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS log (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  path TEXT NOT NULL UNIQUE,
+  format INTEGER NOT NULL,
+  size INTEGER NOT NULL,
+  digest TEXT NOT NULL,
+  machine TEXT,
+  at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+`;
+
+/** Mutable files whose changes the client never needs to hear of: the reviewer's own heartbeat, as `baesian serve` ignores it. */
+const QUIET = new Set(["presence.json"]);
+
+/** A path's signature beside it. A signature rides in its file's entry, never in one of its own. */
+const SIG = ".sig";
+
+/** Bytes for a BLOB binding: exactly these, in a buffer of their own. */
+const blob = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer as ArrayBuffer;
+
+/** A file's own format number (D156): its JSON's, or its frontmatter's; 1 when it names none, as a file from before v1. */
+function formatOf(path: string, bytes: Uint8Array): number {
+  try {
+    const text = new TextDecoder().decode(bytes);
+    const fields: unknown = path.endsWith(".md") ? parseDoc(text).meta : JSON.parse(text);
+    const format = (fields as { format?: unknown }).format;
+    return typeof format === "number" && Number.isInteger(format) && format >= 1 ? format : 1;
+  } catch {
+    return 1;
+  }
+}
+
+interface EntryRow extends Record<string, SqlStorageValue> {
+  seq: number;
+  path: string;
+  format: number;
+  size: number;
+  digest: string;
+  machine: string | null;
+  at: string;
+  body: ArrayBuffer | null;
+  sig: ArrayBuffer | null;
+}
+
+/**
+ * `Storage` over a Durable Object's SQLite (B-0ag7h). `SqlFileStorage.create` is an INSERT, so a taken path throws
+ * `FileExists`; `SqlFileStorage.replace` is an INSERT OR REPLACE; `SqlFileStorage.list` is a range query. Each file
+ * written once gets the project's next sequence number in the log, in the same transaction, with its signature when the
+ * service signs its kind. Every write but the reviewer's heartbeat moves the project's version, which live updates
+ * announce (B-bv49e).
+ */
+export class SqlFileStorage implements Storage {
+  private readonly sql: SqlStorage;
+  /** The machine an upload came from, while it's written: its entry names it (D162). */
+  private machine: string | undefined;
+  /** What was written once since `SqlFileStorage.mark`, in order. */
+  private written: string[] = [];
+
+  constructor(
+    private readonly storage: DurableObjectStorage,
+    private readonly opts: { sign?: Sign; now?: () => string } = {},
+  ) {
+    this.sql = storage.sql;
+    this.sql.exec(SCHEMA);
+  }
+
+  read(path: string): Uint8Array | undefined {
+    const row = this.sql.exec<{ bytes: ArrayBuffer }>("SELECT bytes FROM files WHERE path = ?", checkPath(path)).toArray()[0];
+    return row ? new Uint8Array(row.bytes) : undefined;
+  }
+
+  list(dir: string): string[] {
+    const prefix = checkPath(dir, true) === "" ? "" : `${dir}/`;
+    // Everything under `dir/`: from "dir/" up to "dir0", since "0" sorts just after "/".
+    const rows = prefix
+      ? this.sql.exec<{ path: string }>("SELECT path FROM files WHERE path >= ? AND path < ?", prefix, `${dir}0`).toArray()
+      : this.sql.exec<{ path: string }>("SELECT path FROM files").toArray();
+    return [...new Set(rows.map((r) => r.path.slice(prefix.length).split("/")[0]!))];
+  }
+
+  create(path: string, bytes: Uint8Array): void {
+    checkPath(path);
+    if (path.endsWith(SIG)) throw new Error(`${path}: a signature is the relay's own, written with its file`);
+    this.storage.transactionSync(() => {
+      try {
+        this.sql.exec("INSERT INTO files (path, bytes, once) VALUES (?, ?, 1)", path, blob(bytes));
+      } catch (e) {
+        if (/UNIQUE constraint failed/.test(e instanceof Error ? e.message : String(e))) throw new FileExists(path);
+        throw e;
+      }
+      const sig = this.opts.sign?.(path, bytes);
+      if (sig !== undefined) this.sql.exec("INSERT INTO files (path, bytes, once) VALUES (?, ?, 1)", `${path}${SIG}`, blob(new TextEncoder().encode(sig)));
+      this.sql.exec(
+        "INSERT INTO log (path, format, size, digest, machine, at) VALUES (?, ?, ?, ?, ?, ?)",
+        path,
+        formatOf(path, bytes),
+        bytes.byteLength,
+        createHash("sha256").update(bytes).digest("hex"),
+        this.machine ?? null,
+        this.opts.now?.() ?? new Date().toISOString(),
+      );
+      this.written.push(path);
+      this.bump();
+    });
+  }
+
+  // `replace` and `remove` do what they say to any path, as a folder and memory do: the store uses them only for its
+  // mutable files (presence, waiting markers, cursors), and a machine's uploads reach them only for waiting markers.
+
+  replace(path: string, bytes: Uint8Array): void {
+    checkPath(path);
+    this.storage.transactionSync(() => {
+      this.sql.exec("INSERT OR REPLACE INTO files (path, bytes, once) VALUES (?, ?, 0)", path, blob(bytes));
+      if (!QUIET.has(path)) this.bump();
+    });
+  }
+
+  remove(path: string): void {
+    checkPath(path);
+    this.storage.transactionSync(() => {
+      if (!this.sql.exec("DELETE FROM files WHERE path = ?", path).rowsWritten) return;
+      if (!QUIET.has(path)) this.bump();
+    });
+  }
+
+  // ---------------------------------------------------------------- the relay's own
+
+  /** Run `fn` as one transaction: if it throws, nothing it wrote is kept, its log entries included. */
+  transaction<T>(fn: () => T): T {
+    return this.storage.transactionSync(fn);
+  }
+
+  /** Write as `machine`: the entries `fn` adds name it (D162). */
+  asMachine<T>(machine: string, fn: () => T): T {
+    const outer = this.machine;
+    this.machine = machine;
+    try {
+      return fn();
+    } finally {
+      this.machine = outer;
+    }
+  }
+
+  /** Start noting what's written once; `SqlFileStorage.writtenSince` gives it back. */
+  mark(): number {
+    return this.written.length;
+  }
+
+  writtenSince(mark: number): string[] {
+    return this.written.slice(mark);
+  }
+
+  /** The project's version: it moves with every write but the reviewer's heartbeat, and never goes back. */
+  version(): number {
+    const row = this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'version'").toArray()[0];
+    return row ? Number(row.value) : 1;
+  }
+
+  private bump(): void {
+    this.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(this.version() + 1));
+  }
+
+  /** A value the relay keeps for itself, apart from the live layer. */
+  meta(key: string): string | undefined {
+    return this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = ?", key).toArray()[0]?.value;
+  }
+
+  setMeta(key: string, value: string): void {
+    this.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", key, value);
+  }
+
+  /** The last sequence number given, or 0. */
+  head(): number {
+    return this.sql.exec<{ seq: number | null }>("SELECT MAX(seq) AS seq FROM log").one().seq ?? 0;
+  }
+
+  /** A file's entry, by its path, if it was written once. */
+  entryOf(path: string): RelayEntry | undefined {
+    return this.entries(`WHERE l.path = ?`, [path], 1)[0];
+  }
+
+  /** The log's entries after `after`, oldest first, at most `limit` (P16 section 8). */
+  after(after: number, limit: number): RelayEntry[] {
+    return this.entries("WHERE l.seq > ?", [after], limit);
+  }
+
+  private entries(where: string, args: SqlStorageValue[], limit: number): RelayEntry[] {
+    const rows = this.sql
+      .exec<EntryRow>(
+        `SELECT l.seq, l.path, l.format, l.size, l.digest, l.machine, l.at, f.bytes AS body, s.bytes AS sig
+         FROM log l LEFT JOIN files f ON f.path = l.path LEFT JOIN files s ON s.path = l.path || '${SIG}'
+         ${where} ORDER BY l.seq LIMIT ?`,
+        ...args,
+        limit,
+      )
+      .toArray();
+    return rows.map((r) =>
+      readRelayEntry({
+        seq: r.seq,
+        path: r.path,
+        format: r.format,
+        size: r.size,
+        digest: r.digest,
+        ...(r.body ? { body: Buffer.from(r.body).toString("base64") } : {}),
+        ...(r.sig ? { sig: Buffer.from(r.sig).toString("base64") } : {}),
+        ...(r.machine ? { machine: r.machine } : {}),
+        at: r.at,
+      }),
+    );
+  }
+
+  /** Every file, mutable ones too, with its bytes: for tests, and for building a store elsewhere over the same files. */
+  files(): { path: string; bytes: Uint8Array }[] {
+    return this.sql
+      .exec<{ path: string; bytes: ArrayBuffer }>("SELECT path, bytes FROM files ORDER BY path")
+      .toArray()
+      .map((r) => ({ path: r.path, bytes: new Uint8Array(r.bytes) }));
+  }
+}

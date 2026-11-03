@@ -17,6 +17,7 @@
     "build": "tsc -p tsconfig.build.json && vite build --config client/vite.config.ts",
     "typecheck": "tsc --noEmit && tsc -p client --noEmit",
     "test": "vitest run",
+    "test:service": "npm --prefix service run typecheck && npm --prefix service test",
     "e2e": "npm run build && playwright test",
     "dev:client": "vite --config client/vite.config.ts",
     "demo": "vite build --config client/vite.config.ts --logLevel warn && tsx scripts/demo.ts",

@@ -53,7 +53,7 @@ describe("filing into a repo", () => {
 });
 
 // The store's behaviour holds over both kinds of storage (B-0ag7h): a repo's folder, and memory with no repo, as the relay's.
-describe.each(LAYERS)("filing, over %s", (_, repo) => {
+describe.each(LAYERS)("filing, over %s", (_, repo, it) => {
   it("files a card in the branch's default deck", () => {
     const { store } = repo();
     const { card } = store.fileCard(draft(), BODY, AGENT);
@@ -156,7 +156,7 @@ describe.each(LAYERS)("filing, over %s", (_, repo) => {
   });
 });
 
-describe.each(LAYERS)("the filing check (D36, D38), over %s", (_, repo) => {
+describe.each(LAYERS)("the filing check (D36, D38), over %s", (_, repo, it) => {
   it("stops a second card on the same topic", () => {
     const { store } = repo();
     const first = store.fileCard(draft(), BODY, AGENT).card;
@@ -232,7 +232,7 @@ describe.each(LAYERS)("the filing check (D36, D38), over %s", (_, repo) => {
   });
 });
 
-describe.each(LAYERS)("filing at the same moment as another agent, over %s", (_, repo) => {
+describe.each(LAYERS)("filing at the same moment as another agent, over %s", (_, repo, it) => {
   it("doesn't fail when another agent creates the branch deck first", () => {
     const { store } = repo();
     store.fileCard(draft(), BODY, AGENT); // the deck exists now
@@ -260,7 +260,7 @@ describe("filing at the same moment as another agent, in a folder", () => {
   });
 });
 
-describe.each(LAYERS)("verdicts, over %s", (_, repo) => {
+describe.each(LAYERS)("verdicts, over %s", (_, repo, it) => {
   it("returns a card on \"I need to see it run\" (D85)", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
@@ -294,7 +294,7 @@ describe.each(LAYERS)("verdicts, over %s", (_, repo) => {
   });
 });
 
-describe.each(LAYERS)("cards don't record the folder they were filed from (D105), over %s", (_, repo) => {
+describe.each(LAYERS)("cards don't record the folder they were filed from (D105), over %s", (_, repo, it) => {
   it("leaves the path out of the record, and refuses a draft that carries one", () => {
     const { store } = repo();
     const { card } = store.fileCard(draft(), BODY, AGENT);
@@ -304,7 +304,7 @@ describe.each(LAYERS)("cards don't record the folder they were filed from (D105)
   });
 });
 
-describe.each(LAYERS)("status (computed, never stored), over %s", (_, repo) => {
+describe.each(LAYERS)("status (computed, never stored), over %s", (_, repo, it) => {
   it("resolves on accept, an alternative or a correction", () => {
     const { store } = repo();
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
@@ -434,7 +434,7 @@ describe("the record (D37)", () => {
   });
 });
 
-describe.each(LAYERS)("reading through a view, over %s", (_, repo) => {
+describe.each(LAYERS)("reading through a view, over %s", (_, repo, it) => {
   it("gives the statuses reading afresh does, and the next view sees what changed in this one", () => {
     const { store } = repo();
     const ids = [0, 1, 2].map((i) => store.fileCard(draft({ title: `Card ${i}`, question: `Question ${i}?`, topic: `area${i}/x` }), BODY, { agent: "a", force: true }).card.meta.id);

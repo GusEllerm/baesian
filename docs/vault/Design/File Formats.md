@@ -236,6 +236,32 @@ Its client data must be `webauthn.get`, from the service key's `origin`, not in 
 
 **The relay's gate record** (D158) is the CLI's format (`GateRecord`, [[#Routing]]) with `by: relay`, signed, and when it holds a card, `draw_proof`: the service's SSH signature, unarmored, in the namespace `baesian-draw` (`DRAW_NAMESPACE`), over `drawMessage()`'s text: `<id> r<revision> <SHA-256 of the card revision's bytes, hex>` and a newline. The draw is the SHA-256 of the raw Ed25519 signature, its first six bytes read as a number from 0 to 1, as `drawOf()` reads the CLI's hash (`drawOfProof()`). Ed25519 is deterministic, so the relay can't redraw, and nobody without its key can predict a draw.
 
+## The relay (M9b)
+
+The relay ([[service]]; [[Formats for v1]] section 8, [[Hosted Service]] section 1) keeps each project's live layer in its Durable Object, one row per file, and beside it an append-only log of the files written once. Its protocol is versioned by its address: every address starts `/v1/projects/{project}/` (B-7z97x). Before v1 it changes freely (D108).
+
+**The relay's entry** (`RelayEntry`, read with `readRelayEntry()`), as `GET …/log?after={seq}` sends them, in `{ entries, head, more }`, at most 1,000 at a time:
+
+| Field | Notes |
+|---|---|
+| `seq` | the project's sequence number for it: from 1, strictly increasing, never reused |
+| `path` | the file's path in the live layer |
+| `format` | the file's own format number; 1 for a file that names none (D156). The entry has no `type` or `format` of its own: its version is the `/v1/` in its address |
+| `size`, `digest` | its length in bytes, and the lowercase hex SHA-256 of its bytes |
+| `body` | its bytes, base64. Dropped once it's delivered and its card resolved (D137, retention is M9f's); the rest of the entry stays |
+| `sig` | its `.sig`'s bytes, base64, for a kind the service signs. A `.sig` is never an entry of its own |
+| `machine` | the machine whose upload it was (D162); absent on what the relay wrote |
+| `at` | when the relay accepted it, by its clock |
+| `enc` | **reserved** for encryption (D137): absent in v1, and an entry that sets it is refused by name, so an encrypted entry from a later version fails loudly |
+
+What's logged: every file written once, uploaded or written by the relay. What isn't: waiting markers and presence, which are mutable state the state carries, and signatures, which ride in their files' entries. The first write to a project logs the service's key, `trust/service-<key>.json`, before anything it signed. Each card revision the relay accepts is followed by its gate record, `cards/<id>/gate-r<n>-relay.json`.
+
+**Uploads** (`PUT …/files/{path}`, a machine only) take the kinds an agent writes: card revisions, the CLI's gate records (`by: cli`), withdrawals, fallbacks, attachments, decks, and waiting markers (mutable; `DELETE` removes one). Each is read through its kind's schema and must match its path. The same bytes again do nothing; other bytes at a path are refused (409), as a second exclusive create is.
+
+**Live updates** (`GET …/live`, a WebSocket): the message `{"type":"changed","version":N}` on opening, and whenever the project's version moves; `ping` is answered `pong`. The version is the state's `version`.
+
+**Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key and the stand-in's grants for the project `proj-dev`, and prints a `curl` line for a machine and one for a person; then `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/v1/projects/proj-dev/…`. `npm run test:service` from the root runs the relay's tests in workerd. Deployed with no sign-in (M9c), the relay refuses every request.
+
 ## Vault notes (M6)
 
 With `vault` set, the vault adapter writes two more files, in the vault rather than in Baesian's layers ([[Vault Adapter]], D170–D175; `src/vault.ts`, [[src-vault]]). They're views of the record: the pre-commit hook and `baesian sync` write them, from the branch's record and nothing else, and the gate never reads them (D173).
