@@ -205,7 +205,8 @@ export function presets(store: Store): ApiPresets {
       inForce: { settings: force.settings, replay: replay(cards, force.settings) },
       survey: { ...SURVEY_QUESTION, items: [...SURVEY] },
     };
-  });
+    // A file that can't be read is left out, as the snapshot leaves it, rather than failing the request (D84).
+  }, () => {});
 }
 
 /** A cheap summary of the live layer's files, to tell whether anything changed between two looks. */

@@ -230,6 +230,20 @@ describe("filing at the same moment as another agent", () => {
     vi.spyOn(store, "deck").mockReturnValueOnce(undefined);
     expect(() => store.fileCard(draft({ title: "Another store", topic: "storage/other" }), BODY, AGENT)).not.toThrow();
   });
+
+  it("never shows another agent a file half-written: each is linked into place whole, and a write in progress isn't listed", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    // Nothing is left behind, and a write still in progress, as another process would leave it, is never read.
+    expect(readdirSync(join(store.live, "cards", id)).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    writeFileSync(join(store.live, "cards", id, "r2.md.x4k2m.tmp"), "");
+    writeFileSync(join(store.live, "attachments", `${id}-x4k2m.json.a1b2c.tmp`), "");
+    expect(store.revisions(id)).toHaveLength(1);
+    expect(store.attachments(id)).toEqual([]);
+    expect(store.syncRecord().filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    // A second write of the same file still fails, as an exclusive create did.
+    expect(() => store.createDeck({ id: store.branchDeckId(), title: "Again" }, "")).toThrow(/already a deck/);
+  });
 });
 
 describe("verdicts", () => {

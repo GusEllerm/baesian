@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc } from "./frontmatter.js";
@@ -295,11 +295,26 @@ export class Store {
     if (!this.isInitialised()) throw new NotSetUp();
   }
 
-  /** Write a file that must never change (D34). Fails if it exists. */
+  /**
+   * Write a file that must never change (D34). Fails if it exists. It's written whole to a temporary file first, then
+   * linked into place, which fails if the name is taken: so another process never reads it half-written. An exclusive
+   * create alone made the file visible empty for a moment, which the server's four-writer test caught once the gate
+   * made filing read more of the layer. Where hard links aren't supported, it falls back to the exclusive create.
+   */
   private writeOnce(path: string, text: string): void {
     if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, text, { flag: "wx" });
+    const tmp = `${path}.${randomSuffix()}.tmp`;
+    writeFileSync(tmp, text, { flag: "wx" });
+    try {
+      linkSync(tmp, path);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "EPERM" && code !== "ENOTSUP" && code !== "EXDEV" && code !== "ENOSYS") throw e;
+      writeFileSync(path, text, { flag: "wx" });
+    } finally {
+      rmSync(tmp, { force: true });
+    }
   }
 
   /** Copy a live file into this worktree's record, unless it's already there (D37). */
@@ -315,7 +330,8 @@ export class Store {
     const dir = join(this.live, kind, sub);
     const cached = this.session?.lists.get(dir);
     if (cached) return cached;
-    const names = existsSync(dir) ? readdirSync(dir).sort() : [];
+    // A temporary file is a write in progress (`writeOnce`, presence, waiting markers): never listed.
+    const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.endsWith(".tmp")).sort() : [];
     this.session?.lists.set(dir, names);
     return names;
   }
@@ -1037,7 +1053,8 @@ export class Store {
       throw new StalePreferences(force.name ? `the preferences have changed since: preferences/${force.name} is in force now` : "there's no preference file yet: a first one replaces none");
     }
     const { replaces: _r, preset: presetId, ...fields } = change;
-    const survey = fields.survey_see || fields.survey_fine ? suggestPreset({ see: fields.survey_see ?? [], fine: fields.survey_fine ?? [] }) : undefined;
+    const list = (v: unknown): Row[] => (Array.isArray(v) ? v.filter((r): r is Row => (ROWS as readonly unknown[]).includes(r)) : []);
+    const survey = fields.survey_see || fields.survey_fine ? suggestPreset({ see: list(fields.survey_see), fine: list(fields.survey_fine) }) : undefined;
     const preset = presetId !== undefined ? PRESETS.find((p) => p.id === presetId) : survey;
     if (presetId !== undefined && !preset) throw new ValidationError(`no preset "${presetId}": the presets are ${PRESETS.map((p) => p.id).join(", ")}`);
     const base = force.file ? settingsOf(force.file) : TODAY;
