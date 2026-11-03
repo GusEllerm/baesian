@@ -23,7 +23,7 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -98,7 +98,7 @@ sig = "1f8c7c02469d986e"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/model.ts"
-sig = "ff9de227a3d56fa0"
+sig = "fe34c4da78f11774"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -268,7 +268,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts"
-sig = "6ae53a9a9c2b973e"
+sig = "3a142827f004ee7f"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -278,22 +278,17 @@ sig = "19da8b178a90e203"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts#Brief"
-sig = "f74a62ad2a7919fb"
+sig = "a89589bb14fd5a16"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts#Status"
-sig = "8929eb93dd817ba6"
-
-[[bindings]]
-doc = "docs/vault/Design/Client Build.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+sig = "61b2c38f5750106a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -303,7 +298,7 @@ sig = "3ee3d53ddf719a25"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -318,7 +313,7 @@ sig = "5e500011f99b3490"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -327,8 +322,13 @@ sig = "dcb44488cded38e2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/routing.ts#SurveyItem"
+sig = "d3cc8a5e2864da7b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/schema.ts#CardMeta"
-sig = "364824e552765043"
+sig = "b56c65925ba2e739"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -363,7 +363,7 @@ sig = "f62e46acd11f1236"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/schema.ts#Verdict"
-sig = "c6a8ef7d4a59ff05"
+sig = "ea98524f548f7042"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -378,7 +378,7 @@ sig = "3ee3d53ddf719a25"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -412,6 +412,11 @@ sig = "8c865dbaaeaba05f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round3/app.js#sample"
+sig = "51c258e5439216e2"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round3/atlas.js#level"
 sig = "5e500011f99b3490"
 
@@ -427,6 +432,16 @@ sig = "921b8df87db21e45"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round4/app.js#mode"
+sig = "4afe7880c2ab52c8"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round4/app.js#sample"
+sig = "51c258e5439216e2"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round5/app.js#answered"
 sig = "e551cc38bdd94395"
 
@@ -434,6 +449,16 @@ sig = "e551cc38bdd94395"
 doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round5/app.js#commit"
 sig = "e6313b8380995e2f"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round5/app.js#mode"
+sig = "4afe7880c2ab52c8"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round5/app.js#sample"
+sig = "51c258e5439216e2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -447,13 +472,28 @@ sig = "cfd32713f48b1632"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "plugins/baesian/hooks/baesian.mjs"
+sig = "4724db53562a6d66"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/api.ts#ApiCard"
-sig = "a42745f7c5a005da"
+sig = "36da16420b7cba42"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/api.ts#ApiRouting"
+sig = "b4e4f34e1d212ad5"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/api.ts#RowReport"
+sig = "53d7b0995a4cfaf0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -478,12 +518,37 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/ops.ts#ShowData"
-sig = "4fa0bca00ae04bb6"
+sig = "65c14c7f02d629db"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+target = "src/report.ts#Counted"
+sig = "a3b244c364df0d2b"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/report.ts#RowWindow"
+sig = "b521431c17e3fa45"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/routing.ts"
+sig = "08b6e6231e3f4ff4"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/routing.ts#Settings"
+sig = "82a7c72812f4458f"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/routing.ts#SurveyItem"
+sig = "d3cc8a5e2864da7b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -493,12 +558,12 @@ sig = "a5d218ac234f2d08"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#CardDraft"
-sig = "534d657f6dd40528"
+sig = "3dc2196dd8a6ebde"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#CardMeta"
-sig = "364824e552765043"
+sig = "b56c65925ba2e739"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -518,12 +583,17 @@ sig = "93230d9b8d0ea6f5"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#FILE_KINDS"
-sig = "92df2786a85fc6c1"
+sig = "44a0ebb9e409c479"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Fallback"
 sig = "472e879c4e537827"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#GateRecord"
+sig = "33ca2cfe3605c261"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -539,6 +609,11 @@ sig = "011c4af03fb7be2b"
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#NewerFormat"
 sig = "db3b4efbb06d836a"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/schema.ts#Preferences"
+sig = "a67509981afe76d7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -573,7 +648,7 @@ sig = "56c2813e14a8941b"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Verdict"
-sig = "c6a8ef7d4a59ff05"
+sig = "ea98524f548f7042"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -608,12 +683,12 @@ sig = "cb04b0f174427522"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/server.ts#ServerOptions"
-sig = "33af486b2b7bc62a"
+sig = "e291114dde80f7dd"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/server.ts#snapshot"
-sig = "dc6a76aae93fca42"
+sig = "2ee9c419b809c0f8"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -622,8 +697,23 @@ sig = "1e7a84482a917483"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#PENDING"
+sig = "f120b530e5e178cc"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#StalePreferences"
+sig = "69d7b63372cb6df6"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#drawOf"
+sig = "c6d222583ded5802"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -667,8 +757,18 @@ sig = "5e500011f99b3490"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
+target = "src/api.ts#ApiPreferenceFile"
+sig = "4a889f934759c0aa"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "src/api.ts#ApiRouting"
+sig = "b4e4f34e1d212ad5"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
 target = "src/api.ts#Status"
-sig = "8929eb93dd817ba6"
+sig = "61b2c38f5750106a"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -677,18 +777,23 @@ sig = "76837fce844f7733"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "src/routing.ts#Preset"
+sig = "8592e3be27d919fe"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts#CardDraft"
-sig = "534d657f6dd40528"
+sig = "3dc2196dd8a6ebde"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts#CardMeta"
-sig = "364824e552765043"
+sig = "b56c65925ba2e739"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -703,7 +808,7 @@ sig = "e87e803e7b17ba72"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts#FILE_KINDS"
-sig = "92df2786a85fc6c1"
+sig = "44a0ebb9e409c479"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -743,7 +848,7 @@ sig = "56c2813e14a8941b"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts#Verdict"
-sig = "c6a8ef7d4a59ff05"
+sig = "ea98524f548f7042"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -758,7 +863,7 @@ sig = "cb04b0f174427522"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/server.ts#ServerOptions"
-sig = "33af486b2b7bc62a"
+sig = "e291114dde80f7dd"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -767,13 +872,23 @@ sig = "a687e84739c0a4d6"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
 target = "src/store.ts#PENDING"
 sig = "f120b530e5e178cc"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
+target = "src/store.ts#StalePreferences"
+sig = "69d7b63372cb6df6"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -783,7 +898,7 @@ sig = "52dbd59da072b726"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/verify.ts#checkMerge"
-sig = "6630c9e2a119bb76"
+sig = "bd19b17e8241ca42"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -812,8 +927,18 @@ sig = "4724db53562a6d66"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
+target = "src/api.ts#ApiPreferenceFile"
+sig = "4a889f934759c0aa"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/routing.ts#Preset"
+sig = "8592e3be27d919fe"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
 target = "src/schema.ts#CardMeta"
-sig = "364824e552765043"
+sig = "b56c65925ba2e739"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -838,7 +963,7 @@ sig = "56c2813e14a8941b"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "src/schema.ts#Verdict"
-sig = "c6a8ef7d4a59ff05"
+sig = "ea98524f548f7042"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -848,12 +973,17 @@ sig = "72615353e26390ab"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "src/server.ts#startServer"
-sig = "f8b60ee46692ce79"
+sig = "3125651d6226ac97"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -903,7 +1033,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/agents.ts"
-sig = "48c9a68dccbd6dd5"
+sig = "56ae8216617c36a1"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -923,7 +1053,7 @@ sig = "ea47a2e110e1729b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/api.ts"
-sig = "6ae53a9a9c2b973e"
+sig = "3a142827f004ee7f"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -988,7 +1118,7 @@ sig = "1fd0df270d6858a2"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/mcp.ts"
-sig = "19280959b8f6e5eb"
+sig = "626d291593ec7bd7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -998,17 +1128,12 @@ sig = "780f3927f3747da4"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/ops.ts"
-sig = "304b31c7a06c47ee"
+sig = "392a5f45b947ee52"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/quote.ts"
 sig = "c122e98d1397f13f"
-
-[[bindings]]
-doc = "docs/vault/Design/Implementation Plan.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1028,12 +1153,12 @@ sig = "dfcc8cba04d9cf1c"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts"
-sig = "a07e9f94be9a9d73"
+sig = "d4988f87ced97a01"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts#startServer"
-sig = "f8b60ee46692ce79"
+sig = "3125651d6226ac97"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1048,7 +1173,7 @@ sig = "a5a5e57ff6a04c98"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1058,7 +1183,7 @@ sig = "64c108b9fb042ce0"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/verify.ts"
-sig = "5d4f4de6c3a2b380"
+sig = "0e26ca3f7e776c9e"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1073,7 +1198,7 @@ sig = "46475140bde00362"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts"
-sig = "25b93569636a246c"
+sig = "8565752a3dc3f000"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1083,12 +1208,12 @@ sig = "5481bc5d6b9e8cb8"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts#describeBrief"
-sig = "41ef62a356bcb4e3"
+sig = "3236ed4c8028b561"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "ec736e31a7e47a83"
+sig = "ce1621a5d523883f"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1107,8 +1232,13 @@ sig = "9f8bbe9695c33412"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
+target = "src/api.ts#ApiPreferenceFile"
+sig = "4a889f934759c0aa"
+
+[[bindings]]
+doc = "docs/vault/Design/Local Server.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1119,6 +1249,11 @@ sig = "976f83bdfe6e7029"
 doc = "docs/vault/Design/Local Server.md"
 target = "src/gate.ts#GateReport"
 sig = "dc0e03d3acfe3ad1"
+
+[[bindings]]
+doc = "docs/vault/Design/Local Server.md"
+target = "src/routing.ts#Preset"
+sig = "8592e3be27d919fe"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1133,12 +1268,17 @@ sig = "85f5c3e6b5f14213"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "src/server.ts#ServerOptions"
-sig = "33af486b2b7bc62a"
+sig = "e291114dde80f7dd"
+
+[[bindings]]
+doc = "docs/vault/Design/Local Server.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1158,12 +1298,12 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "19efa956ec7853f5"
+sig = "49f9c30d4a025327"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "42fba74b82891649"
+sig = "7b36eea08390a61b"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1183,7 +1323,7 @@ sig = "ea47a2e110e1729b"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/api.ts#Brief"
-sig = "f74a62ad2a7919fb"
+sig = "a89589bb14fd5a16"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1218,7 +1358,7 @@ sig = "14ae8a7c312598a2"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/schema.ts#CardDraft"
-sig = "534d657f6dd40528"
+sig = "3dc2196dd8a6ebde"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1233,7 +1373,7 @@ sig = "dfcc8cba04d9cf1c"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/store.ts#FileResult"
-sig = "a887283736d7d004"
+sig = "3493a9f46f2205bb"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1248,7 +1388,7 @@ sig = "cd910b37964e86aa"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1263,7 +1403,7 @@ sig = "5481bc5d6b9e8cb8"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#WAIT_EXIT"
-sig = "b2bcc2550f8b3429"
+sig = "5041f073fb26c3bc"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1273,22 +1413,22 @@ sig = "a5d004d408ac99b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#WaitOutcome"
-sig = "7508db1d6a796bad"
+sig = "f70767e1a5f5042e"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#describeBrief"
-sig = "41ef62a356bcb4e3"
+sig = "3236ed4c8028b561"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#describeOutcome"
-sig = "606fddaa51cc4ea7"
+sig = "8d35ab3b615e0a42"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#exitCodeFor"
-sig = "98cb827953a07410"
+sig = "2a9582c7144a8791"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1303,7 +1443,7 @@ sig = "0a72fcaba88453d2"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "ec736e31a7e47a83"
+sig = "ce1621a5d523883f"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -1313,7 +1453,7 @@ sig = "5e500011f99b3490"
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/api.ts#Status"
-sig = "8929eb93dd817ba6"
+sig = "61b2c38f5750106a"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -1322,13 +1462,18 @@ sig = "8a539918aaa94533"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
+target = "src/routing.ts#replay"
+sig = "6b7d54b629bba9af"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts#CardMeta"
-sig = "364824e552765043"
+sig = "b56c65925ba2e739"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -1353,17 +1498,17 @@ sig = "9a44c6ce35f5f2bb"
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts#Verdict"
-sig = "c6a8ef7d4a59ff05"
+sig = "ea98524f548f7042"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/verify.ts#checkMerge"
-sig = "6630c9e2a119bb76"
+sig = "bd19b17e8241ca42"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1408,12 +1553,12 @@ sig = "15d779da349933ad"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/api.ts#ApiCard"
-sig = "a42745f7c5a005da"
+sig = "36da16420b7cba42"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1443,7 +1588,12 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/ops.ts#ShowData"
-sig = "4fa0bca00ae04bb6"
+sig = "65c14c7f02d629db"
+
+[[bindings]]
+doc = "docs/vault/Design/Vault Adapter.md"
+target = "src/routing.ts#SurveyItem"
+sig = "d3cc8a5e2864da7b"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1453,7 +1603,7 @@ sig = "93230d9b8d0ea6f5"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/server.ts#snapshot"
-sig = "dc6a76aae93fca42"
+sig = "2ee9c419b809c0f8"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1463,7 +1613,7 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -1543,7 +1693,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "19efa956ec7853f5"
+sig = "49f9c30d4a025327"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1553,7 +1703,7 @@ sig = "77e1aaf4e49bee9b"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "42fba74b82891649"
+sig = "7b36eea08390a61b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1678,7 +1828,7 @@ sig = "0285f459eecaca01"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts"
-sig = "304b31c7a06c47ee"
+sig = "392a5f45b947ee52"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1688,7 +1838,7 @@ sig = "1cc8ea2292c9f1c6"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#NEXT"
-sig = "8a70c6446d176aa7"
+sig = "da7e46dd4dd49ccd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1713,12 +1863,17 @@ sig = "2e6b514cc9eb45a3"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#fileOp"
-sig = "8241fa4d0194168f"
+sig = "055beb817e75e993"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/ops.ts#gateLine"
+sig = "f47a9f543e5f816d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#inboxOp"
-sig = "6ed41307018283c1"
+sig = "99db52f8f1df9d74"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1733,7 +1888,7 @@ sig = "f7e5a9d5896b9b07"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#reviseOp"
-sig = "b25ade9c62b6a9e8"
+sig = "9b5709ebec47eafc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1743,7 +1898,7 @@ sig = "b8598b5456e59c23"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#showOp"
-sig = "3c5ae33e25e77e8f"
+sig = "67975376d191acd4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1788,7 +1943,7 @@ sig = "eeaec9c83a70bd3d"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1833,7 +1988,7 @@ sig = "5481bc5d6b9e8cb8"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#WAIT_EXIT"
-sig = "b2bcc2550f8b3429"
+sig = "5041f073fb26c3bc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -1848,22 +2003,22 @@ sig = "a5d004d408ac99b1"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#describeBrief"
-sig = "41ef62a356bcb4e3"
+sig = "3236ed4c8028b561"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#describeOutcome"
-sig = "606fddaa51cc4ea7"
+sig = "8d35ab3b615e0a42"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#exitCodeFor"
-sig = "98cb827953a07410"
+sig = "2a9582c7144a8791"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "ec736e31a7e47a83"
+sig = "ce1621a5d523883f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -2002,13 +2157,8 @@ sig = "517284c2dd8a5ec6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-gate.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -2083,12 +2233,12 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "19efa956ec7853f5"
+sig = "49f9c30d4a025327"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/agents.ts#CARD_FIELDS"
-sig = "42fba74b82891649"
+sig = "7b36eea08390a61b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2118,17 +2268,17 @@ sig = "5db285d39c997691"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts"
-sig = "19280959b8f6e5eb"
+sig = "626d291593ec7bd7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts#MCP_INSTRUCTIONS"
-sig = "c71757695615e143"
+sig = "ee9f837fa4eb5d9f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2143,7 +2293,7 @@ sig = "4c8038dc930bea4e"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts#buildMcpServer"
-sig = "217be78f3cc567c6"
+sig = "064371c114bb9b9b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2168,12 +2318,12 @@ sig = "14ae8a7c312598a2"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts"
-sig = "304b31c7a06c47ee"
+sig = "392a5f45b947ee52"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#NEXT"
-sig = "8a70c6446d176aa7"
+sig = "da7e46dd4dd49ccd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2183,12 +2333,12 @@ sig = "490d885df4320ce5"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#fileOp"
-sig = "8241fa4d0194168f"
+sig = "055beb817e75e993"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#inboxOp"
-sig = "6ed41307018283c1"
+sig = "99db52f8f1df9d74"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2203,7 +2353,7 @@ sig = "f7e5a9d5896b9b07"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#reviseOp"
-sig = "b25ade9c62b6a9e8"
+sig = "9b5709ebec47eafc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2213,7 +2363,7 @@ sig = "b8598b5456e59c23"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#showOp"
-sig = "3c5ae33e25e77e8f"
+sig = "67975376d191acd4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2237,8 +2387,13 @@ sig = "c0cdf7c2fc819cd2"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/routing.ts#ReplayRow"
+sig = "fb08c48aa43363f4"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/schema.ts#CardDraft"
-sig = "534d657f6dd40528"
+sig = "3dc2196dd8a6ebde"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2248,7 +2403,7 @@ sig = "db3b4efbb06d836a"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -2278,12 +2433,252 @@ sig = "a5d004d408ac99b1"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/wait.ts#WaitOutcome"
-sig = "7508db1d6a796bad"
+sig = "f70767e1a5f5042e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "ec736e31a7e47a83"
+sig = "ce1621a5d523883f"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/api.ts#ApiCard"
+sig = "36da16420b7cba42"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/api.ts#RoutingReport"
+sig = "1155fe7fab06490c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/mcp.ts"
+sig = "626d291593ec7bd7"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/ops.ts"
+sig = "392a5f45b947ee52"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#CONVENTIONS_DECK"
+sig = "6be07bb039633ace"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#LOOSEN_AFTER"
+sig = "d30622daef88b1b7"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#PREFERENCES_DECK"
+sig = "1f852b2e4dddb971"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#RULE_WORDS"
+sig = "8151c154e93b9368"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#afterVerdict"
+sig = "dcd523c16d9b019d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#proposeConvention"
+sig = "92a3717be7d2104e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#proposeSliderMoves"
+sig = "65e116fc9202aaa8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#countedCards"
+sig = "94912799b8c74130"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#replayCards"
+sig = "6f4a884f6186c5cb"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#routingReport"
+sig = "db9fe4d656b1e93e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#rowWindows"
+sig = "a1e2a5f35e39855b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#AUDIT_DEFAULTS"
+sig = "90fd8bde47bc95e8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#FINAL"
+sig = "3b8e9b9da5d520f8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#FIXED_ROWS"
+sig = "7c42c5e60a3063b0"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#GateReason"
+sig = "a8c181ffced0c131"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#GateSource"
+sig = "3648a885a9ef705d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#LEVEL_AT"
+sig = "28a2844d5b82ff80"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#OVERTURNS"
+sig = "f63e8099e38c4573"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#Outcome"
+sig = "f8b82813b4c96a37"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#POSITIONS"
+sig = "d080cacff43ce10a"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#POSITION_NAMES"
+sig = "f2cc4c229f3c6a40"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#PRESETS"
+sig = "afd2730381339b66"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#ROWS"
+sig = "91d257fbe406a1fe"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#ROW_FLOOR"
+sig = "365fe6fa0d771fa9"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#ROW_NAMES"
+sig = "84bfed8b05017709"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#ROW_OF_FACT"
+sig = "e5a05090c42a6f24"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#SURVEY"
+sig = "0f50680aa1b1ebd3"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#SURVEY_QUESTION"
+sig = "2e4ef720faa75fe0"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#Settings"
+sig = "82a7c72812f4458f"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#TODAY"
+sig = "05361efbb13af933"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#isOwnCard"
+sig = "1a44eb17886c5bda"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#levelInForce"
+sig = "dee444fc54262f00"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#outcomeOf"
+sig = "76b3d8f3d65b500d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#replay"
+sig = "6b7d54b629bba9af"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#replayCardOf"
+sig = "89c8fd9188f2dd62"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#route"
+sig = "7845908818f54ba2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#rowOf"
+sig = "f89fa21ed94ca9f5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#stop"
+sig = "f83aed3fee9bc9b3"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#suggestPreset"
+sig = "62a201f114581fe6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#tellMe"
+sig = "59583b67ce182636"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/similarity.ts#SIMILAR_TITLE"
+sig = "3fea88c79e5b6529"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/store.ts#Store"
+sig = "fe0d16f8f81e9c45"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/store.ts#drawOf"
+sig = "c6d222583ded5802"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2308,7 +2703,7 @@ sig = "43a0e8af8514e9d5"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/api.ts"
-sig = "6ae53a9a9c2b973e"
+sig = "3a142827f004ee7f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2318,7 +2713,7 @@ sig = "29da82846f510745"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/api.ts#ApiCard"
-sig = "a42745f7c5a005da"
+sig = "36da16420b7cba42"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2327,13 +2722,33 @@ sig = "19da8b178a90e203"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
+target = "src/api.ts#ApiPreferenceFile"
+sig = "4a889f934759c0aa"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/api.ts#ApiPreferencesInput"
+sig = "65d52c1673bfc44d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/api.ts#ApiPresets"
+sig = "b6e9b46b4b2a0988"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/api.ts#ApiRouting"
+sig = "b4e4f34e1d212ad5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
 target = "src/api.ts#ApiState"
-sig = "cf1272a1a9a8c0a1"
+sig = "9d7685b1dc0d9fc1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/api.ts#ApiVerdictInput"
-sig = "641dab11a3717986"
+sig = "9c03b4c0af1c6945"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2352,8 +2767,23 @@ sig = "dc0e03d3acfe3ad1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+target = "src/proposals.ts#afterVerdict"
+sig = "dcd523c16d9b019d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/report.ts#routingReport"
+sig = "db9fe4d656b1e93e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/routing.ts#Preset"
+sig = "8592e3be27d919fe"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/routing.ts#replay"
+sig = "6b7d54b629bba9af"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2378,7 +2808,7 @@ sig = "85f5c3e6b5f14213"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#ServerOptions"
-sig = "33af486b2b7bc62a"
+sig = "e291114dde80f7dd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2389,6 +2819,11 @@ sig = "35f768925db5152d"
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#findRunningServer"
 sig = "35f2f376cd2243dc"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/server.ts#presets"
+sig = "ca14e69272dc5784"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2408,12 +2843,12 @@ sig = "7dd83327787a5faf"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#snapshot"
-sig = "dc6a76aae93fca42"
+sig = "2ee9c419b809c0f8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/server.ts#startServer"
-sig = "f8b60ee46692ce79"
+sig = "3125651d6226ac97"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2422,8 +2857,18 @@ sig = "e0255082e7a81e7a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "src/store.ts#StalePreferences"
+sig = "69d7b63372cb6df6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -2457,11 +2902,6 @@ sig = "b346b2b146c7c63e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
-target = "design/explorations/round3/atlas.js#level"
-sig = "5e500011f99b3490"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-store.md"
 target = "design/explorations/round4/map.js#show"
 sig = "77f21c726a34fd5c"
 
@@ -2478,7 +2918,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/api.ts#Brief"
-sig = "f74a62ad2a7919fb"
+sig = "a89589bb14fd5a16"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2507,8 +2947,28 @@ sig = "089ba207d88e1c9a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
-target = "src/schema.ts"
-sig = "1c19bc1d99bea9be"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/routing.ts#SurveyItem"
+sig = "d3cc8a5e2864da7b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/routing.ts#levelInForce"
+sig = "dee444fc54262f00"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/routing.ts#route"
+sig = "7845908818f54ba2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/routing.ts#suggestPreset"
+sig = "62a201f114581fe6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2523,7 +2983,7 @@ sig = "e87e803e7b17ba72"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/schema.ts#FILE_KINDS"
-sig = "92df2786a85fc6c1"
+sig = "44a0ebb9e409c479"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2578,7 +3038,12 @@ sig = "3fea88c79e5b6529"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/store.ts#FileResult"
-sig = "a887283736d7d004"
+sig = "3493a9f46f2205bb"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2627,8 +3092,13 @@ sig = "a78a3d35f1b2d973"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#StalePreferences"
+sig = "69d7b63372cb6df6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2639,6 +3109,16 @@ sig = "48b5201484aca28c"
 doc = "docs/vault/Modules/src-store.md"
 target = "src/store.ts#WAITING_STALE_MS"
 sig = "1886335fd4fbac7d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#drawOf"
+sig = "c6d222583ded5802"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
+target = "src/store.ts#settingsOf"
+sig = "6e9134c1bce08643"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -2653,7 +3133,7 @@ sig = "36358eeffb9cdb65"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "ec736e31a7e47a83"
+sig = "ce1621a5d523883f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -2663,7 +3143,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/agents.ts"
-sig = "48c9a68dccbd6dd5"
+sig = "56ae8216617c36a1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -2682,13 +3162,18 @@ sig = "089ba207d88e1c9a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
+target = "src/routing.ts#SurveyItem"
+sig = "d3cc8a5e2864da7b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-vault.md"
 target = "src/schema.ts#upgradeFile"
 sig = "cb04b0f174427522"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -2852,6 +3337,11 @@ sig = "36358eeffb9cdb65"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
+target = "design/explorations/round3/atlas.js#level"
+sig = "5e500011f99b3490"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-verify.md"
 target = "package.json"
 sig = "4415bd737be85ff5"
 
@@ -2862,8 +3352,23 @@ sig = "978db6f05d34272b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
+target = "src/routing.ts#GateDecision"
+sig = "ac5cb23a71a06714"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-verify.md"
+target = "src/routing.ts#route"
+sig = "7845908818f54ba2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-verify.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-verify.md"
+target = "src/store.ts#drawOf"
+sig = "c6d222583ded5802"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
@@ -2888,7 +3393,7 @@ sig = "52dbd59da072b726"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/verify.ts#checkMerge"
-sig = "6630c9e2a119bb76"
+sig = "bd19b17e8241ca42"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
@@ -2904,6 +3409,11 @@ sig = "0ad4ac372954b514"
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/verify.ts#findConflicts"
 sig = "4251010b975798b1"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-verify.md"
+target = "src/verify.ts#gateProblem"
+sig = "870dafd7fa9d3253"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
@@ -2933,7 +3443,7 @@ sig = "8a539918aaa94533"
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
 target = "src/api.ts#ApiCard"
-sig = "a42745f7c5a005da"
+sig = "36da16420b7cba42"
 
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
@@ -2943,7 +3453,7 @@ sig = "0f7d2318d9ed3513"
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
 target = "src/ops.ts#ShowData"
-sig = "4fa0bca00ae04bb6"
+sig = "65c14c7f02d629db"
 
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
@@ -2953,4 +3463,4 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
 target = "src/store.ts#Store"
-sig = "1224bd9bd03fdc68"
+sig = "fe0d16f8f81e9c45"

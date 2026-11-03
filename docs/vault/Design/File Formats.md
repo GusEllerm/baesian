@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-03
 reviewed: 2026-10-23
@@ -24,7 +24,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
   - **A newer format** than this Baesian reads is refused, with `NewerFormat`: "cards/B-7f3kq/r1.md has card format 2; this Baesian reads up to 1: upgrade Baesian". It's refused as a bad file is. Inside a view that reports problems (the server's snapshot) it's reported and skipped; elsewhere it throws, so the CLI and `baesian verify` stop with the message. Where an unreadable file already means "unknown" (presence, the server file, the last port), one in a newer format is ignored too.
   - **Schemas stay strict otherwise.** A `format` that isn't a whole number from 1, or an unknown key, fails the schema as before.
   - **Mutable files** (the cursors, presence, waiting markers, the server file and the last port) are written in the newest format the next time they're written.
-- **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat, the waiting markers and the server file is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
+- **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat, the waiting markers and the server file is written once and never edited (D34). The store writes each whole to a temporary file and links it into place, which fails if it exists, so a second write fails and no reader sees half a file. Status is computed from the files, never stored.
 - **Flat.** Frontmatter and JSON have no nested objects. Lists of strings are fine. Empty lists and unset fields are left out when writing.
 - **IDs.** Cards are `B-` plus five Crockford base32 characters (`B-7f3kq`), and rules are `R-` plus five. The alphabet is lowercase and has no `i`, `l`, `o` or `u` (D51). A new ID is checked against the live layer and retried on collision (`newId`).
 - **Two layers (D34).** Everything is written to the live layer, `.git/baesian/`. The record, `.baesian/` in the worktree, receives copies of the files for the cards the branch filed or attached to (D37).
@@ -36,6 +36,8 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `cards/<id>/r<n>.md` | `CardMeta` + body | yes | yes | `baesian file`, `baesian revise` |
 | `cards/<id>/withdrawn.json` | `Withdrawal` | yes | yes | `baesian withdraw` |
 | `cards/<id>/fallback-<suffix>.json` | `Fallback` | yes | yes | `baesian wait`, on a blocking card with no verdict (D46) |
+| `cards/<id>/gate-r<n>-cli.json` | `GateRecord` | yes | yes | the gate, at filing: `Store.fileCard`, `Store.reviseCard`, `Store.replyToCard`, `Store.draftRule` (M8; [[#Routing]]) |
+| `preferences/<at>-<suffix>.json` | `Preferences` | yes | yes, in every branch's record on sync, as rules | the client only (D147), through the local server, or by accepting a slider proposal |
 | `verdicts/<at>-<id>-r<n>-<suffix>.json` | `Verdict` | yes | on sync | the client only (D32); named timestamp first, so a listing is in order (D107) |
 | `ledger/<id>-<suffix>.md` | `LedgerMeta` + body | yes | on sync | the git gate (M3) |
 | `decks/<deck>.md` | `DeckMeta` + body | yes | yes, with its cards | `baesian deck`; the branch deck on first use |
@@ -70,7 +72,7 @@ Frontmatter (`CardMeta`):
 | `doing` | string | yes | one short line, in the agent's voice, on what it was doing when the decision came up (D73) |
 | `topic` | slash-separated key | yes (D66) | `storage/run-metadata`; canonicalised through aliases (D38, D44). It names one question (D112): a second card on it is a possible duplicate, the earlier answer is its precedent, and two branches answering it differently conflict at merge. A follow-on question gets its own, narrower topic |
 | `deck` | deck ID | | defaults to the branch deck, `branch-<branch>` (D29) |
-| `level` | `provisional` \| `blocking` \| `hard` | | defaults to `hard` when `touches` includes `publishes`, `security`, `privacy`, `money` or `data-loss` (D42; privacy since card B-z3agk), otherwise `provisional` |
+| `level` | `provisional` \| `blocking` \| `hard` | | the level in force, set by the gate at filing (M8): a shown card's level, the level the draft asked for raised by its row; a held card's `provisional`, since its agent goes ahead. A draft's `level` is what the agent asks for, and is kept in the gate record. With no preference file, `hard` when `touches` includes `publishes`, `security`, `privacy`, `money` or `data-loss` (D42, D144; privacy since card B-z3agk), otherwise the level asked for or `provisional`, as before the gate |
 | `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `privacy` (personal data, split from security by card B-z3agk), `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
 | `reverse` | `cheap` \| `moderate` \| `one-way` | yes (D95) | how costly the decision is to undo. It decides the stakes line and feeds rarity |
 | `proposal`, `proposal_then` | strings | yes | the agent's pick, named in a few words, and what happens if it's chosen |
@@ -93,6 +95,8 @@ Frontmatter (`CardMeta`):
 | `conflict_of`, `caught_at` | optional | | conflict cards only: the decisions in conflict, and where it was caught (`filing`, `merge`, `late`; D45) |
 | `reply` | optional string | | the agent's one reply to an answer that went against its pick (D89, D104): a fact or a check. Only `baesian reply` sets it, on a revision that is otherwise the one before; a draft can't carry it |
 | `rule`, `rule_covers` | optional string; list of gate patterns | | a drafted rule (D16, D109, D110): its wording, and the gate facts it answers (`dep:pytest-*`, `schema:migrations/*`). A card that carries one asks you to make it a rule. Only `baesian rule` sets them, on a card that builds on the decision you asked a rule of; a draft can't carry them |
+| `convention` | optional `same-choice` \| `rule-words` | | a convention card (D161): which signal found the pattern. Only Baesian sets it; a draft can't carry it |
+| `pref_row`, `pref_from`, `pref_to` | optional row; positions | all or none | a slider proposal (B-y6jn6): the row and the move. Only Baesian sets them; accepting the card writes a preference file |
 | `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
 | `domain`, `evidence` | lists | | routing tags; links |
 | `source_agent`, `source_branch`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness. The folder a card was filed from isn't recorded (D105) |
@@ -126,6 +130,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 | `first_choice` | optional: `proposal` or `alternative`, the option chosen before the agent's pick was shown (D86, D88) |
 | `make_rule` | the "make this a rule" toggle (D16) |
 | `retire_rules` | optional: rules the chosen option breaks, retired with this answer (D119). Only on `accept` or `alternative`, and only rules that option's `_breaks` lists and that aren't retired yet |
+| `should_have_asked` | optional: "you should have asked me" (D151, B-87tkc), only on a card the gate held back, or in shadow would have; it counts as a miss on the card's row |
 | `reviewer`, `client`, `at` | `client` names the client that wrote it (D62). `at` is strictly increasing per card, so the latest verdict is unambiguous |
 
 ## The others
@@ -153,6 +158,43 @@ Each also has `type` and `format` (D156), not repeated below.
   - a phone-push token would be in the repo.
 
   This is a change from the first draft, part of P12.
+
+## Routing
+
+The gate at filing (M8: D144–D151, [[Routing and Preferences]], [[Formats for v1]] sections 2 to 4; [[src-routing]]). Rows, positions and presets are in `src/routing.ts`.
+
+**Preference file** (`Preferences`), one per change, written once, by the client only (D147). The newest by name is in force; the rest are the history. With none, the gate runs "Today" in shadow, which routes as before the gate.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type`, `format` | `preferences`; 1 | yes | |
+| `mode` | `shadow` \| `enforce` | yes | shadow records what the gate would hold back, and holds nothing (D148) |
+| `row_public_api`, `row_schema`, `row_dependency`, `row_infra`, `row_user_facing`, `row_security`, `row_privacy`, `row_other` | each `agent-decides`, `sample`, `tell-me`, `stop-and-ask` or `never-without-me` | yes, all eight | security and privacy no lower than `tell-me` (D146, B-z3agk). Spending, destroying data and publishing have no key: always "never without me" |
+| `rate_agent_decides`, `rate_sample` | 0 to 1 | yes | the chance a held card is drawn for audit at each low position (B-fgc4y: 0.1 and 1/3 to start) |
+| `burn_in` | integer ≥ 0 | yes | how many of each row's first held cards are all drawn (10 to start) |
+| `profile` | slug | | the preset it started from (B-wwxa3) |
+| `replaces` | file name | yes but on the first | the file it was made from: a change from an older view is refused (`StalePreferences`) |
+| `from_card` | card ID | | the slider proposal it came from (B-y6jn6) |
+| `survey_see`, `survey_fine` | lists of rows | | the setup survey's answers (B-5na1k): the rows whose example you wanted to see, and those you'd be fine not seeing |
+| `reason` | string | | your note |
+| `by`, `client`, `at` | | yes | who, which client (D62), when |
+
+**Gate record** (`GateRecord`), one per card revision and writer, beside the card, written once. The CLI's (`by: cli`) counts locally; in a hosted repo only the relay's will hold a card back (D158, M9).
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `gate`; 1 |
+| `card`, `revision`, `by`, `gate` | the revision it gated, `cli` or `relay`, and the rules' version, `rules-1` |
+| `mode`, `preferences` | copied from the preference file it applied, named; with none, `shadow` and no name |
+| `touches`, `reverse`, `asked`, `source` | what it read: the facts, reversibility and the level the draft asked for; and `agent`, `baesian` (a card Baesian files) or `answer` (a revision after an answer, or a reply), the last two always shown |
+| `row`, `position`, `outcome`, `level`, `reason` | the strictest row and its position; `shown` or `held` (in shadow, what it would have done); the level when shown; and what set it: `row`, `floor`, `one-way`, `agent`, `baesian`, `answer` or `error` |
+| `draw`, `p`, `held_before`, `burn_in`, `drawn` | when held: the card's draw (`drawOf()`), its chance, the row's held cards the gate counted before it, whether that's within the burn-in, and whether it was drawn for audit |
+| `draw_proof` | the relay's signature its draw came from, on the relay's record only (M9) |
+| `at` | when it ran |
+
+A classifier's model, score and threshold are reserved (D145): the schema is strict, so a v1 reader refuses a record that sets them.
+
+**Status `held`** is computed, never stored: the revision's gate record says held, enforcing, and the revision has no verdict (D150). It isn't in `PENDING`, and the merge gate accepts it.
 
 ## Vault notes (M6)
 

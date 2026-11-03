@@ -1,9 +1,26 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Repo, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
+import {
+  type AnyRow,
+  BAESIAN,
+  GATE_VERSION,
+  type GateSource,
+  PRESETS,
+  type Position,
+  ROWS,
+  type Row,
+  type Settings,
+  TODAY,
+  levelInForce,
+  rowOf,
+  route,
+  suggestPreset,
+} from "./routing.js";
 import {
   Attachment,
   CardDraft,
@@ -13,9 +30,12 @@ import {
   FACT_PATTERN,
   DeckMeta,
   Fallback,
+  GateRecord,
   HARD_BY_DEFAULT,
   LedgerMeta,
   type Level,
+  PREFERENCE_FILE,
+  Preferences,
   Presence,
   RuleMeta,
   RuleRetirement,
@@ -44,13 +64,46 @@ const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attac
 export type { Brief, BriefCommit, Status } from "./api.js";
 import type { Brief, BriefCommit, Status } from "./api.js";
 
-/** Statuses that still need the reviewer. */
+/** Statuses that still need the reviewer. A held card doesn't, unless it's drawn for audit (D150, D151). */
 export const PENDING: ReadonlySet<Status> = new Set(["open", "returned", "rerouted", "deferred"]);
+
+export { BAESIAN } from "./routing.js";
+
+/** Responses that return a card to its agent. */
+const RETURNS: ReadonlySet<Verdict["response"]> = new Set(["reject", "question", "need_context", "see_it_run"]);
+
+/**
+ * A card revision's draw for audit (P16 section 3): a SHA-256 hash of its ID and revision, its first six bytes read as a
+ * number from 0 to 1. The store picks the ID, so the agent can't choose it; `baesian verify` recomputes it.
+ */
+export function drawOf(id: string, revision: number): number {
+  return createHash("sha256").update(`${id} r${revision}`).digest().readUIntBE(0, 6) / 2 ** 48;
+}
+
+/** A change to the preferences, as the client asks for it (D147): any field over the file in force, a preset, or the survey's answers. */
+export type PreferenceChange = Partial<Omit<Preferences, "type" | "format" | "replaces" | "from_card" | "by" | "client" | "at">> & {
+  replaces?: string | undefined;
+  preset?: string | undefined;
+};
+
+/** The settings a preference file holds, as the gate reads them. */
+export function settingsOf(p: Preferences): Settings {
+  return {
+    mode: p.mode,
+    rows: Object.fromEntries(ROWS.map((r) => [r, p[`row_${r}`]])) as Record<Row, Position>,
+    rate_agent_decides: p.rate_agent_decides,
+    rate_sample: p.rate_sample,
+    burn_in: p.burn_in,
+  };
+}
 
 export interface Card {
   meta: CardMeta;
   body: string;
 }
+
+/** The card fields only Baesian sets, never a draft: a reply, a drafted rule, a convention, a slider move. */
+type OwnFields = Partial<Pick<CardMeta, "reply" | "rule" | "rule_covers" | "convention" | "pref_row" | "pref_from" | "pref_to">>;
 
 export interface Deck {
   meta: DeckMeta;
@@ -85,12 +138,23 @@ export const WAITING_STALE_MS = 90_000;
 
 export interface FileResult {
   card: Card;
+  /** What the gate did with it, as its record says (D145). */
+  gate: GateRecord;
   /** Topics already in use that look like the one filed (D44). Advisory. */
   nearTopics: string[];
-  /** Set when the level was raised to `hard` by the card's facts (D42). */
+  /** Set when the card's facts made it hard, above the level the agent asked for (D42, D144). */
   hardBecause?: string[];
-  /** Advice on fields that file anyway, such as long ones. */
+  /** Advice on fields that file anyway, such as long ones, and a preference file the gate couldn't read. */
   warnings: string[];
+}
+
+/** The preferences the gate applies now: the newest file, or "Today" in shadow with none, or with one it can't read (P14). */
+export interface InForce {
+  name?: string;
+  file?: Preferences;
+  settings: Settings;
+  /** Why the newest file couldn't be read. */
+  problem?: string;
 }
 
 // The store's errors, by kind, so the MCP server can name each with a code (P18). The CLI prints their messages, and
@@ -125,6 +189,9 @@ export class NotAllowed extends Error {}
 
 /** The card names a deck that doesn't exist. */
 export class NoDeck extends Error {}
+
+/** A preference change made from an older view: its `replaces` isn't the newest file (P16 section 2). The server says 409. */
+export class StalePreferences extends Error {}
 
 function now(): string {
   return new Date().toISOString();
@@ -228,11 +295,26 @@ export class Store {
     if (!this.isInitialised()) throw new NotSetUp();
   }
 
-  /** Write a file that must never change (D34). Fails if it exists. */
+  /**
+   * Write a file that must never change (D34). Fails if it exists. It's written whole to a temporary file first, then
+   * linked into place, which fails if the name is taken: so another process never reads it half-written. An exclusive
+   * create alone made the file visible empty for a moment, which the server's four-writer test caught once the gate
+   * made filing read more of the layer. Where hard links aren't supported, it falls back to the exclusive create.
+   */
   private writeOnce(path: string, text: string): void {
     if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, text, { flag: "wx" });
+    const tmp = `${path}.${randomSuffix()}.tmp`;
+    writeFileSync(tmp, text, { flag: "wx" });
+    try {
+      linkSync(tmp, path);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "EPERM" && code !== "ENOTSUP" && code !== "EXDEV" && code !== "ENOSYS") throw e;
+      writeFileSync(path, text, { flag: "wx" });
+    } finally {
+      rmSync(tmp, { force: true });
+    }
   }
 
   /** Copy a live file into this worktree's record, unless it's already there (D37). */
@@ -248,7 +330,8 @@ export class Store {
     const dir = join(this.live, kind, sub);
     const cached = this.session?.lists.get(dir);
     if (cached) return cached;
-    const names = existsSync(dir) ? readdirSync(dir).sort() : [];
+    // A temporary file is a write in progress (`writeOnce`, presence, waiting markers): never listed.
+    const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.endsWith(".tmp")).sort() : [];
     this.session?.lists.set(dir, names);
     return names;
   }
@@ -331,19 +414,10 @@ export class Store {
    * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
-  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
+  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; warnings: string[] } {
     const parsed = readAs("card-draft", CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
-    let hardBecause: string[] | undefined;
-    const hardFacts = parsed.touches.filter((f) => HARD_BY_DEFAULT.has(f));
-    let level: Level = parsed.level ?? "provisional";
-    // An agent may raise a card's level, never lower it (D144): a hard-by-default fact makes it hard, whatever
-    // level the draft asks for. Only the repo's settings may lower it (D146), once they exist.
-    if (level !== "hard" && hardFacts.length > 0) {
-      level = "hard";
-      hardBecause = hardFacts;
-    }
     let near: string[] = [];
     let topic = parsed.topic;
     if (topic) {
@@ -351,7 +425,91 @@ export class Store {
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
     }
-    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed, body) };
+    // The draft's `level` is what the agent asks for; the gate sets the level the card is written with (D144, D145).
+    return { draft: { ...parsed, topic }, nearTopics: near, warnings: filingWarnings(parsed, body) };
+  }
+
+  // ---------------------------------------------------------------- the gate at filing (D144–D148)
+
+  /**
+   * Run the gate over a card revision about to be written (D145): the rules over its stated facts, its `reverse` and the
+   * level it asks for, under the preferences in force. Returns its record and the level the card is written with. It
+   * fails toward the reviewer: if it can't run, the card is shown at the level asked for, or provisional, and never a
+   * card with a hard-by-default fact below hard (D144, D146).
+   */
+  private runGate(id: string, revision: number, draft: CardDraft, source: GateSource): { record: GateRecord; level: Level; warnings: string[] } {
+    const asked = draft.level;
+    const force = this.inForce();
+    const warnings = force.problem ? [`${force.problem}: the gate used "Today", in shadow, which shows every card`] : [];
+    const base = {
+      type: "gate",
+      format: newestFormat("gate"),
+      card: id,
+      revision,
+      by: "cli",
+      gate: GATE_VERSION,
+      mode: force.settings.mode,
+      ...(force.name && force.file ? { preferences: force.name } : {}),
+      ...(draft.touches.length ? { touches: draft.touches } : {}),
+      reverse: draft.reverse,
+      ...(asked ? { asked } : {}),
+      source,
+      at: now(),
+    };
+    try {
+      const decision = route({ touches: draft.touches, reverse: draft.reverse, asked, source, draw: drawOf(id, revision), heldBefore: (row) => this.heldBefore(row) }, force.settings);
+      const record = parse(GateRecord, { ...base, ...decision }, "the gate record");
+      return { record, level: levelInForce(decision, force.settings.mode, asked), warnings };
+    } catch (e) {
+      const floor: Level = draft.touches.some((f) => HARD_BY_DEFAULT.has(f)) ? "hard" : "provisional";
+      const level: Level = asked === "hard" || floor === "hard" ? "hard" : (asked ?? "provisional");
+      const { row, position } = rowOf(draft.touches, TODAY);
+      const record = parse(GateRecord, { ...base, row, position, outcome: "shown", level, reason: "error" }, "the gate record");
+      return { record, level, warnings: [...warnings, `the gate failed (${e instanceof Error ? e.message : String(e)}), so the card is shown`] };
+    }
+  }
+
+  /** How many held cards a row has had, enforcing, as the CLI's gate records say: the burn-in counts them (B-fgc4y). */
+  private heldBefore(row: AnyRow): number {
+    let n = 0;
+    for (const id of this.cardIds()) {
+      for (const g of this.gateRecords(id)) if (g.by === "cli" && g.mode === "enforce" && g.outcome === "held" && g.row === row) n++;
+    }
+    return n;
+  }
+
+  /** A card's gate records, every revision's and every writer's. */
+  gateRecords(id: string): GateRecord[] {
+    return this.list("cards", id)
+      .filter((f) => /^gate-r\d+-(cli|relay)\.json$/.test(f))
+      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => readAs("gate", GateRecord, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
+  }
+
+  /**
+   * The gate record that counts for a revision: the CLI's. In a hosted repo only the relay's signed record will hold a
+   * card back (D158, M9), so this is where it's chosen.
+   */
+  gateRecord(id: string, revision?: number): GateRecord | undefined {
+    const rev = revision ?? this.card(id)?.meta.revision;
+    return this.gateRecords(id).find((g) => g.revision === rev && g.by === "cli");
+  }
+
+  /** The gate's facts that made a card hard above the level its agent asked for (D42, D144): for the message. */
+  private hardBecause(draft: CardDraft, level: Level): string[] | undefined {
+    if (level !== "hard" || draft.level === "hard") return undefined;
+    const facts = draft.touches.filter((f) => HARD_BY_DEFAULT.has(f));
+    return facts.length ? facts : undefined;
+  }
+
+  /** Write a revision the gate has seen, and its record beside it. */
+  private writeGated(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string, source: GateSource): { card: Card; gate: GateRecord; hardBecause?: string[]; warnings: string[] } {
+    const gate = this.view(() => this.runGate(id, revision, draft, source));
+    const card = this.writeRevision(id, revision, { ...draft, level: gate.level }, body, agent);
+    const rel = join("cards", id, `gate-r${revision}-cli.json`);
+    this.writeOnce(join(this.live, rel), `${JSON.stringify(gate.record, null, 2)}\n`);
+    this.toRecord(rel);
+    const hard = this.hardBecause(draft, gate.level);
+    return { card, gate: gate.record, ...(hard ? { hardBecause: hard } : {}), warnings: gate.warnings };
   }
 
   /** Cards and rules a draft names that don't exist. */
@@ -394,8 +552,29 @@ export class Store {
     });
     if (matches.length > 0) throw new PossibleDuplicate(matches);
     const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
-    const card = this.writeRevision(id, 1, prep.draft, body, opts.agent);
-    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
+    // Baesian's own cards always reach you; the store files them under its name (conflict cards, D35).
+    const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : "agent");
+    return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
+  }
+
+  /**
+   * File a card Baesian writes itself, with no model (D65): a convention card (D161) or a slider proposal (B-y6jn6), with
+   * the fields only Baesian sets. Its deck is created when it's first used. The gate always shows it.
+   */
+  fileOwn(draft: Record<string, unknown> & OwnFields, body: string, deck: { id: string; title: string; brief: string }): Card {
+    this.requireInit();
+    if (!this.deck(deck.id)) {
+      try {
+        this.createDeck({ id: deck.id, title: deck.title }, deck.brief);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      }
+    }
+    const { convention, pref_row, pref_from, pref_to, ...rest } = draft;
+    const prep = this.view(() => this.prepare({ ...rest, deck: deck.id }, body));
+    const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
+    const own = { ...(convention ? { convention } : {}), ...(pref_row ? { pref_row, pref_from, pref_to } : {}) };
+    return this.writeGated(id, 1, { ...prep.draft, ...own }, body, BAESIAN, "baesian").card;
   }
 
   /** File the next revision of a returned card: the agent's reply to a verdict. */
@@ -406,8 +585,12 @@ export class Store {
     const status = this.status(id);
     if (status !== "returned") throw new NotAllowed(`${id} is ${status}; only a returned card takes a new revision`);
     const prep = this.prepare(draft, body);
-    const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
-    return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
+    // A revision that follows your answer is shown; one returned because a parent went the other way (D80) is a new
+    // decision, so it's gated as one (P16 section 3).
+    const own = this.latestVerdict(latest);
+    const source: GateSource = this.parentReturns(latest).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : "agent";
+    const { warnings, ...gated } = this.writeGated(id, latest.meta.revision + 1, prep.draft, body, opts.agent, source);
+    return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
   }
 
   /**
@@ -416,7 +599,8 @@ export class Store {
    */
   canReply(id: string): boolean {
     const card = this.card(id);
-    if (!card || this.revisions(id).some((r) => r.meta.reply !== undefined) || this.status(id) !== "resolved") return false;
+    // Nobody replies for Baesian: its conflict, convention and slider cards take none.
+    if (!card || card.meta.source_agent === BAESIAN || this.revisions(id).some((r) => r.meta.reply !== undefined) || this.status(id) !== "resolved") return false;
     const last = this.latestVerdict(card);
     return last?.response === "alternative" || last?.response === "correction";
   }
@@ -435,8 +619,9 @@ export class Store {
     }
     const text = reply.trim();
     if (!text) throw new ValidationError("the reply is empty: give the fact or the check, in a line");
-    const { type: _t, id: _i, revision: _r, source_agent: _a, source_branch: _b, created: _c, ...draft } = latest.meta;
-    return this.writeRevision(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent);
+    const { type: _t, format: _f, id: _i, revision: _r, source_agent: _a, source_branch: _b, created: _c, ...draft } = latest.meta;
+    // A reply follows an answer, so the gate shows it, at least at the level the card had (P16 section 3).
+    return this.writeGated(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent, "answer").card;
   }
 
   /** The cards that draft a rule from decision `id` (D110), whatever became of them, short of being withdrawn. */
@@ -446,12 +631,18 @@ export class Store {
 
   /**
    * Whether the reviewer asked for a rule from this decision (D16's toggle) and none has been drafted yet: the
-   * latest verdict on its latest revision carries `make_rule` (D109).
+   * latest verdict on its latest revision carries `make_rule` (D109), or accepts a convention card, whose yes is a
+   * request for a rule (D161).
    */
   ruleAsked(id: string): boolean {
     const card = this.card(id);
-    if (!card || !this.latestVerdict(card)?.make_rule) return false;
+    if (!card || !this.asksForRule(card)) return false;
     return this.ruleDrafts(id).length === 0;
+  }
+
+  private asksForRule(card: Card): boolean {
+    const last = this.latestVerdict(card);
+    return Boolean(last?.make_rule) || (card.meta.convention !== undefined && last?.response === "accept");
   }
 
   /**
@@ -464,7 +655,7 @@ export class Store {
     const from = this.card(id);
     if (!from) throw new NoCard(id);
     if (this.ruleDrafts(id).length) throw new NotAllowed(`a rule from ${id} is already drafted: it's one card per decision`);
-    if (!this.latestVerdict(from)?.make_rule) throw new NotAllowed(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
+    if (!this.asksForRule(from)) throw new NotAllowed(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
     const text = rule.trim();
     if (!text) throw new ValidationError("the rule is empty: give it in a line");
     const bad = covers.filter((p) => !FACT_PATTERN.test(p));
@@ -488,7 +679,8 @@ export class Store {
       depends_on: [id],
     });
     const newCard = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
-    return this.writeRevision(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts.agent);
+    // A rule draft is Baesian's own card, filed by an agent: the gate always shows it.
+    return this.writeGated(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts.agent, "baesian").card;
   }
 
   /**
@@ -510,7 +702,7 @@ export class Store {
     this.toRecord(rel);
   }
 
-  private writeRevision(id: string, revision: number, draft: CardDraft & { reply?: string; rule?: string; rule_covers?: string[] }, body: string, agent: string): Card {
+  private writeRevision(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
     if (!this.deck(deck)) throw new NoDeck(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
     const meta = parse(
@@ -794,11 +986,107 @@ export class Store {
       const problem = this.retirementProblem(card, v, id);
       if (problem) throw new ValidationError(problem);
     }
+    // "You should have asked me" is for a card the gate held back, or in shadow would have (D151, B-87tkc).
+    if (v.should_have_asked !== undefined && this.gateRecord(card.meta.id, card.meta.revision)?.outcome !== "held") {
+      throw new ValidationError(`${card.meta.id} wasn't held back: "you should have asked me" is only for a card the gate held, or in shadow would have`);
+    }
     const name = `${v.at.replace(/[-:]/g, "")}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
     this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
     this.saveRule(card, v);
     this.retireRules(card, v);
+    this.moveSlider(card, v);
     return v;
+  }
+
+  /**
+   * Accepting a slider proposal writes a new preference file, moving its row (B-y6jn6), with `from_card` naming it. If
+   * the row has moved since the card was filed, the proposal is stale and nothing is written: a person moved it.
+   */
+  private moveSlider(card: Card, v: Verdict): void {
+    const { pref_row: row, pref_from: from, pref_to: to } = card.meta;
+    if (!row || !from || !to || v.response !== "accept") return;
+    const force = this.inForce();
+    if (force.settings.rows[row] !== from) return;
+    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, client: v.client, from_card: card.meta.id });
+  }
+
+  // ---------------------------------------------------------------- preferences (D147)
+
+  /** The preference files, oldest first by name, which is by time (D107). */
+  preferenceNames(): string[] {
+    return this.list("preferences").filter((f) => PREFERENCE_FILE.test(f));
+  }
+
+  /** One preference file, by name. */
+  preferenceFile(name: string): Preferences | undefined {
+    const path = join(this.live, "preferences", name);
+    if (!PREFERENCE_FILE.test(name) || !existsSync(path)) return undefined;
+    return this.read(path, (t) => readAs("preferences", Preferences, JSON.parse(t), `preferences/${name}`));
+  }
+
+  /**
+   * The preferences the gate applies now (P14, D148): the newest file, or with none, "Today" in shadow, which routes as
+   * Baesian did before the gate. A newest file that can't be read fails toward the reviewer: "Today" in shadow, saying why.
+   */
+  inForce(): InForce {
+    const name = this.preferenceNames().at(-1);
+    if (!name) return { settings: TODAY };
+    try {
+      const file = this.preferenceFile(name);
+      if (!file) return { name, settings: TODAY, problem: `the preference file preferences/${name} can't be read` };
+      return { name, file, settings: settingsOf(file) };
+    } catch (e) {
+      return { name, settings: TODAY, problem: `the preference file preferences/${name} can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})` };
+    }
+  }
+
+  /**
+   * Write a change to the preferences (D147): for the client only, through the local server, and for an accepted slider
+   * proposal. The change is made over the file in force (or "Today" in shadow), from a preset if it names one, or the
+   * one the setup survey's answers suggest (B-5na1k). `replaces` must name the newest file, or be absent when there's
+   * none: a change made from an older view is refused (`StalePreferences`), so two tabs can't undo each other.
+   */
+  writePreferences(change: PreferenceChange, who: { by: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
+    this.requireInit();
+    const force = this.inForce();
+    if ((change.replaces ?? undefined) !== force.name) {
+      throw new StalePreferences(force.name ? `the preferences have changed since: preferences/${force.name} is in force now` : "there's no preference file yet: a first one replaces none");
+    }
+    const { replaces: _r, preset: presetId, ...fields } = change;
+    const list = (v: unknown): Row[] => (Array.isArray(v) ? v.filter((r): r is Row => (ROWS as readonly unknown[]).includes(r)) : []);
+    const survey = fields.survey_see || fields.survey_fine ? suggestPreset({ see: list(fields.survey_see), fine: list(fields.survey_fine) }) : undefined;
+    const preset = presetId !== undefined ? PRESETS.find((p) => p.id === presetId) : survey;
+    if (presetId !== undefined && !preset) throw new ValidationError(`no preset "${presetId}": the presets are ${PRESETS.map((p) => p.id).join(", ")}`);
+    const base = force.file ? settingsOf(force.file) : TODAY;
+    const rows = preset ? preset.rows : base.rows;
+    let at = who.at ?? now();
+    const previous = force.file?.at;
+    if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
+    const file = parse(
+      Preferences,
+      {
+        type: "preferences",
+        format: newestFormat("preferences"),
+        mode: base.mode,
+        ...Object.fromEntries(ROWS.map((r) => [`row_${r}`, rows[r]])),
+        rate_agent_decides: base.rate_agent_decides,
+        rate_sample: base.rate_sample,
+        burn_in: base.burn_in,
+        ...(preset ? { profile: preset.id } : force.file?.profile ? { profile: force.file.profile } : {}),
+        ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0))),
+        ...(force.name ? { replaces: force.name } : {}),
+        ...(who.from_card ? { from_card: who.from_card } : {}),
+        by: who.by,
+        client: who.client,
+        at,
+      },
+      "the preferences",
+    );
+    const name = `${at.replace(/[-:]/g, "")}-${randomSuffix()}.json`;
+    const rel = join("preferences", name);
+    this.writeOnce(join(this.live, rel), `${JSON.stringify(file, null, 2)}\n`);
+    this.toRecord(rel);
+    return { name, file };
   }
 
   /** An answer retires only a rule that the option it chose breaks, and a rule is retired once (D119). */
@@ -850,7 +1138,8 @@ export class Store {
     // Choosing the alternative returns the cards built on the proposal (D80).
     if (this.parentReturns(card).length) return "returned";
     const last = this.latestVerdict(card);
-    if (!last) return "open";
+    // Held back by the gate, enforcing, and not answered yet (D150): any answer on the revision ends it.
+    if (!last) return this.isHeld(card) ? "held" : "open";
     switch (last.response) {
       case "accept":
       case "alternative":
@@ -866,6 +1155,12 @@ export class Store {
       case "defer":
         return "deferred";
     }
+  }
+
+  /** The gate held this revision back, enforcing: a shadow record never holds a card (D148). */
+  private isHeld(card: Card): boolean {
+    const g = this.gateRecord(card.meta.id, card.meta.revision);
+    return g?.mode === "enforce" && g.outcome === "held";
   }
 
   /** The latest verdict on a card's latest revision. */
@@ -914,6 +1209,14 @@ export class Store {
     const last = vs.at(-1);
     const answerOf = (v: Verdict) => (v.response === "accept" ? card.meta.proposal : v.response === "alternative" || v.response === "correction" ? v.choice : undefined);
     const earlier = vs.slice(0, -1).reverse().find((v) => answerOf(v) !== undefined);
+    const g = last && this.gateRecord(card.meta.id, last.revision);
+    if (last && !earlier && g?.mode === "enforce" && g.outcome === "held") {
+      // Held back, so the agent went ahead with its pick (D150): an answer that overturns it, or a rejection, means
+      // rework (D151). A question or a deferral doesn't: the card's status says what to do.
+      const now = answerOf(last);
+      if (now === undefined ? last.response !== "reject" : normalise(now) === normalise(card.meta.proposal)) return undefined;
+      return { kind: "held-answered", card: card.meta.id, assumed: card.meta.proposal, agent: card.meta.source_agent, branch: card.meta.source_branch, now, reviewer: last.reviewer, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
+    }
     if (!last || !earlier) return undefined;
     const was = answerOf(earlier)!, now = answerOf(last);
     if (now !== undefined && normalise(now) === normalise(was)) return undefined;
@@ -1098,7 +1401,15 @@ export class Store {
   /** Every inbox item newer than `since`, delivered or not, oldest first. */
   private inboxSince(since: string): InboxItem[] {
     const items: InboxItem[] = [];
-    for (const c of this.branchCards()) {
+    // Baesian's own proposals are the reviewer's business, not an agent's: a slider proposal never reaches an inbox, and
+    // a convention card reaches every branch's only with a yes, which asks any agent for a rule (P16 section 6).
+    const mine = this.branchCards().filter((c) => c.meta.pref_row === undefined && c.meta.convention === undefined);
+    for (const c of this.cards().filter((k) => k.meta.convention !== undefined)) {
+      for (const v of this.verdicts(c.meta.id)) {
+        if (v.at > since && (v.make_rule || v.response === "accept")) items.push({ card: c.meta.id, verdict: v });
+      }
+    }
+    for (const c of mine) {
       const change = this.answerChange(c);
       for (const v of this.verdicts(c.meta.id)) {
         if (v.at > since) items.push({ card: c.meta.id, verdict: v, ...(change && change.at === v.at ? { brief: change } : {}) });
@@ -1159,8 +1470,8 @@ export class Store {
   // ---------------------------------------------------------------- record
 
   /**
-   * Copy verdicts and ledger entries for the cards this worktree's record holds (D37), and every rule, retirement
-   * and topic alias, which apply to the whole repo. Run by `baesian sync`, and by the pre-commit hook. Returns the
+   * Copy verdicts and ledger entries for the cards this worktree's record holds (D37), and every rule, retirement,
+   * topic alias and preference file, which apply to the whole repo. Run by `baesian sync`, and by the pre-commit hook. Returns the
    * files it added.
    */
   syncRecord(): string[] {
@@ -1170,7 +1481,8 @@ export class Store {
     const added: string[] = [];
     // The client saves a rule into the record of the worktree it runs in. The local gate reads every rule from the
     // live layer, but CI reads each commit's own record, so every branch's record must hold them too.
-    for (const kind of ["rules", "topics"] as const) {
+    // Preference files too: CI rechecks a gate record against the file it names, in the commit's own record (P16).
+    for (const kind of ["rules", "topics", "preferences"] as const) {
       for (const f of this.list(kind)) {
         const rel = join(kind, f);
         if (this.toRecord(rel)) added.push(rel);

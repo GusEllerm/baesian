@@ -106,7 +106,7 @@ describe("AGENTS.md (tier 1)", () => {
   });
 
   it("documents the wait exit codes the code uses", () => {
-    for (const code of ["exits 0", "4 when answered", "5 with no verdict", "6 with no verdict on a hard card"]) {
+    for (const code of ["exits 0", "4 when answered", "5 with no verdict", "6 with no verdict on a hard card", "8 when the card is held back"]) {
       expect(AGENTS_BLOCK).toContain(code);
     }
   });

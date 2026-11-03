@@ -5,9 +5,12 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ApiCard, ApiState, ApiVerdictInput } from "./api.js";
+import type { ApiCard, ApiPreferenceFile, ApiPresets, ApiPreferencesInput, ApiRouting, ApiState, ApiVerdictInput } from "./api.js";
+import { afterVerdict } from "./proposals.js";
+import { countedCards, replayCards, routingReport } from "./report.js";
+import { ALL_ROWS, LEVEL_AT, POSITIONS, POSITION_NAMES, PRESETS, ROW_FLOOR, ROW_NAMES, SURVEY, SURVEY_QUESTION, type Row, isFixed, replay } from "./routing.js";
 import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
-import { type Store, ValidationError } from "./store.js";
+import { type Store, StalePreferences, ValidationError } from "./store.js";
 import { contextNotes } from "./vault.js";
 
 // The local server (M4 step 4): the client's API over the live layer. docs/vault/Design/Local Server.md is
@@ -40,6 +43,11 @@ export interface ServerOptions {
   keepAliveMs?: number;
   /** Where the client's build is. Defaults to `dist/client/` (D98). */
   clientDir?: string;
+  /**
+   * File the cards Baesian proposes after an answer: convention cards (D161) and slider moves (B-y6jn6). Default true;
+   * tests of something else turn it off.
+   */
+  proposals?: boolean;
 }
 
 export interface RunningServer {
@@ -119,12 +127,14 @@ export function snapshot(store: Store, extra: { version: number; started: string
       const id = c.meta.id;
       try {
         const decision = store.decision(id);
+        const status = store.status(id);
+        const gate = store.gateRecord(id, c.meta.revision);
         cards.push({
           meta: c.meta,
           body: c.body,
           revisions: store.revisions(id).length,
           replied: store.revisions(id).some((r) => r.meta.reply !== undefined),
-          status: store.status(id),
+          status,
           ...(decision !== undefined ? { decision } : {}),
           canonicalTopic: store.canonicalTopic(c.meta.topic),
           verdicts: store.verdicts(id),
@@ -133,6 +143,8 @@ export function snapshot(store: Store, extra: { version: number; started: string
           waiting: store.waitingOn(id, nowMs).map(({ marker, stale }) => ({ agent: marker.agent, since: marker.since, at: marker.at, stale })),
           fallbacks: store.fallbacks(id),
           attachments: store.attachments(id).length,
+          ...(gate ? { gate } : {}),
+          ...(status === "held" && gate?.drawn ? { audit: true as const } : {}),
         });
       } catch (e) {
         problems.push({ path: join("cards", id), error: e instanceof Error ? e.message : String(e) });
@@ -149,9 +161,52 @@ export function snapshot(store: Store, extra: { version: number; started: string
       decks: store.decks().map((d) => ({ ...d, notes: contextNotes(store, d.meta.context_notes, vaultNotes) })),
       rules: store.rules(),
       cards,
+      routing: routingState(store, problems),
       problems,
     };
   }, (path, error) => problems.push({ path, error }));
+}
+
+/** The preferences in force, their history, and the report per row (M8), for `GET /api/state`. */
+function routingState(store: Store, problems: ApiState["problems"]): ApiRouting {
+  const force = store.inForce();
+  const history = store.preferenceNames().flatMap((name): ApiPreferenceFile[] => {
+    const file = store.preferenceFile(name);
+    return file ? [{ name, file }] : [];
+  });
+  let report: ApiRouting["report"];
+  try {
+    report = routingReport(store, force);
+  } catch (e) {
+    problems.push({ path: "preferences", error: e instanceof Error ? e.message : String(e) });
+    report = { rows: {}, pooled: { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 }, beforeGate: 0 };
+  }
+  return {
+    ...(force.name && force.file ? { preferences: { name: force.name, file: force.file } } : {}),
+    ...(force.problem ? { problem: force.problem } : {}),
+    settings: force.settings,
+    history,
+    report,
+  };
+}
+
+/** `GET /api/presets` (M8): the rows and positions, each preset and the settings in force replayed over past cards, and the setup survey. */
+export function presets(store: Store): ApiPresets {
+  return store.view(() => {
+    const cards = replayCards(countedCards(store));
+    const force = store.inForce();
+    return {
+      rows: ALL_ROWS.map((row) => ({ row, name: ROW_NAMES[row], ...(isFixed(row) ? { fixed: true as const } : ROW_FLOOR[row as Row] ? { floor: ROW_FLOOR[row as Row]! } : {}) })),
+      positions: POSITIONS.map((position) => ({ position, name: POSITION_NAMES[position], ...(LEVEL_AT[position] ? { level: LEVEL_AT[position]! } : {}) })),
+      presets: PRESETS.map((p) => {
+        const settings = { ...force.settings, rows: p.rows };
+        return { id: p.id, name: p.name, summary: p.summary, settings, replay: replay(cards, settings) };
+      }),
+      inForce: { settings: force.settings, replay: replay(cards, force.settings) },
+      survey: { ...SURVEY_QUESTION, items: [...SURVEY] },
+    };
+    // A file that can't be read is left out, as the snapshot leaves it, rather than failing the request (D84).
+  }, () => {});
 }
 
 /** A cheap summary of the live layer's files, to tell whether anything changed between two looks. */
@@ -314,7 +369,11 @@ function serveClient(res: ServerResponse, dir: string | undefined, pathname: str
   res.end(body);
 }
 
-const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule", "retire_rules"]);
+const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule", "retire_rules", "should_have_asked"]);
+const PREFERENCE_KEYS = new Set([
+  "replaces", "preset", "mode", "rate_agent_decides", "rate_sample", "burn_in", "reason", "survey_see", "survey_fine",
+  ...["public_api", "schema", "dependency", "infra", "user_facing", "security", "privacy", "other"].map((r) => `row_${r}`),
+]);
 
 /** Start the server. It runs until `close`. */
 export async function startServer(store: Store, opts: ServerOptions = {}): Promise<RunningServer> {
@@ -366,7 +425,17 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
           if (!input || typeof input !== "object" || unknown.length) return send(res, 400, { error: `unexpected fields: ${unknown.join(", ")}` });
           try {
             const verdict = store.addVerdict({ ...(input as unknown as ApiVerdictInput), reviewer, client: "web" });
-            return send(res, 201, { verdict, status: store.status(verdict.card) });
+            // Baesian's own proposals from the record (D161, B-y6jn6). A failure there never fails the answer.
+            let filed: string[] = [];
+            if (opts.proposals !== false) {
+              try {
+                filed = afterVerdict(store, verdict).map((c) => c.meta.id);
+              } catch (e) {
+                process.stderr.write(`baesian serve: proposals failed: ${e instanceof Error ? e.message : String(e)}
+`);
+              }
+            }
+            return send(res, 201, { verdict, status: store.status(verdict.card), ...(filed.length ? { filed } : {}) });
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             if (e instanceof ValidationError) return send(res, 400, { error: message });
@@ -389,6 +458,20 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
             throw e;
           }
         }
+        // A change to the preferences (D147): only the client writes them, and only through here.
+        if (url.pathname === "/api/preferences") {
+          const input = (await readJson(req)) as Record<string, unknown>;
+          const unknown = Object.keys(input ?? {}).filter((k) => !PREFERENCE_KEYS.has(k));
+          if (!input || typeof input !== "object" || Array.isArray(input) || unknown.length) return send(res, 400, { error: `unexpected fields: ${unknown.join(", ")}` });
+          try {
+            const written = store.writePreferences(input as ApiPreferencesInput, { by: reviewer, client: "web" });
+            return send(res, 201, written);
+          } catch (e) {
+            if (e instanceof StalePreferences) return send(res, 409, { error: e.message });
+            if (e instanceof ValidationError) return send(res, 400, { error: e.message });
+            throw e;
+          }
+        }
         if (url.pathname === "/api/presence") {
           store.touchPresence("web");
           res.writeHead(204, HEADERS);
@@ -400,6 +483,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
       if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
       if (url.pathname === "/api/health") return send(res, 200, { ok: true, pid: process.pid });
       if (url.pathname === "/api/state") return send(res, 200, snapshot(store, { version, started, watch: watcher.mode() }));
+      if (url.pathname === "/api/presets") return send(res, 200, presets(store));
       if (url.pathname === "/api/events") {
         res.writeHead(200, { ...HEADERS, "content-type": "text/event-stream; charset=utf-8", connection: "keep-alive" });
         res.write(`retry: 2000\nevent: changed\ndata: ${JSON.stringify({ version })}\n\n`);

@@ -47,11 +47,11 @@ What counts as a signature is livedocs' rule: parameters, defaults, return types
 2. a cited card whose `touches` map to its kind (`KIND_OF_TOUCH`, D53);
 3. a rule whose `covers` matches it, unless the rule is retired (D119).
 
-Separately, it checks every cited card:
+Separately, it checks every cited card, by the level in force, which the gate at filing wrote on the card ([[src-routing]]):
 - unknown, withdrawn or superseded: blocked;
 - rejected: blocked, with a rework brief listing the commits in its ledger (D30);
 - hard and not resolved: blocked (D46);
-- returned with a question, or filed as provisional or blocking: allowed.
+- returned with a question, filed as provisional or blocking, or held back by the gate (written provisional): allowed.
 
 `describeReport` prints the result, ending with trailer lines to paste. What a reviewer wrote, in a rejection or a new verdict, is quoted with their name (`answerLine`, D169). `verdictsSinceLastCommit` adds the verdicts since the branch's last commit. Commit times have one-second resolution, so a verdict given in the same second as the last commit can be shown twice; that's harmless. `detectStaged` applies the repo's configured paths.
 

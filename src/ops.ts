@@ -1,6 +1,7 @@
 import { CARD_TEMPLATE } from "./agents.js";
 import { agentLabel, answerLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
-import type { Verdict, Withdrawal } from "./schema.js";
+import { POSITION_NAMES, ROW_NAMES, type AnyRow, type Position } from "./routing.js";
+import type { GateRecord, Verdict, Withdrawal } from "./schema.js";
 import { type Brief, type Card, type FileResult, type InboxItem, NoCard, PENDING, type PossibleDuplicate, type Status, type Store } from "./store.js";
 import { type WaitOptions, type WaitOutcome, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
 
@@ -73,6 +74,32 @@ export function duplicateLines(e: PossibleDuplicate): string[] {
   return out;
 }
 
+/**
+ * What the gate did with a card, in a line (P14): shown at a level and why, or held back, which means its agent goes
+ * ahead with its pick. `filer`: the line is for the agent that filed it. Whether a held card was drawn for audit isn't
+ * said: it changes nothing the agent does.
+ */
+export function gateLine(g: GateRecord, filer = true): string {
+  const row = ROW_NAMES[g.row as AnyRow];
+  // No quotation marks: in an agent's lines they mean a text someone else wrote (D169).
+  const at = POSITION_NAMES[g.position as Position];
+  if (g.outcome === "held") {
+    if (g.mode === "shadow") return `  gate: shown; in shadow, the repo's preferences would have held it back (${row}: ${at})`;
+    const go = filer ? "go ahead with your pick, as provisional, whatever level you asked for" : "its agent goes ahead with its pick, as provisional";
+    return `  held back (${row}: ${at}): ${go}. It counts as settled at merge; the reviewer may still answer it later`;
+  }
+  const why = {
+    row: `${row}: ${at}`,
+    floor: `${row}: never without me, always`,
+    "one-way": "it's one-way, and a one-way card is never held back",
+    agent: `the level ${filer ? "you" : "its agent"} asked for; a level is a minimum when a card is shown`,
+    baesian: "a card Baesian files is always shown",
+    answer: "a revision that follows an answer is always shown",
+    error: "the gate couldn't run, so the card is shown",
+  }[g.reason];
+  return `  gate: shown at ${g.level} (${why})`;
+}
+
 // ---------------------------------------------------------------- filing
 
 /** `baesian file`: file a card, notify for blocking and hard cards, and say what to do next. */
@@ -80,12 +107,13 @@ export function fileOp(s: Store, draft: unknown, body: string, actor: Actor & { 
   const result = s.fileCard(draft, body, { agent: actor.agent, force: actor.force ?? false });
   actor.notify(result.card);
   const { id, level, deck } = result.card.meta;
-  const lines = [`filed ${id} (${level}, deck ${deck})`];
+  const held = result.gate.outcome === "held" && result.gate.mode === "enforce";
+  const lines = [`filed ${id} (${held ? "held back" : level}, deck ${deck})`, gateLine(result.gate)];
   if (result.hardBecause) lines.push(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42; an agent can raise a card's level, never lower it: D144)`);
   if (result.nearTopics.length) lines.push(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
   for (const w of result.warnings) lines.push(`  note: ${w}`);
-  if (level === "blocking") lines.push(`  run \`baesian wait ${id}\` before building on it`);
-  if (level === "hard") lines.push(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
+  if (!held && level === "blocking") lines.push(`  run \`baesian wait ${id}\` before building on it`);
+  if (!held && level === "hard") lines.push(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
   lines.push(`  add "Baesian-Card: ${id}" to commits that build on it`);
   return { lines, data: result };
 }
@@ -94,7 +122,7 @@ export function fileOp(s: Store, draft: unknown, body: string, actor: Actor & { 
 export function reviseOp(s: Store, id: string, draft: unknown, body: string, actor: Actor): Op<FileResult> {
   const result = s.reviseCard(id, draft, body, { agent: actor.agent });
   actor.notify(result.card);
-  return { lines: [`filed ${id} r${result.card.meta.revision}`, ...result.warnings.map((w) => `  note: ${w}`)], data: result };
+  return { lines: [`filed ${id} r${result.card.meta.revision}`, gateLine(result.gate), ...result.warnings.map((w) => `  note: ${w}`)], data: result };
 }
 
 /** `baesian reply`: the agent's one reply to an answer against its pick (D89, D104). */
@@ -134,7 +162,7 @@ export function withdrawOp(s: Store, id: string, reason: string, agent: string):
 // ---------------------------------------------------------------- waiting and the inbox
 
 /** What to do after a wait, by its exit code (P18): the MCP tool's `next`. */
-export const NEXT = { 0: "use", 4: "read", 5: "proceed", 6: "park", 7: "again" } as const;
+export const NEXT = { 0: "use", 4: "read", 5: "proceed", 6: "park", 7: "again", 8: "go" } as const;
 export type Next = (typeof NEXT)[keyof typeof NEXT];
 
 export type WaitResult = WaitOutcome & { next: Next; exit: number };
@@ -160,7 +188,9 @@ export function inboxOp(s: Store, opts: { advance: boolean; session?: string }):
       // Only the answer that's standing now: an earlier one, or one already replied to, takes no reply.
       const latest = s.card(item.card);
       const standing = item.verdict.card === item.card && latest !== undefined && item.verdict.revision === latest.meta.revision;
-      return { ...item, canReply: standing && s.canReply(item.card), ruleAsked: standing && Boolean(item.verdict.make_rule) && s.ruleAsked(item.card) };
+      // A yes to a convention card asks for a rule as the toggle does (D161).
+      const asks = Boolean(item.verdict.make_rule) || (latest?.meta.convention !== undefined && item.verdict.response === "accept");
+      return { ...item, canReply: standing && s.canReply(item.card), ruleAsked: standing && asks && s.ruleAsked(item.card) };
     });
     const lines: string[] = [];
     for (const e of entries) {
@@ -183,6 +213,8 @@ export interface ShowData extends Card {
   /** Agents waiting on it, and whether each has gone quiet (D90). */
   waiting: { agent: string; since: string; at: string; stale: boolean }[];
   briefs: Brief[];
+  /** The gate's record for the latest revision, if it was filed through the gate (M8). */
+  gate?: GateRecord;
 }
 
 /** `baesian show`: the card as the client shows it, with who's waiting, its briefs and its verdicts. */
@@ -196,16 +228,18 @@ export function showOp(s: Store, id: string): Op<ShowData> {
     const verdicts = s.verdicts(id);
     const waiting = s.waitingOn(id).map(({ marker, stale }) => ({ agent: marker.agent, since: marker.since, at: marker.at, stale }));
     const briefs = s.briefs(id);
+    const gate = s.gateRecord(id);
     const lines = [cardLine(s, card)];
     if (decision !== undefined) {
       const by = verdicts.filter((v) => v.revision === card.meta.revision).at(-1);
       lines.push(by ? said("decided", reviewerOf(by), decision) : `decided: ${q(decision)}`);
     }
+    if (gate) lines.push(gateLine(gate, false));
     lines.push("", ...cardDetails(card));
     for (const w of waiting) lines.push(`  ${agentLabel(w.agent)} ${w.stale ? `stopped waiting (last seen ${w.at})` : `is waiting, since ${w.since}`}`);
     for (const b of briefs) lines.push(...describeBrief(b));
     if (verdicts.length) lines.push("", "verdicts:", ...verdicts.map((v) => `  ${verdictLine(s, v)}`));
-    return { lines, data: { ...card, status, ...(decision !== undefined ? { decision } : {}), verdicts, waiting, briefs } };
+    return { lines, data: { ...card, status, ...(decision !== undefined ? { decision } : {}), verdicts, waiting, briefs, ...(gate ? { gate } : {}) } };
   });
 }
 

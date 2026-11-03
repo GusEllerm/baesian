@@ -53,7 +53,7 @@ The store's errors come back as tool results with `isError` set, the CLI's messa
 
 ## Waiting (D168)
 
-`wait_for_verdict` runs `waitOp`, so `waitForVerdict` with the CLI's options: one call lasts at most `SLICE_MS` (100 seconds), and a call that ends with the reviewer still there returns `next: again`. The 9-minute budget counts from the first call, through the waiting marker (D90, D101). Its result is the `WaitOutcome` with `next` and `exit` (`NEXT`).
+`wait_for_verdict` runs `waitOp`, so `waitForVerdict` with the CLI's options. A held card returns at once with `next: go` (exit 8): go ahead with the pick, as provisional (B-chq61). Otherwise one call lasts at most `SLICE_MS` (100 seconds), and a call that ends with the reviewer still there returns `next: again`. The 9-minute budget counts from the first call, through the waiting marker (D90, D101). Its result is the `WaitOutcome` with `next` and `exit` (`NEXT`).
 - **Cancelling:** the call's abort signal is `WaitOptions.signal`, so a call the harness cancels, or a closed input, stops the wait (`WaitCancelled`) and removes the marker. It records no fallback.
 - **Progress:** when the call carries a progress token, `WaitOptions.onBeat` sends progress at each beat of the marker, every 30 seconds.
 
@@ -66,7 +66,8 @@ One name per call, as P18 section 6 has it: the global `--agent` from the regist
 ## What it never does
 
 - **Answer a card** (D32, D62). None of `Store.addVerdict`, `Store.mergeTopics`, `Store.touchPresence` or `Store.recordFallback` is named in `src/mcp.ts` or `src/ops.ts`, and a test reads both to keep it so. Another test calls every tool on every path and finds no new verdict, rule or alias, and presence unchanged. A fallback is recorded only by `waitForVerdict`, as for the CLI.
-- **Lower a card's level** (D144): filing goes through `Store.fileCard`.
+- **Lower a card's level** (D144): filing goes through `Store.fileCard`, so through the gate, and `file_card` returns its record and prints its outcome, as `baesian file` does. A held card's level is provisional, and the instructions say a level is a minimum only when a card is shown.
+- **Write the repo's preferences** (D147): neither `src/mcp.ts` nor `src/ops.ts` names `Store.writePreferences`, and a test keeps it so.
 - **Listen on a port,** fetch anything, or sign in.
 
 ## Tests

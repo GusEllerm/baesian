@@ -26,13 +26,20 @@ export const WAIT_EXIT = {
   park: 6,
   /** No verdict yet, and the reviewer is still there: run `baesian wait` again (D101). */
   again: 7,
+  /**
+   * Held back by the repo's preferences (D150, B-chq61): go ahead with your pick, as provisional. It counts as settled at
+   * merge, and the reviewer may still answer it later.
+   */
+  held: 8,
 } as const;
 
 export type WaitOutcome =
   /** `canReply`: the answer went against the agent's pick, and it hasn't replied yet (D89, D104). */
   /** `ruleAsked`: the answer asks for a rule, and none is drafted yet (D16, D109). */
   | { kind: "resolved"; id: string; decision: string; verdict: Verdict | undefined; briefs: Brief[]; canReply: boolean; ruleAsked: boolean }
-  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[]; ruleAsked: boolean }
+  | { kind: "answered"; id: string; status: Exclude<Status, "open" | "held" | "rerouted" | "resolved">; level: Level; verdict: Verdict | undefined; briefs: Brief[]; ruleAsked: boolean }
+  /** The gate held it back (D150): the agent goes ahead with its pick, whatever level it asked for (B-chq61). */
+  | { kind: "held"; id: string }
   | { kind: "no-verdict"; id: string; reason: "timeout" | "away"; level: Level; proceed: boolean; recorded: boolean }
   /** This run is over, but the wait isn't: the agent runs `baesian wait` again (D101). */
   | { kind: "again"; id: string; waitedMs: number; leftMs: number };
@@ -91,6 +98,8 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
   const card = store.card(id);
   if (!card) throw new NoCard(id);
   if (opts.signal?.aborted) throw new WaitCancelled(id);
+  // A held card answers the agent at once: go ahead, as settled at merge (B-chq61). Nobody waits, so no marker.
+  if (store.view(() => store.status(id)) === "held") return { kind: "held", id };
 
   // The waiting marker (D90): while it's fresh, "stopped for you" is true. A run that ends with "again" keeps it,
   // and the next run picks it up, so the wait's budget counts from when it first started (D101). It's removed when
@@ -114,7 +123,7 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
         if (status === "resolved") {
           return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
         }
-        if (status !== "open" && status !== "rerouted") {
+        if (status !== "open" && status !== "rerouted" && status !== "held") {
           return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
         }
         return undefined;
@@ -163,6 +172,7 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
 export function exitCodeFor(outcome: WaitOutcome): number {
   if (outcome.kind === "resolved") return WAIT_EXIT.resolved;
   if (outcome.kind === "again") return WAIT_EXIT.again;
+  if (outcome.kind === "held") return WAIT_EXIT.held;
   if (outcome.kind === "answered") return WAIT_EXIT.answered;
   return outcome.proceed ? WAIT_EXIT.proceed : WAIT_EXIT.park;
 }
@@ -180,8 +190,6 @@ export function describeBrief(b: Brief): string[] {
       `  Re-propose ${b.card} on that basis with \`baesian revise ${b.card} <card.md>\`, or withdraw it.`,
     ];
   }
-  const was = said("an answer", { person: b.wasReviewer }, b.was);
-  const now = b.now !== undefined ? said("one", reviewerOf(b), b.now) : `not a go-ahead (${b.response} by ${byLine(reviewerOf(b))})`;
   const name = (c: BriefCommit) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`;
   const live = b.commits.filter((c) => !c.rewritten);
   const gone = b.commits.filter((c) => c.rewritten);
@@ -194,6 +202,13 @@ export function describeBrief(b: Brief): string[] {
   const rewritten = gone.length
     ? [`  Rewritten since, and on no branch now: ${gone.map(name).join(", ")}. Their work may be in ${live.length ? "the commits above, or in ones" : "commits"} that don't cite ${b.card}.`]
     : [];
+  const now = b.now !== undefined ? said(b.kind === "held-answered" ? "decided" : "one", reviewerOf(b), b.now) : `not a go-ahead (${b.response} by ${byLine(reviewerOf(b))})`;
+  if (b.kind === "held-answered") {
+    // D150, D151: the gate held it back, so the agent went ahead with its pick; the reviewer answered it later.
+    const pick = said("the pick", { agent: b.agent, branch: b.branch }, b.assumed);
+    return [`  ${b.card} was held back, so its agent went ahead with ${pick}. The reviewer has answered it since: ${now}.`, commits, ...rewritten];
+  }
+  const was = said("an answer", { person: b.wasReviewer }, b.was);
   return [`  The answer on ${b.card} changed. It was ${was}; now it's ${now}.`, commits, ...rewritten];
 }
 
@@ -215,6 +230,13 @@ export const replyHint = (id: string) => [
 export function describeOutcome(o: WaitOutcome): string[] {
   const comment = (v: Verdict | undefined) => (v?.comment ? [`  ${said("Comment", reviewerOf(v), v.comment)}`] : []);
   const by = (v: Verdict | undefined) => (v ? ` by ${byLine(reviewerOf(v))}` : "");
+  if (o.kind === "held") {
+    return [
+      `${o.id} is held back: this repo's preferences let the agent decide this kind of decision, whatever level the card asked for.`,
+      `Go ahead with your pick, as provisional. Commits that build on it carry \`Baesian-Card: ${o.id}\`, and it counts as settled at merge.`,
+      "The reviewer may still answer it later; `baesian inbox` brings that answer if they do.",
+    ];
+  }
   if (o.kind === "again") {
     const min = Math.max(1, Math.round(o.leftMs / 60_000));
     return [`No verdict on ${o.id} yet, and the reviewer is still there.`, `Run \`baesian wait ${o.id}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`];

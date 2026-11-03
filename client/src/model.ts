@@ -131,6 +131,7 @@ export const parked = (state: ApiState): ApiCard[] => state.cards.filter((c) => 
 
 const STATE_WORDS: Record<Status, string> = {
   open: "waiting for you",
+  held: "held back: its agent went ahead",
   resolved: "settled earlier",
   returned: "returned to its agent",
   rerouted: "passed to another reviewer",

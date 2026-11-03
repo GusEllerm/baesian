@@ -1,0 +1,20 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-4ewdp",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "schema"
+  ],
+  "reverse": "moderate",
+  "source": "agent",
+  "row": "schema",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-03T15:55:59.765Z"
+}

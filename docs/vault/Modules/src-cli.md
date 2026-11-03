@@ -23,7 +23,7 @@ The agent commands' logic is in `src/ops.ts` (below), which the MCP server calls
 |---|---|
 | `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]). `--vault` records the vault, in a config that may already exist, turns Obsidian's Bases on and adds the Decision Log's query (`initVault`, [[src-vault]]); it refuses a path outside the repo |
 | `template [--json]` | prints a card draft (`CARD_TEMPLATE`). Unfilled, it fails validation |
-| `file [path]` | files a card from a file or stdin; notifies for blocking and hard cards, and prints notes on long fields |
+| `file [path]` | files a card from a file or stdin; prints what the gate did with it (`gateLine`: shown at a level and why, or held back, which means go ahead with the pick, as provisional), notifies for blocking and hard cards, and prints notes on long fields |
 | `revise <id> [path] [--json]` | the next revision of a returned card |
 | `rule <id> <text> [--covers <patterns…>] [--json]` | drafts the rule the reviewer asked for on a decision, as a card that builds on it (D110). `wait` and `inbox` offer it while it's asked for |
 | `reply <id> <text> [--json]` | the agent's one reply to an answer against its pick: a fact or a check (D89, D104). `wait` and `inbox` offer it when it's open |
@@ -53,13 +53,14 @@ No command resolves a card (D32). When `init` installs the hooks, it records how
 | 5 | `wait`: no verdict yet; proceed provisionally |
 | 6 | `wait`: no verdict on a hard card; don't proceed |
 | 7 | `wait`: no verdict yet, and the reviewer is still there; run it again (D101) |
+| 8 | `wait`: the card is held back by the repo's preferences; go ahead with your pick, as provisional: it counts as settled at merge (D150, B-chq61) |
 | 130 | `wait`: stopped with Ctrl-C (`WaitCancelled`) |
 
-`WAIT_EXIT` holds codes 4–7. `AGENTS_BLOCK` lists them for agents, and a test keeps the two in step.
+`WAIT_EXIT` holds codes 4–8. `AGENTS_BLOCK` lists them for agents, and a test keeps the two in step.
 
 ## src/ops.ts
 
-One function per agent command, shared by the CLI and the MCP server ([[src-mcp]]): `fileOp`, `reviseOp`, `replyOp`, `ruleOp`, `attachOp`, `withdrawOp`, `waitOp`, `inboxOp`, `showOp`, `listOp`, `topicsOp` and `templateOp`. Each returns an `Op`: the lines the CLI prints, and the data its `--json` prints, which the server returns as a tool's text and structured content. Errors are the store's classes ([[src-store#Errors]]); `duplicateLines` is what a possible duplicate prints. The filing operations call the notifier they're given (`Actor`), so the CLI and the server each report a failed notification their own way. `waitOp` marks an answer delivered, and adds `next` and `exit` (`NEXT`: use, read, proceed, park, again). `inboxOp` marks each item with whether it can still take a reply or a rule draft. `cardLine`, `cardDetails` and `verdictLine` are how a card and a verdict read.
+One function per agent command, shared by the CLI and the MCP server ([[src-mcp]]): `fileOp`, `reviseOp`, `replyOp`, `ruleOp`, `attachOp`, `withdrawOp`, `waitOp`, `inboxOp`, `showOp`, `listOp`, `topicsOp` and `templateOp`. Each returns an `Op`: the lines the CLI prints, and the data its `--json` prints, which the server returns as a tool's text and structured content. Errors are the store's classes ([[src-store#Errors]]); `duplicateLines` is what a possible duplicate prints. The filing operations call the notifier they're given (`Actor`), so the CLI and the server each report a failed notification their own way. `waitOp` marks an answer delivered, and adds `next` and `exit` (`NEXT`: use, read, proceed, park, again, go). `fileOp` and `reviseOp` print the gate's outcome (`gateLine`), and `showOp` prints it for any card, without saying whether a held card was drawn for audit: that changes nothing an agent does. `inboxOp` marks each item with whether it can still take a reply or a rule draft. `cardLine`, `cardDetails` and `verdictLine` are how a card and a verdict read.
 
 ## src/quote.ts
 
@@ -68,12 +69,12 @@ Text others wrote reaches agents quoted, with its author, on one line (D169): ti
 ## src/wait.ts
 
 `waitForVerdict` runs in short slices (D101), so a run fits inside any harness's command limit (Claude Code's default is 2 minutes). Each poll reads through a fresh `Store.view`, so a card's status reads every other card once, not once per question ([[2026-11-03 Scale Test]]). It polls the store every `POLL_MS` until one of four things happens:
-- the card leaves `open` or `rerouted`;
+- the card leaves `open` or `rerouted`. A `held` card returns at once, before any marker, as `held` (exit 8): the agent goes ahead with its pick, whatever level it asked for (B-chq61);
 - the client's heartbeat is older than `PRESENCE_STALE_MS`, so the reviewer is away;
 - the wait's budget, `DEFAULT_TIMEOUT_MS` (9 minutes), is spent. It counts from the card's first run;
 - the run's slice, `SLICE_MS` (100 seconds), is over. The run then returns `again`, exit 7, and the agent runs `baesian wait` again.
 
-While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` (D90), calling `WaitOptions.onBeat` at each beat (the MCP server reports progress then). `WaitOptions.signal` stops a wait: it throws `WaitCancelled`, removes the marker, and records no fallback; the CLI aborts it on Ctrl-C, the MCP server when a call is cancelled or its input closes. A run that ends with `again` keeps its marker, and the next run picks it up, which is how the budget knows when the wait began. Any other ending removes it. With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, with what the reviewer wrote quoted and named (D169), including the card's briefs (`describeBrief`): what a parent's verdict did to it, or how its answer changed and the commits to rework, with those a rebase or a squash has since taken off every branch listed apart (D80, D81, B-9v5xj). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. A wait that ends with an answer marks what it printed as delivered (`Store.markDelivered`), so `inbox` and the plugin's hooks don't hand it over again. A resolved card whose answer retired a rule tells the agent not to cite the rule again (D119). The clock and the sleep can be injected, so the tests run without real time passing.
+While it waits, it keeps a waiting marker (`Store.startWaiting`), refreshed every `WAITING_BEAT_MS` (D90), calling `WaitOptions.onBeat` at each beat (the MCP server reports progress then). `WaitOptions.signal` stops a wait: it throws `WaitCancelled`, removes the marker, and records no fallback; the CLI aborts it on Ctrl-C, the MCP server when a call is cancelled or its input closes. A run that ends with `again` keeps its marker, and the next run picks it up, which is how the budget knows when the wait began. Any other ending removes it. With no verdict, a blocking card gets a fallback recorded (`Store.recordFallback`), and a hard card never proceeds. `exitCodeFor` and `describeOutcome` turn the result into the exit code and the text the agent reads, with what the reviewer wrote quoted and named (D169), including the card's briefs (`describeBrief`): what a parent's verdict did to it, how its answer changed, or that a held card its agent went ahead on has been overturned since (D151), and the commits to rework, with those a rebase or a squash has since taken off every branch listed apart (D80, D81, B-9v5xj). `baesian inbox` and `baesian show` print the same briefs, and `show` says who is waiting or stopped waiting. A wait that ends with an answer marks what it printed as delivered (`Store.markDelivered`), so `inbox` and the plugin's hooks don't hand it over again. A resolved card whose answer retired a rule tells the agent not to cite the rule again (D119). The clock and the sleep can be injected, so the tests run without real time passing.
 
 ## src/notify.ts
 
@@ -95,6 +96,7 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 - drafting a rule when an answer asks for one, with `baesian rule` (D110);
 - naming a long-lived agent with `$BAESIAN_AGENT` (D102);
 - what to do when `baesian file` exits 3, including for a follow-on (D112);
-- that only a person resolves a card.
+- that a level is a minimum only when a card is shown, and a held card means go ahead with the pick, as provisional, settled at merge (D150, B-chq61); `wait` exits 8 for one;
+- that only a person resolves a card, or sets the repo's preferences: agents never write preference files (D147).
 
 The template says the same as the block: reuse a topic only for the same question, and `crux_fact` is the only context the reviewer sees first.

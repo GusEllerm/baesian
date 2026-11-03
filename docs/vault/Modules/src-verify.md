@@ -35,6 +35,7 @@ With a vault in the record's config, `verify` warns, without failing, when the r
 | Status | Result |
 |---|---|
 | resolved | ok |
+| held | ok, with a note: the gate let its agent go ahead, so it counts as settled (D150) |
 | deferred | ok, with the reason shown as a note |
 | withdrawn, superseded | a note: the commits that cite it may need another look |
 | rejected | fail: rework before merging |
@@ -42,6 +43,10 @@ With a vault in the record's config, `verify` warns, without failing, when the r
 | missing | fail, with the same hint |
 
 The messages quote what others wrote, a reviewer's comment or a card's title, with its author (D169).
+
+**The gate's record** (M8, P16 section 3): before it reads a cited card's status, `checkMerge` rechecks the gate record for its latest revision, whatever the status, with `gateProblem`. The preference file it names must be in the record and readable; its mode must match; it must have read the card's own facts and `reverse`; the rules (`route()`) must give the same row, position, outcome, level and reason from it; for a held card, the same chance, draw (`drawOf()`), burn-in and `drawn`; and the card's `level` must be the level the gate gave. A record that doesn't recheck fails, like an uncovered fact: answer the card, or file it again.
+
+The burn-in can't be recounted from one branch's record, since a row's earlier held cards may be on any branch. So the record keeps the count the gate saw (`held_before`), and the recheck uses it. Locally that count is the CLI's word, as a verdict is (D62); in a hosted repo only the relay's own record will hold a card back (D158, M9), with its own count and draw. Per-commit checks read a card's `level`, which is the level in force at filing, so a held card is never blocked as hard.
 
 ## Conflicting decisions (D35, D38)
 

@@ -54,13 +54,16 @@ line.
 
 - `level: provisional` (the default): carry on with your proposal. `blocking`: run `baesian wait <id>`
   before building on it. `hard` (the default for publishing, security, privacy, money and data loss): never
-  proceed without a verdict.
+  proceed without a verdict. A level is a minimum only when the card is shown: the repo's preferences may
+  hold a card back instead, and `baesian file` says so. A held card means go ahead with your pick, as
+  provisional, citing it as usual; it counts as settled at merge, and the reviewer may answer it later.
 - `baesian wait <id>` exits 0 when resolved (use the decision. If it went against your pick and you hold
   a fact the reviewer lacked, or a check that would settle it, you may reply once:
   `baesian reply <id> "<the fact or check>"`. Not your pick again); 4 when answered otherwise (returned:
   read the comment, then `baesian revise <id>` or `baesian withdraw <id>`); 5 with no verdict yet
   (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop); 7 while
-  the reviewer is still there (run `baesian wait <id>` again). Each run lasts at most 100 seconds.
+  the reviewer is still there (run `baesian wait <id>` again); 8 when the card is held back (go ahead with
+  your pick, as provisional). Each run lasts at most 100 seconds.
 - If an answer asks for a rule (`wait` and `inbox` say so), draft it, with the gate patterns it covers:
   `baesian rule <id> "<the rule>" --covers dep:pytest-*`. It goes to the reviewer as a card.
 - If you're a long-lived agent, set `BAESIAN_AGENT` to your name; otherwise your harness's name is used.
@@ -70,5 +73,6 @@ line.
   (`client/rule-drafts` beside `client/rules`) and list what it builds on in `depends_on`.
 - Commits that build on a card carry the trailer `Baesian-Card: <id>`. The gate blocks a commit that
   builds on a rejected card, or on a hard card that isn't resolved yet.
-- Never record a verdict yourself: only a person answers, in the Baesian client.
+- Never record a verdict yourself, or write the repo's preference files: only a person answers, and sets
+  the preferences, in the Baesian client.
 <!-- baesian:end -->

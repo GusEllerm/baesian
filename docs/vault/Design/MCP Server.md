@@ -108,6 +108,7 @@ Every tool also takes cwd (section 1). Reads happen inside one `Store.view`, as 
   | proceed | 5 | no verdict in time: proceed provisionally |
   | park | 6 | no verdict on a hard card: don't proceed |
   | again | 7 | the reviewer is still there: call it again |
+  | go | 8 | held back by the repo's preferences: go ahead with the pick, as provisional (M8, B-chq61) |
 
 - **check_inbox** returns each `InboxItem` (the card, the verdict, any brief), marked with whether it can still take a reply or a rule draft, and the CLI's lines.
 - **show_card** returns what `baesian show --json` prints. The CLI's text shows waiting markers and briefs, and its JSON doesn't, so both gain them.
