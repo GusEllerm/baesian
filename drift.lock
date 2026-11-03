@@ -1981,6 +1981,16 @@ target = "plugins/baesian/hooks/baesian.mjs"
 sig = "4724db53562a6d66"
 
 [[bindings]]
+doc = "docs/vault/Home.md"
+target = "src/store.ts#Store"
+sig = "77095e1b7321d8e1"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "src/verify.ts#VerifyResult"
+sig = "3a47560fd57a01aa"
+
+[[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "design/explorations/round3/app.js#next"
 sig = "3c03519ac5431d85"
