@@ -556,6 +556,66 @@ target = "src/wait.ts#PRESENCE_STALE_MS"
 sig = "0406b42d0614950c"
 
 [[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "client/src/Desk.tsx"
+sig = "3b8950d0cccde826"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "client/src/Path.tsx"
+sig = "a447468bd84edc1d"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "client/src/model.ts#Relation"
+sig = "9f8bbe9695c33412"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#CardMeta"
+sig = "7d0dd5446592dd32"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#Config"
+sig = "f43f4c83b978a678"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#Presence"
+sig = "60da343dcb45d3e7"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#UserConfig"
+sig = "831b0fb14ecc7537"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#Verdict"
+sig = "be276fd6befc1766"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/schema.ts#Waiting"
+sig = "19884aca62b972e1"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/server.ts#startServer"
+sig = "2c309bb784772746"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/store.ts#Store"
+sig = "bd94526b1f0bc967"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "src/verify.ts#verify"
+sig = "b343302a273f6af6"
+
+[[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "client/src/notify.ts"
 sig = "f09f2ea133d765dc"
