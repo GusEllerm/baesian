@@ -115,8 +115,9 @@ const tellMe: Record<Row, Position> = {
 };
 
 /**
- * What a preference change loosens, against the settings in force before it (D163): each row moved toward held, and
- * enforcing turned on. Either lets more cards past you, so in a hosted repo it takes your passkey; tightening doesn't.
+ * What a preference change loosens, against the settings in force before it (D163): each row moved toward held,
+ * enforcing turned on, and a lower audit rate or burn-in (B-shndb), which brings fewer held cards back to you. Each lets
+ * more cards past you, so in a hosted repo it takes your passkey; tightening doesn't.
  */
 export function loosening(before: Settings, after: Settings): string[] {
   const out: string[] = [];
@@ -124,6 +125,11 @@ export function loosening(before: Settings, after: Settings): string[] {
   for (const row of ROWS) {
     if (rank(after.rows[row]) < rank(before.rows[row])) out.push(`it moves ${row} from ${before.rows[row]} to ${after.rows[row]}`);
   }
+  const percent = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  for (const rate of ["rate_agent_decides", "rate_sample"] as const) {
+    if (after[rate] < before[rate]) out.push(`it lowers ${rate} from ${percent(before[rate])} to ${percent(after[rate])}`);
+  }
+  if (after.burn_in < before.burn_in) out.push(`it lowers burn_in from ${before.burn_in} to ${after.burn_in}`);
   return out;
 }
 

@@ -1,5 +1,5 @@
 import { type KeyObject, createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { renderDoc } from "../src/frontmatter.js";
 import { randomSuffix } from "../src/ids.js";
@@ -71,9 +71,14 @@ export interface Deliver {
   /** The reviewer's passkey proof, beside it. */
   passkey?: TestPasskey;
   proof?: Parameters<TestPasskey["prove"]>[2];
+  /** Made in another project, as a file copied from another of your repos would be (B-tf9fc). */
+  project?: string;
 }
 
-/** The service: an Ed25519 key it signs with (D160), and the files it writes for a person (P16 section 7). */
+/**
+ * The service: an Ed25519 key it signs with (D160), and the files it writes for a person in one project (P16 section 7),
+ * each naming that project (B-tf9fc).
+ */
 export class TestService {
   readonly privateKey: KeyObject;
   readonly publicKey: string;
@@ -82,6 +87,7 @@ export class TestService {
   constructor(
     readonly keyId = "test-1",
     readonly validity: { after?: string; before?: string } = {},
+    readonly project = "proj-test",
   ) {
     this.privateKey = generateKeyPairSync("ed25519").privateKey;
     this.publicKey = opensshPublicKey(this.privateKey);
@@ -109,8 +115,10 @@ export class TestService {
     return parseTrust(this.pin(...passkeys), "the test pin");
   }
 
-  /** Link a repo: the service's key in the live layer, as the CLI will write it at sign-in (M9d). */
+  /** Link a repo, as the CLI will at sign-in (M9d): the service and project in its config, and the service's key in the live layer. */
   link(store: Store): void {
+    const config = join(store.record, "config.json");
+    writeFileSync(config, json({ ...JSON.parse(readFileSync(config, "utf8")), service: ORIGIN, project: this.project }));
     put(store, `trust/service-${this.keyId}.json`, json(this.serviceKey()));
   }
 
@@ -144,24 +152,28 @@ export class TestService {
     return rel;
   }
 
-  /** An answer given on the website: a verdict with the account's handle and ID, signed. Returns its path in the layer. */
+  /**
+   * An answer given on the website: a verdict with the account's handle and ID, and the digest of the card revision's
+   * file as the relay received it (B-f571v), signed. Returns its path in the layer.
+   */
   answer(store: Store, v: Partial<Omit<Verdict, "type" | "format">> & { card: string; response: Verdict["response"] }, opts: Deliver = {}): string {
     const revision = v.revision ?? store.card(v.card)!.meta.revision;
     const at = v.at ?? this.now();
-    const verdict = { type: "verdict", format: 1, ...v, revision, reviewer: v.reviewer ?? "gus", account: v.account ?? "acct-gus", client: v.client ?? "hosted-desktop", at };
+    const card_digest = "card_digest" in v ? v.card_digest : sha256(store.bytes(`cards/${v.card}/r${revision}.md`)).toString("hex");
+    const verdict = { type: "verdict", format: 1, ...v, revision, reviewer: v.reviewer ?? "gus", account: v.account ?? "acct-gus", project: "project" in v ? v.project : (opts.project ?? this.project), card_digest, client: v.client ?? "hosted-desktop", at };
     return this.deliver(store, `verdicts/${compact(at)}-${v.card}-r${revision}-${randomSuffix()}.json`, json(verdict), opts);
   }
 
   /** A rule saved on the website (D110). */
   rule(store: Store, r: { covers: string[]; text?: string; from_card?: string; topic?: string }, opts: Deliver = {}): string {
     const id = `R-${randomSuffix()}`;
-    const meta = { type: "rule", format: 1, id, ...(r.topic ? { topic: r.topic } : {}), covers: r.covers, ...(r.from_card ? { from_card: r.from_card } : {}), accepted_by: "gus", account: "acct-gus", created: this.now() };
+    const meta = { type: "rule", format: 1, id, ...(r.topic ? { topic: r.topic } : {}), covers: r.covers, ...(r.from_card ? { from_card: r.from_card } : {}), accepted_by: "gus", account: "acct-gus", project: opts.project ?? this.project, created: this.now() };
     return this.deliver(store, `rules/${id}.md`, renderDoc(meta, `${r.text ?? "Small dev dependencies need no card."}\n`), opts);
   }
 
   /** A topic merge made on the website (D44). */
   alias(store: Store, from: string, to: string, opts: Deliver = {}): string {
-    return this.deliver(store, `topics/alias-${randomSuffix()}.json`, json({ type: "topic-alias", format: 1, from, to, by: "gus", account: "acct-gus", at: this.now() }), opts);
+    return this.deliver(store, `topics/alias-${randomSuffix()}.json`, json({ type: "topic-alias", format: 1, from, to, by: "gus", account: "acct-gus", project: opts.project ?? this.project, at: this.now() }), opts);
   }
 
   /** A preference change made on the website (D147): every row, over the file in force or "Today" in shadow. */
@@ -181,6 +193,7 @@ export class TestService {
       ...(force.name ? { replaces: force.name } : {}),
       by: "gus",
       account: "acct-gus",
+      project: opts.project ?? this.project,
       client: "hosted-desktop",
       at,
     };
@@ -214,6 +227,7 @@ export class TestService {
       source: opts.source ?? "agent",
       ...decision,
       ...(decision.outcome === "held" ? { draw_proof } : {}),
+      project: opts.project ?? this.project,
       at: this.now(),
       ...opts.tamper,
     } as GateRecord;

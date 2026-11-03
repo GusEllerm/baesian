@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 import { evaluate } from "../src/gate.js";
 import { openRepo } from "../src/git.js";
 import { proofProblem } from "../src/passkey.js";
-import { NewerFormat } from "../src/schema.js";
+import { Config, NewerFormat } from "../src/schema.js";
 import { NAMESPACE, parseSignature, signMessage } from "../src/sshsig.js";
 import { Store } from "../src/store.js";
 import { BadTrust, TRUST_ENV, TRUST_FILE_ENV, checkSigned, parseTrust, pinnedTrust } from "../src/trust.js";
@@ -313,6 +313,73 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     copy(loose.rel, `preferences/${later}`);
     expect(store.inForce().name).toBe(tight.name);
     expect(store.uncounted()).toContainEqual({ file: `preferences/${later}`, why: expect.stringContaining("its name doesn't match its time") });
+  });
+
+  it("takes the passkey for a change that brings fewer held cards back to you: a lower audit rate or burn-in (B-shndb)", () => {
+    const { store, service } = hosted();
+    const passkey = new TestPasskey();
+    service.enrol(store, passkey);
+    const more = service.preferences(store, { rate_sample: 0.5, burn_in: 20 });
+    expect(store.inForce().name).toBe(more.name);
+    const fewer = service.preferences(store, { rate_sample: 0.1 });
+    const shorter = service.preferences(store, { burn_in: 0 });
+    expect(store.inForce().name).toBe(more.name);
+    expect(store.uncounted()).toEqual([
+      { file: fewer.rel, why: "it lets more cards past you (it lowers rate_sample from 50% to 10%), so it takes your passkey (D163), and has no passkey proof" },
+      { file: shorter.rel, why: "it lets more cards past you (it lowers burn_in from 20 to 0), so it takes your passkey (D163), and has no passkey proof" },
+    ]);
+    const proved = service.preferences(store, { rate_agent_decides: 0 }, { passkey });
+    expect(store.inForce()).toMatchObject({ name: proved.name, settings: { rate_agent_decides: 0, rate_sample: 0.5, burn_in: 20 } });
+  });
+
+  it("counts an answer only on the card text it names: a card rewritten after its answer is unanswered (B-f571v)", () => {
+    const { store, service } = hosted();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    service.answer(store, { card: id, response: "accept", card_digest: undefined });
+    service.answer(store, { card: id, response: "reject", comment: "No.", card_digest: "0".repeat(64) });
+    expect(store.status(id)).toBe("open");
+    expect(store.uncounted().map((u) => u.why)).toEqual([
+      "it doesn't name the digest of the card it answers, so what was answered can't be checked (B-f571v)",
+      `${id} r1 has changed since it was answered: it isn't the text the answer names (B-f571v)`,
+    ]);
+    service.answer(store, { card: id, response: "accept" });
+    expect(store.status(id)).toBe("resolved");
+    appendFileSync(join(store.live, "cards", id, "r1.md"), "\nAnd one thing more.\n");
+    expect(store.status(id)).toBe("open");
+  });
+
+  it("counts a signed file only in its own project: one copied from another of your repos counts nowhere else (B-tf9fc)", () => {
+    const { store, service } = hosted();
+    const passkey = new TestPasskey();
+    service.enrol(store, passkey);
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const other = { project: "proj-other" };
+    service.answer(store, { card: id, response: "accept" }, other);
+    service.rule(store, { covers: ["dep:left-*"] }, other);
+    service.alias(store, "storage/runs", "storage/run-metadata", other);
+    service.preferences(store, { row_dependency: "agent-decides" }, { ...other, passkey });
+    service.answer(store, { card: id, response: "reject", comment: "No.", project: undefined });
+    expect(store.status(id)).toBe("open");
+    expect(store.rules()).toEqual([]);
+    expect(store.canonicalTopic("storage/runs")).toBe("storage/runs");
+    expect(store.inForce().name).toBeUndefined();
+    const copied = "it's for project proj-other, not this repo's (proj-test), so it was copied from another repo";
+    expect(store.uncounted().map((u) => u.why).sort()).toEqual([copied, copied, copied, copied, "it names no project, so it could be another repo's (B-tf9fc)"].sort());
+    service.answer(store, { card: id, response: "accept" });
+    expect(store.status(id)).toBe("resolved");
+  });
+
+  it("counts nothing signed until the config names the repo's project, set with the service", () => {
+    const { store } = repo();
+    const service = new TestService();
+    put(store, `trust/service-${service.keyId}.json`, `${JSON.stringify(service.serviceKey())}\n`);
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    service.answer(store, { card: id, response: "accept" });
+    expect(store.status(id)).toBe("open");
+    expect(store.uncounted()[0]?.why).toBe("it's for project proj-test, and .baesian/config.json names no project");
+    expect(Config.safeParse({ service: ORIGIN }).success).toBe(false);
+    expect(Config.safeParse({ project: "proj-test" }).success).toBe(false);
+    expect(Config.safeParse({ service: ORIGIN, project: "proj-test" }).success).toBe(true);
   });
 
   it("keeps an agent waiting on a card the relay raised to hard: it never proceeds without an answer", async () => {

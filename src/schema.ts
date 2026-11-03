@@ -163,6 +163,15 @@ const Text = z.string().min(1);
  */
 export const AccountId = z.string().max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "an account ID is letters, digits, dots, dashes and underscores");
 
+/**
+ * A project's random ID on the hosted service (P16 section 8), in the committed config and, set by the relay, on every
+ * file the service signs (B-tf9fc): one key signs every project's files, so a file counts only in its own project.
+ */
+export const ProjectId = z.string().max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "a project ID is letters, digits, dots, dashes and underscores");
+
+/** A SHA-256 digest, in lowercase hex. */
+const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, "a SHA-256 digest in lowercase hex");
+
 /** Bytes as base64url, with no padding, as WebAuthn gives them. */
 const Base64Url = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/, "base64url, with no padding");
 
@@ -397,6 +406,13 @@ export const Verdict = z
     reviewer: z.string().min(1),
     /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
     account: AccountId.optional(),
+    /** The project it was given in, on the hosted service: set by the relay (B-tf9fc). */
+    project: ProjectId.optional(),
+    /**
+     * The SHA-256 digest of the card revision's file as the relay received it (B-f571v): set by the relay, so the
+     * service's signature, and a hard card's passkey proof, cover what was answered, not only its ID.
+     */
+    card_digest: Sha256.optional(),
     /** Which client wrote the verdict (D62). */
     client: z.string().min(1),
     at: Timestamp,
@@ -458,6 +474,8 @@ export const RuleMeta = z.strictObject({
   accepted_by: z.string().min(1),
   /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
   account: AccountId.optional(),
+  /** The project it was saved in, on the hosted service: set by the relay (B-tf9fc). */
+  project: ProjectId.optional(),
   created: Timestamp,
 });
 export type RuleMeta = z.infer<typeof RuleMeta>;
@@ -475,6 +493,8 @@ export const RuleRetirement = z.strictObject({
   by: z.string().min(1),
   /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
   account: AccountId.optional(),
+  /** The project it was made in, on the hosted service: set by the relay (B-tf9fc). */
+  project: ProjectId.optional(),
   at: Timestamp,
 });
 export type RuleRetirement = z.infer<typeof RuleRetirement>;
@@ -488,6 +508,8 @@ export const TopicAlias = z.strictObject({
   by: z.string().min(1),
   /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
   account: AccountId.optional(),
+  /** The project it was made in, on the hosted service: set by the relay (B-tf9fc). */
+  project: ProjectId.optional(),
   at: Timestamp,
 });
 export type TopicAlias = z.infer<typeof TopicAlias>;
@@ -630,6 +652,8 @@ export const Preferences = z
     by: z.string().min(1),
     /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
     account: AccountId.optional(),
+    /** The project it was made in, on the hosted service: set by the relay (B-tf9fc). */
+    project: ProjectId.optional(),
     /** Which client wrote it (D62). */
     client: z.string().min(1),
     at: Timestamp,
@@ -690,6 +714,8 @@ export const GateRecord = z
     drawn: z.boolean().optional(),
     /** The relay's signature its draw came from (D158): on the relay's record only, from M9. */
     draw_proof: z.string().min(1).optional(),
+    /** The project it gated the card in: on the relay's record only (B-tf9fc). */
+    project: ProjectId.optional(),
     at: Timestamp,
   })
   .superRefine((g, ctx) => {
@@ -701,6 +727,9 @@ export const GateRecord = z
 export type GateRecord = z.infer<typeof GateRecord>;
 
 // ---------------------------------------------------------------- the hosted service's proof (M9a: D138, D139, D142, D159, D160)
+
+/** A website's origin: its scheme and host, with no path. */
+const Origin = z.string().regex(/^https?:\/\/[^\s/?#]+$/, "an origin: https://host, with no path");
 
 /** A service key's ID, chosen by the service: `trust/service-<key>.json`. */
 const KeyId = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a key ID is a lowercase slug");
@@ -717,7 +746,7 @@ export const ServiceKey = z.strictObject({
   /** The Ed25519 public key in OpenSSH's form, as an allowed-signers line takes it: `ssh-ed25519 AAAA…`, with no comment. */
   public_key: z.string().regex(/^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$/, "an Ed25519 key in OpenSSH's form: ssh-ed25519 AAAA…"),
   /** The website's origin and WebAuthn relying party, which a passkey proof under this key's signature must name (D139). */
-  origin: z.string().regex(/^https?:\/\/[^\s/?#]+$/, "an origin: https://host, with no path"),
+  origin: Origin,
   rp_id: z.string().regex(/^[a-z0-9.-]+$/, "a relying party ID is a domain"),
   /** It signs only files whose own time is from `valid_after`, and before `valid_before` (git's allowed signers, B5 F14). */
   valid_after: Timestamp,
@@ -774,21 +803,31 @@ export const PasskeyProof = z.strictObject({
 export type PasskeyProof = z.infer<typeof PasskeyProof>;
 
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it. */
-export const Config = z.strictObject({
-  format: formatOf("config").optional(),
-  vault: z.string().optional(),
-  /** Globs for the schema detector; replace the defaults (D25). */
-  gate_schema: z.array(z.string().min(1)).optional(),
-  /** Globs for the CI, infra and deploy detector; replace the defaults. */
-  gate_infra: z.array(z.string().min(1)).optional(),
-  /** Paths the gate never looks at, added to the defaults. */
-  gate_ignore: z.array(z.string().min(1)).optional(),
-  /**
-   * The project's public modules, as globs. The `api:` detector is off until this is set (D59), and
-   * needs livedocs on PATH (`livedocs signatures`, D56).
-   */
-  gate_api: z.array(z.string().min(1)).optional(),
-});
+export const Config = z
+  .strictObject({
+    format: formatOf("config").optional(),
+    vault: z.string().optional(),
+    /** The hosted service's address (P16 section 8), set with `project` when the repo is linked. */
+    service: Origin.optional(),
+    /** The project's random ID on the service. No secret, since this file is committed. */
+    project: ProjectId.optional(),
+    /** Globs for the schema detector; replace the defaults (D25). */
+    gate_schema: z.array(z.string().min(1)).optional(),
+    /** Globs for the CI, infra and deploy detector; replace the defaults. */
+    gate_infra: z.array(z.string().min(1)).optional(),
+    /** Paths the gate never looks at, added to the defaults. */
+    gate_ignore: z.array(z.string().min(1)).optional(),
+    /**
+     * The project's public modules, as globs. The `api:` detector is off until this is set (D59), and
+     * needs livedocs on PATH (`livedocs signatures`, D56).
+     */
+    gate_api: z.array(z.string().min(1)).optional(),
+  })
+  .superRefine((c, ctx) => {
+    if ((c.service === undefined) !== (c.project === undefined)) {
+      ctx.addIssue({ code: "custom", path: [c.service === undefined ? "service" : "project"], message: "service and project are set together" });
+    }
+  });
 export type Config = z.infer<typeof Config>;
 
 /**

@@ -10,6 +10,7 @@ import {
   type Settings,
   TODAY,
   levelInForce,
+  loosening,
   replay,
   route,
   rowOf,
@@ -112,6 +113,23 @@ describe("the rules (rules-1)", () => {
     expect(stop("security", "tell-me", "down")).toBeUndefined();
     expect(stop("privacy", "stop-and-ask", "down")).toBe("tell-me");
     expect(stop("schema", "never-without-me", "up")).toBeUndefined();
+  });
+
+  it("count as loosening each change that lets more cards past you: a row toward held, enforcing, fewer audits (D163, B-shndb)", () => {
+    expect(loosening(TODAY, TODAY)).toEqual([]);
+    expect(loosening(TODAY, settings({ mode: "enforce", rows: preset("fewer-interruptions") }))).toEqual([
+      "it turns enforcing on",
+      "it moves dependency from tell-me to sample",
+      "it moves infra from tell-me to sample",
+      "it moves other from tell-me to sample",
+    ]);
+    expect(loosening(TODAY, settings({ rate_agent_decides: 0, rate_sample: 0.25, burn_in: 3 }))).toEqual([
+      "it lowers rate_agent_decides from 10% to 0%",
+      "it lowers rate_sample from 33.3% to 25%",
+      "it lowers burn_in from 10 to 3",
+    ]);
+    // Tightening, more audits and a longer burn-in included, lets nothing more past.
+    expect(loosening(settings({ mode: "enforce", rows: preset("hands-off") }), settings({ rate_agent_decides: 0.5, burn_in: 20 }))).toEqual([]);
   });
 
   it("have three presets, security and privacy at \"never without me\" in all (B-wwxa3)", () => {

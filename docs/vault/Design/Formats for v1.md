@@ -230,7 +230,8 @@ Accepting one writes a new preference file whose from_card names the card. The e
 > - **A preference change is loosening** against the newest counting file before it, or "Today" in shadow, not against the file its `replaces` names.
 > - **The relay's `draw_proof`** is its SSH signature, bare base64, in the namespace `baesian-draw`, over `<id> r<revision> <the revision's SHA-256>`; the draw is the signature's SHA-256 read as the CLI's is. Its signed gate record also raises the level in force when it shows a card higher.
 > - **A rule's own time** is its `created`.
-> - **A signed file counts only under its own name and folder,** since a signature covers bytes, not names: otherwise a signed answer copied under another card's name would count there. What a verdict's bytes don't name, the card's text and the project, are drafted as cards for the user.
+> - **A signed file counts only under its own name and folder,** since a signature covers bytes, not names: otherwise a signed answer copied under another card's name would count there. What a verdict's bytes don't name, the card's text and the project, were put to the user as cards.
+> - **Then, as the user answered those cards (2026-11-03):** every signed file names its `project`, and counts only where the config's `project` matches (B-tf9fc); a verdict names its card's `card_digest`, and counts only while the card revision's file has those bytes (B-f571v); and a lower audit rate or burn-in is loosening too, so it takes the passkey (B-shndb). `Config` gains `service` and `project` now, set together, for the project check; linking a repo to set them is M9d's.
 > - **Not built here:** the relay (M9b), sign-in and enrolment (M9c), and the CLI pulling these files and the config's `service` (M9d).
 
 ### The reviewer's account

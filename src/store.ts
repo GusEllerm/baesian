@@ -164,6 +164,19 @@ export const proofPath = (rel: string) => rel.replace(/\.json$/, ".passkey.json"
 export interface Hosted {
   root: TrustRoot;
   pinned: boolean;
+  /** The project the repo is linked to, from its config: a signed file counts only in its own (B-tf9fc). */
+  project: string | undefined;
+}
+
+/** What a signed file says about itself, for the checks it takes (`Store.signedClaim`). */
+interface Claim {
+  at: string;
+  account?: string | undefined;
+  project?: string | undefined;
+  /** For an answer: the card revision it answers, and the digest of that revision's file it names (B-f571v). */
+  answers?: { card: string; revision: number; digest: string | undefined };
+  /** Why it takes a passkey proof, when it does. */
+  proof?: string | undefined;
 }
 
 /** Whether a file a person writes counts in a hosted repo (D138), and why not. Outside one, everything counts. */
@@ -480,12 +493,13 @@ export class Store {
     const pinned = this.pinnedRoot();
     const files = this.trustFiles();
     const revoked = [...(pinned?.revoked ?? []), ...files.revoked.map((r) => r.key)];
+    const project = this.config().project;
     let value: Hosted | undefined;
-    if (pinned) value = { pinned: true, root: { service: pinned.service, passkeys: pinned.passkeys, revoked } };
+    if (pinned) value = { pinned: true, root: { service: pinned.service, passkeys: pinned.passkeys, revoked }, project };
     else if (files.service.length) {
       const base = { service: files.service.map((s) => s.key), revoked };
       const passkeys = files.passkeys.filter((p) => this.signedBy(p.file, p.key.enrolled, base).ok).map((p) => p.key);
-      value = { pinned: false, root: { ...base, passkeys } };
+      value = { pinned: false, root: { ...base, passkeys }, project };
     }
     if (this.session) this.session.hosted = { value };
     return value;
@@ -528,44 +542,64 @@ export class Store {
   private judgeAfresh(rel: string, h: Hosted): Judgement {
     const [dir, a, b] = rel.split("/");
     if (dir === "preferences") return this.preferenceJudgements(h).get(a!) ?? doesnt("it isn't a preference file");
-    let claim: { at: string; account?: string | undefined; proof?: string | undefined };
+    let claim: Claim;
     const elsewhere = (says: string) => doesnt(`its name or folder doesn't match what it says (${says}), so it was copied or renamed`);
     if (dir === "verdicts" && a && verdictFileCard(a)) {
       const v = this.verdictFile(a);
       if (!v) return doesnt("it can't be read");
       if (!a.startsWith(`${compactAt(v.at)}-${v.card}-r${v.revision}-`)) return elsewhere(`${v.card} r${v.revision}, at ${v.at}`);
       const hard = this.levelOf(v.card, v.revision) === "hard";
-      claim = { at: v.at, account: v.account, proof: hard ? `it answers ${v.card}, a hard card, so it takes the reviewer's passkey (D139)` : undefined };
+      claim = {
+        at: v.at,
+        account: v.account,
+        project: v.project,
+        answers: { card: v.card, revision: v.revision, digest: v.card_digest },
+        proof: hard ? `it answers ${v.card}, a hard card, so it takes the reviewer's passkey (D139)` : undefined,
+      };
     } else if (dir === "rules" && a?.endsWith("-retired.json")) {
       const r = this.retirementFile(a);
       if (!r) return doesnt("it can't be read");
       if (a !== `${r.rule}-retired.json`) return elsewhere(`it retires ${r.rule}`);
-      claim = { at: r.at, account: r.account };
+      claim = { at: r.at, account: r.account, project: r.project };
     } else if (dir === "rules" && a?.endsWith(".md")) {
       const r = this.ruleFile(a)?.meta;
       if (!r) return doesnt("it can't be read");
       if (a !== `${r.id}.md`) return elsewhere(`it's ${r.id}`);
-      claim = { at: r.created, account: r.account };
+      claim = { at: r.created, account: r.account, project: r.project };
     } else if (dir === "topics" && a?.endsWith(".json")) {
       const t = this.read(join(this.live, rel), (x) => readAs("topic-alias", TopicAlias, JSON.parse(x), rel));
       if (!t) return doesnt("it can't be read");
-      claim = { at: t.at, account: t.account };
+      claim = { at: t.at, account: t.account, project: t.project };
     } else if (dir === "cards" && b && RELAY_GATE.test(b)) {
       const g = this.read(join(this.live, rel), (t) => readAs("gate", GateRecord, JSON.parse(t), rel));
       if (!g) return doesnt("it can't be read");
       if (g.by !== "relay") return doesnt("it's named for the relay, but says it ran elsewhere");
       if (g.card !== a || b !== `gate-r${g.revision}-relay.json`) return elsewhere(`it gated ${g.card} r${g.revision}`);
-      claim = { at: g.at };
+      claim = { at: g.at, project: g.project };
     } else {
       return doesnt("it isn't a kind of file a person writes");
     }
     return this.signedClaim(rel, claim, h);
   }
 
-  /** The signature, and the passkey proof when one is needed: the checks every signed file takes (P16 section 7). */
-  private signedClaim(rel: string, claim: { at: string; account?: string | undefined; proof?: string | undefined }, h: Hosted): Judgement {
+  /**
+   * The checks every signed file takes (P16 section 7): the signature; the project, since one key signs every project's
+   * files (B-tf9fc); for an answer, the card's text it answered (B-f571v); and the passkey proof when one is needed.
+   */
+  private signedClaim(rel: string, claim: Claim, h: Hosted): Judgement {
     const signed = this.signedBy(rel, claim.at, h.root);
     if (!signed.ok) return signed;
+    if (claim.project !== h.project) {
+      if (!claim.project) return doesnt("it names no project, so it could be another repo's (B-tf9fc)");
+      return doesnt(h.project ? `it's for project ${claim.project}, not this repo's (${h.project}), so it was copied from another repo` : `it's for project ${claim.project}, and .baesian/config.json names no project`);
+    }
+    if (claim.answers) {
+      const { card, revision, digest } = claim.answers;
+      if (!digest) return doesnt("it doesn't name the digest of the card it answers, so what was answered can't be checked (B-f571v)");
+      const cardRel = `cards/${card}/r${revision}.md`;
+      if (!existsSync(join(this.live, cardRel))) return doesnt(`${card} r${revision} isn't here, so what was answered can't be checked`);
+      if (createHash("sha256").update(this.bytes(cardRel)).digest("hex") !== digest) return doesnt(`${card} r${revision} has changed since it was answered: it isn't the text the answer names (B-f571v)`);
+    }
     if (!claim.proof) return COUNTS;
     const proofRel = proofPath(rel);
     if (!existsSync(join(this.live, proofRel))) return doesnt(`${claim.proof}, and has no passkey proof`);
@@ -611,7 +645,7 @@ export class Store {
         continue;
       }
       const loose = loosening(before, settingsOf(file));
-      const j = this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
+      const j = this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, project: file.project, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
       out.set(name, j);
       if (j.ok) before = settingsOf(file);
     }
