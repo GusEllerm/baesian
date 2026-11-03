@@ -44,6 +44,10 @@ describe("the plugin's files", () => {
     expect(existsSync(join(PLUGIN, "skills", "baesian", "SKILL.md"))).toBe(true);
   });
 
+  it("register the MCP server, as `baesian mcp` on PATH, with no timeouts, so one file serves both harnesses (D165)", () => {
+    expect(readJson(join(PLUGIN, ".mcp.json"))).toEqual({ mcpServers: { baesian: { command: "baesian", args: ["mcp"] } } });
+  });
+
   it("bring new verdicts in at stopping points only, and never decide whether a plan is approved", () => {
     const { hooks } = readJson(join(PLUGIN, "hooks", "hooks.json"));
     for (const event of ["SessionStart", "UserPromptSubmit"]) {

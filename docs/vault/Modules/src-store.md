@@ -13,6 +13,17 @@ tags: [baesian, module]
 
 `Store` is the only code that touches Baesian's files. `Store.overRecord` opens a read-only view of a committed record, which is how CI reads it ([[src-verify]]). `Store.open` finds the repo with `openRepo`. The live layer is `LIVE_DIR` inside git's common directory, and the record is `RECORD_DIR` in the worktree ([[File Formats]]).
 
+## Errors
+
+The store's errors are classes, so the MCP server can give each a code ([[src-mcp]]); the CLI prints their messages and exits 1, or 3 for a duplicate:
+- `NotARepo` (from `openRepo`): the directory isn't in a git repository;
+- `NotSetUp` (`Store.requireInit`): there's no live layer, so `baesian init` hasn't run;
+- `ValidationError`: the card fails its schema or a filing rule;
+- `PossibleDuplicate`: an open card or a resolved decision may cover it, with the matches;
+- `NoCard`: no card with that ID;
+- `NotAllowed`: the card's state, or who asks, doesn't allow it: revising a card that isn't returned, a second reply, a rule nobody asked for, withdrawing another agent's card or one already withdrawn;
+- `NoDeck`: the card names a deck that doesn't exist.
+
 ## Writing
 
 - **`Store.fileCard`** validates a draft, checks for possible duplicates, assigns an ID and writes revision 1. It writes into the live layer and copies the card and its deck into the worktree's record.
@@ -26,7 +37,7 @@ tags: [baesian, module]
 - **Retiring a rule (D119):** a verdict's `retire_rules` names rules the chosen option breaks. `Store.addVerdict` refuses it, writing nothing, unless the verdict chooses an option (`accept` or `alternative`), that option's `_breaks` lists each rule, and none is retired yet. It then writes a `RuleRetirement` beside each rule and copies it into the record.
 - **`Store.replyToCard`** writes the agent's one reply (D89, D104): the next revision, a copy of the last plus `reply`. It's allowed only when `Store.canReply` says so: the latest answer went against the pick (`alternative` or `correction`), and no revision has had a reply. The reply reopens the card. The D81 brief counts the answer the reply was to as the earlier one.
 - **`Store.attach`** records an `Attachment` (with no folder path, D121), and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
-- **`Store.withdraw`** writes the card's single `Withdrawal`, and only for the agent that filed the card or one attached to it. Agents name themselves, so this guards against mistakes, not against an agent set on it. **`Store.withdrawal`** reads it back, for the vault adapter's notes ([[src-vault]]).
+- **`Store.withdraw`** writes the card's single `Withdrawal`, and only for the agent that filed the card or one attached to it; a second withdrawal is refused too (`NotAllowed`). Agents name themselves, so this guards against mistakes, not against an agent set on it. **`Store.withdrawal`** reads it back, for the vault adapter's notes ([[src-vault]]).
 - **`Store.setVault`** records the vault in the worktree's `config.json`, keeping its other keys (M6). `Store.init` writes the config only when there's none, so `baesian init --vault` in a repo already set up goes through it.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.
 - **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
@@ -48,7 +59,7 @@ All of these go through a private write-once helper that uses an exclusive creat
   4. otherwise, the latest verdict on the latest revision: resolved, returned (including `see_it_run`), rerouted or deferred; or open if there's none.
 - **`PENDING`** is the set of statuses that still need the reviewer. **`Store.decision`** gives what was decided for a resolved card.
 - **`Store.canonicalTopic`** follows `TopicAlias` files. **`Store.topics`** lists the canonical topics in use.
-- **`Store.briefs`** says what an agent should be told beyond the verdict, computed from the records and never stored (`Brief`):
+- **`Store.briefs`** says what an agent should be told beyond the verdict, computed from the records and never stored (`Brief`). Each names who wrote its texts, the reviewer of each answer and the parent's agent and branch, so an agent reads them quoted with their authors (D169):
   - `parent-decided-otherwise`: a parent went the other way, so this card is returned (D80);
   - `answer-changed`: the answer changed after an earlier one had resolved the card (D81). It lists the commits built on it before the change (`BriefCommit`); only commits that cite the card, so a lower bound. Since a rebase or a squash merge rewrites commits, and the ledger's hashes go stale, they're found by their trailers (B-9v5xj): `readHistory` ([[src-gate]]) gives the commits on any branch, local or remote-tracking, whose `Baesian-Card` trailers cite the card, authored before the change (a rebase keeps the author's date, and a rework made after the change isn't listed). Each is named by the branch the ledger says it was made on, or else the branch the search found it on; a ledger entry made on a detached HEAD, as git's post-commit runs during a rebase, doesn't count. Then come the ledger's entries whose commit is on no branch now, marked `rewritten`. The history is read once per view, and cached per process while the branches stay put. The ledger itself is unchanged.
 - **`Store.view`** runs a function over one consistent read of the live layer: each file is read once, and the list of cards, each card's verdict files and each card's claimants (`Store.claimants`: the cards that supersede it or name it in a conflict) are built once. With a `report`, a file that can't be read is reported and skipped instead of thrown; the server reads that way ([[src-server]]). Without one, a bad file still throws, so the CLI stays loud. The CLI's `list`, `show`, `inbox`, `topics`, each poll of `wait`, and filing's checks read through a view: a card's status reads the others, and reading afresh made them quadratic ([[2026-11-03 Scale Test]]). A view must not span a write it then reads back: filing ends its view before writing.

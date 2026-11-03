@@ -26,6 +26,7 @@ import {
   filingWarnings,
   describeError,
 } from "./schema.js";
+import { byLine, cardAuthor } from "./quote.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
 import { type History, readHistory } from "./trailers.js";
 
@@ -88,6 +89,10 @@ export interface FileResult {
   warnings: string[];
 }
 
+// The store's errors, by kind, so the MCP server can name each with a code (P18). The CLI prints their messages, and
+// exits 1, as it always has; `PossibleDuplicate` exits 3.
+
+/** The card fails its schema or a filing rule. */
 export class ValidationError extends Error {}
 
 /** Raised by `fileCard` when the decision may already be open or decided (D36, D38). */
@@ -96,6 +101,26 @@ export class PossibleDuplicate extends Error {
     super("this decision may already be on file");
   }
 }
+
+/** Baesian isn't set up in the repository. */
+export class NotSetUp extends Error {
+  constructor() {
+    super("Baesian is not set up in this repository: run `baesian init`");
+  }
+}
+
+/** No card with that ID. */
+export class NoCard extends Error {
+  constructor(readonly id: string) {
+    super(`no card ${id}`);
+  }
+}
+
+/** The card's state, or who is asking, doesn't allow it: revising a card that isn't returned, a second reply. */
+export class NotAllowed extends Error {}
+
+/** The card names a deck that doesn't exist. */
+export class NoDeck extends Error {}
 
 function now(): string {
   return new Date().toISOString();
@@ -186,8 +211,9 @@ export class Store {
     return true;
   }
 
-  private requireInit(): void {
-    if (!this.isInitialised()) throw new Error("Baesian is not set up in this repository: run `baesian init`");
+  /** Throws `NotSetUp` unless the live layer exists. */
+  requireInit(): void {
+    if (!this.isInitialised()) throw new NotSetUp();
   }
 
   /** Write a file that must never change (D34). Fails if it exists. */
@@ -364,9 +390,9 @@ export class Store {
   reviseCard(id: string, draft: unknown, body: string, opts: { agent: string }): FileResult {
     this.requireInit();
     const latest = this.card(id);
-    if (!latest) throw new Error(`no card ${id}`);
+    if (!latest) throw new NoCard(id);
     const status = this.status(id);
-    if (status !== "returned") throw new Error(`${id} is ${status}; only a returned card takes a new revision`);
+    if (status !== "returned") throw new NotAllowed(`${id} is ${status}; only a returned card takes a new revision`);
     const prep = this.prepare(draft, body);
     const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
@@ -390,10 +416,10 @@ export class Store {
   replyToCard(id: string, reply: string, opts: { agent: string }): Card {
     this.requireInit();
     const latest = this.card(id);
-    if (!latest) throw new Error(`no card ${id}`);
-    if (this.revisions(id).some((r) => r.meta.reply !== undefined)) throw new Error(`${id} has had its reply: an agent replies once to a card (D89)`);
+    if (!latest) throw new NoCard(id);
+    if (this.revisions(id).some((r) => r.meta.reply !== undefined)) throw new NotAllowed(`${id} has had its reply: an agent replies once to a card (D89)`);
     if (!this.canReply(id)) {
-      throw new Error(`${id} is ${this.status(id)}; only a card answered against your pick (the alternative, or the reviewer's own answer) takes a reply`);
+      throw new NotAllowed(`${id} is ${this.status(id)}; only a card answered against your pick (the alternative, or the reviewer's own answer) takes a reply`);
     }
     const text = reply.trim();
     if (!text) throw new ValidationError("the reply is empty: give the fact or the check, in a line");
@@ -424,9 +450,9 @@ export class Store {
   draftRule(id: string, rule: string, covers: string[], opts: { agent: string }): Card {
     this.requireInit();
     const from = this.card(id);
-    if (!from) throw new Error(`no card ${id}`);
-    if (this.ruleDrafts(id).length) throw new Error(`a rule from ${id} is already drafted: it's one card per decision`);
-    if (!this.latestVerdict(from)?.make_rule) throw new Error(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
+    if (!from) throw new NoCard(id);
+    if (this.ruleDrafts(id).length) throw new NotAllowed(`a rule from ${id} is already drafted: it's one card per decision`);
+    if (!this.latestVerdict(from)?.make_rule) throw new NotAllowed(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
     const text = rule.trim();
     if (!text) throw new ValidationError("the rule is empty: give it in a line");
     const bad = covers.filter((p) => !FACT_PATTERN.test(p));
@@ -474,7 +500,7 @@ export class Store {
 
   private writeRevision(id: string, revision: number, draft: CardDraft & { reply?: string; rule?: string; rule_covers?: string[] }, body: string, agent: string): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
-    if (!this.deck(deck)) throw new Error(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
+    if (!this.deck(deck)) throw new NoDeck(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
     const meta = parse(
       CardMeta,
       {
@@ -500,11 +526,12 @@ export class Store {
   withdraw(id: string, reason: string, by: string): Withdrawal {
     this.requireInit();
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     // Only the agent that filed it, or one attached to it, withdraws a card. Names are what agents say they are, so
     // this guards against mistakes, not against an agent set on it.
     const mine = card.meta.source_agent === by || this.attachments().some((a) => a.card === id && a.agent === by);
-    if (!mine) throw new ValidationError(`${id} was filed by ${card.meta.source_agent}: only the agent that filed it, or one attached to it, may withdraw it`);
+    if (!mine) throw new NotAllowed(`${id} was filed by ${byLine(cardAuthor(card.meta))}: only the agent that filed it, or one attached to it, may withdraw it`);
+    if (existsSync(join(this.live, "cards", id, "withdrawn.json"))) throw new NotAllowed(`${id} is already withdrawn`);
     const w = parse(Withdrawal, { type: "withdrawal", card: id, reason, by, at: now() }, "the withdrawal");
     const rel = join("cards", id, "withdrawn.json");
     this.writeOnce(join(this.live, rel), `${JSON.stringify(w, null, 2)}\n`);
@@ -516,7 +543,7 @@ export class Store {
   attach(id: string, agent: string): Attachment {
     this.requireInit();
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     const a = parse(
       Attachment,
       { type: "attachment", card: id, agent, branch: this.repo.branch, at: now() },
@@ -550,7 +577,7 @@ export class Store {
   recordFallback(id: string, reason: Fallback["reason"], agent: string): Fallback {
     this.requireInit();
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     const f = parse(
       Fallback,
       { type: "fallback", card: id, revision: card.meta.revision, reason, agent, at: now() },
@@ -573,7 +600,7 @@ export class Store {
   /** Record that a commit builds on a card (D15). Written by the post-commit hook. */
   writeLedger(id: string, entry: { commit: string; branch?: string }, body: string): string {
     this.requireInit();
-    if (!this.card(id)) throw new Error(`no card ${id}`);
+    if (!this.card(id)) throw new NoCard(id);
     const meta = parse(
       LedgerMeta,
       { type: "ledger", card: id, branch: entry.branch ?? this.repo.branch, commit: entry.commit, at: now() },
@@ -739,7 +766,7 @@ export class Store {
   addVerdict(input: Omit<Verdict, "type" | "at"> & { at?: string }): Verdict {
     this.requireInit();
     const card = this.card(input.card);
-    if (!card) throw new Error(`no card ${input.card}`);
+    if (!card) throw new NoCard(input.card);
     if (input.revision !== card.meta.revision) {
       throw new Error(`${input.card} is at revision ${card.meta.revision}; a verdict on r${input.revision} is stale`);
     }
@@ -785,7 +812,7 @@ export class Store {
   /** A card's status, computed from its files; nothing is ever edited in place (D34). */
   status(id: string, seen: Set<string> = new Set()): Status {
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     if (existsSync(join(this.live, "cards", id, "withdrawn.json"))) return "withdrawn";
     seen.add(id);
     // Rejecting a parent withdraws the cards that depend on it (D14). `>=`, not `>`: timestamps have
@@ -847,7 +874,18 @@ export class Store {
       const parent = this.card(parentId);
       const pv = parent && this.latestVerdict(parent);
       if (!parent || !pv || (pv.response !== "alternative" && pv.response !== "correction") || pv.at < since) continue;
-      out.push({ kind: "parent-decided-otherwise", card: card.meta.id, parent: parentId, parentTitle: parent.meta.title, assumed: parent.meta.proposal, decided: pv.choice!, at: pv.at });
+      out.push({
+        kind: "parent-decided-otherwise",
+        card: card.meta.id,
+        parent: parentId,
+        parentTitle: parent.meta.title,
+        parentAgent: parent.meta.source_agent,
+        parentBranch: parent.meta.source_branch,
+        assumed: parent.meta.proposal,
+        decided: pv.choice!,
+        reviewer: pv.reviewer,
+        at: pv.at,
+      });
     }
     return out;
   }
@@ -865,7 +903,7 @@ export class Store {
     if (!last || !earlier) return undefined;
     const was = answerOf(earlier)!, now = answerOf(last);
     if (now !== undefined && normalise(now) === normalise(was)) return undefined;
-    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
+    return { kind: "answer-changed", card: card.meta.id, was, wasReviewer: earlier.reviewer, now, reviewer: last.reviewer, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
   }
 
   /**
@@ -905,7 +943,7 @@ export class Store {
   /** What an agent should be told about a card now, beyond its verdict (D80, D81). */
   briefs(id: string): Brief[] {
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     const change = this.answerChange(card);
     return [...this.parentReturns(card), ...(change ? [change] : [])];
   }
@@ -1069,7 +1107,7 @@ export class Store {
   startWaiting(id: string, agent: string, at: string = now()): { since: string; refresh(at?: string): void; stop(): void } {
     this.requireInit();
     const card = this.card(id);
-    if (!card) throw new Error(`no card ${id}`);
+    if (!card) throw new NoCard(id);
     const atMs = Date.parse(at);
     const mine = this.list("waiting")
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))

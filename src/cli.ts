@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
-import { agentName, CARD_TEMPLATE, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
+import { agentName, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
 import { stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
@@ -10,12 +10,30 @@ import { installHooks, runHook } from "./hooks.js";
 import { notifyFiled } from "./notify.js";
 import { openRepo } from "./git.js";
 import { parseTrailers } from "./trailers.js";
+import { serveMcp } from "./mcp.js";
+import {
+  type Actor,
+  type InboxEntry,
+  type Op,
+  attachOp,
+  duplicateLines,
+  fileOp,
+  inboxOp,
+  listOp,
+  replyOp,
+  reviseOp,
+  ruleOp,
+  showOp,
+  templateOp,
+  topicsOp,
+  waitOp,
+  withdrawOp,
+} from "./ops.js";
 import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
-import type { Verdict } from "./schema.js";
-import { type Card, type InboxItem, PENDING, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { type Card, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { cleanVaultPath, initVault, vaultGuidance, vaultPathProblem, writeNotes } from "./vault.js";
-import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
+import { DEFAULT_TIMEOUT_MS, SLICE_MS, WaitCancelled, type WaitOptions } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
@@ -98,37 +116,6 @@ async function readInput(path: string | undefined, io: Io): Promise<string> {
   return !path || path === "-" ? await io.stdin() : readFileSync(resolve(io.cwd, path), "utf8");
 }
 
-function cardLine(store: Store, card: Card): string {
-  const m = card.meta;
-  const status = store.status(m.id);
-  const topic = m.topic ? ` [${m.topic}]` : "";
-  return `${m.id}  ${status.padEnd(10)} ${m.level.padEnd(11)} ${m.title}${topic}  (${m.source_branch}, deck ${m.deck})`;
-}
-
-/** The card itself, as the client shows it: the question, the two options and the crux. */
-function cardDetails(m: Card["meta"]): string[] {
-  const undo = { cheap: "easy", moderate: "costly", "one-way": "hard" }[m.reverse];
-  const out = [m.question, `  ${m.source_agent} is ${m.doing}.`, `  stakes: ${undo} to undo${m.touches.length ? `; touches ${m.touches.join(", ")}` : ""}`, ""];
-  out.push(`  it turns on: ${m.crux}${m.crux_preference ? " (a preference)" : ""}`);
-  if (m.crux_fact) out.push(`  fact: ${m.crux_fact}`);
-  out.push(`  ${m.crux_proposal} → ${m.proposal} (the agent's pick): then ${m.proposal_then}`);
-  out.push(`  ${m.crux_alternative} → ${m.alternative}: then ${m.alternative_then}`);
-  if (m.premise) out.push(`  unverified: "${m[m.premise_option!]}" ${m.premise} (check: ${m.premise_check})`);
-  if (m.acted) out.push(`  already built, for "${m[m.acted_option!]}": ${m.acted}`);
-  const why = [m.rationale, m.wrong_if ? `Wrong if ${m.wrong_if} (check: ${m.check}).` : undefined].filter(Boolean);
-  if (why.length) out.push(`  the agent's case: ${why.join(" ")}`);
-  return out;
-}
-
-/** One verdict, naming what it decided: an accept names the proposal it accepted, as `wait` does. */
-function verdictLine(s: Store, v: Verdict): string {
-  const proposal = v.response === "accept" ? s.revisions(v.card).find((r) => r.meta.revision === v.revision)?.meta.proposal : undefined;
-  const what = v.choice ? `: ${v.choice}` : proposal ? `: ${proposal}` : "";
-  const why = v.comment ? ` — ${v.comment}` : "";
-  const retired = v.retire_rules?.length ? `; retires ${v.retire_rules.join(", ")}` : "";
-  return `${v.card} r${v.revision}  ${v.response}${what}${why}${retired}  (${v.reviewer}, ${v.at})`;
-}
-
 export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }): Command {
   const program = new Command()
     .name("baesian")
@@ -148,6 +135,9 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       io.err(`notification failed (the card is filed): ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+  const actor = (): Actor => ({ agent: agentName(program.opts().agent), notify });
+  /** Print an operation's lines, or with `--json` its data (P18: what the MCP tool returns as structured content). */
+  const print = <T>(op: Op<T>, asJson: boolean | undefined) => (asJson ? json(op.data) : op.lines.forEach((line) => io.out(line)));
 
   program
     .command("init")
@@ -191,16 +181,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   program
     .command("template")
     .description("print a card draft to fill in")
-    .action(() => io.out(CARD_TEMPLATE.trimEnd()));
+    .option("--json", "print it as JSON")
+    .action((opts: { json?: boolean }) => print(templateOp(), opts.json));
 
   program
     .command("topics")
     .description("list the topics in use, to reuse rather than invent near-duplicates")
-    .action(() => {
-      const s = store();
-      const topics = [...s.view(() => s.topics())].sort();
-      io.out(topics.length ? topics.join("\n") : "no topics yet");
-    });
+    .option("--json", "print them as JSON")
+    .action((opts: { json?: boolean }) => print(topicsOp(store()), opts.json));
 
   program
     .command("wait")
@@ -211,19 +199,25 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--no-presence", "wait the full timeout even if the client says the reviewer is away")
     .option("--json", "print the outcome as JSON")
     .action(async (id: string, opts: { timeout: number; slice: number; presence: boolean; json?: boolean }) => {
-      const s = store();
-      const outcome = await waitForVerdict(s, id, {
-        agent: agentName(program.opts().agent),
-        timeoutMs: opts.timeout * 1000,
-        sliceMs: opts.slice * 1000,
-        usePresence: opts.presence,
-        ...io.waitClock,
-      });
-      if (opts.json) json(outcome);
-      else for (const line of describeOutcome(outcome)) io.out(line);
-      // The agent has the answer now: `inbox` and the hooks shouldn't hand it over again.
-      if (outcome.kind === "resolved" || outcome.kind === "answered") s.markDelivered(id, outcome);
-      state.code = exitCodeFor(outcome);
+      // Ctrl-C stops the wait and removes its marker, since the agent has stopped waiting (P18).
+      const stop = new AbortController();
+      const cancel = () => stop.abort();
+      process.once("SIGINT", cancel);
+      try {
+        // An answer it gives is marked delivered: `inbox` and the hooks shouldn't hand it over again.
+        const op = await waitOp(store(), id, {
+          agent: agentName(program.opts().agent),
+          timeoutMs: opts.timeout * 1000,
+          sliceMs: opts.slice * 1000,
+          usePresence: opts.presence,
+          signal: stop.signal,
+          ...io.waitClock,
+        });
+        print(op, opts.json);
+        state.code = op.data.exit;
+      } finally {
+        process.off("SIGINT", cancel);
+      }
     });
 
   program
@@ -234,17 +228,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--json", "print the filed card as JSON")
     .action(async (path: string | undefined, opts: { new?: boolean; json?: boolean }) => {
       const { meta, body } = parseDoc(await readInput(path, io));
-      const result = store().fileCard(meta, body, { agent: agentName(program.opts().agent), force: opts.new ?? false });
-      notify(result.card);
-      if (opts.json) return json(result);
-      const { id, level, deck } = result.card.meta;
-      io.out(`filed ${id} (${level}, deck ${deck})`);
-      if (result.hardBecause) io.out(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42; an agent can raise a card's level, never lower it: D144)`);
-      if (result.nearTopics.length) io.out(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
-      for (const w of result.warnings) io.out(`  note: ${w}`);
-      if (level === "blocking") io.out(`  run \`baesian wait ${id}\` before building on it`);
-      if (level === "hard") io.out(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
-      io.out(`  add "Baesian-Card: ${id}" to commits that build on it`);
+      print(fileOp(store(), meta, body, { ...actor(), force: opts.new ?? false }), opts.json);
     });
 
   program
@@ -252,12 +236,10 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("file the next revision of a returned card: your reply to the reviewer")
     .argument("<id>", "the card")
     .argument("[path]", "the revised card; '-' or omitted reads stdin")
-    .action(async (id: string, path: string | undefined) => {
+    .option("--json", "print the new revision as JSON")
+    .action(async (id: string, path: string | undefined, opts: { json?: boolean }) => {
       const { meta, body } = parseDoc(await readInput(path, io));
-      const result = store().reviseCard(id, meta, body, { agent: agentName(program.opts().agent) });
-      notify(result.card);
-      io.out(`filed ${id} r${result.card.meta.revision}`);
-      for (const w of result.warnings) io.out(`  note: ${w}`);
+      print(reviseOp(store(), id, meta, body, actor()), opts.json);
     });
 
   program
@@ -265,16 +247,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("reply once to an answer that went against your pick: a fact the reviewer lacked, or a check (D89)")
     .argument("<id>", "the card")
     .argument("<text>", "the fact or the check, in a line; not your pick again")
-    .action((id: string, text: string) => {
-      const card = store().replyToCard(id, text, { agent: agentName(program.opts().agent) });
-      notify(card);
-      io.out(`filed ${id} r${card.meta.revision}: your reply goes to the reviewer, and the card is open again`);
-      io.out(
-        card.meta.level === "hard"
-          ? `  it's hard: don't commit work that cites it until \`baesian wait ${id}\` exits 0`
-          : "  until they answer again, proceed with their decision; `baesian inbox` brings the new answer",
-      );
-    });
+    .option("--json", "print the reply's revision as JSON")
+    .action((id: string, text: string, opts: { json?: boolean }) => print(replyOp(store(), id, text, actor()), opts.json));
 
   program
     .command("rule")
@@ -282,31 +256,23 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .argument("<id>", "the decision")
     .argument("<text>", "the rule, in a line")
     .option("--covers <patterns...>", "the gate facts it answers, as gate reports name them: dep:pytest-*, schema:migrations/*")
-    .action((id: string, text: string, opts: { covers?: string[] }) => {
-      const card = store().draftRule(id, text, opts.covers ?? [], { agent: agentName(program.opts().agent) });
-      notify(card);
-      io.out(`filed ${card.meta.id}: the rule goes to the reviewer as a card, and is saved once they accept it`);
-    });
+    .option("--json", "print the draft's card as JSON")
+    .action((id: string, text: string, opts: { covers?: string[]; json?: boolean }) => print(ruleOp(store(), id, text, opts.covers ?? [], actor()), opts.json));
 
   program
     .command("attach")
     .description("wait on an existing card instead of filing a duplicate")
     .argument("<id>", "the card")
-    .action((id: string) => {
-      const s = store();
-      s.attach(id, agentName(program.opts().agent));
-      io.out(`attached to ${id}; ${s.waiting(id)} agents are waiting on it`);
-    });
+    .option("--json", "print the attachment as JSON")
+    .action((id: string, opts: { json?: boolean }) => print(attachOp(store(), id, agentName(program.opts().agent)), opts.json));
 
   program
     .command("withdraw")
     .description("withdraw your own card")
     .argument("<id>", "the card")
     .requiredOption("--reason <text>", "why it's no longer needed")
-    .action((id: string, opts: { reason: string }) => {
-      store().withdraw(id, opts.reason, agentName(program.opts().agent));
-      io.out(`withdrew ${id}`);
-    });
+    .option("--json", "print the withdrawal as JSON")
+    .action((id: string, opts: { reason: string; json?: boolean }) => print(withdrawOp(store(), id, opts.reason, agentName(program.opts().agent)), opts.json));
 
   program
     .command("deck")
@@ -333,47 +299,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--all", "include resolved, withdrawn and superseded cards")
     .option("--branch", "only this branch's cards")
     .option("--json", "print as JSON")
-    .action((opts: { all?: boolean; branch?: boolean; json?: boolean }) => {
-      const s = store();
-      // A card's status reads the others: read the live layer once (Store.view), not once per card.
-      s.view(() => {
-        const cards = (opts.branch ? s.branchCards() : s.cards()).filter((c) => opts.all || PENDING.has(s.status(c.meta.id)));
-        if (opts.json) return json(cards.map((c) => ({ ...c.meta, status: s.status(c.meta.id) })));
-        if (!cards.length) return io.out(opts.all ? "no cards" : "nothing waiting on the reviewer");
-        for (const c of cards) io.out(cardLine(s, c));
-      });
-    });
+    .action((opts: { all?: boolean; branch?: boolean; json?: boolean }) => print(listOp(store(), opts), opts.json));
 
   program
     .command("show")
     .description("show a card, its status and its verdicts")
     .argument("<id>", "the card")
     .option("--json", "print as JSON")
-    .action((id: string, opts: { json?: boolean }) => {
-      const s = store();
-      s.view(() => show(s, id, opts));
-    });
-  /** `baesian show`, inside one view of the live layer. */
-  const show = (s: Store, id: string, opts: { json?: boolean }) => {
-    {
-      const card = s.card(id);
-      if (!card) throw new Error(`no card ${id}`);
-      const verdicts = s.verdicts(id);
-      if (opts.json) return json({ ...card, status: s.status(id), decision: s.decision(id), verdicts });
-      io.out(cardLine(s, card));
-      const decision = s.decision(id);
-      if (decision) io.out(`decided: ${decision}`);
-      io.out("");
-      for (const line of cardDetails(card.meta)) io.out(line);
-      for (const w of s.waitingOn(id)) io.out(`  ${w.marker.agent} ${w.stale ? `stopped waiting (last seen ${w.marker.at})` : `is waiting, since ${w.marker.since}`}`);
-      for (const b of s.briefs(id)) for (const line of describeBrief(b)) io.out(line);
-      if (card.body.trim()) io.out(`\n${card.body.trimEnd()}`);
-      if (verdicts.length) {
-        io.out("\nverdicts:");
-        for (const v of verdicts) io.out(`  ${verdictLine(s, v)}`);
-      }
-    }
-  };
+    .action((id: string, opts: { json?: boolean }) => print(showOp(store(), id), opts.json));
 
   program
     .command("inbox")
@@ -384,38 +317,28 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--session <id>", "for a harness hook: the session reading, which keeps its own place, so every session on the branch hears each verdict once")
     .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
       // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
-      let s: Store;
+      let op: Op<InboxEntry[]>;
       try {
-        s = store();
+        const s = store();
+        // A hook names its session; an agent's own command runs in one too, which the harness says (B-ghhym).
+        const session = opts.session ?? harnessSession(io.env ?? process.env);
+        op = inboxOp(s, { advance: !opts.peek, ...(session ? { session } : {}) });
       } catch (e) {
         if (opts.quiet) return;
         throw e;
       }
-      // Read the live layer once for the whole listing (Store.view), not once per card.
-      s.view(() => {
-        let items: InboxItem[];
-        try {
-          // A hook names its session; an agent's own command runs in one too, which the harness says (B-ghhym).
-          const session = opts.session ?? harnessSession(io.env ?? process.env);
-          items = s.inbox({ advance: !opts.peek, ...(session ? { session } : {}) });
-        } catch (e) {
-          if (opts.quiet) return;
-          throw e;
-        }
-        if (opts.json) return json(items);
-        if (!items.length) return opts.quiet ? undefined : io.out("no new verdicts");
-        if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
-        for (const item of items) {
-          // A dependent returned by its parent's verdict (D80) is listed under its own ID.
-          io.out(item.verdict.card === item.card ? verdictLine(s, item.verdict) : `${item.card}  returned, by a verdict on ${item.verdict.card}`);
-          if (item.brief) for (const line of describeBrief(item.brief)) io.out(line);
-          // Only on the answer that's standing now: an earlier one, or one already replied to, takes no reply.
-          const latest = s.card(item.card);
-          const standing = item.verdict.card === item.card && latest !== undefined && item.verdict.revision === latest.meta.revision;
-          if (standing && item.verdict.make_rule && s.ruleAsked(item.card)) for (const line of ruleHint(item.card)) io.out(`  ${line}`);
-          if (standing && s.canReply(item.card)) for (const line of replyHint(item.card)) io.out(`  ${line}`);
-        }
-      });
+      if (opts.json) return json(op.data);
+      if (!op.data.length && opts.quiet) return;
+      if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
+      for (const line of op.lines) io.out(line);
+    });
+
+  program
+    .command("mcp")
+    .description("serve the agent commands as MCP tools over stdio, for a harness to start (the plugin registers it)")
+    .action(async () => {
+      // Only protocol messages go to the output; the server opens the store on every call, in the harness's directory.
+      await serveMcp({ cwd: io.cwd, ...(program.opts().agent ? { agent: program.opts().agent } : {}) });
     });
 
   program
@@ -520,18 +443,13 @@ export async function main(argv: string[] = process.argv, io: Io = defaultIo): P
     // Commander has already printed its own message (usage errors, --help, --version).
     if (e instanceof CommanderError) return e.exitCode;
     if (e instanceof PossibleDuplicate) {
-      io.err("This decision may already be on file:");
-      for (const m of e.matches) {
-        io.err(`  ${m.card.meta.id}  ${m.status}  ${m.card.meta.title}  (same ${m.by})`);
-      }
-      io.err("Attach to an open card (`baesian attach <id>`), follow a resolved one,");
-      io.err("or file anyway with --new, setting `supersedes:` if you are arguing against a decision.");
-      // A topic is one question (D112): a different question on the same subject is a narrower topic, not a duplicate.
-      if (e.matches.some((m) => m.by === "topic")) {
-        io.err("If yours is a different question on the same subject, give it a narrower topic of its own");
-        io.err("(client/rule-drafts beside client/rules), and list what it builds on in `depends_on`.");
-      }
+      for (const line of duplicateLines(e)) io.err(line);
       return EXIT_POSSIBLE_DUPLICATE;
+    }
+    // Ctrl-C during `wait`: its marker is gone, so the reviewer no longer sees the agent waiting.
+    if (e instanceof WaitCancelled) {
+      io.err(`${e.message}; run \`baesian wait ${e.id}\` again to wait on it`);
+      return 130;
     }
     io.err(e instanceof ValidationError || e instanceof Error ? e.message : String(e));
     return 1;

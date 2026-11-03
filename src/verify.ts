@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { commitSnapshot } from "./facts.js";
 import { type GateReport, describeReport, detectStaged, evaluate } from "./gate.js";
 import { type Repo, git } from "./git.js";
+import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { type Card, RECORD_DIR, Store, normalise } from "./store.js";
 import { parseTrailers } from "./trailers.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
@@ -120,7 +121,7 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
     const last = head.verdicts(id).filter((v) => v.revision === card.meta.revision).at(-1);
     if (status === "resolved") continue;
     if (status === "deferred") {
-      notes.push(`${id} is deferred: ${last?.comment ?? "no reason given"}`);
+      notes.push(last?.comment ? `${id} is deferred; ${said("comment", reviewerOf(last), last.comment)}` : `${id} is deferred: no reason given`);
       continue;
     }
     if (status === "withdrawn" || status === "superseded") {
@@ -131,14 +132,14 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
       problems.push({
         card: id,
         problem: "rejected",
-        message: `${id} was rejected${last.comment ? `: ${last.comment}` : ""}. Rework what builds on it before merging.`,
+        message: `${id} was rejected by ${byLine(reviewerOf(last))}${last.comment ? `: ${q(last.comment)}` : ""}. Rework what builds on it before merging.`,
       });
       continue;
     }
     problems.push({
       card: id,
       problem: "unanswered",
-      message: `${id} (${card.meta.title}) is ${status} in the record at HEAD. Answer it, or defer it with a reason. If it's already answered, run \`baesian sync\` and commit.`,
+      message: `${id} (${said("title", cardAuthor(card.meta), card.meta.title)}) is ${status} in the record at HEAD. Answer it, or defer it with a reason. If it's already answered, run \`baesian sync\` and commit.`,
     });
   }
   return { problems, conflicts: findConflicts(head, baseRecord), notes };
@@ -227,7 +228,7 @@ export function describeVerify(r: VerifyResult): string[] {
     for (const p of r.merge.problems) out.push(`  FAIL ${p.message}`);
     for (const c of r.merge.conflicts) {
       out.push(
-        `  FAIL conflict on ${c.topic}: ${c.base.id} on the base decided "${c.base.decision}", ${c.branch.id} here decided "${c.branch.decision}".`,
+        `  FAIL conflict on ${c.topic}: ${c.base.id} on the base decided ${q(c.base.decision)}, ${c.branch.id} here decided ${q(c.branch.decision)}.`,
       );
     }
     if (r.merge.conflicts.length) {

@@ -246,6 +246,17 @@ MCP-2 and MCP-6 touch security, so they're hard. The rest are blocking. MCP-1, M
 
 **Not drafted as cards:** naming the agent (section 6). **The agent's calls, which the user may overturn:** moving the CLI's logic into shared operations; error classes in the store; the cwd argument; the tool hints; narrowing who may withdraw a card (section 5).
 
+## As built (M7, 2026-11-03)
+
+Built as above ([[src-mcp]]), with these choices the proposal left open, each the agent's:
+- **Every quoted text carries its author on its own line,** as D169 says, in show_card too, where each field has a line: `question by claude-code on main (an agent): "…"`. Briefs now name who wrote their texts (`Brief`).
+- **card_template takes no cwd:** it reads no repo.
+- **The filing tools' schema leaves out** `type`, `conflict_of` and `caught_at`, which Baesian sets itself; `supersedes`, `confidence`, `domain`, `evidence` and `modules_touched` are in it, with notes of their own in `CARD_FIELDS`.
+- **wait_for_verdict's slice_seconds** is at most 100 (D168).
+- **The CLI's read commands** (`list`, `show`, `topics`) say Baesian isn't set up in a repo without it, as the tools do, instead of listing nothing. `baesian wait` stopped with Ctrl-C removes its marker and exits 130.
+- **Withdrawing a card twice** is refused (`not_allowed`) instead of failing on the file.
+- **The SDK's version range** is `^2.4.0`, like the other runtime dependencies; its client, `@modelcontextprotocol/client`, is a dev dependency for the tests.
+
 ## Open questions
 
 - **The inbox and sessions.** The server doesn't know the harness's session ID, so check_inbox reads the branch's place, as `baesian inbox` without `--session` does. A hook in the same session may then repeat a verdict the tool showed. The same happens today when an agent runs `baesian inbox` itself. A fix belongs in `Store.inbox`, for both.

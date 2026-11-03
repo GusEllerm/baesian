@@ -1,5 +1,6 @@
+import { byLine, q, reviewerOf, said } from "./quote.js";
 import type { Level, Verdict } from "./schema.js";
-import { type Brief, type BriefCommit, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
+import { type Brief, type BriefCommit, NoCard, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
 
 /** The client beats every 30 s; three missed beats means the reviewer has stepped away (D41). */
 export const PRESENCE_STALE_MS = 90_000;
@@ -47,9 +48,35 @@ export interface WaitOptions {
   usePresence?: boolean;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Stops the wait: the harness cancelled the MCP call, its input closed, or the person pressed Ctrl-C. The marker is
+   * removed, since the agent has stopped waiting, and the wait throws `WaitCancelled`.
+   */
+  signal?: AbortSignal;
+  /** Called at each beat of the marker (every `WAITING_BEAT_MS`): the MCP server reports progress then. */
+  onBeat?: (beat: { waitedMs: number; leftMs: number }) => void;
 }
 
-const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** The wait was stopped through its signal before it had an outcome. */
+export class WaitCancelled extends Error {
+  constructor(readonly id: string) {
+    super(`stopped waiting on ${id}`);
+  }
+}
+
+/** A sleep that ends early when the signal aborts. */
+function realSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((done) => {
+    if (signal?.aborted) return done();
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      done();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
+}
 
 /**
  * Block until the reviewer answers `id`, the timeout passes, or the client reports the reviewer away.
@@ -59,10 +86,11 @@ const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
  */
 export async function waitForVerdict(store: Store, id: string, opts: WaitOptions): Promise<WaitOutcome> {
   const now = opts.now ?? Date.now;
-  const sleep = opts.sleep ?? realSleep;
+  const sleep = opts.sleep ?? ((ms: number) => realSleep(ms, opts.signal));
   const pollMs = opts.pollMs ?? POLL_MS;
   const card = store.card(id);
-  if (!card) throw new Error(`no card ${id}`);
+  if (!card) throw new NoCard(id);
+  if (opts.signal?.aborted) throw new WaitCancelled(id);
 
   // The waiting marker (D90): while it's fresh, "stopped for you" is true. A run that ends with "again" keeps it,
   // and the next run picks it up, so the wait's budget counts from when it first started (D101). It's removed when
@@ -110,9 +138,12 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
         return { kind: "again", id, waitedMs: now() - Date.parse(marker.since), leftMs: budgetEnd - now() };
       }
       await sleep(Math.max(0, Math.min(pollMs, sliceEnd - now(), budgetEnd - now())));
+      // Cancelled: the finally below removes the marker, since the agent has stopped waiting.
+      if (opts.signal?.aborted) throw new WaitCancelled(id);
       if (now() - beat >= WAITING_BEAT_MS) {
         beat = now();
         marker.refresh(new Date(beat).toISOString());
+        opts.onBeat?.({ waitedMs: beat - Date.parse(marker.since), leftMs: budgetEnd - beat });
       }
     }
 
@@ -136,16 +167,21 @@ export function exitCodeFor(outcome: WaitOutcome): number {
   return outcome.proceed ? WAIT_EXIT.proceed : WAIT_EXIT.park;
 }
 
-/** What the agent should read: what happened, and what to do next. */
-/** A brief in the words an agent reads: what changed, and what to do about it (D80, D81). */
+/**
+ * A brief in the words an agent reads: what changed, and what to do about it (D80, D81). The texts others wrote are
+ * quoted with their authors (D169).
+ */
 export function describeBrief(b: Brief): string[] {
   if (b.kind === "parent-decided-otherwise") {
+    const parent = { agent: b.parentAgent, branch: b.parentBranch };
     return [
-      `  ${b.parent} ("${b.parentTitle}"), which ${b.card} builds on, was decided the other way: "${b.decided}", not "${b.assumed}".`,
+      `  ${b.parent}, which ${b.card} builds on, was decided the other way. ${said("Its title", parent, b.parentTitle)}`,
+      `  ${said("Decided", reviewerOf(b), b.decided)}; ${said("not the proposal", parent, b.assumed)}`,
       `  Re-propose ${b.card} on that basis with \`baesian revise ${b.card} <card.md>\`, or withdraw it.`,
     ];
   }
-  const now = b.now !== undefined ? `"${b.now}"` : `not a go-ahead (${b.response})`;
+  const was = said("an answer", { person: b.wasReviewer }, b.was);
+  const now = b.now !== undefined ? said("one", reviewerOf(b), b.now) : `not a go-ahead (${b.response} by ${byLine(reviewerOf(b))})`;
   const name = (c: BriefCommit) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`;
   const live = b.commits.filter((c) => !c.rewritten);
   const gone = b.commits.filter((c) => c.rewritten);
@@ -158,7 +194,7 @@ export function describeBrief(b: Brief): string[] {
   const rewritten = gone.length
     ? [`  Rewritten since, and on no branch now: ${gone.map(name).join(", ")}. Their work may be in ${live.length ? "the commits above, or in ones" : "commits"} that don't cite ${b.card}.`]
     : [];
-  return [`  The answer on ${b.card} changed: it was "${b.was}", and now it's ${now}.`, commits, ...rewritten];
+  return [`  The answer on ${b.card} changed. It was ${was}; now it's ${now}.`, commits, ...rewritten];
 }
 
 /** What an agent is told when the reviewer asked for a rule from a decision (D16, D109, D110). */
@@ -175,8 +211,10 @@ export const replyHint = (id: string) => [
   "Not your pick again. Until they answer again, proceed with their decision.",
 ];
 
+/** What the agent should read: what happened, and what to do next. What the reviewer wrote is quoted (D169). */
 export function describeOutcome(o: WaitOutcome): string[] {
-  const comment = (v: Verdict | undefined) => (v?.comment ? [`  reviewer: ${v.comment}`] : []);
+  const comment = (v: Verdict | undefined) => (v?.comment ? [`  ${said("Comment", reviewerOf(v), v.comment)}`] : []);
+  const by = (v: Verdict | undefined) => (v ? ` by ${byLine(reviewerOf(v))}` : "");
   if (o.kind === "again") {
     const min = Math.max(1, Math.round(o.leftMs / 60_000));
     return [`No verdict on ${o.id} yet, and the reviewer is still there.`, `Run \`baesian wait ${o.id}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`];
@@ -185,7 +223,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
   switch (o.kind) {
     case "resolved":
       return [
-        `${o.id} resolved: ${o.decision}`,
+        `${o.id} resolved${by(o.verdict)}: ${q(o.decision)}`,
         ...comment(o.verdict),
         ...(o.verdict?.retire_rules?.length ? [`  The reviewer retired the rule${o.verdict.retire_rules.length === 1 ? "" : "s"} it breaks, ${o.verdict.retire_rules.join(", ")}: don't cite ${o.verdict.retire_rules.length === 1 ? "it" : "them"} again.`] : []),
         ...briefs,
@@ -199,7 +237,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
       }
       if (o.status === "returned") {
         return [
-          `${o.id} returned (${o.verdict?.response ?? "reject"}).`,
+          `${o.id} returned (${o.verdict?.response ?? "reject"}${by(o.verdict)}).`,
           ...comment(o.verdict),
           ...briefs,
           `Reply with \`baesian revise ${o.id} <card.md>\`, or withdraw it with \`baesian withdraw ${o.id} --reason …\`.`,
@@ -208,7 +246,7 @@ export function describeOutcome(o: WaitOutcome): string[] {
       }
       if (o.status === "deferred") {
         return [
-          `${o.id} deferred.`,
+          `${o.id} deferred${by(o.verdict)}.`,
           ...comment(o.verdict),
           o.level === "hard"
             ? "It is hard: don't proceed with it."

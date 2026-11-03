@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { DEFAULT_INFRA, DEFAULT_SCHEMA, type DetectedFact, type FactKind, type Snapshot, detectFacts } from "./facts.js";
 import { matcher } from "./globs.js";
+import { answerLine, byLine, q, reviewerOf } from "./quote.js";
 import type { Fact, Verdict } from "./schema.js";
 import type { Store } from "./store.js";
 import { ACK_TRAILER, CARD_TRAILER, type Trailers } from "./trailers.js";
@@ -65,7 +66,7 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
       card: id,
       problem: "rejected",
       lines: [
-        `${id} was rejected${last.comment ? `: ${last.comment}` : "."}`,
+        `${id} was rejected by ${byLine(reviewerOf(last))}${last.comment ? `: ${q(last.comment)}` : "."}`,
         `Don't build on it: revise it (\`baesian revise ${id}\`) or withdraw it, and rework what depends on it.`,
         ...(built.length ? [`Commits already built on it: ${built.join(", ")}`] : []),
       ],
@@ -151,7 +152,8 @@ export function describeReport(r: GateReport, news: Verdict[] = []): string[] {
   if (news.length) {
     out.push("baesian: new verdicts since this branch's last commit:");
     for (const v of news) {
-      out.push(`  ${v.card} ${v.response}${v.choice ? `: ${v.choice}` : ""}${v.comment ? ` — ${v.comment}` : ""}`);
+      // What the reviewer wrote is quoted, with their name (D169).
+      out.push(`  ${v.card} ${answerLine(v)}`);
     }
   }
   for (const w of r.warnings) out.push(`baesian: warning: ${w}`);

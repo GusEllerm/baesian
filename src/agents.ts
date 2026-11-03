@@ -54,10 +54,20 @@ ${END}`;
 
 /**
  * Who is running a command (D102): `--agent`, then `$BAESIAN_AGENT` (a long-lived agent's own name), then the
- * name the harness gives itself, then "agent".
+ * name the harness gives itself, then "agent". The MCP server passes the name its client gave in the protocol, which
+ * comes before the harness's variables, since a stdio server isn't given them all (P18).
  */
-export function agentName(opt: string | undefined, env: NodeJS.ProcessEnv = process.env): string {
-  return opt ?? (env.BAESIAN_AGENT?.trim() || undefined) ?? harnessName(env) ?? "agent";
+export function agentName(opt: string | undefined, env: NodeJS.ProcessEnv = process.env, client?: string): string {
+  return opt ?? (env.BAESIAN_AGENT?.trim() || undefined) ?? clientAgentName(client) ?? harnessName(env) ?? "agent";
+}
+
+/** An MCP client's name as an agent's: Claude Code's and Codex's become the names their commands get; others stay. */
+export function clientAgentName(client: string | undefined): string | undefined {
+  const name = client?.trim();
+  if (!name) return undefined;
+  if (/^claude[-_ ]?code\b/i.test(name)) return "claude-code";
+  if (/^codex\b/i.test(name)) return "codex";
+  return name;
 }
 
 /** The harness's own name, from the variables it sets for the commands it runs. */
@@ -121,38 +131,80 @@ export function claudeMdMissesAgents(toplevel: string): boolean {
   return existsSync(path) && !/@AGENTS\.md/.test(readFileSync(path, "utf8"));
 }
 
+/** One field of a card draft, as the template shows it and the MCP filing tool's schema describes it (D167). */
+export interface CardField {
+  field: string;
+  /** What the template shows as its value. */
+  value: string;
+  /** Its note: the template's comment on its line, and its description in the filing tool's schema. */
+  note: string;
+  /** Commented out in the template. */
+  optional?: true;
+  /** The template's comment when it isn't the note: a note that runs over several fields' lines, or none ("") */
+  line?: string;
+  /** Not in the template, only in the tool's schema. */
+  template?: false;
+}
+
+/**
+ * The card's fields, with their notes, in the template's order: one table, so `baesian template` and the MCP filing
+ * tool's schema can't drift apart (D167).
+ */
+export const CARD_FIELDS: readonly CardField[] = [
+  { field: "title", value: '""', note: 'a neutral short name: "Where the access token lives"' },
+  { field: "question", value: '""', note: "the decision, as a neutral question" },
+  { field: "doing", value: '""', note: "what you were doing when it came up: \"writing the server's file watcher\"" },
+  { field: "topic", value: '""', note: "area/subject, naming this one question; reuse one from `baesian topics` only for the same question" },
+  { field: "touches", value: "[]", note: "any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss" },
+  { field: "reverse", value: '""', note: "how costly it is to undo: cheap, moderate or one-way" },
+  { field: "proposal", value: '""', note: "your pick, in a few words" },
+  { field: "proposal_then", value: '""', note: "what happens if it's chosen" },
+  { field: "alternative", value: '""', note: "the strongest alternative, in a few words" },
+  { field: "alternative_then", value: '""', note: "what happens if it's chosen" },
+  { field: "crux", value: '""', note: "the one question the choice turns on" },
+  { field: "crux_proposal", value: '""', note: 'the answer that leads to your pick: "If it does"' },
+  { field: "crux_alternative", value: '""', note: "the answer that leads to the alternative: \"If it doesn't\"" },
+  { field: "crux_preference", value: "true", optional: true, note: "the crux is about what the reviewer values, not a fact" },
+  { field: "crux_fact", value: '""', optional: true, note: "what the reviewer needs to choose, kept neutral: the only context they see first" },
+  { field: "rationale", value: '""', optional: true, note: "why you pick the proposal" },
+  {
+    field: "wrong_if", value: '""', optional: true,
+    note: "what would show your pick is wrong: required if reverse is one-way, touches includes security, or a premise is set",
+    line: "(what would show your pick is wrong: required if reverse is one-way,",
+  },
+  {
+    field: "check", value: '""', optional: true,
+    note: "where to look to check wrong_if: required with it",
+    line: " touches includes security, or a premise is set; check says where to look)",
+  },
+  { field: "premise", value: '""', optional: true, note: "a claim an option rests on that nobody has checked; give premise_option and premise_check with it", line: "(a claim an option rests on that nobody has checked," },
+  { field: "premise_option", value: "proposal", optional: true, note: "which option the premise rests on: proposal or alternative", line: " which option rests on it," },
+  { field: "premise_check", value: '""', optional: true, note: "how to check the premise", line: " and how to check it)" },
+  { field: "acted", value: '""', optional: true, note: "what you've already built for one option; give acted_option with it", line: "(what you've already built for one option," },
+  { field: "acted_option", value: "proposal", optional: true, note: "which option you've already built for: proposal or alternative", line: " and which)" },
+  { field: "serves", value: '""', optional: true, note: "the criterion your pick serves, when the crux is a preference" },
+  { field: "also_considered", value: "[]", optional: true, note: "other options, by name" },
+  { field: "rules", value: "[R-xxxxx]", optional: true, note: "rules this decision bears on" },
+  { field: "proposal_breaks", value: "[]", optional: true, note: "decisions or rules your pick would replace or break" },
+  { field: "alternative_breaks", value: "[]", optional: true, note: "decisions or rules the alternative would replace or break", line: "" },
+  { field: "level", value: "blocking", optional: true, note: "provisional by default; hard by default for publishes, security, money, data-loss" },
+  { field: "depends_on", value: "[B-xxxxx]", optional: true, note: "the cards this decision builds on", line: "" },
+  { field: "deck", value: "storage-layer", optional: true, note: "your branch's deck by default" },
+  { field: "supersedes", value: "", template: false, note: "a decision this card argues against, filed with new; it becomes superseded once this card resolves" },
+  { field: "modules_touched", value: "", template: false, note: "how many modules the decision touches" },
+  { field: "confidence", value: "", template: false, note: "your confidence in your pick, from 0 to 1: recorded, not used for routing" },
+  { field: "domain", value: "", template: false, note: "routing tags" },
+  { field: "evidence", value: "", template: false, note: "links that bear on the decision" },
+];
+
+function templateLine(f: CardField): string {
+  const head = f.optional ? `# ${f.field}: ${f.value}` : `${f.field}: ${f.value}`;
+  const comment = f.line ?? (f.optional ? `(${f.note})` : `# ${f.note}`);
+  return comment ? `${head.padEnd(f.optional ? 27 : 23)}${comment}` : head;
+}
+
 export const CARD_TEMPLATE = `---
-title: ""              # a neutral short name: "Where the access token lives"
-question: ""           # the decision, as a neutral question
-doing: ""              # what you were doing when it came up: "writing the server's file watcher"
-topic: ""              # area/subject, naming this one question; reuse one from \`baesian topics\` only for the same question
-touches: []            # any of: schema, public-api, dependency, infra, user-facing, publishes, security, money, data-loss
-reverse: ""            # how costly it is to undo: cheap, moderate or one-way
-proposal: ""           # your pick, in a few words
-proposal_then: ""      # what happens if it's chosen
-alternative: ""        # the strongest alternative, in a few words
-alternative_then: ""   # what happens if it's chosen
-crux: ""               # the one question the choice turns on
-crux_proposal: ""      # the answer that leads to your pick: "If it does"
-crux_alternative: ""   # the answer that leads to the alternative: "If it doesn't"
-# crux_preference: true    (the crux is about what the reviewer values, not a fact)
-# crux_fact: ""            (what the reviewer needs to choose, kept neutral: the only context they see first)
-# rationale: ""            (why you pick the proposal)
-# wrong_if: ""             (what would show your pick is wrong: required if reverse is one-way,
-# check: ""                 touches includes security, or a premise is set; check says where to look)
-# premise: ""              (a claim an option rests on that nobody has checked,
-# premise_option: proposal  which option rests on it,
-# premise_check: ""         and how to check it)
-# acted: ""                (what you've already built for one option,
-# acted_option: proposal    and which)
-# serves: ""               (the criterion your pick serves, when the crux is a preference)
-# also_considered: []      (other options, by name)
-# rules: [R-xxxxx]         (rules this decision bears on)
-# proposal_breaks: []      (decisions or rules your pick would replace or break)
-# alternative_breaks: []
-# level: blocking          (provisional by default; hard by default for publishes, security, money, data-loss)
-# depends_on: [B-xxxxx]
-# deck: storage-layer      (your branch's deck by default)
+${CARD_FIELDS.filter((f) => f.template !== false).map(templateLine).join("\n")}
 # Below the closing line, optionally: background, shown with your case once the reviewer has chosen.
 ---
 `;

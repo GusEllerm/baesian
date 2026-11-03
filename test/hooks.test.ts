@@ -192,7 +192,7 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     const r = commit(dir, `More runs\n\nBaesian-Card: ${id}\n`);
     expect(r.code).toBe(1);
     expect(r.err).toContain("new verdicts since this branch's last commit");
-    expect(r.err).toContain(`${id} was rejected: Use Parquet.`);
+    expect(r.err).toContain(`${id} was rejected by gus (a person): "Use Parquet."`);
     expect(r.err).toMatch(/Commits already built on it: [0-9a-f]{10}/);
   });
 

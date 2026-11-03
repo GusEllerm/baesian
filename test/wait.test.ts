@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { PRESENCE_STALE_MS, WAIT_EXIT, describeOutcome, exitCodeFor, waitForVerdict } from "../src/wait.js";
+import { PRESENCE_STALE_MS, WAIT_EXIT, WaitCancelled, describeOutcome, exitCodeFor, waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo } from "./helpers.js";
 
 afterEach(cleanup);
@@ -22,6 +22,25 @@ function filed(level: "provisional" | "blocking" | "hard") {
 }
 
 describe("wait", () => {
+  it("stops when its signal aborts, removing its marker and recording no fallback (P18)", async () => {
+    const { store, id } = filed("blocking");
+    const stop = new AbortController();
+    const clock = fakeClock();
+    const beats: number[] = [];
+    clock.at(45_000, () => stop.abort());
+    const waiting = waitForVerdict(store, id, { ...AGENT, ...clock, signal: stop.signal, onBeat: (b) => beats.push(b.waitedMs) });
+    await expect(waiting).rejects.toBeInstanceOf(WaitCancelled);
+    expect(beats).toEqual([30_000]);
+    expect(store.waitingOn(id)).toEqual([]);
+    expect(store.fallbacks(id)).toEqual([]);
+    // A real sleep ends as soon as the signal aborts.
+    const again = new AbortController();
+    const started = Date.now();
+    setTimeout(() => again.abort(), 50);
+    await expect(waitForVerdict(store, id, { ...AGENT, signal: again.signal, pollMs: 60_000 })).rejects.toBeInstanceOf(WaitCancelled);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
   it("returns the decision when the reviewer resolves the card", async () => {
     const { store, id } = filed("blocking");
     const clock = fakeClock();
@@ -30,7 +49,7 @@ describe("wait", () => {
     expect(o.kind).toBe("resolved");
     expect(exitCodeFor(o)).toBe(WAIT_EXIT.resolved);
     expect(clock.elapsed()).toBeLessThan(10_000);
-    expect(describeOutcome(o)[0]).toBe(`${id} resolved: SQLite (WAL mode)`);
+    expect(describeOutcome(o)[0]).toBe(`${id} resolved by gus (a person): "SQLite (WAL mode)"`);
   });
 
   it("reports a returned card with the reviewer's comment", async () => {

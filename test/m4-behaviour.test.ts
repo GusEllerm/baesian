@@ -78,7 +78,8 @@ describe("choosing the alternative returns the cards built on the proposal (D80)
     const o = await waitForVerdict(store, child, { ...AGENT, ...clock, timeoutMs: 60_000 });
     expect(o).toMatchObject({ kind: "answered", status: "returned" });
     const text = describeOutcome(o).join("\n");
-    expect(text).toMatch(/decided the other way: "Postgres", not "SQLite \(WAL mode\)"/);
+    expect(text).toContain(`${parent}, which ${child} builds on, was decided the other way. Its title by claude-code on main (an agent): "The run-metadata store"`);
+    expect(text).toContain('Decided by gus (a person): "Postgres"; not the proposal by claude-code on main (an agent): "SQLite (WAL mode)"');
     expect(text).toMatch(new RegExp(`baesian revise ${child}`));
   });
 });
@@ -125,7 +126,7 @@ describe("a changed answer comes with a rework brief (D81)", () => {
     store.addVerdict({ card: id, revision: 1, response: "alternative", choice: "Postgres", ...REVIEWER, at: later(1) });
     const o = await waitForVerdict(store, id, { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ kind: "resolved", decision: "Postgres" });
-    expect(describeOutcome(o).join("\n")).toMatch(/was "SQLite \(WAL mode\)", and now it's "Postgres"[\s\S]*No commit cites/);
+    expect(describeOutcome(o).join("\n")).toMatch(/It was an answer by gus \(a person\): "SQLite \(WAL mode\)"; now it's one by gus \(a person\): "Postgres"\.[\s\S]*No commit cites/);
   });
 });
 

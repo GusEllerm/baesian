@@ -13,12 +13,15 @@ export interface Repo {
   branch: string;
 }
 
+/** The directory isn't inside a git repository. */
+export class NotARepo extends Error {}
+
 export function openRepo(cwd: string = process.cwd()): Repo {
   let toplevel: string;
   try {
     toplevel = git(cwd, ["rev-parse", "--show-toplevel"]);
   } catch {
-    throw new Error(`not inside a git repository: ${cwd}`);
+    throw new NotARepo(`not inside a git repository: ${cwd}`);
   }
   const commonDir = git(toplevel, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   return { toplevel, commonDir, branch: currentBranch(toplevel) };
