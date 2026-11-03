@@ -6,7 +6,7 @@ import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApiCard, ApiState, ApiVerdictInput } from "./api.js";
-import { LastPort, ServerInfo } from "./schema.js";
+import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
 import { type Store, ValidationError } from "./store.js";
 import { contextNotes } from "./vault.js";
 
@@ -72,13 +72,13 @@ export function reviewerName(toplevel: string): string {
   return userInfo().username;
 }
 
-/** The server another `baesian serve` started, if it's still answering (D97). A stale file is ignored. */
+/** The server another `baesian serve` started, if it's still answering (D97). A stale file is ignored, as is one this Baesian can't read, a newer format's included (D157). */
 export async function findRunningServer(store: Store): Promise<ServerInfo | undefined> {
   const path = join(store.live, "server.json");
   if (!existsSync(path)) return undefined;
   let info: ServerInfo;
   try {
-    info = ServerInfo.parse(JSON.parse(readFileSync(path, "utf8")));
+    info = ServerInfo.parse(upgradeFile("server", JSON.parse(readFileSync(path, "utf8")), "server.json"));
   } catch {
     return undefined;
   }
@@ -95,10 +95,10 @@ export async function findRunningServer(store: Store): Promise<ServerInfo | unde
   }
 }
 
-/** The port the last server used, if it's on record and readable (D103). */
+/** The port the last server used, if it's on record and readable (D103): a file in a newer format isn't (D157). */
 function lastPort(path: string): number | undefined {
   try {
-    return LastPort.parse(JSON.parse(readFileSync(path, "utf8"))).port;
+    return LastPort.parse(upgradeFile("port", JSON.parse(readFileSync(path, "utf8")), "port.json")).port;
   } catch {
     return undefined;
   }
@@ -445,7 +445,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
   port = typeof address === "object" && address ? address.port : 0;
   if (reuse && port !== last) {
     const tmp = `${portPath}.${randomBytes(4).toString("hex")}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(LastPort.parse({ type: "port", port }))}\n`);
+    writeFileSync(tmp, `${JSON.stringify(LastPort.parse({ type: "port", format: newestFormat("port"), port }))}\n`);
     renameSync(tmp, portPath);
   }
 
@@ -454,7 +454,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
     for (const s of streams) s.write(": keep-alive\n\n");
   }, opts.keepAliveMs ?? 15_000);
   if (opts.writeServerFile !== false) {
-    const info = ServerInfo.parse({ type: "server", pid: process.pid, port, token, started });
+    const info = ServerInfo.parse({ type: "server", format: newestFormat("server"), pid: process.pid, port, token, started });
     const tmp = `${infoPath}.${randomBytes(4).toString("hex")}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(info)}\n`, { mode: 0o600 });
     renameSync(tmp, infoPath);

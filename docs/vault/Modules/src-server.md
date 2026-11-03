@@ -58,14 +58,14 @@ The live layer's own bookkeeping never counts as a change: presence, the server 
 
 ## Reading without failing
 
-`snapshot` reads through `Store.view`, so each file is read once per snapshot. A file that can't be read, half-written or invalid, goes in `problems` instead of failing the request, and is read again next time. 150 cards are read well within a second.
+`snapshot` reads through `Store.view`, so each file is read once per snapshot. A file that can't be read, half-written, invalid or in a newer format than this Baesian reads (D157), goes in `problems` instead of failing the request, and is read again next time. 150 cards are read well within a second.
 
 ## The server file (D97)
 
-`server.json` in the live layer (`ServerInfo` in `src/schema.ts`) holds the pid, port, token and start time.
+`server.json` in the live layer (`ServerInfo` in `src/schema.ts`) holds the pid, port, token and start time, after its `type` and `format` (D156), as `port.json` holds the port.
 - **It's written atomically, readable only by the user.**
 - **It's removed by `close`,** but only if it still holds this server's token.
-- **`findRunningServer`** returns a server only if its process exists and `/api/health` answers with its token. Anything else is a stale file, and the next start replaces it.
+- **`findRunningServer`** returns a server only if its process exists and `/api/health` answers with its token. Anything else is a stale file, one in a newer format included, and the next start replaces it. A `port.json` it can't read is ignored the same way, and rewritten in the newest format.
 
 ## Tests
 

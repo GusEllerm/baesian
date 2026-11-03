@@ -92,7 +92,7 @@ describe("a decision note (D171, D172)", () => {
       branch: "main",
     });
     // The vault's keys first, then the decision's (P17 §2).
-    expect(Object.keys(note.meta).slice(0, 4)).toEqual(["type", "status", "authority", "livedocs"]);
+    expect(Object.keys(note.meta).slice(0, 5)).toEqual(["type", "format", "status", "authority", "livedocs"]);
     expect(note.body).toContain("# The run-metadata store\n\nWhich store should hold run metadata?");
     expect(note.body).toContain("**Decided:** SQLite (WAL mode), the agent's pick. Then runs are recorded in one file next to the repo.");
     expect(note.body).toContain("**Not chosen:** Postgres. Then runs go to a database server that has to be running.");
@@ -503,7 +503,7 @@ describe("baesian init --vault (P17 §5)", () => {
     const r = await run(dir, ["init", "--no-hooks", "--vault", `${VAULT}/`]);
     expect(r.code).toBe(0);
     expect(r.out).toContain(`vault:       ${VAULT}/  (recorded in .baesian/config.json)`);
-    expect(store.config()).toEqual({ vault: VAULT, gate_schema: ["src/schema.ts"] });
+    expect(store.config()).toEqual({ format: 1, vault: VAULT, gate_schema: ["src/schema.ts"] });
     expect(readFileSync(join(dir, VAULT, ".obsidian", "core-plugins.json"), "utf8")).toBe(`{\n  "file-explorer": true,\n  "graph": true,\n  "bases": true\n}\n`);
     const log = readFileSync(join(dir, VAULT, "Decision Log.md"), "utf8");
     expect(log).toBe(`---\ntype: decision-log\n---\n\n# Decision Log\n\nIntro.\n\n${DECISION_LOG_SECTION}\n## Accepted (user)\n\n| ID |\n`);

@@ -9,6 +9,7 @@ import {
   CardDraft,
   CardMeta,
   Config,
+  Cursor,
   FACT_PATTERN,
   DeckMeta,
   Fallback,
@@ -25,6 +26,9 @@ import {
   filingProblems,
   filingWarnings,
   describeError,
+  type FileKindName,
+  newestFormat,
+  upgradeFile,
 } from "./schema.js";
 import { byLine, cardAuthor } from "./quote.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
@@ -137,6 +141,14 @@ function parse<T extends z.ZodType>(schema: T, value: unknown, what: string): z.
   return result.data;
 }
 
+/**
+ * A file read from disk, in the newest format of its kind (D156): upgraded in memory, then checked by its schema. One in a
+ * newer format than this Baesian reads throws `NewerFormat` (D157); a view that reports problems reports it instead.
+ */
+function readAs<T extends z.ZodType>(kind: FileKindName, schema: T, fields: unknown, what: string): z.infer<T> {
+  return parse(schema, upgradeFile(kind, fields, what), what);
+}
+
 export class Store {
   readonly live: string;
   readonly record: string;
@@ -187,7 +199,7 @@ export class Store {
     const configPath = join(this.record, "config.json");
     if (!existsSync(configPath)) {
       mkdirSync(this.record, { recursive: true });
-      writeFileSync(configPath, `${JSON.stringify(parse(Config, config, "config"), null, 2)}\n`);
+      writeFileSync(configPath, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
       created.push(configPath);
     }
     return created;
@@ -195,7 +207,7 @@ export class Store {
 
   config(): Config {
     const path = join(this.record, "config.json");
-    return existsSync(path) ? parse(Config, JSON.parse(readFileSync(path, "utf8")), "config.json") : {};
+    return existsSync(path) ? readAs("config", Config, JSON.parse(readFileSync(path, "utf8")), "config.json") : {};
   }
 
   /**
@@ -207,7 +219,7 @@ export class Store {
     const { vault: was, ...rest } = this.config();
     if (was === vault) return false;
     mkdirSync(this.record, { recursive: true });
-    writeFileSync(join(this.record, "config.json"), `${JSON.stringify(parse(Config, { vault, ...rest }, "config"), null, 2)}\n`);
+    writeFileSync(join(this.record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), vault }, "config"), null, 2)}\n`);
     return true;
   }
 
@@ -296,7 +308,7 @@ export class Store {
       .filter((f) => /^r\d+\.md$/.test(f))
       .flatMap((f) => this.read(join(this.live, "cards", id, f), (text) => {
         const { meta, body } = parseDoc(text);
-        return { meta: parse(CardMeta, meta, `${id}/${f}`), body };
+        return { meta: readAs("card", CardMeta, meta, `cards/${id}/${f}`), body };
       }) ?? [])
       .sort((a, b) => a.meta.revision - b.meta.revision);
   }
@@ -320,7 +332,7 @@ export class Store {
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
   private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
-    const parsed = parse(CardDraft, draft, "the card");
+    const parsed = readAs("card-draft", CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
     let hardBecause: string[] | undefined;
@@ -490,7 +502,7 @@ export class Store {
     const ruleId = newId("R", (candidate) => existsSync(join(this.live, "rules", `${candidate}.md`)));
     const meta = parse(
       RuleMeta,
-      { type: "rule", id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, created: v.at },
+      { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, created: v.at },
       "the rule",
     );
     const rel = join("rules", `${ruleId}.md`);
@@ -506,6 +518,7 @@ export class Store {
       {
         ...draft,
         type: "card",
+        format: newestFormat("card"),
         id,
         revision,
         deck,
@@ -532,7 +545,7 @@ export class Store {
     const mine = card.meta.source_agent === by || this.attachments().some((a) => a.card === id && a.agent === by);
     if (!mine) throw new NotAllowed(`${id} was filed by ${byLine(cardAuthor(card.meta))}: only the agent that filed it, or one attached to it, may withdraw it`);
     if (existsSync(join(this.live, "cards", id, "withdrawn.json"))) throw new NotAllowed(`${id} is already withdrawn`);
-    const w = parse(Withdrawal, { type: "withdrawal", card: id, reason, by, at: now() }, "the withdrawal");
+    const w = parse(Withdrawal, { type: "withdrawal", format: newestFormat("withdrawal"), card: id, reason, by, at: now() }, "the withdrawal");
     const rel = join("cards", id, "withdrawn.json");
     this.writeOnce(join(this.live, rel), `${JSON.stringify(w, null, 2)}\n`);
     this.toRecord(rel);
@@ -546,7 +559,7 @@ export class Store {
     if (!card) throw new NoCard(id);
     const a = parse(
       Attachment,
-      { type: "attachment", card: id, agent, branch: this.repo.branch, at: now() },
+      { type: "attachment", format: newestFormat("attachment"), card: id, agent, branch: this.repo.branch, at: now() },
       "the attachment",
     );
     this.writeOnce(join(this.live, "attachments", `${id}-${randomSuffix()}.json`), `${JSON.stringify(a, null, 2)}\n`);
@@ -559,13 +572,13 @@ export class Store {
   withdrawal(id: string): Withdrawal | undefined {
     const path = join(this.live, "cards", id, "withdrawn.json");
     if (!existsSync(path)) return undefined;
-    return this.read(path, (t) => parse(Withdrawal, JSON.parse(t), `${id}/withdrawn.json`));
+    return this.read(path, (t) => readAs("withdrawal", Withdrawal, JSON.parse(t), `cards/${id}/withdrawn.json`));
   }
 
   attachments(id?: string): Attachment[] {
     return this.list("attachments")
       .filter((f) => !id || f.startsWith(`${id}-`))
-      .flatMap((f) => this.read(join(this.live, "attachments", f), (t) => parse(Attachment, JSON.parse(t), f)) ?? []);
+      .flatMap((f) => this.read(join(this.live, "attachments", f), (t) => readAs("attachment", Attachment, JSON.parse(t), `attachments/${f}`)) ?? []);
   }
 
   /** How many agents are waiting on a card: its filer plus every attachment (D36). */
@@ -580,7 +593,7 @@ export class Store {
     if (!card) throw new NoCard(id);
     const f = parse(
       Fallback,
-      { type: "fallback", card: id, revision: card.meta.revision, reason, agent, at: now() },
+      { type: "fallback", format: newestFormat("fallback"), card: id, revision: card.meta.revision, reason, agent, at: now() },
       "the fallback",
     );
     const rel = join("cards", id, `fallback-${randomSuffix()}.json`);
@@ -592,7 +605,7 @@ export class Store {
   fallbacks(id: string): Fallback[] {
     return this.list("cards", id)
       .filter((f) => f.startsWith("fallback-"))
-      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => parse(Fallback, JSON.parse(t), f)) ?? []);
+      .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => readAs("fallback", Fallback, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
   }
 
   // ---------------------------------------------------------------- ledger and rules
@@ -603,7 +616,7 @@ export class Store {
     if (!this.card(id)) throw new NoCard(id);
     const meta = parse(
       LedgerMeta,
-      { type: "ledger", card: id, branch: entry.branch ?? this.repo.branch, commit: entry.commit, at: now() },
+      { type: "ledger", format: newestFormat("ledger"), card: id, branch: entry.branch ?? this.repo.branch, commit: entry.commit, at: now() },
       "the ledger entry",
     );
     this.writeOnce(join(this.live, "ledger", `${id}-${randomSuffix()}.md`), renderDoc(meta, body));
@@ -615,7 +628,7 @@ export class Store {
       .filter((f) => f.startsWith(`${id}-`))
       .flatMap((f) => this.read(join(this.live, "ledger", f), (text) => {
         const { meta, body } = parseDoc(text);
-        return { meta: parse(LedgerMeta, meta, `ledger/${f}`), body };
+        return { meta: readAs("ledger", LedgerMeta, meta, `ledger/${f}`), body };
       }) ?? [])
       .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
   }
@@ -627,9 +640,9 @@ export class Store {
       .filter((f) => f.endsWith(".md"))
       .flatMap((f) => this.read(join(this.live, "rules", f), (text) => {
         const { meta, body } = parseDoc(text);
-        const rule = parse(RuleMeta, meta, `rules/${f}`);
+        const rule = readAs("rule", RuleMeta, meta, `rules/${f}`);
         const gone = `${rule.id}-retired.json`;
-        const retired = files.includes(gone) ? this.read(join(this.live, "rules", gone), (t) => parse(RuleRetirement, JSON.parse(t), `rules/${gone}`)) : undefined;
+        const retired = files.includes(gone) ? this.read(join(this.live, "rules", gone), (t) => readAs("rule-retirement", RuleRetirement, JSON.parse(t), `rules/${gone}`)) : undefined;
         return { meta: rule, body, ...(retired ? { retired } : {}) };
       }) ?? []);
   }
@@ -641,16 +654,16 @@ export class Store {
     const path = join(this.live, "presence.json");
     if (!existsSync(path)) return undefined;
     try {
-      return parse(Presence, JSON.parse(readFileSync(path, "utf8")), "presence.json");
+      return readAs("presence", Presence, JSON.parse(readFileSync(path, "utf8")), "presence.json");
     } catch {
-      return undefined; // a half-written or foreign file means "unknown", never a crash
+      return undefined; // a half-written or foreign file, or one in a newer format (D157), means "unknown", never a crash
     }
   }
 
   /** The client's heartbeat. Written to a temporary file and renamed, so readers never see half a file. */
   touchPresence(client: string, at: string = now()): Presence {
     this.requireInit();
-    const p = parse(Presence, { type: "presence", client, at }, "presence");
+    const p = parse(Presence, { type: "presence", format: newestFormat("presence"), client, at }, "presence");
     const path = join(this.live, "presence.json");
     const tmp = `${path}.${randomSuffix()}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(p)}\n`);
@@ -665,7 +678,7 @@ export class Store {
     if (!existsSync(path)) return undefined;
     return this.read(path, (text) => {
       const { meta, body } = parseDoc(text);
-      return { meta: parse(DeckMeta, meta, `decks/${id}.md`), body };
+      return { meta: readAs("deck", DeckMeta, meta, `decks/${id}.md`), body };
     });
   }
 
@@ -685,6 +698,7 @@ export class Store {
       DeckMeta,
       {
         type: "deck",
+        format: newestFormat("deck"),
         id: input.id,
         title: input.title,
         branch: this.repo.branch,
@@ -729,7 +743,7 @@ export class Store {
 
   verdicts(id: string): Verdict[] {
     return this.verdictFilesOf(id)
-      .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => parse(Verdict, JSON.parse(t), f)) ?? [])
+      .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => readAs("verdict", Verdict, JSON.parse(t), `verdicts/${f}`)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
   }
 
@@ -763,7 +777,7 @@ export class Store {
   }
 
   /** Record a verdict. Only the client calls this: agents never resolve cards (D32). */
-  addVerdict(input: Omit<Verdict, "type" | "at"> & { at?: string }): Verdict {
+  addVerdict(input: Omit<Verdict, "type" | "format" | "at"> & { at?: string }): Verdict {
     this.requireInit();
     const card = this.card(input.card);
     if (!card) throw new NoCard(input.card);
@@ -775,7 +789,7 @@ export class Store {
     let at = input.at ?? now();
     const previous = this.verdicts(input.card).at(-1)?.at;
     if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
-    const v = parse(Verdict, { ...input, type: "verdict", at }, "the verdict");
+    const v = parse(Verdict, { ...input, type: "verdict", format: newestFormat("verdict"), at }, "the verdict");
     for (const id of v.retire_rules ?? []) {
       const problem = this.retirementProblem(card, v, id);
       if (problem) throw new ValidationError(problem);
@@ -800,7 +814,7 @@ export class Store {
 
   private retireRules(card: Card, v: Verdict): void {
     for (const id of v.retire_rules ?? []) {
-      const r = parse(RuleRetirement, { type: "rule-retirement", rule: id, card: card.meta.id, by: v.reviewer, at: v.at }, "the retirement");
+      const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, at: v.at }, "the retirement");
       const rel = join("rules", `${id}-retired.json`);
       this.writeOnce(join(this.live, rel), `${JSON.stringify(r, null, 2)}\n`);
       this.toRecord(rel);
@@ -969,7 +983,7 @@ export class Store {
   aliases(): TopicAlias[] {
     return this.list("topics")
       .filter((f) => f.startsWith("alias-"))
-      .flatMap((f) => this.read(join(this.live, "topics", f), (t) => parse(TopicAlias, JSON.parse(t), f)) ?? []);
+      .flatMap((f) => this.read(join(this.live, "topics", f), (t) => readAs("topic-alias", TopicAlias, JSON.parse(t), `topics/${f}`)) ?? []);
   }
 
   /**
@@ -981,7 +995,7 @@ export class Store {
     const source = this.canonicalTopic(from), target = this.canonicalTopic(to);
     if (source === target) throw new ValidationError(`"${from}" and "${to}" are already the same topic`);
     if (!this.topics().has(target)) throw new ValidationError(`no card uses the topic "${to}": merge into a topic that's in use`);
-    const alias = parse(TopicAlias, { type: "topic-alias", from: source, to: target, by, at: now() }, "the alias");
+    const alias = parse(TopicAlias, { type: "topic-alias", format: newestFormat("topic-alias"), from: source, to: target, by, at: now() }, "the alias");
     const rel = join("topics", `alias-${randomSuffix()}.json`);
     this.writeOnce(join(this.live, rel), `${JSON.stringify(alias, null, 2)}\n`);
     this.toRecord(rel);
@@ -1069,14 +1083,16 @@ export class Store {
   private readCursor(session?: string): { at: string; delivered: string[] } | undefined {
     const path = this.cursorPath(session);
     if (!existsSync(path)) return session ? undefined : { at: "", delivered: [] };
-    const c = JSON.parse(readFileSync(path, "utf8"));
-    return { at: c.at ?? "", delivered: c.delivered ?? [] };
+    const c = readAs("cursor", Cursor, JSON.parse(readFileSync(path, "utf8")), relative(this.live, path));
+    return { at: c.at, delivered: c.delivered ?? [] };
   }
 
+  /** A cursor is mutable: it's rewritten in place, in the newest format (D156). */
   private writeCursor(c: { at: string; delivered?: string[] }, session?: string): void {
     const path = this.cursorPath(session);
+    const cursor = parse(Cursor, { type: "cursor", format: newestFormat("cursor"), at: c.at, ...(c.delivered?.length ? { delivered: c.delivered } : {}) }, "the cursor");
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(c)}\n`);
+    writeFileSync(path, `${JSON.stringify(cursor)}\n`);
   }
 
   /** Every inbox item newer than `since`, delivered or not, oldest first. */
@@ -1113,7 +1129,7 @@ export class Store {
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
       .flatMap((f) => {
         try {
-          return [{ f, w: parse(Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), f) }];
+          return [{ f, w: readAs("waiting", Waiting, JSON.parse(readFileSync(join(this.live, "waiting", f), "utf8")), `waiting/${f}`) }];
         } catch {
           return [];
         }
@@ -1123,7 +1139,7 @@ export class Store {
     const since = mine ? mine.w.since : at;
     mkdirSync(dirname(path), { recursive: true });
     const write = (beat: string) => {
-      const w = parse(Waiting, { type: "waiting", card: id, revision: card.meta.revision, agent, since, at: beat }, "the waiting marker");
+      const w = parse(Waiting, { type: "waiting", format: newestFormat("waiting"), card: id, revision: card.meta.revision, agent, since, at: beat }, "the waiting marker");
       const tmp = `${path}.${randomSuffix()}.tmp`;
       writeFileSync(tmp, `${JSON.stringify(w)}\n`);
       renameSync(tmp, path);
@@ -1136,7 +1152,7 @@ export class Store {
   waitingOn(id: string, nowMs: number = Date.now()): { marker: Waiting; stale: boolean }[] {
     return this.list("waiting")
       .filter((f) => f.startsWith(`${id}-`) && f.endsWith(".json"))
-      .flatMap((f) => this.read(join(this.live, "waiting", f), (t) => parse(Waiting, JSON.parse(t), f)) ?? [])
+      .flatMap((f) => this.read(join(this.live, "waiting", f), (t) => readAs("waiting", Waiting, JSON.parse(t), `waiting/${f}`)) ?? [])
       .map((marker) => ({ marker, stale: nowMs - Date.parse(marker.at) > WAITING_STALE_MS }));
   }
 

@@ -14,7 +14,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
   const topic = over.topic ?? `area${n}/subject`;
   return {
     meta: {
-      type: "card", id, revision: 1, title: `Decision ${n}`, question: `Which option for ${n}?`, doing: "working",
+      type: "card", format: 1, id, revision: 1, title: `Decision ${n}`, question: `Which option for ${n}?`, doing: "working",
       topic, deck: "branch-main", level: "provisional", touches: [], reverse: "cheap",
       proposal: "Option A", proposal_then: "A happens", alternative: "Option B", alternative_then: "B happens", also_considered: [],
       crux: "Does A fit?", crux_proposal: "If it does", crux_alternative: "If it doesn't",
@@ -32,7 +32,7 @@ function snapshot(cards: ApiCard[], rules: ApiState["rules"] = []): ApiState {
   return { version: 1, server: { pid: 1, started: at(0), now: at(100), watch: "events" }, project: { name: "repo", branch: "main" }, decks: [], rules, cards, problems: [] };
 }
 const rule = (id: string, body: string, topic?: string): ApiState["rules"][number] => ({
-  meta: { type: "rule", id, covers: [], accepted_by: "gus", created: at(0), ...(topic ? { topic } : {}) },
+  meta: { type: "rule", format: 1, id, covers: [], accepted_by: "gus", created: at(0), ...(topic ? { topic } : {}) },
   body,
 });
 
@@ -68,7 +68,7 @@ describe("waiting agents (D90)", () => {
   it("tells waiting from gone from carried on", () => {
     expect(waitState(card({}, { waiting: [{ agent: "a", since: at(100), at: at(190), stale: false }] }), now)).toBe("waiting");
     expect(waitState(card({}, { waiting: [{ agent: "a", since: at(0), at: at(50), stale: false }] }), now)).toBe("gone");
-    expect(waitState(card({}, { fallbacks: [{ type: "fallback", card: "B-00001", revision: 1, reason: "timeout", agent: "a", at: at(9) }] }), now)).toBe("carried-on");
+    expect(waitState(card({}, { fallbacks: [{ type: "fallback", format: 1, card: "B-00001", revision: 1, reason: "timeout", agent: "a", at: at(9) }] }), now)).toBe("carried-on");
     expect(waitState(card(), now)).toBe("none");
   });
 });
@@ -140,7 +140,7 @@ describe("relations, from stated fields only (D65)", () => {
   });
 
   it("shows a retired rule as retired, with nothing for either option to break, and drops it from its topic (D119)", () => {
-    const retired = { ...rule("R-aaaaa", "Never put secrets in URLs.", "client/auth"), retired: { type: "rule-retirement" as const, rule: "R-aaaaa", card: "B-bbbbb", by: "gus", at: at(1) } };
+    const retired = { ...rule("R-aaaaa", "Never put secrets in URLs.", "client/auth"), retired: { type: "rule-retirement" as const, format: 1, rule: "R-aaaaa", card: "B-bbbbb", by: "gus", at: at(1) } };
     const breaker = card({ topic: "client/auth", proposal_breaks: ["R-aaaaa"] });
     expect(relationsOf(breaker, snapshot([breaker], [retired]))).toEqual([expect.objectContaining({ id: "R-aaaaa", kind: "rule", state: "retired rule" })]);
     expect(relationsOf(breaker, snapshot([breaker], [retired]))[0]).not.toHaveProperty("effect");

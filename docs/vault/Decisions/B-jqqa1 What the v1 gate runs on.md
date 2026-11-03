@@ -1,5 +1,6 @@
 ---
 type: decision
+format: 1
 status: active
 authority: log
 livedocs: snapshot

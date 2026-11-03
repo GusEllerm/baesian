@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-03
 reviewed: 2026-10-23
@@ -11,12 +11,19 @@ tags: [baesian, design, formats]
 
 # File Formats
 
-> **Status: accepted (D124, 2026-11-02).** These formats are implemented as described here, and the user has accepted them: the card revision and verdict tables and the open points D105–D107 (2026-11-01), then the open points found in the other files, D119–D121, and the rest of the other files (2026-11-02). Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. A review of them, for git workflows and for what the record exposes, comes just before publishing.
+> **Status: accepted (D124, 2026-11-02).** These formats are implemented as described here, and the user has accepted them: the card revision and verdict tables and the open points D105–D107 (2026-11-01), then the open points found in the other files, D119–D121, and the rest of the other files (2026-11-02). Compatibility between Baesian versions isn't a concern until a v1 is published (D108), so these formats stay free to change until then. Every file now carries a format number (D156, D157, 2026-11-03), so from v1 a change to one is a new format, with an upgrade from the one before. A review of them, for git workflows and for what the record exposes, comes just before publishing.
 
 The definitions are the Zod schemas in `src/schema.ts`. This note describes them for people, and livedocs binds it to them: a change to a schema blocks the commit until this note is reconciled.
 
 ## Rules that apply to every file
 
+- **A format number (D156).** Every file Baesian writes carries `format`, an integer from 1, right after `type` in JSON and in frontmatter (first, in the config, which has no `type`). It's numbered per kind of file: a card format 2 would leave verdicts at 1. v1 writes `format: 1` everywhere. In `Config`, `UserConfig` and a card draft (`CardDraft`), which people write by hand, it's optional; a draft's `format` is the draft's own, and Baesian sets the revision's. The kinds and their upgrades are in one table, `FILE_KINDS`, and `newestFormat()` gives the one Baesian writes.
+- **Reading a format (D156, D157).** `upgradeFile()` brings a file's fields to the newest format of its kind, in memory, before its schema checks them; a file is never rewritten for it. Files are written once, and CI checks each commit against its own record (`checkCommit()`), so an old commit's files must stay readable as they are.
+  - **No `format`:** the file was written before v1, and reads as format 1. That changes nothing, except that an inbox cursor gains the `type` it lacked. So `baesian verify` passes over a commit whose record predates the field.
+  - **An older format:** each later format comes with one upgrade function in its kind's entry, applied in turn. There are none yet.
+  - **A newer format** than this Baesian reads is refused, with `NewerFormat`: "cards/B-7f3kq/r1.md has card format 2; this Baesian reads up to 1: upgrade Baesian". It's refused as a bad file is. Inside a view that reports problems (the server's snapshot) it's reported and skipped; elsewhere it throws, so the CLI and `baesian verify` stop with the message. Where an unreadable file already means "unknown" (presence, the server file, the last port), one in a newer format is ignored too.
+  - **Schemas stay strict otherwise.** A `format` that isn't a whole number from 1, or an unknown key, fails the schema as before.
+  - **Mutable files** (the cursors, presence, waiting markers, the server file and the last port) are written in the newest format the next time they're written.
 - **Immutable.** Every file except the config files, the inbox cursors, the presence heartbeat, the waiting markers and the server file is written once and never edited (D34). The store writes with an exclusive create, so a second write fails. Status is computed from the files, never stored.
 - **Flat.** Frontmatter and JSON have no nested objects. Lists of strings are fine. Empty lists and unset fields are left out when writing.
 - **IDs.** Cards are `B-` plus five Crockford base32 characters (`B-7f3kq`), and rules are `R-` plus five. The alphabet is lowercase and has no `i`, `l`, `o` or `u` (D51). A new ID is checked against the live layer and retried on collision (`newId`).
@@ -36,8 +43,8 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `rules/<id>-retired.json` | `RuleRetirement` | yes | yes, as rules | the client, with an answer that breaks the rule (D119) |
 | `topics/alias-<suffix>.json` | `TopicAlias` | yes | yes, as rules | the client (M4) |
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
-| `cursors/<branch>.json` | — (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
-| `cursors/<branch>/<session>.json` | — (`at`): one session's own place in the branch's inbox (B-ghhym, provisional) | yes (mutable) | no | `baesian inbox --session`, run by the plugin's hooks |
+| `cursors/<branch>.json` | `Cursor` (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
+| `cursors/<branch>/<session>.json` | `Cursor` (`at`): one session's own place in the branch's inbox (B-ghhym, provisional) | yes (mutable) | no | `baesian inbox --session`, run by the plugin's hooks |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
@@ -56,6 +63,7 @@ Frontmatter (`CardMeta`):
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `type` | `card` | | |
+| `format` | integer ≥ 1 | | the card format, 1 (D156); filled in by Baesian |
 | `id`, `revision` | card ID, integer ≥ 1 | | filled in by Baesian |
 | `title` | string | yes | a neutral short name, not a question ("Where the access token lives"). A settled decision is shown as its title plus its outcome |
 | `question` | string | yes | the decision, as a neutral question |
@@ -91,7 +99,7 @@ Frontmatter (`CardMeta`):
 
 **Body:** optional Markdown context, shown with the agent's reasoning (D92). Nothing in it is checked.
 
-What an agent writes is a **draft** (`CardDraft`): the same frontmatter without the fields Baesian fills in. `deck` and `level` are optional.
+What an agent writes is a **draft** (`CardDraft`): the same frontmatter without the fields Baesian fills in. `deck` and `level` are optional, and so is `format`, the draft's own format (1), which `baesian template` doesn't show and the MCP filing tool doesn't take.
 
 **Filing** (`filingProblems()`, and the store's reference check) rejects:
 - a missing required field;
@@ -122,6 +130,8 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 
 ## The others
 
+Each also has `type` and `format` (D156), not repeated below.
+
 - **Withdrawal** (`Withdrawal`): `card`, `reason`, `by`, `at`. One per card.
 - **Ledger entry** (`LedgerMeta`): `card`, `branch`, optional `commit`, `at`. One per card a commit cites. The body is one line naming the commit (D120): what the commit changed is git's to say. Entries written before D120 also list the commit's files.
 - **Deck** (`DeckMeta`): `id`, `title`, optional `branch` and `from` (the source document, relative to the repo, and only when it's in the repo), `context_notes` (vault wikilinks), `created`. The body is the briefing. Membership isn't stored: it's computed from the cards' `deck` fields, so a deck never needs editing.
@@ -136,8 +146,9 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 - **Waiting marker** (`Waiting`, D90): `card`, `revision`, `agent`, `since`, `at`. `baesian wait` writes it when it starts, and rewrites it every 30 seconds (with a temporary file and a rename, as presence does). A run that ends with exit 7 (D101) leaves it for the next run to pick up; any other ending removes it. `since` is when the wait first began, across runs. A marker more than 90 seconds old means the agent stopped waiting: the card says so, and drops back to its place in the queue. Several agents can wait on one card, each with its own marker. `baesian wait` writes it from M4 step 3.
 - **Server file** (`ServerInfo`, D97): `pid`, `port`, `token`, `started`. `baesian serve` writes it atomically, readable only by the user, and removes it when it stops. The token is new on every start. Another `serve` uses it to find a running server, and ignores it if that process has gone or doesn't answer.
 - **Last port** (`LastPort`, D103): `port`. The port the last server listened on, kept after it stops so the next one can start on the same address, and the browser keeps what it stored for that address. No secret. An unreadable file is ignored, and a port in use falls back to one the system picks.
-- **Config** (`Config`): optional `vault` (the vault adapter's folder, relative to the repo root and inside it, set by `baesian init --vault`; M6), and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
-- **User config** (`UserConfig`): optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
+- **Inbox cursor** (`Cursor`): `at`, the time of the newest verdict the branch has read (empty before the first), and optional `delivered`, what `baesian wait` has delivered since, as `<card> <verdict's card> <verdict's at>`; a session's cursor has only `at`. Mutable, rewritten in place. Cursors written before v1 had neither `type` nor `format`, and still read.
+- **Config** (`Config`): optional `format`, which `baesian init` writes first; optional `vault` (the vault adapter's folder, relative to the repo root and inside it, set by `baesian init --vault`; M6), and optional detector paths: `gate_schema` and `gate_infra` replace the defaults, `gate_ignore` adds to them, and `gate_api` lists the public modules that turn on the `api:` detector (D59). It's committed, so it holds only what's shared by everyone working on the repo. Keys stay flat, like everything else.
+- **User config** (`UserConfig`): optional `format`, never written by Baesian; optional `notify` (a shell command run for blocking and hard cards, with the card as JSON on stdin) and `os_notify` (default true). Its location is `$BAESIAN_CONFIG`, or `$XDG_CONFIG_HOME/baesian/config.json`, or `~/.config/baesian/config.json`. It's personal for two reasons:
   - a `notify` command in a committed file would run on every clone of the repo;
   - a phone-push token would be in the repo.
 
@@ -154,13 +165,13 @@ With `vault` set, the vault adapter writes two more files, in the vault rather t
 
 **Names (D171).** The card's first revision's title, or the rule's first words, with `* " \ / < > : | ? # ^ [ ]` removed, spacing collapsed, and cut at a word boundary to 80 characters for a title and 60 for a rule; a trailing dot or space is dropped. A note is found by the ID at the start of its name, anywhere under its folder, so one renamed or moved by hand keeps its ID and isn't written again.
 
-**How a note changes (D172).** The body is rendered once, from the card's first resolving answer, and never rewritten. The frontmatter is rendered afresh from the record each time: the keys below, in this order, then any key a person added, whose value is kept; a person's own `tags` and `aliases` are kept beside Baesian's. Each change adds one section at the end, `## <What> on <YYYY-MM-DD>`, the date in UTC: `Changed`, `Reopened`, `Answered again`, `Superseded`, `Withdrawn`; for a rule, `Retired`. A section already there is found by its heading. Everything is rendered from immutable files, so a note written fresh is the same bytes as one written earlier and extended since. Lists of links (`depends_on` and the like) hold wikilinks, `"[[<card ID> <title>|<card ID>]]"`, or the bare ID for a card with no note.
+**How a note changes (D172).** The body is rendered once, from the card's first resolving answer, and never rewritten. The frontmatter is rendered afresh from the record each time: the keys below, in this order, then any key a person added, whose value is kept; a person's own `tags` and `aliases` are kept beside Baesian's. Each change adds one section at the end, `## <What> on <YYYY-MM-DD>`, the date in UTC: `Changed`, `Reopened`, `Answered again`, `Superseded`, `Withdrawn`; for a rule, `Retired`. A section already there is found by its heading. Everything is rendered from immutable files, so a note written fresh is the same bytes as one written earlier and extended since. A note written before v1, with no `format`, gains it at its next update; one in a newer format than this Baesian writes is left as it is, with a warning (D157). Lists of links (`depends_on` and the like) hold wikilinks, `"[[<card ID> <title>|<card ID>]]"`, or the bare ID for a card with no note.
 
 **Decision note frontmatter:**
 
 | Key | Value |
 |---|---|
-| `type`, `status` | `decision`; `active` (resolved), `superseded`, `withdrawn`, or `reopened` (open again: returned, deferred, rerouted, or replied to) |
+| `type`, `format`, `status` | `decision`; the decision note format, 1 (D156); `active` (resolved), `superseded`, `withdrawn`, or `reopened` (open again: returned, deferred, rerouted, or replied to) |
 | `authority`, `livedocs` | `log`; `snapshot`, so livedocs binds nothing in it (D175) |
 | `summary` | `<title>: <answer> (<card ID>).` |
 | `created`, `updated` | the date of the first answer, and of the latest change |
@@ -174,7 +185,7 @@ With `vault` set, the vault adapter writes two more files, in the vault rather t
 
 **Decision note body:** the title, the question, then one paragraph each, only when set: **Decided** (with what follows from it), **Not chosen** (one or two), **It turned on** (the crux, and the answer that leads to each option), **The fact given**, **Comment**, **First chose** (when the reviewer switched after the agent's pick was shown, D88), **The agent's case**, **The agent's reply**. Then who answered, when, and on which card and revision; who filed it, on which branch and in which deck, and the deck's context notes as links; where the record is, and that editing the note changes nothing. Last, `## Background`, the card's body.
 
-**Rule note frontmatter:** `type: rule`; `status` (`active` or `retired`); `authority: specifies`; `livedocs: snapshot`; `summary` (the rule's first sentence); `created`, `updated`; `tags: [baesian, rule]`; `aliases: [<rule ID>]`; then `rule` (the rule ID), `topic`, `covers`, `from_card` (a link), `accepted_by`, `accepted` (ISO); and once retired, `retired` (ISO), `retired_by`, `retired_on` (a link to the card it was retired on).
+**Rule note frontmatter:** `type: rule`; `format: 1`, the rule note format (D156); `status` (`active` or `retired`); `authority: specifies`; `livedocs: snapshot`; `summary` (the rule's first sentence); `created`, `updated`; `tags: [baesian, rule]`; `aliases: [<rule ID>]`; then `rule` (the rule ID), `topic`, `covers`, `from_card` (a link), `accepted_by`, `accepted` (ISO); and once retired, `retired` (ISO), `retired_by`, `retired_on` (a link to the card it was retired on).
 
 **Rule note body:** the rule's first words as a heading, the rule as a quote, who accepted it and when and from which decision (by ID, since every branch's record holds the rule but not always that card), the gate facts it lets through without a card, and that editing the note changes no rule.
 

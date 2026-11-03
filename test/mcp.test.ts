@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
@@ -106,6 +106,9 @@ describe("the tools", () => {
     expect(schema.required.sort()).toEqual(CARD_FIELDS.filter((f) => !f.optional && f.template !== false && f.field !== "touches").map((f) => f.field).sort());
     expect(Object.keys(schema.properties)).toEqual(expect.arrayContaining(["body", "new", "cwd"]));
     expect(schema.properties).not.toHaveProperty("conflict_of");
+    // A draft's format is for drafts in files (D156): Baesian sets the revision's, and the tool doesn't offer it.
+    expect(schema.properties).not.toHaveProperty("format");
+    expect(CARD_TEMPLATE).not.toMatch(/format/);
     expect(schema.additionalProperties).toBe(false);
     const revise = tools.find((t) => t.name === "revise_card")!.inputSchema as { required: string[] };
     expect(revise.required).toContain("id");
@@ -250,6 +253,18 @@ describe("errors (P18 section 3)", () => {
     expect((dup.data.error as { matches: unknown[] }).matches).toEqual([{ id, status: "open", title: "The run-metadata store", by: "topic", agent: "claude-code", branch: "main" }]);
     // The CLI says the same, word for word.
     expect((await cli(dir, ["show", "B-zzzzz"])).err).toBe("no card B-zzzzz");
+  });
+
+  it("report a file in a newer format as a tool error with the CLI's message (D157)", async () => {
+    const { dir, store } = repo();
+    const id = file(store);
+    const path = join(store.live, "cards", id, "r1.md");
+    writeFileSync(path, readFileSync(path, "utf8").replace(/^format: 1$/m, "format: 2"));
+    const client = await connect(dir);
+    const r = await call(client, "list_cards", {});
+    expect(r.isError).toBe(true);
+    expect(r.text).toBe(`cards/${id}/r1.md has card format 2; this Baesian reads up to 1: upgrade Baesian`);
+    expect((await cli(dir, ["list"])).err).toBe(r.text);
   });
 
   it("report bad arguments by field, and an unknown tool as a protocol error", async () => {

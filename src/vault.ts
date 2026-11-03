@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileS
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { ApiContextNote } from "./api.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
-import type { RuleMeta, RuleRetirement, Verdict } from "./schema.js";
+import { type RuleMeta, type RuleRetirement, type Verdict, newestFormat, upgradeFile } from "./schema.js";
 import { type Card, type Status, Store, normalise } from "./store.js";
 
 // M6, the vault adapter (docs/vault/Design/Vault Adapter.md, P17; D170–D175). A vault is Markdown in the repo, with
@@ -305,18 +305,20 @@ function notChosen(r: Resolution): { name: string; then: string; pick: boolean }
 
 /** Keys the adapter owns, in the order it writes them: the vault's own keys, then the decision's (P17 §2). */
 const DECISION_KEYS = [
-  "type", "status", "authority", "livedocs", "summary", "created", "updated", "tags", "aliases",
+  "type", "format", "status", "authority", "livedocs", "summary", "created", "updated", "tags", "aliases",
   "card", "revision", "title", "question", "answer", "response", "not_chosen", "answered", "answered_by",
   "topic", "deck", "level", "reverse", "touches", "filed", "filed_by", "branch",
   "depends_on", "supersedes", "superseded_by", "conflict_of",
 ] as const;
 
 const RULE_KEYS = [
-  "type", "status", "authority", "livedocs", "summary", "created", "updated", "tags", "aliases",
+  "type", "format", "status", "authority", "livedocs", "summary", "created", "updated", "tags", "aliases",
   "rule", "topic", "covers", "from_card", "accepted_by", "accepted", "retired", "retired_by", "retired_on",
 ] as const;
 
 interface Rendered {
+  /** Which kind of note, for its format number (D156). */
+  kind: "decision-note" | "rule-note";
   meta: Record<string, unknown>;
   owned: readonly string[];
   head: string;
@@ -330,6 +332,7 @@ function decisionNote(read: Reading, id: string, h: History): Rendered {
   const m = a.card.meta;
   const meta = {
     type: "decision",
+    format: newestFormat("decision-note"),
     status: noteStatus(record.status(id)),
     authority: "log",
     livedocs: "snapshot",
@@ -360,7 +363,7 @@ function decisionNote(read: Reading, id: string, h: History): Rendered {
     superseded_by: record.status(id) === "superseded" && h.supersededBy ? read.linkIfNoted(h.supersededBy) : undefined,
     conflict_of: m.conflict_of?.map((c) => read.linkIfNoted(c)),
   };
-  return { meta, owned: DECISION_KEYS, head: decisionHead(read, id, h.first), sections: h.sections };
+  return { kind: "decision-note", meta, owned: DECISION_KEYS, head: decisionHead(read, id, h.first), sections: h.sections };
 }
 
 /** The body as a person reads it, in the client's order: the question, what was decided, then the rest (P17 §2). */
@@ -411,6 +414,7 @@ function ruleNote(read: Reading, rule: { meta: RuleMeta; body: string; retired?:
   const text = rule.body.trim();
   const meta = {
     type: "rule",
+    format: newestFormat("rule-note"),
     status: retired ? "retired" : "active",
     authority: "specifies",
     livedocs: "snapshot",
@@ -444,7 +448,7 @@ function ruleNote(read: Reading, rule: { meta: RuleMeta; body: string; retired?:
   const sections: Section[] = retired
     ? [{ at: retired.at, heading: `Retired on ${day(retired.at)}`, text: `By ${retired.by}, with the answer on ${retired.card}, whose chosen option breaks it. The gate no longer applies it.` }]
     : [];
-  return { meta, owned: RULE_KEYS, head, sections };
+  return { kind: "rule-note", meta, owned: RULE_KEYS, head, sections };
 }
 
 /** A note written from scratch. */
@@ -458,10 +462,12 @@ const GENERATED = /^## (?:Superseded|Changed|Reopened|Withdrawn|Answered again|R
 /**
  * An existing note brought up to date (D172): the owned keys rendered afresh, in order, then the keys a person added;
  * and each missing section added, in its place among the ones already there, or at the end. Nothing in the body is
- * rewritten, so text a person added stays where they put it.
+ * rewritten, so text a person added stays where they put it. A note with no `format` was written before v1, and gains
+ * it now; one in a newer format than this Baesian writes is refused (D157), and left as it is.
  */
 export function extendNote(existing: string, n: Rendered): string {
   const { meta: old, body } = parseDoc(existing);
+  upgradeFile(n.kind, old, "the note");
   const owned = new Set(n.owned);
   const union = (key: string) => [...new Set([...((n.meta[key] as string[] | undefined) ?? []), ...(Array.isArray(old[key]) ? (old[key] as unknown[]).map(String) : [])])];
   const meta: Record<string, unknown> = { ...n.meta, tags: union("tags"), aliases: union("aliases") };
