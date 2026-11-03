@@ -166,9 +166,8 @@ describe.skipIf(!livedocsPath)("with the real livedocs (D175)", { timeout: 120_0
     await init(dir, ["--vault", VAULT]);
     const path = [BIN_DIR, livedocsPath!, ...(process.env.PATH ?? "").split(":").filter((p) => !p.includes(".nvm") && !p.includes("node_modules"))].join(":");
     sh(dir, "add", "-A");
-    // Committed hooks run on everyone's machine, so the gate asks about them (D135).
-    const acks = ["pre-commit", "commit-msg", "post-commit"].map((h) => `Baesian-Ack: infra:.githooks/${h} the gate's own hooks`).join("\n");
-    const setUp = commit(dir, `Set up the vault and Baesian\n\n${acks}\n`, path);
+    // Baesian's own hook blocks pass the gate (B-g6ywj), but pre-commit holds livedocs' lines too, so it asks about that one (D135).
+    const setUp = commit(dir, "Set up the vault and Baesian\n\nBaesian-Ack: infra:.githooks/pre-commit livedocs' hook, beside Baesian's\n", path);
     expect(setUp.err).not.toContain("blocked");
     expect(setUp.code).toBe(0);
     const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;

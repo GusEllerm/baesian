@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { matcher } from "./globs.js";
+import { onlyBaesianBlock } from "./hookblock.js";
 
 // The gate's detectors (D25): decision types found mechanically in a diff. Each finding is a fact
 // with an ID the agent can cite in a `Baesian-Ack:` trailer (D52).
@@ -297,7 +298,9 @@ export function detectFacts(snap: Snapshot, opts: DetectOptions = {}): Detection
     const either = (test: (p: string) => boolean) => test(change.path) || (change.oldPath !== undefined && test(change.oldPath));
     for (const f of dependencyFacts(snap, change, warnings)) add(f);
     if (either(isSchema)) add({ id: `schema:${change.path}`, kind: "schema", path: change.path, detail: what });
-    if (either(isInfra)) add({ id: `infra:${change.path}`, kind: "infra", path: change.path, detail: what });
+    // Baesian's own block, as `baesian init` writes it, isn't a decision anyone made (B-g6ywj); any other hook change is.
+    const ownBlock = (change.status === "A" || change.status === "M") && onlyBaesianBlock(change.path, snap.before(change.path), snap.after(change.path));
+    if (either(isInfra) && !ownBlock) add({ id: `infra:${change.path}`, kind: "infra", path: change.path, detail: what });
   }
   if (opts.api?.length && snap.apiChanges) {
     const isApi = matcher(opts.api);

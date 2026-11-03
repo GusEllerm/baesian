@@ -1378,7 +1378,7 @@ sig = "8883755b1410374c"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/facts.ts"
-sig = "7e0a82125077415f"
+sig = "3cd505a6c0f41c5c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1412,8 +1412,13 @@ sig = "e5beaf70231fed9f"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
+target = "src/hookblock.ts"
+sig = "da80294a20a147eb"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/hooks.ts"
-sig = "35c98ab5ccd43d69"
+sig = "3c5c5d20459594d7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -2122,16 +2127,6 @@ sig = "e99887530b840dce"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
-target = "src/hooks.ts#BEGIN"
-sig = "90af29cc511ccea8"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-cli.md"
-target = "src/hooks.ts#END"
-sig = "663035fcab104af9"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#runHook"
 sig = "089ba207d88e1c9a"
 
@@ -2413,7 +2408,7 @@ sig = "978db6f05d34272b"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/facts.ts#detectFacts"
-sig = "fa827cfb0638be97"
+sig = "b9931d1ea63ed619"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -2462,13 +2457,28 @@ sig = "22920b622d7112c1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/hooks.ts#FALLBACK_KEY"
+target = "src/hookblock.ts"
+sig = "da80294a20a147eb"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hookblock.ts#FALLBACK_KEY"
 sig = "48be4cdec96dc473"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/hooks.ts#hookBlock"
+target = "src/hookblock.ts#HOOKS"
+sig = "103a7ce49ea140d3"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hookblock.ts#hookBlock"
 sig = "5443f535b3f7bcf8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hookblock.ts#onlyBaesianBlock"
+sig = "1372a85dbd33bce9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -2488,7 +2498,7 @@ sig = "453252026840420b"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#writeHook"
-sig = "a53cbbd51e5d623b"
+sig = "edef7c5ed54b13dc"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

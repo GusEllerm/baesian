@@ -4,50 +4,17 @@ import { isAbsolute, join, relative } from "node:path";
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
+import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock } from "./hookblock.js";
 import { type Store } from "./store.js";
 import { parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
 
-// D54: Baesian's hooks are a marked block inside whatever hook files the repo already uses, placed
-// right after the shebang, because livedocs' pre-commit ends in `exec`.
+// Baesian's hooks (D54) are installed here; their block's text is in src/hookblock.ts.
 
-export const HOOKS = ["pre-commit", "commit-msg", "post-commit"] as const;
-export type HookName = (typeof HOOKS)[number];
-
-const BEGIN = "# >>> baesian >>>";
-const END = "# <<< baesian <<<";
-
-/** Per-clone git config key holding the command that runs Baesian when it isn't on PATH (D48). */
-export const FALLBACK_KEY = "baesian.fallback";
+export { FALLBACK_KEY, HOOKS, type HookName, hookBlock } from "./hookblock.js";
 
 function sq(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * The marked block for one hook. It's the same on every machine, because `.githooks/` is committed:
- * the machine-specific fallback lives in the clone's own git config, never in the file.
- */
-export function hookBlock(name: HookName): string {
-  const args = name === "commit-msg" ? ` ${name} "$1"` : ` ${name}`;
-  const evalArgs = name === "commit-msg" ? ` ${name} \\"\\$1\\"` : ` ${name}`;
-  // post-commit can't stop a commit; it only records the ledger, so a missing binary is skipped quietly.
-  const missing =
-    name === "post-commit"
-      ? "  :"
-      : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
-  return [
-    BEGIN,
-    "# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.",
-    "if command -v baesian >/dev/null 2>&1; then",
-    `  baesian hook${args} || exit $?`,
-    `elif baesian_fallback="$(git config --get ${FALLBACK_KEY})" && [ -n "$baesian_fallback" ]; then`,
-    `  eval "$baesian_fallback hook${evalArgs}" || exit $?`,
-    "else",
-    missing,
-    "fi",
-    END,
-  ].join("\n");
 }
 
 /** Record (or clear) this clone's fallback command. Local config: shared by its worktrees, never committed. */
@@ -67,7 +34,7 @@ export function setFallback(store: Store, fallback: readonly string[]): void {
 /** Insert or refresh the block in one hook file. */
 export function writeHook(path: string, block: string): "created" | "inserted" | "updated" | "unchanged" {
   if (!existsSync(path)) {
-    writeFileSync(path, `#!/bin/sh\n${block}\n`);
+    writeFileSync(path, NEW_HOOK(block));
     chmodSync(path, 0o755);
     return "created";
   }

