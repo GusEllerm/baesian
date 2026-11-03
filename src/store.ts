@@ -27,6 +27,7 @@ import {
   describeError,
 } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
+import { type History, readHistory } from "./trailers.js";
 
 /** The live layer, inside git's common directory: shared by every worktree of a clone, never committed (D34). */
 export const LIVE_DIR = "baesian";
@@ -35,8 +36,8 @@ export const RECORD_DIR = ".baesian";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
 
-export type { Brief, Status } from "./api.js";
-import type { Brief, Status } from "./api.js";
+export type { Brief, BriefCommit, Status } from "./api.js";
+import type { Brief, BriefCommit, Status } from "./api.js";
 
 /** Statuses that still need the reviewer. */
 export const PENDING: ReadonlySet<Status> = new Set(["open", "returned", "rerouted", "deferred"]);
@@ -209,6 +210,8 @@ export class Store {
     cards?: Card[];
     verdictFiles?: Map<string, string[]>;
     claims?: Map<string, Card[]>;
+    /** The history's trailers (B-9v5xj), searched once per view. */
+    history?: History;
     report: ((path: string, error: string) => void) | undefined;
   };
 
@@ -277,7 +280,7 @@ export class Store {
    * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
-  private prepare(draft: unknown): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
+  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; hardBecause?: string[]; warnings: string[] } {
     const parsed = parse(CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -295,7 +298,7 @@ export class Store {
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
     }
-    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed) };
+    return { draft: { ...parsed, level, topic }, nearTopics: near, ...(hardBecause ? { hardBecause } : {}), warnings: filingWarnings(parsed, body) };
   }
 
   /** Cards and rules a draft names that don't exist. */
@@ -333,7 +336,7 @@ export class Store {
     this.requireInit();
     // The checks read every card: once, in a view, which ends before anything is written.
     const { prep, matches } = this.view(() => {
-      const prep = this.prepare(draft);
+      const prep = this.prepare(draft, body);
       return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
     });
     if (matches.length > 0) throw new PossibleDuplicate(matches);
@@ -349,7 +352,7 @@ export class Store {
     if (!latest) throw new Error(`no card ${id}`);
     const status = this.status(id);
     if (status !== "returned") throw new Error(`${id} is ${status}; only a returned card takes a new revision`);
-    const prep = this.prepare(draft);
+    const prep = this.prepare(draft, body);
     const card = this.writeRevision(id, latest.meta.revision + 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
   }
@@ -832,10 +835,41 @@ export class Store {
     if (!last || !earlier) return undefined;
     const was = answerOf(earlier)!, now = answerOf(last);
     if (now !== undefined && normalise(now) === normalise(was)) return undefined;
-    const commits = this.ledger(card.meta.id)
-      .filter((e) => e.meta.at < last.at)
-      .map((e) => ({ ...(e.meta.commit ? { commit: e.meta.commit } : {}), branch: e.meta.branch }));
-    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits, at: last.at };
+    return { kind: "answer-changed", card: card.meta.id, was, now, response: last.response, commits: this.builtOn(card.meta.id, last.at), at: last.at };
+  }
+
+  /**
+   * The commits built on a card before `before` (B-9v5xj). First those on a branch whose trailers cite it, found by
+   * searching the history, so a rebase, or a squash that keeps the trailer, doesn't lose them; then the ledger's
+   * entries whose commit is on no branch now, marked rewritten. A commit in both is named by the branch the ledger
+   * says it was made on, unless that was a detached HEAD (as during a rebase).
+   */
+  private builtOn(id: string, before: string): BriefCommit[] {
+    const history = this.history();
+    const ledger = this.ledger(id).filter((e) => e.meta.at < before);
+    const madeOn = new Map(ledger.flatMap((e) => (e.meta.commit && !e.meta.branch.startsWith("detached-") ? [[e.meta.commit, e.meta.branch] as const] : [])));
+    // When the work was done: a rebase keeps the author's date, and a commit made after the change built on the new answer.
+    const found = (history.citing.get(id) ?? []).filter((c) => c.authored < Date.parse(before));
+    const listed = new Set(found.map((c) => c.commit));
+    const out: BriefCommit[] = found.map((c) => ({ commit: c.commit, branch: madeOn.get(c.commit) ?? c.branch }));
+    for (const e of ledger) {
+      const commit = e.meta.commit;
+      if (!commit) {
+        out.push({ branch: e.meta.branch });
+      } else if (!listed.has(commit)) {
+        listed.add(commit);
+        out.push({ commit, branch: e.meta.branch, ...(history.onBranch(commit) ? {} : { rewritten: true as const }) });
+      }
+    }
+    return out;
+  }
+
+  /** The history's `Baesian-Card` trailers (B-9v5xj): searched once per view, and cached per process while the branches stay put. */
+  private history(): History {
+    if (this.session?.history) return this.session.history;
+    const history = readHistory(this.repo.toplevel);
+    if (this.session) this.session.history = history;
+    return history;
   }
 
   /** What an agent should be told about a card now, beyond its verdict (D80, D81). */

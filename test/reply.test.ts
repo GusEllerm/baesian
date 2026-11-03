@@ -76,7 +76,7 @@ describe("the agent's one reply (D89, D104)", () => {
     expect(store.briefs(id)).toEqual([]);
     store.addVerdict({ card: id, revision: 2, response: "accept", ...REVIEWER, at: later(1) });
     expect(store.decision(id)).toBe("SQLite (WAL mode)");
-    expect(store.briefs(id)).toEqual([expect.objectContaining({ kind: "answer-changed", was: "Postgres", now: "SQLite (WAL mode)", commits: [{ commit: "abc1234def5678", branch: "main" }] })]);
+    expect(store.briefs(id)).toEqual([expect.objectContaining({ kind: "answer-changed", was: "Postgres", now: "SQLite (WAL mode)", commits: [{ commit: "abc1234def5678", branch: "main", rewritten: true }] })]);
   });
 
   it("is offered to a waiting agent, once, and not when the answer was its pick", async () => {

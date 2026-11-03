@@ -185,6 +185,19 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-03 `[agent decision]` The details of B-vqn69, a warning on likely secrets (accepted by the user through Baesian, 2026-11-03; [[File Formats]], [[src-store]], [[Client Build]]):
+  - **Every text field is scanned, lists included, and the body,** on filing and on revising, which share the check. One note per field, naming what the text looks like ("an AWS access key ID"), never the text.
+  - **An assignment counts only with a long value of letters and digits,** so `process.env.API_KEY` and prose about tokens don't warn. GitHub's `ghu_` and `ghr_` tokens count beside the four named.
+  - **The note says to check it before the next commit,** since a card can't be edited once filed.
+  - **This repo's own `AGENTS.md` block was refreshed** with the new sentence, as `baesian init` would.
+
+- 2026-11-03 `[agent decision]` The details of B-9v5xj, finding a card's commits by its trailer (accepted by the user through Baesian, 2026-11-03; [[src-store]], [[src-gate]]):
+  - **The search covers local and remote-tracking branches,** not tags or stashes: a squash merged on GitHub reaches `origin/main` before the local branch. A ledger commit on none of them counts as rewritten, whether a rebase, a squash or a deleted branch took it off.
+  - **A commit is listed when it was authored before the answer changed.** A rebase keeps the author's date, and a rework committed after the change is built on the new answer.
+  - **A commit in both the ledger and the history is named by the ledger's branch,** except one recorded on a detached HEAD: git runs post-commit for each commit a rebase makes, on a detached HEAD (tested), so the ledger gets a `detached-…` entry for the new commit.
+  - **Cached per process while the branches stay put** (one `git for-each-ref` per view to check), so the long-running server doesn't go stale.
+  - **The gate's brief for a rejected card (D30) still lists the ledger's commits;** only the answer-changed brief was asked for.
+
 - 2026-11-02 `[agent decision]` The README and its media, at the user's request:
   - **The GIF is recorded from a real run of the demo** (`scripts/readme-media.ts`): the client in a headless browser, captured through Chromium's screencast, beside a panel with a caption and each agent's terminal, whose lines are the demo's own `wait` output. ffmpeg lays the two side by side at 12 frames a second and makes the GIF (about 3 MB, 36 seconds). It answers two cards: the session card with the agent's pick, held to confirm, and the price card against codex's pick, so codex is offered its one reply. Embedding the client in a page was tried first: its policy (`frame-ancestors 'none'`) refuses that, and stripping the header in the recording browser didn't load it either, so the two are recorded apart.
   - **The figures are HTML with inline SVG** (`docs/media/branches.html`, `checkpoints.html`), in the client's fonts and colours, rendered to PNG at twice their size by the same script. "Checkpointing" was taken to mean that every commit carries the record as it stood and names the cards it builds on, with a changed answer naming the commits to rework.

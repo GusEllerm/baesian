@@ -4,7 +4,7 @@ status: active
 authority: specifies
 summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; where each lives, and which are immutable. Defined in src/schema.ts."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-03
 reviewed: 2026-10-23
 tags: [baesian, design, formats]
 ---
@@ -101,7 +101,7 @@ What an agent writes is a **draft** (`CardDraft`): the same frontmatter without 
 - a facet with only some of its fields (D75);
 - IDs in `depends_on`, `rules` or the `_breaks` lists that don't exist.
 
-**Warnings** (`filingWarnings()`): no length limit has been measured yet, so long fields file anyway, with a note. The limits are 60 characters for the title and option names, 160 for the question, crux and `doing`, and 240 for a `then`.
+**Warnings** (`filingWarnings()`): no length limit has been measured yet, so long fields file anyway, with a note. The limits are 60 characters for the title and option names, 160 for the question, crux and `doing`, and 240 for a `then`. A field or the body that looks like it holds a secret also gets a note, since the record is committed with the code (B-vqn69): a private-key header, an AWS access key ID, a GitHub or Slack token, a JWT, a `token=`, `key=` or `secret=` query parameter with a long value, or an assignment like `api_key = <long value>`. The note names the field and what the text looks like, never the text, and the card files anyway.
 
 **Conflict cards** are filed by Baesian itself, with no model (D65). They carry a fixed crux (D94): "Was the newer decision made with context the older one lacked?" "If it wasn't" keeps the base branch's decision; "if it was" keeps the branch's. Each option's `_breaks` names the decision it would replace.
 
@@ -147,7 +147,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 
 These aren't files, but they're part of the same public interface. They go in the commit message's final trailer block, parsed with git's own rules (`git interpret-trailers --parse`, in `parseTrailers`):
 
-- **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it.
+- **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it. A changed answer's brief finds the card's commits by this trailer in the history of every branch (B-9v5xj), so they're still found after a rebase, or a squash whose message keeps the trailer in its last paragraph; a ledger entry whose commit is on no branch now is shown as rewritten.
 - **`Baesian-Ack: <fact-id> <reason>`** acknowledges a detected decision as a two-way door. The fact ID is the one the gate prints (`dep:httpx`, `schema:<path>`, `infra:<path>`, and later `api:<symbol>`). The reason is required.
 
 ## Decided points of P12 (2026-11-01, 2026-11-02)

@@ -27,6 +27,7 @@ The reviewer chooses between your two options before seeing which is yours, your
 - **The crux is the one question the choice turns on,** with the answer that leads to each option (`crux_proposal`, `crux_alternative`). If the answers don't point at different options, it isn't the crux.
 - **`crux_fact` is the only context they see first.** Put there what they need in order to choose: when the situation arises, what goes wrong, what's already true. Keep it neutral: a fact, not an argument for your pick.
 - **The body is background,** shown with your case once they've chosen. Your reasoning goes in `rationale`, and what would show you're wrong in `wrong_if` and `check`.
+- **The decision record is committed with the code,** so don't paste secrets, credentials or private output into a card.
 
 Start from `baesian template`, which lists every field.
 
