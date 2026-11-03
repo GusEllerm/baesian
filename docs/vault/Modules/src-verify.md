@@ -37,6 +37,8 @@ That is the same view the local `commit-msg` hook had, so CI repeats the local c
 | open, rerouted, returned with a question | fail, with the hint "if it's already answered, run `baesian sync` and commit". The record lags the live layer until something is committed |
 | missing | fail, with the same hint |
 
+The messages quote what others wrote, a reviewer's comment or a card's title, with its author (D169).
+
 ## Conflicting decisions (D35, D38)
 
 `findConflicts` looks for a decision resolved on this branch whose canonical topic matches a decision resolved on the base, but with a different answer. Three things settle a pair:

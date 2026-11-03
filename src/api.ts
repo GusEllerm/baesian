@@ -14,10 +14,13 @@ export type Status = "open" | "returned" | "rerouted" | "deferred" | "resolved" 
  *   built on it before the change: the commits on a branch whose trailers cite it, found in the history, then the
  *   ledger's entries whose commit is on no branch now, marked `rewritten` (B-9v5xj). Only commits that cite the card,
  *   so a lower bound.
+ *
+ * Each names who wrote its texts, so an agent reads them quoted with their authors (D169): the reviewer who gave each
+ * answer, and the agent that filed the parent.
  */
 export type Brief =
-  | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; assumed: string; decided: string; at: string }
-  | { kind: "answer-changed"; card: string; was: string; now: string | undefined; response: Verdict["response"]; commits: BriefCommit[]; at: string };
+  | { kind: "parent-decided-otherwise"; card: string; parent: string; parentTitle: string; parentAgent: string; parentBranch: string; assumed: string; decided: string; reviewer: string; at: string }
+  | { kind: "answer-changed"; card: string; was: string; wasReviewer: string; now: string | undefined; reviewer: string; response: Verdict["response"]; commits: BriefCommit[]; at: string };
 
 /** A commit an `answer-changed` brief lists. `rewritten`: the ledger has it, but it's on no branch now (B-9v5xj). */
 export interface BriefCommit {

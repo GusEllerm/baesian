@@ -157,7 +157,7 @@ describe("cli: M2 commands", () => {
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
     const resolved = await run(dir, ["wait", id], "", { waitClock: fakeClock() });
     expect(resolved.code).toBe(0);
-    expect(resolved.out).toContain("resolved: SQLite (WAL mode)");
+    expect(resolved.out).toContain('resolved by gus (a person): "SQLite (WAL mode)"');
   });
 
   it("rejects a bad timeout", async () => {

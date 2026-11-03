@@ -89,10 +89,10 @@ describe("cli", () => {
     const filed = await run(dir, ["file", "--json"], draftFile());
     const id: string = JSON.parse(filed.out).card.meta.id;
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
-    expect((await run(dir, ["show", id])).out).toContain("decided: SQLite (WAL mode)");
-    expect((await run(dir, ["show", id])).out).toContain(`${id} r1  accept: SQLite (WAL mode)  (gus`);
+    expect((await run(dir, ["show", id])).out).toContain('decided by gus (a person): "SQLite (WAL mode)"');
+    expect((await run(dir, ["show", id])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  (20`);
     // An accept names what it accepted, as `wait` does.
-    expect((await run(dir, ["inbox"])).out).toContain(`${id} r1  accept: SQLite (WAL mode)  (gus`);
+    expect((await run(dir, ["inbox"])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  (20`);
     expect((await run(dir, ["inbox"])).out).toBe("no new verdicts");
   });
 

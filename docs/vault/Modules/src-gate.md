@@ -53,7 +53,7 @@ Separately, it checks every cited card:
 - hard and not resolved: blocked (D46);
 - returned with a question, or filed as provisional or blocking: allowed.
 
-`describeReport` prints the result, ending with trailer lines to paste. `verdictsSinceLastCommit` adds the verdicts since the branch's last commit. Commit times have one-second resolution, so a verdict given in the same second as the last commit can be shown twice; that's harmless. `detectStaged` applies the repo's configured paths.
+`describeReport` prints the result, ending with trailer lines to paste. What a reviewer wrote, in a rejection or a new verdict, is quoted with their name (`answerLine`, D169). `verdictsSinceLastCommit` adds the verdicts since the branch's last commit. Commit times have one-second resolution, so a verdict given in the same second as the last commit can be shown twice; that's harmless. `detectStaged` applies the repo's configured paths.
 
 ## src/hooks.ts (D54)
 

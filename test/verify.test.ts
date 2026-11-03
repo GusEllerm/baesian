@@ -105,7 +105,7 @@ describe("the merge gate (D31)", () => {
     commit(dir, store, "Sync");
     const r = verify(repo, "main", { merge: true });
     expect(r.merge?.problems).toMatchObject([{ card: rejected, problem: "rejected" }]);
-    expect(r.merge?.notes.join("\n")).toContain(`${deferred} is deferred: After the benchmark.`);
+    expect(r.merge?.notes.join("\n")).toContain(`${deferred} is deferred; comment by gus (a person): "After the benchmark."`);
   });
 });
 

@@ -27,6 +27,7 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 | `src/schema.ts` | the file formats ([[File Formats]]) |
 | `src/store.ts` | both layers, immutable writes, computed status, the filing check ([[src-store]]) |
 | `src/cli.ts`, `src/bin.ts` | the CLI; `bin.ts` is the npm entry point ([[src-cli]]) |
+| `src/ops.ts`, `src/quote.ts` | the agent commands' operations, which the CLI and the MCP server share; how text others wrote is quoted (D169) ([[src-cli]]) |
 | `src/wait.ts`, `src/notify.ts`, `src/agents.ts` | waiting for verdicts; notifications; the AGENTS.md block and card template |
 | `src/facts.ts`, `src/trailers.ts`, `src/gate.ts`, `src/hooks.ts`, `src/globs.ts` | the commit gate ([[src-gate]]) |
 | `src/verify.ts` | `baesian verify`: CI and the merge gate ([[src-verify]]) |

@@ -103,7 +103,7 @@ describe("cards a commit may not build on (D30, D46)", () => {
     const r = evaluate(store, { facts: [], warnings: [] }, parseTrailers(msg(`Baesian-Card: ${id}`), dir));
     expect(r.ok).toBe(false);
     const text = describeReport(r).join("\n");
-    expect(text).toContain(`${id} was rejected: Use Postgres.`);
+    expect(text).toContain(`${id} was rejected by gus (a person): "Use Postgres."`);
     expect(text).toContain("Commits already built on it: 0123456789");
   });
 
