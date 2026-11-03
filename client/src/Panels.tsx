@@ -56,9 +56,9 @@ export function moveInMenu(dir: "up" | "down") {
   items[(i + (dir === "down" ? 1 : items.length - 1) + items.length) % items.length]!.focus();
 }
 
-function Panel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+function Panel({ id, label, onClose, children, at }: { id?: string; label: string; onClose: () => void; children: ReactNode; at?: { left: number; top: number } }) {
   return (
-    <aside className="panel" aria-label={label}>
+    <aside id={id} className={`panel${at ? " anchored" : ""}`} aria-label={label} style={at ? { left: at.left, top: at.top } : undefined}>
       <button type="button" className="panel-close" onClick={onClose}>
         Close <kbd>Esc</kbd>
       </button>
@@ -68,13 +68,18 @@ function Panel({ label, onClose, children }: { label: string; onClose: () => voi
   );
 }
 
-/** Every answer this session, newest first: the path shows only the last few, round its drum. */
-export function AnswersPanel({ answers, onOpen, onClose }: { answers: { key: string; id: string; name: string; state: string }[]; onOpen: (id: string) => void; onClose: () => void }) {
+/** Every answer this session, oldest first as on the path, opened beside it: the path shows only the last few. */
+export function AnswersPanel({ answers, at, onOpen, onClose }: { answers: { key: string; id: string; name: string; state: string }[]; at?: { left: number; top: number }; onOpen: (id: string) => void; onClose: () => void }) {
+  // Opened from the path, it takes the focus to its first answer, and gives it back to the button when it closes.
+  useEffect(() => {
+    document.querySelector<HTMLElement>("#answers-panel .answers button")?.focus();
+    return () => document.querySelector<HTMLElement>(".path button.earlier")?.focus({ preventScroll: true });
+  }, []);
   return (
-    <Panel label="Your answers" onClose={onClose}>
-      <p className="sub">This session, newest first. Open one to see it, or change your answer.</p>
+    <Panel id="answers-panel" label="Your answers" onClose={onClose} {...(at ? { at } : {})}>
+      <p className="sub">This session, oldest first, as on the path. Open one to see it, or change your answer.</p>
       <ol className="answers">
-        {[...answers].reverse().map((a) => (
+        {answers.map((a) => (
           <li key={a.key}>
             <button type="button" onClick={() => onOpen(a.id)}>
               <span className="nm">{a.name}</span>

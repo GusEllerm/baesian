@@ -41,7 +41,7 @@ export interface PathProps {
   trail: TrailStep[];
   current: { id: string; name: string; rarity: Rarity; stopped: boolean; conflict: boolean } | undefined;
   /** Opens the list of every answer this session, the ones folded into "N earlier answers" included. */
-  onEarlier?: () => void;
+  onEarlier?: (at: DOMRect) => void;
   earlierOpen?: boolean;
   relations: Relation[];
   upcoming: NextStep[];
@@ -76,7 +76,7 @@ const DRUM_EDGE = (58 * Math.PI) / 180;
 /** The labels at either end ("N earlier answers", "N more after these") sit just past the last row drawn, this much smaller. */
 const LABEL_SCALE = 0.92;
 /** "you chose …" fades out between these angles, where it gets too small to read. */
-const CHOSE_FADE = [(35 * Math.PI) / 180, (50 * Math.PI) / 180] as const;
+const CHOSE_FADE = [(44 * Math.PI) / 180, (54 * Math.PI) / 180] as const;
 /** How long the drum takes to turn to a new arrangement, landing before your choice's flight does. */
 const TURN_MS = 420;
 /** The turn: a spring, so the drum has some weight and settles into place, slightly past it and back. */
@@ -107,6 +107,8 @@ interface Lines {
   done: Segment[];
   ahead: Segment[];
   join?: Join;
+  /** The drum's front: a soft band, fixed while the drum turns through it, from the path's left edge to the card. */
+  band?: { x: number; y: number; w: number };
   arcs: { d: string; head: string; conflict: boolean; id: string }[];
 }
 
@@ -117,6 +119,9 @@ export function Path(p: PathProps) {
   const [lines, setLines] = useState<Lines>();
   const [shift, setShift] = useState(0);
   const [hot, setHot] = useState<string>();
+  // Next rows the drum has turned past its lower edge: counted into "N more after these".
+  const [hiddenNext, setHiddenNext] = useState(0);
+  const more = p.more + hiddenNext;
   const shown = p.trail.slice(Math.max(0, p.trail.length - TRAIL_MAX + folded));
   const hidden = p.trail.length - shown.length;
   const linked = new Set([...shown, ...p.upcoming].flatMap((s) => (s.link ? [s.id] : [])));
@@ -160,13 +165,16 @@ export function Path(p: PathProps) {
     }
     // The arrangement has settled: put every row on the drum, turning it from where the rows were if they moved.
     // The lines are measured from where things are drawn, so they follow the drum as it turns.
-    const hiddenAbove = turnDrum(el, h, shift);
+    const { hiddenAbove, hiddenBelow } = turnDrum(el, h, shift);
+    if (hiddenBelow !== undefined && hiddenBelow !== hiddenNext) setHiddenNext(hiddenBelow);
     // A settled answer that rose past the top edge is folded into "N earlier answers", so it's counted, not lost.
     if (hiddenAbove && shown.length > 0) {
       setFolded((f) => f + 1);
       return;
     }
-    const measured = desk ? measure(desk, el, card ?? undefined) : undefined;
+    const nowRow = el.querySelector<HTMLElement>(":scope > .row.now");
+    const frontY = nowRow ? h.getBoundingClientRect().top + offsetIn(nowRow, h).top + shift + nowRow.offsetHeight / 2 : undefined;
+    const measured = desk ? measure(desk, el, card ?? undefined, frontY, h) : undefined;
     if (JSON.stringify(measured) !== JSON.stringify(lines)) setLines(measured);
     if (p.fly) {
       const row = el.querySelector<HTMLElement>(`.row.past[data-key="${CSS.escape(p.fly.key)}"]`);
@@ -238,6 +246,7 @@ export function Path(p: PathProps) {
     const done = turning.from.size ? turned.current : 1;
     const shown = Math.max(0, Math.min(1, done));
     let hiddenAbove = false;
+    let hiddenBelow = 0;
     // How far the drawn rows reach above and below the front, for the labels to sit just beyond.
     let reachUp = 0, reachDown = 0;
     const labels: HTMLElement[] = [];
@@ -258,6 +267,7 @@ export function Path(p: PathProps) {
         reachDown = Math.max(reachDown, drawn.bottom);
       }
       if (!drawn.seen && done >= 1 && r.classList.contains("past")) hiddenAbove = true;
+      if (!drawn.seen && r.classList.contains("next")) hiddenBelow++;
       // Names cross-fade as the drum turns: the card coming to the front loses its name to the card itself, and
       // the card just answered gets its name back as it turns away.
       const midway = turning.from.size > 0 && done < 1;
@@ -272,12 +282,15 @@ export function Path(p: PathProps) {
       r.style.setProperty("--dy", `${(centre - at).toFixed(2)}px`);
       r.style.setProperty("--sx", String(LABEL_SCALE));
       r.style.setProperty("--sy", String(LABEL_SCALE));
-      r.style.setProperty("--o", seen ? "0.9" : "0");
+      r.style.setProperty("--o", seen ? "1" : "0");
       r.style.visibility = seen ? "" : "hidden";
     }
     if (done < 1) el.dataset.turning = "";
     else delete el.dataset.turning;
-    return hiddenAbove;
+    // Hover's easing comes on only after the first placement, so the rows don't slide into the drum as it loads.
+    if (el.dataset.placed === undefined) requestAnimationFrame(() => (el.dataset.placed = ""));
+    // The count below is only settled once the drum has stopped.
+    return { hiddenAbove, hiddenBelow: done >= 1 ? hiddenBelow : undefined };
   };
   // The turn itself is Motion's: it eases the turn's progress from 0 to 1, and each step draws and measures again.
   const turn = useRef<AnimationPlaybackControls | undefined>(undefined);
@@ -326,6 +339,21 @@ export function Path(p: PathProps) {
   return (
     <>
       <svg className="path-lines" width={lines?.width ?? 0} height={lines?.height ?? 0} aria-hidden="true">
+        <defs>
+          <linearGradient id="band-v" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fff" stopOpacity="0" />
+            <stop offset="0.5" stopColor="#fff" stopOpacity="0.3" />
+            <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="band-h" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#fff" stopOpacity="0" />
+            <stop offset="0.3" stopColor="#fff" stopOpacity="1" />
+          </linearGradient>
+          <mask id="band-fade" maskContentUnits="objectBoundingBox">
+            <rect width="1" height="1" fill="url(#band-h)" />
+          </mask>
+        </defs>
+        {lines?.band && <rect className="band" x={lines.band.x} y={lines.band.y - 23} width={lines.band.w} height={46} rx={10} fill="url(#band-v)" mask="url(#band-fade)" />}
         {lines?.done.map((s) => <path key={s.d} className="spine done" d={s.d} style={{ strokeWidth: s.w, opacity: s.o }} />)}
         {lines?.ahead.map((s) => <path key={s.d} className="spine ahead" d={s.d} style={{ strokeWidth: s.w, opacity: s.o, strokeDasharray: `${2 * s.dash} ${5 * s.dash}` }} />)}
         {lines?.join && <path className="join" ref={joinEl} />}
@@ -339,7 +367,7 @@ export function Path(p: PathProps) {
       <aside className="hood" ref={hood} aria-label="Your path through the decisions, and what this one is connected to" data-lean={p.lean ?? ""}>
         <div className="path" ref={path} style={{ transform: `translateY(${shift}px)` }} data-glide={drum.current.to.size ? "" : undefined}>
           {hidden > 0 && (
-            <button type="button" className="earlier" data-flip="earlier" aria-expanded={p.earlierOpen ?? false} onClick={p.onEarlier}>
+            <button type="button" className="earlier" data-flip="earlier" aria-expanded={p.earlierOpen ?? false} aria-controls="answers-panel" onClick={(e) => p.onEarlier?.(e.currentTarget.getBoundingClientRect())}>
               {hidden === 1 ? "1 earlier answer" : `${hidden} earlier answers`}
             </button>
           )}
@@ -397,9 +425,9 @@ export function Path(p: PathProps) {
               </span>
             </button>
           ))}
-          {p.more > 0 && (
+          {more > 0 && (
             <p className="earlier ahead" data-flip="more">
-              {p.more} more after these
+              {more} more after these
             </p>
           )}
         </div>
@@ -421,15 +449,16 @@ function flyInto(fly: { from: { x: number; y: number }; text: string }, row: HTM
   document.body.append(chip);
   const hr = hood.getBoundingClientRect(), at = offsetIn(st, hood), w = chip.offsetWidth;
   const end = { x: hr.left + at.left + st.offsetWidth - w, y: hr.top + at.top + shift - 3 };
-  st.animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1, offset: 0.55 }], { duration: MOVE });
-  row.querySelector(".node")?.animate([{ transform: "scale(1)" }, { transform: "scale(1)", offset: 0.35 }, { transform: "scale(1.35)", offset: 0.45 }, { transform: "scale(1)", offset: 0.6 }], { duration: MOVE });
+  // It lands at 0.62, once the drum has turned the row into place.
+  st.animate([{ opacity: 0 }, { opacity: 0, offset: 0.62 }, { opacity: 1, offset: 0.72 }], { duration: MOVE });
+  row.querySelector(".node")?.animate([{ transform: "scale(1)" }, { transform: "scale(1)", offset: 0.52 }, { transform: "scale(1.35)", offset: 0.62 }, { transform: "scale(1)", offset: 0.77 }], { duration: MOVE });
   chip
     .animate(
       [
         { transform: `translate(${fly.from.x}px, ${fly.from.y}px) scale(1.2)`, opacity: 1 },
-        { transform: `translate(${fly.from.x - 40}px, ${end.y - 5}px) scale(1)`, opacity: 1, offset: 0.25 },
-        { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 1, offset: 0.45 },
-        { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 0, offset: 0.55 },
+        { transform: `translate(${fly.from.x - 40}px, ${end.y - 5}px) scale(1)`, opacity: 1, offset: 0.32 },
+        { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 1, offset: 0.62 },
+        { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 0, offset: 0.72 },
         { transform: `translate(${end.x}px, ${end.y}px) scale(.85)`, opacity: 0 },
       ],
       { duration: MOVE, easing: "cubic-bezier(.3,.7,.3,1)" },
@@ -488,7 +517,9 @@ function place(r: HTMLElement, d: number, at: number, alpha: number, top: number
   r.style.setProperty("--sx", depth.toFixed(4));
   r.style.setProperty("--sy", (depth * flat).toFixed(4));
   // Depth shows in size and shape more than in fading, so what's drawn stays readable against the desk.
-  const seen = gone ? 0 : alpha * (0.8 + 0.2 * Math.cos(c));
+  // ...and fades out over the last 12° before the edge, rather than popping out at full strength.
+  const edge = Math.max(0, Math.min(1, (DRUM_EDGE - Math.abs(th)) / ((12 * Math.PI) / 180)));
+  const seen = gone ? 0 : alpha * (0.8 + 0.2 * Math.cos(c)) * edge;
   r.style.setProperty("--o", seen.toFixed(3));
   r.style.visibility = seen < 0.03 ? "hidden" : "";
   const half = (r.offsetHeight / 2) * depth * flat;
@@ -526,7 +557,7 @@ export function joinPath(g: Join, dx: number, dy: number, deg: number): string {
 }
 
 /** The spine (solid through your answers, dotted through what's next), the line into the card, and the arcs. */
-function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undefined): Lines {
+function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undefined, frontY?: number, hood?: HTMLElement): Lines {
   const base = desk.getBoundingClientRect();
   const at = (el: Element) => {
     const r = el.getBoundingClientRect();
@@ -554,10 +585,17 @@ function measure(desk: HTMLElement, path: HTMLElement, card: HTMLElement | undef
     return out;
   };
   const lines: Lines = { width: Math.round(base.width), height: Math.round(base.height), done: segments([...past, ...(now ? [now] : [])]), ahead: segments([...(now ? [now] : []), ...ahead]), arcs: [] };
+  if (card && frontY !== undefined && hood) {
+    // Where the front settles, by layout: the band stays put while rows turn through it.
+    const nowNode = path.querySelector<HTMLElement>(".row.now .node");
+    const left = nowNode ? nowNode.getBoundingClientRect().left - base.left - 150 : hood.getBoundingClientRect().left - base.left;
+    lines.band = { x: Math.round(left), y: Math.round(frontY - base.top), w: Math.round(restRect(card).left - base.left - left + 4) };
+  }
   if (now && card) {
     const n = at(now), c = restRect(card);
     const r1 = (v: number) => Math.round(v * 10) / 10;
-    lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
+    // Whole pixels, so the line is crisp.
+    lines.join = { x1: r1(n.x + 15), y: Math.round(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
     // A link back to an earlier answer: an arc to the right of the spine, into this card's ring from above.
     for (const row of path.querySelectorAll<HTMLElement>(".row.past")) {
       const tag = row.querySelector(".tag.link");

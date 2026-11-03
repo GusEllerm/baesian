@@ -195,8 +195,9 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 /* The drum (Path.tsx): every row shrinks about its node, so the spine stays straight. After `.path .row`, whose `all: unset` would reset it. */
 .path > [data-flip] { transform-origin: calc(100% - 15px) 50%; transform: translateY(var(--dy, 0px)) scale(var(--sx, 1), var(--sy, 1)); opacity: var(--o, 1); }
 /* Hover or focus lays a row flat, at full strength, where it sits on the drum; eased, except while the drum turns. */
-.path:not([data-turning]) > button.row { transition: transform 140ms ease-out, opacity 140ms ease-out, background-color 120ms; }
+.path[data-placed]:not([data-turning]) > button.row { transition: transform 140ms ease-out, opacity 140ms ease-out, background-color 120ms; }
 .path > button.row:hover, .path > button.row:focus-visible { transform: translateY(var(--dy, 0px)); opacity: 1; z-index: 2; }
+.path > button.row:is(:hover, :focus-visible) :is(.st, .nm) { opacity: 1; }
 /* The rows unset everything, the global focus ring included: put it back. */
 .path button.row:focus-visible { outline: 2px solid var(--right); outline-offset: 2px; }
 .path button.row { cursor: pointer; }
@@ -214,8 +215,6 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .path .row .tag.link { color: var(--ink); }
 .path .row .tag.link.c { color: var(--left); }
 .path .row.now { min-height: 44px; position: relative; }
-/* The drum's front: a soft band behind the current card's row, running on to the card, as a picker wheel has. */
-.path .row.now::before { content: ""; position: absolute; left: -12px; right: -44px; top: 50%; height: 46px; transform: translateY(-50%); border-radius: 10px; background: linear-gradient(#fff0, #ffffff5c 50%, #fff0); z-index: -1; pointer-events: none; }
 .path .row.now .node { border-radius: 50%; background: var(--face); box-shadow: 0 0 0 2px var(--ink); }
 .path .row.now .nm { opacity: var(--name, 0); color: var(--ink-soft); }
 .rels { display: flex; flex-direction: column; gap: 2px; margin: 2px 22px 6px 0; padding: 4px 0; }
@@ -232,12 +231,14 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .path .row.rel.fx-good .hurt, .row.rel.fx-bad .hurt { opacity: .5; }
 .hood[data-lean]:not([data-lean=""]) .path .row.rel:not(.fx-good):not(.fx-bad) { opacity: .55; }
 .group-h { margin: 0 24px 4px 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--left); }
-.next-h { margin: 6px 36px 0 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-soft); }
+.next-h { margin: 6px 36px 0 0; text-align: right; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-soft); transition: opacity 120ms; }
+/* While the drum turns, "Next" steps aside: the rising card passes through where it sits. */
+.path[data-turning] .next-h { opacity: 0; transition: none; }
 .path .row.next { min-height: 34px; opacity: calc(var(--o, 1) * .8); }
 .path .row.next .nm { font-size: 14px; }
 .path .row.next:hover { opacity: 1; }
 .earlier { margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
-button.earlier { all: unset; box-sizing: border-box; margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); cursor: pointer; border-radius: 4px; padding: 2px 4px; transform-origin: calc(100% - 15px) 50%; transform: translateY(var(--dy, 0px)) scale(var(--sx, 1), var(--sy, 1)); opacity: var(--o, 1); }
+button.earlier { all: unset; box-sizing: border-box; min-height: 26px; display: flex; align-items: center; justify-content: flex-end; margin: 0 36px 4px 0; text-align: right; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); cursor: pointer; border-radius: 4px; padding: 2px 4px; transform-origin: calc(100% - 15px) 50%; transform: translateY(var(--dy, 0px)) scale(var(--sx, 1), var(--sy, 1)); opacity: var(--o, 1); }
 button.earlier:hover { text-decoration: underline; }
 button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 2px; }
 .earlier.ahead { margin-top: 2px; }
@@ -250,7 +251,7 @@ button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 0; text-align: center; }
 .empty .big { font: var(--t-question); }
 
-@media (prefers-reduced-motion: reduce) { .card { --px: .5 !important; --py: .5 !important; } }
+@media (prefers-reduced-motion: reduce) { .card { --px: .5 !important; --py: .5 !important; } .path > button.row { transition: none !important; } }
 
 /* ------------------------------------------------------------ the menu, its panels, and the "new" tag (step 5e) */
 .menu-wrap { position: relative; margin-left: auto; }
@@ -286,7 +287,8 @@ button.earlier:focus-visible { outline: 2px solid var(--right); outline-offset: 
 .empty .parked-row .go { grid-column: 2; grid-row: 1 / span 2; font: var(--t-meta); font-stretch: 88%; color: var(--right); }
 .empty .ghost { margin-top: 8px; padding: 9px 14px; border: 2px solid var(--ink); background: transparent; border-radius: 6px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; }
 
-/* The list of every answer this session (Panels.tsx), opened from "N earlier answers" on the path. */
+/* The list of every answer this session (Panels.tsx), opened from "N earlier answers", in the path's column. */
+.panel.anchored { right: auto; width: 300px; z-index: 80; }
 .panel .answers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; }
 .panel .answers button { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
 .panel .answers button:hover { background: #00000008; }

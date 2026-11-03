@@ -101,6 +101,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const exitDir = useRef<Leave>("fade");
   const [menuOpen, setMenuOpen] = useState(false);
   const [panel, setPanel] = useState<PanelKind>();
+  /** Where the answers panel opens: under "N earlier answers", in the path's column. */
+  const [answersAt, setAnswersAt] = useState<{ left: number; top: number }>();
   const project = state.project.name;
   usePresence();
   const seen = useSeen(state);
@@ -269,9 +271,13 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     if (id === current?.meta.id) return;
     exitDir.current = "fade";
     const answeredKey = [...answered.keys()].find((k) => k.startsWith(`${id}@`));
-    if (answeredKey) return setReviewing(answeredKey);
-    setReviewing(undefined);
-    setPick(id);
+    if (answeredKey) setReviewing(answeredKey);
+    else {
+      setReviewing(undefined);
+      setPick(id);
+    }
+    // The row you went from unmounts once its card is in play: focus moves to the card, not to the page.
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".stage article.card:not([data-leaving])")?.focus({ preventScroll: true }));
   };
 
   // Topics that look like the card's (D44, D111): the same rule `baesian file` warns with, over the topics in use.
@@ -456,6 +462,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       {panel === "answers" && (
         <AnswersPanel
           answers={trail}
+          {...(answersAt ? { at: answersAt } : {})}
           onOpen={(id) => {
             setPanel(undefined);
             goTo(id);
@@ -476,7 +483,10 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           onGoTo={goTo}
           layoutKey={`${key}:${mode.kind}`}
           turnKey={key}
-          onEarlier={() => showPanel("answers")}
+          onEarlier={(at) => {
+            setAnswersAt({ left: Math.max(16, at.left - 8), top: at.bottom + 6 });
+            showPanel("answers");
+          }}
           earlierOpen={panel === "answers"}
           {...(cardMotion ? { card: cardMotion } : {})}
           {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
@@ -691,6 +701,7 @@ function LiveCard(p: {
   return (
     <motion.article
       ref={el}
+      tabIndex={-1}
       className={`card rarity-${p.rarity}`}
       data-mode={p.card.mode.kind}
       data-locked={p.locked || undefined}

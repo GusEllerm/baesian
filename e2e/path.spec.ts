@@ -162,6 +162,32 @@ test("answering turns the drum to the next card, and with reduced motion it chan
   await expect(page.locator(".path .row.past")).toHaveText(/Run file layout/);
 });
 
+test("answers past the drum are counted, listed in a panel that takes the focus, and reopen with the focus on the card", async ({ page }) => {
+  await open(page, (s) => {
+    for (const [i, t] of ["The run store", "Run file layout", "Run retention", "Run labels", "Run export"].entries()) file(s, { title: t, question: `Question ${i}?`, topic: `alpha/q${i}` });
+  });
+  for (let i = 0; i < 4; i++) {
+    await choose(page, "proposal");
+    await page.clock.runFor(1200);
+  }
+  // Folded: past the three the path shows, and any the drum turned past its top edge. The label counts them all.
+  const earlier = page.locator(".path button.earlier");
+  const shown = await page.locator(".path .row.past").count();
+  await expect(earlier).toHaveText(4 - shown === 1 ? "1 earlier answer" : `${4 - shown} earlier answers`);
+  await earlier.click();
+  const panel = page.getByRole("complementary", { name: "Your answers" });
+  await expect(panel.getByRole("button")).toHaveCount(5); // Close, and the four answers, oldest first
+  await expect(panel.locator(".answers button").first()).toContainText("The run store");
+  await expect(panel.locator(".answers button").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(earlier).toBeFocused();
+  // Reopening an answer moves the focus to its card, not to the page.
+  await page.locator(".path .row.past").first().click();
+  await page.clock.runFor(100);
+  await expect(page.locator(CARD)).toBeFocused();
+});
+
 test("an answered card reopens from the path, and a changed answer is recorded with a brief (D81)", async ({ page }) => {
   const { store } = await open(page, (s) => {
     file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });

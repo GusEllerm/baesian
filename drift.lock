@@ -38,7 +38,7 @@ sig = "f0c5bcbcabb5efbd"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "11baee0f9eb4cb0e"
+sig = "3b6e43eaf0a0f20d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -48,12 +48,12 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "adc9f12dc768c06b"
+sig = "c8cb291223aa1997"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
-sig = "fc8a872b88dd388c"
+sig = "7870c5305f85475c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -933,12 +933,12 @@ sig = "b7602c05740450f6"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "11baee0f9eb4cb0e"
+sig = "3b6e43eaf0a0f20d"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "fc8a872b88dd388c"
+sig = "7870c5305f85475c"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
