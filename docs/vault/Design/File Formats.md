@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-03
 reviewed: 2026-10-23
@@ -53,6 +53,10 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `port.json` | `LastPort` | yes (mutable) | no | `baesian serve`, kept after it stops (D103) |
 | `config.json` | `Config` | no | yes (mutable) | `baesian init` |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
+| `<file>.sig` | OpenSSH's signature format (D160) | yes | yes, with its file | the hosted service, beside each file a person writes ([[#The hosted service's proof (M9a)]]) |
+| `verdicts/<name>.passkey.json`, `preferences/<name>.passkey.json` | `PasskeyProof` | yes | yes, with its file | the hosted service, from the browser's assertion (D139, D163) |
+| `trust/service-<key>.json`, `trust/service-<key>-revoked.json` | `ServiceKey`, `ServiceKeyRevocation` | yes | yes, in every branch's record on sync | the CLI, from the service (M9d); pinned in CI too (D142) |
+| `trust/passkey-<suffix>.json` | `PasskeyKey`, with a `.sig` | yes | yes, as the service's keys | the service, when you enrol a passkey; pinned in CI by hand (D159) |
 
 ## Card revision
 
@@ -132,6 +136,7 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 | `retire_rules` | optional: rules the chosen option breaks, retired with this answer (D119). Only on `accept` or `alternative`, and only rules that option's `_breaks` lists and that aren't retired yet |
 | `should_have_asked` | optional: "you should have asked me" (D151, B-87tkc), only on a card the gate held back, or in shadow would have; it counts as a miss on the card's row |
 | `reviewer`, `client`, `at` | `client` names the client that wrote it (D62). `at` is strictly increasing per card, so the latest verdict is unambiguous |
+| `account` | optional: in a hosted repo, the stable ID of the account that answered (`AccountId`), beside its handle in `reviewer`; the hosted client's `client` is `hosted-desktop` or `hosted-phone` (M9a) |
 
 ## The others
 
@@ -140,6 +145,7 @@ Each also has `type` and `format` (D156), not repeated below.
 - **Withdrawal** (`Withdrawal`): `card`, `reason`, `by`, `at`. One per card.
 - **Ledger entry** (`LedgerMeta`): `card`, `branch`, optional `commit`, `at`. One per card a commit cites. The body is one line naming the commit (D120): what the commit changed is git's to say. Entries written before D120 also list the commit's files.
 - **Deck** (`DeckMeta`): `id`, `title`, optional `branch` and `from` (the source document, relative to the repo, and only when it's in the repo), `context_notes` (vault wikilinks), `created`. The body is the briefing. Membership isn't stored: it's computed from the cards' `deck` fields, so a deck never needs editing.
+- **The account (M9a).** A rule, a rule retirement, a topic alias and a preference file each also take an optional `account`, as a verdict does: in a hosted repo the service sets it beside the handle in `accepted_by` or `by` ([[#The hosted service's proof (M9a)]]).
 - **Rule** (`RuleMeta`): `id`, optional `topic`, `covers` (gate fact-ID globs such as `dep:pytest-*`, which the gate acknowledges automatically; D24), optional `from_card`, `accepted_by`, `created`. The body is the rule. It's saved when you accept a rule draft (D110): the draft's wording, or yours if you answer with your own, its patterns and topic, `from_card` naming the decision it came from, and you as `accepted_by`. One rule per decision.
 - **Rule retirement** (`RuleRetirement`, D119): `rule`, `card` (the card it was retired on), `by`, `at`. Written when an answer chooses an option that breaks the rule and you tick "Retire this rule". The rule file stays; the gate and the client skip a retired rule. Replacing a rule is retiring it and making a new one.
 - **Topic alias** (`TopicAlias`): `from`, `to`, `by`, `at`. Written when you merge two topics on a card (D111): `from` is the card's topic and `to` the one it looked like, both canonical, so aliases never form a cycle.
@@ -195,6 +201,39 @@ The gate at filing (M8: D144–D151, [[Routing and Preferences]], [[Formats for 
 A classifier's model, score and threshold are reserved (D145): the schema is strict, so a v1 reader refuses a record that sets them.
 
 **Status `held`** is computed, never stored: the revision's gate record says held, enforcing, and the revision has no verdict (D150). It isn't in `PENDING`, and the merge gate accepts it.
+
+## The hosted service's proof (M9a)
+
+In a hosted repo only what the service signs counts: every answer, rule, rule retirement, topic merge and preference change (D138), and the relay's gate record (D158). [[Formats for v1]] section 7 is the design; `src/trust.ts`, `src/sshsig.ts` and `src/passkey.ts` check it ([[src-trust]]), and the store skips what doesn't count ([[src-store#The hosted service's proof (M9a)]]). Every file here is written once, by the service, and the CLI writes it into the live layer as it pulls (M9d). Nothing here changes a repo that isn't hosted.
+
+**Signature files (D160).** `<file>.sig`, beside each signed file in both layers: OpenSSH's own signature format (PROTOCOL.sshsig), armored as `ssh-keygen -Y sign` writes it, over the file's exact bytes, so no canonical form is needed. The namespace is `baesian` (`NAMESPACE`), the key Ed25519 and the hash SHA-512 or SHA-256. It carries no `format` field: its format is SSHSIG's own version, 1, and a later version is refused by name (`NewerFormat`, kind `signature`). Signed: verdicts, rules (`rules/<id>.md`), rule retirements, topic aliases, preference files, the relay's gate records (`cards/<id>/gate-r<n>-relay.json`) and passkey key files. [[src-verify#Checking an answer by hand]] shows how to check one with `ssh-keygen -Y verify`.
+
+**A file counts** (`Store.judge`) when its `.sig` is a trusted service key's signature in the `baesian` namespace, made while the key was valid at the file's own time (`at`; a rule's `created`) and before any revocation of it; when it's where its bytes say it belongs; and, when it needs one, its passkey proof checks. A signature covers the bytes, not the name, so a verdict must be named for its own time, card and revision, a rule or retirement for its rule, a preference file for its own time, and a relay's gate record must be in its card's folder, named for its revision: a copy under another name counts nowhere. A verdict needs one when the revision it answers is hard (the level in force, `Store.levelOf`), whatever its response, since a deferral settles a card at merge too (D139). A preference file needs one when it lets more cards past you than the newest counting file before it, or "Today" in shadow with none: a row moved toward held, or enforcing turned on (D163, `loosening()`). It's compared with that file, not the one its `replaces` names, so a change can't make itself look like tightening.
+
+**Passkey proof** (`PasskeyProof`, D139, D163), `<file without .json>.passkey.json` beside a verdict or a preference file:
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `passkey-proof`; 1 |
+| `file` | the file it proves, by name, in the same folder |
+| `credential` | the passkey's credential ID, base64url |
+| `authenticator_data`, `client_data`, `signature` | WebAuthn's assertion as the browser returned it, base64url |
+
+Its client data must be `webauthn.get`, from the service key's `origin`, not in another site's frame, with the challenge the SHA-256 digest of the file's bytes (P16 section 7); its authenticator data must carry the hash of the key's `rp_id` and the user-present and user-verified flags; and its signature must check under a trusted passkey key with the file's `account` and the proof's `credential`, by its COSE algorithm: ES256, EdDSA or RS256 (`PASSKEY_ALGS`).
+
+**The trust files** (D142, D159), in `trust/`, copied into every branch's record by `Store.syncRecord`:
+
+| File | Fields |
+|---|---|
+| `trust/service-<key>.json` (`ServiceKey`) | `type` `service-key`, `format`; `key`, a slug; `public_key`, `ssh-ed25519 AAAA…` with no comment, as an allowed-signers line takes it; `origin` and `rp_id`, the website's origin and WebAuthn relying party; `valid_after`, and optional `valid_before` |
+| `trust/service-<key>-revoked.json` (`ServiceKeyRevocation`) | `type` `service-key-revocation`, `format`, `key`, `reason`, `at`: a file signed at or after `at` doesn't count |
+| `trust/passkey-<suffix>.json` (`PasskeyKey`), with a `.sig` | `type` `passkey-key`, `format`, `account`, `handle`, `credential`, `public_key` (SubjectPublicKeyInfo, base64url), `alg` (COSE: -7, -8 or -257), `enrolled` |
+
+**What makes a repo hosted** (`Store.hosted`): keys pinned in CI's settings, whatever the record says, so a commit that drops the record's copy can't switch the checks off (D142); or else a service key in the layer's `trust/`. Pinned, the keys are CI's alone, and the record's copy must match them (`pinProblems()`). Unpinned, the layer's copy is used, its passkey keys only once the service signed them. Revocations count wherever they are, since they only take trust away. M9d adds the config's `service` field as a local switch too.
+
+**The pin** (`pinnedTrust()`): `BAESIAN_TRUST` holds the trust files' JSON, one per line, as `parseTrust()` reads them, with blank lines and `#` comments skipped; or `BAESIAN_TRUST_FILE` names a file of the same lines, for a protected file on a runner. Both may be set. At least one service key must be among them. A pin that's set but empty, or that can't be read, stops every command with `BadTrust`: a misconfigured pin must never turn the checks off quietly.
+
+**The relay's gate record** (D158) is the CLI's format (`GateRecord`, [[#Routing]]) with `by: relay`, signed, and when it holds a card, `draw_proof`: the service's SSH signature, unarmored, in the namespace `baesian-draw` (`DRAW_NAMESPACE`), over `drawMessage()`'s text: `<id> r<revision> <SHA-256 of the card revision's bytes, hex>` and a newline. The draw is the SHA-256 of the raw Ed25519 signature, its first six bytes read as a number from 0 to 1, as `drawOf()` reads the CLI's hash (`drawOfProof()`). Ed25519 is deterministic, so the relay can't redraw, and nobody without its key can predict a draw.
 
 ## Vault notes (M6)
 

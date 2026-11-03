@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Repo, openRepo, slug } from "./git.js";
@@ -16,7 +16,9 @@ import {
   type Row,
   type Settings,
   TODAY,
+  higherLevel,
   levelInForce,
+  loosening,
   rowOf,
   route,
   suggestPreset,
@@ -34,11 +36,16 @@ import {
   HARD_BY_DEFAULT,
   LedgerMeta,
   type Level,
+  NewerFormat,
   PREFERENCE_FILE,
+  type PasskeyKey,
+  PasskeyProof,
   Preferences,
   Presence,
   RuleMeta,
   RuleRetirement,
+  type ServiceKey,
+  type ServiceKeyRevocation,
   TopicAlias,
   Verdict,
   Waiting,
@@ -50,9 +57,11 @@ import {
   newestFormat,
   upgradeFile,
 } from "./schema.js";
+import { proofProblem } from "./passkey.js";
 import { byLine, cardAuthor } from "./quote.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
 import { type History, readHistory } from "./trailers.js";
+import { type TrustRoot, checkSigned, pinnedTrust, readTrustFile } from "./trust.js";
 
 /** The live layer, inside git's common directory: shared by every worktree of a clone, never committed (D34). */
 export const LIVE_DIR = "baesian";
@@ -128,9 +137,46 @@ export interface InboxItem {
 /** An inbox item's name in the cursor's `delivered` list: the card it's listed under, and its verdict. */
 const inboxKey = (i: InboxItem) => `${i.card} ${i.verdict.card} ${i.verdict.at}`;
 
+/** A time as a file name starts with it (D107): `20261101T093012.345Z`. */
+const compactAt = (at: string) => at.replace(/[-:]/g, "");
+
+/** A rule, or its retirement (D119): `rules/<id>.md`, `rules/<id>-retired.json`. */
+const RULE_FILE = /^R-[0-9a-z]{5}(\.md|-retired\.json)$/;
+
 /** The card a verdict file is for, from its name: `<at>-<id>-r<revision>-<suffix>.json` (D107). */
 const VERDICT_FILE = /^\d{8}T\d{6}\.\d{3}Z-(B-[0-9a-z]{5})-r\d+-[0-9a-z]+\.json$/;
 export const verdictFileCard = (name: string): string | undefined => VERDICT_FILE.exec(name)?.[1];
+
+/** A relay's gate record, which the service signs (D158). */
+const RELAY_GATE = /^gate-r\d+-relay\.json$/;
+
+/** A file that goes with another: its signature (D160), or its passkey proof (D139). Copied with it, never read as it. */
+const isCompanion = (name: string) => name.endsWith(".sig") || name.endsWith(".passkey.json");
+
+/** Where a file's passkey proof would be: beside it, `.passkey.json` for `.json` (P16 section 7). */
+export const proofPath = (rel: string) => rel.replace(/\.json$/, ".passkey.json");
+
+/**
+ * A hosted repo's keys (D138, D142): CI's pinned keys when it pins any, whatever the record says, so a commit that drops
+ * the record's copy can't switch the checks off; otherwise the copy in the layer, its passkeys counted only when the
+ * service signed them.
+ */
+export interface Hosted {
+  root: TrustRoot;
+  pinned: boolean;
+}
+
+/** Whether a file a person writes counts in a hosted repo (D138), and why not. Outside one, everything counts. */
+export type Judgement = { ok: true } | { ok: false; why: string };
+const COUNTS: Judgement = { ok: true };
+const doesnt = (why: string): Judgement => ({ ok: false, why });
+
+/** The service's keys and passkeys found in a layer's `trust/` folder, each with its file. */
+export interface TrustFiles {
+  service: { file: string; key: ServiceKey }[];
+  revoked: { file: string; key: ServiceKeyRevocation }[];
+  passkeys: { file: string; key: PasskeyKey }[];
+}
 
 /** A waiting marker counts as gone after three missed beats, as presence does (D41, D90). */
 export const WAITING_BEAT_MS = 30_000;
@@ -193,6 +239,14 @@ export class NoDeck extends Error {}
 /** A preference change made from an older view: its `replaces` isn't the newest file (P16 section 2). The server says 409. */
 export class StalePreferences extends Error {}
 
+/**
+ * Where a store's pinned keys come from (D142): undefined reads CI's settings (`BAESIAN_TRUST`, `BAESIAN_TRUST_FILE`) the
+ * first time they're needed; `null` means none are pinned; a root means these.
+ */
+export interface StoreTrust {
+  pinned?: TrustRoot | null;
+}
+
 function now(): string {
   return new Date().toISOString();
 }
@@ -225,22 +279,23 @@ export class Store {
   constructor(
     readonly repo: Repo,
     layers?: { dir: string },
+    private readonly trustOpts: StoreTrust = {},
   ) {
     this.live = layers ? layers.dir : join(repo.commonDir, LIVE_DIR);
     this.record = layers ? layers.dir : join(repo.toplevel, RECORD_DIR);
     this.readOnly = layers !== undefined;
   }
 
-  static open(cwd?: string): Store {
-    return new Store(openRepo(cwd));
+  static open(cwd?: string, trust?: StoreTrust): Store {
+    return new Store(openRepo(cwd), undefined, trust);
   }
 
   /**
    * Read a record as if it were the live layer. This is how CI sees cards and verdicts: it has no
    * live layer, only what was committed (D34).
    */
-  static overRecord(repo: Repo, dir: string): Store {
-    return new Store(repo, { dir });
+  static overRecord(repo: Repo, dir: string, trust?: StoreTrust): Store {
+    return new Store(repo, { dir }, trust);
   }
 
   // ---------------------------------------------------------------- layers
@@ -346,6 +401,10 @@ export class Store {
     claims?: Map<string, Card[]>;
     /** The history's trailers (B-9v5xj), searched once per view. */
     history?: History;
+    /** In a hosted repo (M9a): the keys, each signed file's judgement, and the preference files' in order. */
+    hosted?: { value: Hosted | undefined };
+    judged?: Map<string, Judgement>;
+    preferences?: Map<string, Judgement>;
     report: ((path: string, error: string) => void) | undefined;
   };
 
@@ -378,6 +437,226 @@ export class Store {
     }
     this.session?.files.set(path, value);
     return value;
+  }
+
+  /** A file's bytes as written, from the layer: a signature covers these, never the parsed fields (P15). */
+  bytes(rel: string): Buffer {
+    return readFileSync(join(this.live, rel));
+  }
+
+  // ---------------------------------------------------------------- the hosted service's proof (M9a: D138, D139, D142, D158–D160, D163)
+
+  /** CI's pinned keys, read once: from the options, or from CI's settings. A pin that can't be read throws (`BadTrust`). */
+  private pinnedRoot(): TrustRoot | undefined {
+    if (this.pinCache) return this.pinCache.value;
+    const value = this.trustOpts.pinned !== undefined ? (this.trustOpts.pinned ?? undefined) : pinnedTrust();
+    this.pinCache = { value };
+    return value;
+  }
+  private pinCache?: { value: TrustRoot | undefined };
+
+  /** The trust files in this layer, `trust/`: the record's copy of the keys (P16 section 7). */
+  trustFiles(): TrustFiles {
+    const out: TrustFiles = { service: [], revoked: [], passkeys: [] };
+    for (const f of this.list("trust").filter((n) => n.endsWith(".json"))) {
+      const rel = `trust/${f}`;
+      const t = this.read(join(this.live, rel), (text) => readTrustFile(JSON.parse(text), rel));
+      if (!t) continue;
+      if (t.type === "service-key") out.service.push({ file: rel, key: t });
+      else if (t.type === "service-key-revocation") out.revoked.push({ file: rel, key: t });
+      else out.passkeys.push({ file: rel, key: t });
+    }
+    return out;
+  }
+
+  /**
+   * Whether this is a hosted repo, and the keys its answers are checked with (D138): CI's pinned keys whenever it pins
+   * any (D142, D159), or else the service's keys in this layer, when it has any. The layer's passkey keys count only with
+   * the service's signature; revocations count wherever they are, since they only take trust away. Undefined outside a
+   * hosted repo, where nothing here changes anything.
+   */
+  hosted(): Hosted | undefined {
+    if (this.session?.hosted) return this.session.hosted.value;
+    const pinned = this.pinnedRoot();
+    const files = this.trustFiles();
+    const revoked = [...(pinned?.revoked ?? []), ...files.revoked.map((r) => r.key)];
+    let value: Hosted | undefined;
+    if (pinned) value = { pinned: true, root: { service: pinned.service, passkeys: pinned.passkeys, revoked } };
+    else if (files.service.length) {
+      const base = { service: files.service.map((s) => s.key), revoked };
+      const passkeys = files.passkeys.filter((p) => this.signedBy(p.file, p.key.enrolled, base).ok).map((p) => p.key);
+      value = { pinned: false, root: { ...base, passkeys } };
+    }
+    if (this.session) this.session.hosted = { value };
+    return value;
+  }
+
+  /** Whether a file has its signature, by a key in `root` that was valid at `at` (D160). */
+  private signedBy(rel: string, at: string, root: Pick<TrustRoot, "service" | "revoked">): Judgement & { key?: ServiceKey } {
+    const sig = join(this.live, `${rel}.sig`);
+    if (!existsSync(sig)) return doesnt("it has no signature, so the service didn't write it (D138)");
+    const r = checkSigned(root, this.bytes(rel), readFileSync(sig, "utf8"), at, rel);
+    return "problem" in r ? doesnt(r.problem) : { ok: true, key: r.key };
+  }
+
+  /**
+   * Whether a file a person writes counts (D138): in a hosted repo, only with the service's signature, and for an answer
+   * on a hard card (D139) or a preference change that lets more cards past you (D163), with a passkey proof that checks
+   * against a trusted passkey key for the file's account. Outside a hosted repo, everything counts, as before. Files are
+   * written once, so a judgement holds for a view.
+   */
+  judge(rel: string): Judgement {
+    const h = this.hosted();
+    if (!h) return COUNTS;
+    const cached = this.session?.judged?.get(rel);
+    if (cached) return cached;
+    let j: Judgement;
+    try {
+      j = this.judgeAfresh(rel, h);
+    } catch (e) {
+      if (e instanceof NewerFormat) throw e;
+      j = doesnt(`it can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`);
+    }
+    if (this.session) (this.session.judged ??= new Map()).set(rel, j);
+    return j;
+  }
+
+  /**
+   * A signature covers a file's bytes, not its name, so each kind counts only where its bytes say it belongs: a copy of a
+   * signed answer under another card's name, or a relay's record in another card's folder, would otherwise count there.
+   */
+  private judgeAfresh(rel: string, h: Hosted): Judgement {
+    const [dir, a, b] = rel.split("/");
+    if (dir === "preferences") return this.preferenceJudgements(h).get(a!) ?? doesnt("it isn't a preference file");
+    let claim: { at: string; account?: string | undefined; proof?: string | undefined };
+    const elsewhere = (says: string) => doesnt(`its name or folder doesn't match what it says (${says}), so it was copied or renamed`);
+    if (dir === "verdicts" && a && verdictFileCard(a)) {
+      const v = this.verdictFile(a);
+      if (!v) return doesnt("it can't be read");
+      if (!a.startsWith(`${compactAt(v.at)}-${v.card}-r${v.revision}-`)) return elsewhere(`${v.card} r${v.revision}, at ${v.at}`);
+      const hard = this.levelOf(v.card, v.revision) === "hard";
+      claim = { at: v.at, account: v.account, proof: hard ? `it answers ${v.card}, a hard card, so it takes the reviewer's passkey (D139)` : undefined };
+    } else if (dir === "rules" && a?.endsWith("-retired.json")) {
+      const r = this.retirementFile(a);
+      if (!r) return doesnt("it can't be read");
+      if (a !== `${r.rule}-retired.json`) return elsewhere(`it retires ${r.rule}`);
+      claim = { at: r.at, account: r.account };
+    } else if (dir === "rules" && a?.endsWith(".md")) {
+      const r = this.ruleFile(a)?.meta;
+      if (!r) return doesnt("it can't be read");
+      if (a !== `${r.id}.md`) return elsewhere(`it's ${r.id}`);
+      claim = { at: r.created, account: r.account };
+    } else if (dir === "topics" && a?.endsWith(".json")) {
+      const t = this.read(join(this.live, rel), (x) => readAs("topic-alias", TopicAlias, JSON.parse(x), rel));
+      if (!t) return doesnt("it can't be read");
+      claim = { at: t.at, account: t.account };
+    } else if (dir === "cards" && b && RELAY_GATE.test(b)) {
+      const g = this.read(join(this.live, rel), (t) => readAs("gate", GateRecord, JSON.parse(t), rel));
+      if (!g) return doesnt("it can't be read");
+      if (g.by !== "relay") return doesnt("it's named for the relay, but says it ran elsewhere");
+      if (g.card !== a || b !== `gate-r${g.revision}-relay.json`) return elsewhere(`it gated ${g.card} r${g.revision}`);
+      claim = { at: g.at };
+    } else {
+      return doesnt("it isn't a kind of file a person writes");
+    }
+    return this.signedClaim(rel, claim, h);
+  }
+
+  /** The signature, and the passkey proof when one is needed: the checks every signed file takes (P16 section 7). */
+  private signedClaim(rel: string, claim: { at: string; account?: string | undefined; proof?: string | undefined }, h: Hosted): Judgement {
+    const signed = this.signedBy(rel, claim.at, h.root);
+    if (!signed.ok) return signed;
+    if (!claim.proof) return COUNTS;
+    const proofRel = proofPath(rel);
+    if (!existsSync(join(this.live, proofRel))) return doesnt(`${claim.proof}, and has no passkey proof`);
+    let proof: PasskeyProof;
+    try {
+      proof = readAs("passkey-proof", PasskeyProof, JSON.parse(readFileSync(join(this.live, proofRel), "utf8")), proofRel);
+    } catch (e) {
+      if (e instanceof NewerFormat) throw e;
+      return doesnt(`its passkey proof can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`);
+    }
+    if (proof.file !== basename(rel)) return doesnt(`its passkey proof is for ${proof.file}`);
+    if (!claim.account) return doesnt(`${claim.proof}, but names no account to check its passkey against`);
+    const key = h.root.passkeys.find((k) => k.account === claim.account && k.credential === proof.credential);
+    if (!key) return doesnt(`${claim.proof}, and its proof was made with a passkey that isn't trusted for account ${claim.account} (D159)`);
+    const why = proofProblem(proof, this.bytes(rel), key, signed.key!);
+    return why ? doesnt(`its passkey proof doesn't check: ${why}`) : COUNTS;
+  }
+
+  /**
+   * The preference files' judgements, oldest first (D163): each is compared with the newest one before it that counts, or
+   * with "Today" in shadow, so a change that loosens takes the passkey whatever file it says it replaces.
+   */
+  private preferenceJudgements(h: Hosted): Map<string, Judgement> {
+    if (this.session?.preferences) return this.session.preferences;
+    const out = new Map<string, Judgement>();
+    let before: Settings = TODAY;
+    for (const name of this.list("preferences").filter((f) => PREFERENCE_FILE.test(f))) {
+      let file: Preferences | undefined;
+      try {
+        file = this.preferenceRaw(name);
+      } catch (e) {
+        if (e instanceof NewerFormat) throw e;
+        out.set(name, doesnt(`it can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`));
+        continue;
+      }
+      if (!file) {
+        out.set(name, doesnt("it can't be read"));
+        continue;
+      }
+      // Named for its own time, which its signature covers: an old change copied under a newer name can't come back in force.
+      if (!name.startsWith(`${compactAt(file.at)}-`)) {
+        out.set(name, doesnt(`its name doesn't match its time (${file.at}), so it was copied or renamed`));
+        continue;
+      }
+      const loose = loosening(before, settingsOf(file));
+      const j = this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
+      out.set(name, j);
+      if (j.ok) before = settingsOf(file);
+    }
+    if (this.session) this.session.preferences = out;
+    return out;
+  }
+
+  /**
+   * The level in force on a card revision (P16 section 3): the card's own, set by the CLI's gate at filing, and in a hosted
+   * repo raised by the relay's signed gate record, if that shows it higher. The latest revision's, unless one is named.
+   */
+  levelOf(id: string, revision?: number): Level | undefined {
+    const revs = this.revisions(id);
+    const card = revision === undefined ? revs.at(-1) : revs.find((r) => r.meta.revision === revision);
+    if (!card) return undefined;
+    if (!this.hosted()) return card.meta.level;
+    const relay = this.gateRecordBy(id, card.meta.revision, "relay");
+    return relay?.outcome === "shown" && relay.level ? higherLevel(card.meta.level, relay.level) : card.meta.level;
+  }
+
+  /**
+   * In a hosted repo, the files a person writes that don't count (D138), and why: for `baesian verify`'s notes, since a
+   * file that doesn't count is ignored, not an error. Passkey keys the service didn't sign are among them.
+   */
+  uncounted(): { file: string; why: string }[] {
+    const h = this.hosted();
+    if (!h) return [];
+    const rels = [
+      ...this.list("verdicts").filter((f) => verdictFileCard(f)).map((f) => `verdicts/${f}`),
+      ...this.list("rules").filter((f) => RULE_FILE.test(f)).map((f) => `rules/${f}`),
+      ...this.list("topics").filter((f) => f.startsWith("alias-") && f.endsWith(".json")).map((f) => `topics/${f}`),
+      ...this.list("preferences").filter((f) => PREFERENCE_FILE.test(f)).map((f) => `preferences/${f}`),
+      ...this.cardIds().flatMap((id) => this.list("cards", id).filter((f) => RELAY_GATE.test(f)).map((f) => `cards/${id}/${f}`)),
+    ];
+    const out = rels.flatMap((file) => {
+      const j = this.judge(file);
+      return j.ok ? [] : [{ file, why: j.why }];
+    });
+    if (!h.pinned) {
+      for (const p of this.trustFiles().passkeys) {
+        const j = this.signedBy(p.file, p.key.enrolled, h.root);
+        if (!j.ok) out.push({ file: p.file, why: j.why });
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- cards
@@ -478,20 +757,25 @@ export class Store {
     return n;
   }
 
-  /** A card's gate records, every revision's and every writer's. */
+  /** A card's gate records, every revision's and every writer's; in a hosted repo, the relay's only once signed (D158). */
   gateRecords(id: string): GateRecord[] {
     return this.list("cards", id)
-      .filter((f) => /^gate-r\d+-(cli|relay)\.json$/.test(f))
+      .filter((f) => /^gate-r\d+-(cli|relay)\.json$/.test(f) && (!RELAY_GATE.test(f) || this.judge(`cards/${id}/${f}`).ok))
       .flatMap((f) => this.read(join(this.live, "cards", id, f), (t) => readAs("gate", GateRecord, JSON.parse(t), `cards/${id}/${f}`)) ?? []);
   }
 
   /**
-   * The gate record that counts for a revision: the CLI's. In a hosted repo only the relay's signed record will hold a
-   * card back (D158, M9), so this is where it's chosen.
+   * The gate record that counts for a revision: the CLI's; in a hosted repo, only the relay's signed one (D158), so a card
+   * the relay hasn't gated isn't held, and needs an answer before merge.
    */
   gateRecord(id: string, revision?: number): GateRecord | undefined {
+    return this.gateRecordBy(id, revision, this.hosted() ? "relay" : "cli");
+  }
+
+  /** One writer's gate record for a revision: the CLI's, or the relay's, once signed (D158). */
+  gateRecordBy(id: string, revision: number | undefined, by: GateRecord["by"]): GateRecord | undefined {
     const rev = revision ?? this.card(id)?.meta.revision;
-    return this.gateRecords(id).find((g) => g.revision === rev && g.by === "cli");
+    return this.gateRecords(id).find((g) => g.revision === rev && g.by === by);
   }
 
   /** The gate's facts that made a card hard above the level its agent asked for (D42, D144): for the message. */
@@ -694,7 +978,7 @@ export class Store {
     const ruleId = newId("R", (candidate) => existsSync(join(this.live, "rules", `${candidate}.md`)));
     const meta = parse(
       RuleMeta,
-      { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, created: v.at },
+      { type: "rule", format: newestFormat("rule"), id: ruleId, topic: this.canonicalTopic(card.meta.topic), covers: card.meta.rule_covers, ...(from ? { from_card: from } : {}), accepted_by: v.reviewer, ...(v.account ? { account: v.account } : {}), created: v.at },
       "the rule",
     );
     const rel = join("rules", `${ruleId}.md`);
@@ -825,18 +1109,30 @@ export class Store {
       .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
   }
 
-  /** Every rule, retired or not: a retired one carries its retirement (D119). */
+  /** Every rule, retired or not: a retired one carries its retirement (D119). In a hosted repo, only those signed (D138). */
   rules(): { meta: RuleMeta; body: string; retired?: RuleRetirement }[] {
     const files = this.list("rules");
     return files
-      .filter((f) => f.endsWith(".md"))
-      .flatMap((f) => this.read(join(this.live, "rules", f), (text) => {
-        const { meta, body } = parseDoc(text);
-        const rule = readAs("rule", RuleMeta, meta, `rules/${f}`);
-        const gone = `${rule.id}-retired.json`;
-        const retired = files.includes(gone) ? this.read(join(this.live, "rules", gone), (t) => readAs("rule-retirement", RuleRetirement, JSON.parse(t), `rules/${gone}`)) : undefined;
-        return { meta: rule, body, ...(retired ? { retired } : {}) };
-      }) ?? []);
+      .filter((f) => f.endsWith(".md") && this.judge(`rules/${f}`).ok)
+      .flatMap((f) => {
+        const rule = this.ruleFile(f);
+        if (!rule) return [];
+        const gone = `${rule.meta.id}-retired.json`;
+        const retired = files.includes(gone) && this.judge(`rules/${gone}`).ok ? this.retirementFile(gone) : undefined;
+        return [{ ...rule, ...(retired ? { retired } : {}) }];
+      });
+  }
+
+  /** One rule file, read whether or not it counts. A view caches it by path, so it's read the same way everywhere. */
+  private ruleFile(name: string): { meta: RuleMeta; body: string } | undefined {
+    return this.read(join(this.live, "rules", name), (text) => {
+      const { meta, body } = parseDoc(text);
+      return { meta: readAs("rule", RuleMeta, meta, `rules/${name}`), body };
+    });
+  }
+
+  private retirementFile(name: string): RuleRetirement | undefined {
+    return this.read(join(this.live, "rules", name), (t) => readAs("rule-retirement", RuleRetirement, JSON.parse(t), `rules/${name}`));
   }
 
   // ---------------------------------------------------------------- presence
@@ -933,10 +1229,19 @@ export class Store {
 
   // ---------------------------------------------------------------- verdicts
 
+  /** A card's verdicts, oldest first. In a hosted repo, only those that count: signed, and on a hard card proved (D138, D139). */
   verdicts(id: string): Verdict[] {
     return this.verdictFilesOf(id)
-      .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => readAs("verdict", Verdict, JSON.parse(t), `verdicts/${f}`)) ?? [])
+      .flatMap((f) => {
+        const v = this.verdictFile(f);
+        return v && this.judge(`verdicts/${f}`).ok ? [v] : [];
+      })
       .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /** One verdict file, by name, read whether or not it counts. */
+  private verdictFile(name: string): Verdict | undefined {
+    return this.read(join(this.live, "verdicts", name), (t) => readAs("verdict", Verdict, JSON.parse(t), `verdicts/${name}`));
   }
 
   /** A card's verdict files, oldest first by name. In a view, every card's are sorted out once. */
@@ -990,7 +1295,7 @@ export class Store {
     if (v.should_have_asked !== undefined && this.gateRecord(card.meta.id, card.meta.revision)?.outcome !== "held") {
       throw new ValidationError(`${card.meta.id} wasn't held back: "you should have asked me" is only for a card the gate held, or in shadow would have`);
     }
-    const name = `${v.at.replace(/[-:]/g, "")}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
+    const name = `${compactAt(v.at)}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
     this.writeOnce(join(this.live, "verdicts", name), `${JSON.stringify(v, null, 2)}\n`);
     this.saveRule(card, v);
     this.retireRules(card, v);
@@ -1007,18 +1312,24 @@ export class Store {
     if (!row || !from || !to || v.response !== "accept") return;
     const force = this.inForce();
     if (force.settings.rows[row] !== from) return;
-    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, client: v.client, from_card: card.meta.id });
+    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, ...(v.account ? { account: v.account } : {}), client: v.client, from_card: card.meta.id });
   }
 
   // ---------------------------------------------------------------- preferences (D147)
 
-  /** The preference files, oldest first by name, which is by time (D107). */
+  /** The preference files, oldest first by name, which is by time (D107). In a hosted repo, only those that count (D138, D163). */
   preferenceNames(): string[] {
-    return this.list("preferences").filter((f) => PREFERENCE_FILE.test(f));
+    return this.list("preferences").filter((f) => PREFERENCE_FILE.test(f) && this.judge(`preferences/${f}`).ok);
   }
 
-  /** One preference file, by name. */
+  /** One preference file, by name; in a hosted repo, undefined unless it counts. */
   preferenceFile(name: string): Preferences | undefined {
+    const file = this.preferenceRaw(name);
+    return file && this.judge(`preferences/${name}`).ok ? file : undefined;
+  }
+
+  /** One preference file, read whether or not it counts. */
+  private preferenceRaw(name: string): Preferences | undefined {
     const path = join(this.live, "preferences", name);
     if (!PREFERENCE_FILE.test(name) || !existsSync(path)) return undefined;
     return this.read(path, (t) => readAs("preferences", Preferences, JSON.parse(t), `preferences/${name}`));
@@ -1046,7 +1357,7 @@ export class Store {
    * one the setup survey's answers suggest (B-5na1k). `replaces` must name the newest file, or be absent when there's
    * none: a change made from an older view is refused (`StalePreferences`), so two tabs can't undo each other.
    */
-  writePreferences(change: PreferenceChange, who: { by: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
+  writePreferences(change: PreferenceChange, who: { by: string; account?: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
     this.requireInit();
     const force = this.inForce();
     if ((change.replaces ?? undefined) !== force.name) {
@@ -1077,12 +1388,13 @@ export class Store {
         ...(force.name ? { replaces: force.name } : {}),
         ...(who.from_card ? { from_card: who.from_card } : {}),
         by: who.by,
+        ...(who.account ? { account: who.account } : {}),
         client: who.client,
         at,
       },
       "the preferences",
     );
-    const name = `${at.replace(/[-:]/g, "")}-${randomSuffix()}.json`;
+    const name = `${compactAt(at)}-${randomSuffix()}.json`;
     const rel = join("preferences", name);
     this.writeOnce(join(this.live, rel), `${JSON.stringify(file, null, 2)}\n`);
     this.toRecord(rel);
@@ -1102,7 +1414,7 @@ export class Store {
 
   private retireRules(card: Card, v: Verdict): void {
     for (const id of v.retire_rules ?? []) {
-      const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, at: v.at }, "the retirement");
+      const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, ...(v.account ? { account: v.account } : {}), at: v.at }, "the retirement");
       const rel = join("rules", `${id}-retired.json`);
       this.writeOnce(join(this.live, rel), `${JSON.stringify(r, null, 2)}\n`);
       this.toRecord(rel);
@@ -1283,9 +1595,10 @@ export class Store {
 
   // ---------------------------------------------------------------- topics
 
+  /** Topic merges (D44); in a hosted repo, only those signed (D138). */
   aliases(): TopicAlias[] {
     return this.list("topics")
-      .filter((f) => f.startsWith("alias-"))
+      .filter((f) => f.startsWith("alias-") && f.endsWith(".json") && this.judge(`topics/${f}`).ok)
       .flatMap((f) => this.read(join(this.live, "topics", f), (t) => readAs("topic-alias", TopicAlias, JSON.parse(t), `topics/${f}`)) ?? []);
   }
 
@@ -1479,28 +1792,34 @@ export class Store {
     const recordCards = join(this.record, "cards");
     const held = existsSync(recordCards) ? readdirSync(recordCards) : [];
     const added: string[] = [];
+    const copy = (rel: string) => {
+      if (this.toRecord(rel)) added.push(rel);
+    };
+    // A file a person writes goes with its signature and passkey proof, if it has them; in a hosted repo, only once it
+    // counts, so an answer written on the machine never reaches the record (D138, P15).
+    const hosted = this.hosted() !== undefined;
+    const signed = (rel: string) => {
+      if (hosted && !this.judge(rel).ok) return;
+      for (const extra of [`${rel}.sig`, proofPath(rel)]) if (extra !== rel && existsSync(join(this.live, extra))) copy(extra);
+      copy(rel);
+    };
+    // The service's keys, revocations and passkey keys: every branch's record keeps the copy that checks on your machine
+    // use, and that CI compares with its pinned keys (D142, D159).
+    for (const f of this.list("trust")) copy(`trust/${f}`);
     // The client saves a rule into the record of the worktree it runs in. The local gate reads every rule from the
     // live layer, but CI reads each commit's own record, so every branch's record must hold them too.
     // Preference files too: CI rechecks a gate record against the file it names, in the commit's own record (P16).
     for (const kind of ["rules", "topics", "preferences"] as const) {
-      for (const f of this.list(kind)) {
-        const rel = join(kind, f);
-        if (this.toRecord(rel)) added.push(rel);
-      }
+      for (const f of this.list(kind)) if (!isCompanion(f)) signed(`${kind}/${f}`);
     }
     for (const id of held) {
-      // Everything in the card's directory: revisions, a withdrawal, fallbacks.
+      // Everything in the card's directory: revisions, gate records, a withdrawal, fallbacks; the relay's gate record as signed.
       for (const f of this.list("cards", id)) {
-        const rel = join("cards", id, f);
-        if (this.toRecord(rel)) added.push(rel);
+        if (RELAY_GATE.test(f)) signed(`cards/${id}/${f}`);
+        else if (!isCompanion(f)) copy(join("cards", id, f));
       }
-      for (const kind of ["verdicts", "ledger"] as const) {
-        const mine = (name: string) => (kind === "verdicts" ? verdictFileCard(name) === id : name.startsWith(`${id}-`));
-        for (const f of this.list(kind).filter(mine)) {
-          const rel = join(kind, f);
-          if (this.toRecord(rel)) added.push(rel);
-        }
-      }
+      for (const f of this.list("verdicts").filter((name) => verdictFileCard(name) === id)) signed(`verdicts/${f}`);
+      for (const f of this.list("ledger").filter((name) => name.startsWith(`${id}-`))) copy(join("ledger", f));
     }
     return added;
   }

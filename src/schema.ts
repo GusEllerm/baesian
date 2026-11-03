@@ -53,6 +53,13 @@ export const FILE_KINDS = {
   "rule-note": { name: "rule note", upgrades: [] },
   preferences: { name: "preference file", upgrades: [] },
   gate: { name: "gate record", upgrades: [] },
+  // M9a, the hosted service's proof (P16 section 7). The relay writes these, never the CLI on its own.
+  /** A `.sig` beside a signed file: OpenSSH's own format (D160), with no `format` field; its number is SSHSIG's version. */
+  signature: { name: "signature", upgrades: [] },
+  "passkey-proof": { name: "passkey proof", upgrades: [] },
+  "service-key": { name: "service key", upgrades: [] },
+  "service-key-revocation": { name: "service key revocation", upgrades: [] },
+  "passkey-key": { name: "passkey key", upgrades: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
@@ -150,6 +157,15 @@ export const Reverse = z.enum(["cheap", "moderate", "one-way"]);
 export const DecisionRef = z.union([CardId, RuleId]);
 
 const Text = z.string().min(1);
+/**
+ * The stable ID of an account on the hosted service (P16 section 7): Baesian's own, never a Globus identity, which can
+ * change (D153). Set by the relay on everything a person writes, beside the handle in `reviewer`, `by` or `accepted_by`.
+ */
+export const AccountId = z.string().max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "an account ID is letters, digits, dots, dashes and underscores");
+
+/** Bytes as base64url, with no padding, as WebAuthn gives them. */
+const Base64Url = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/, "base64url, with no padding");
+
 /** A gate fact ID, or a pattern of them, as a rule covers them: `dep:httpx`, `dep:pytest-*`, `schema:migrations/*`. */
 export const FACT_PATTERN = /^(dep|schema|infra|api):\S+$/;
 
@@ -379,6 +395,8 @@ export const Verdict = z
     /** Rules the chosen option breaks that the reviewer retired with this answer (D119). */
     retire_rules: z.array(RuleId).optional(),
     reviewer: z.string().min(1),
+    /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
+    account: AccountId.optional(),
     /** Which client wrote the verdict (D62). */
     client: z.string().min(1),
     at: Timestamp,
@@ -438,6 +456,8 @@ export const RuleMeta = z.strictObject({
   covers: z.array(z.string().min(1)).default([]),
   from_card: CardId.optional(),
   accepted_by: z.string().min(1),
+  /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
+  account: AccountId.optional(),
   created: Timestamp,
 });
 export type RuleMeta = z.infer<typeof RuleMeta>;
@@ -453,6 +473,8 @@ export const RuleRetirement = z.strictObject({
   /** The card it was retired on. */
   card: CardId,
   by: z.string().min(1),
+  /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
+  account: AccountId.optional(),
   at: Timestamp,
 });
 export type RuleRetirement = z.infer<typeof RuleRetirement>;
@@ -464,6 +486,8 @@ export const TopicAlias = z.strictObject({
   from: Topic,
   to: Topic,
   by: z.string().min(1),
+  /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
+  account: AccountId.optional(),
   at: Timestamp,
 });
 export type TopicAlias = z.infer<typeof TopicAlias>;
@@ -604,6 +628,8 @@ export const Preferences = z
     survey_fine: z.array(Row).optional(),
     reason: z.string().min(1).optional(),
     by: z.string().min(1),
+    /** The account that wrote it, on the hosted service (P16 section 7): set by the relay, beside the handle. */
+    account: AccountId.optional(),
     /** Which client wrote it (D62). */
     client: z.string().min(1),
     at: Timestamp,
@@ -673,6 +699,79 @@ export const GateRecord = z
     }
   });
 export type GateRecord = z.infer<typeof GateRecord>;
+
+// ---------------------------------------------------------------- the hosted service's proof (M9a: D138, D139, D142, D159, D160)
+
+/** A service key's ID, chosen by the service: `trust/service-<key>.json`. */
+const KeyId = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a key ID is a lowercase slug");
+
+/**
+ * One of the service's signing keys (D142): `trust/service-<key>.json`, in the live layer and every branch's record, and
+ * pinned in CI's own settings (`BAESIAN_TRUST`), where the copy must match. Written once, by the CLI from the relay. A
+ * person-written file counts only with a `.sig` this key made while it was valid (D138, D160).
+ */
+export const ServiceKey = z.strictObject({
+  type: z.literal("service-key"),
+  format: formatOf("service-key"),
+  key: KeyId,
+  /** The Ed25519 public key in OpenSSH's form, as an allowed-signers line takes it: `ssh-ed25519 AAAA…`, with no comment. */
+  public_key: z.string().regex(/^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$/, "an Ed25519 key in OpenSSH's form: ssh-ed25519 AAAA…"),
+  /** The website's origin and WebAuthn relying party, which a passkey proof under this key's signature must name (D139). */
+  origin: z.string().regex(/^https?:\/\/[^\s/?#]+$/, "an origin: https://host, with no path"),
+  rp_id: z.string().regex(/^[a-z0-9.-]+$/, "a relying party ID is a domain"),
+  /** It signs only files whose own time is from `valid_after`, and before `valid_before` (git's allowed signers, B5 F14). */
+  valid_after: Timestamp,
+  valid_before: Timestamp.optional(),
+});
+export type ServiceKey = z.infer<typeof ServiceKey>;
+
+/** A service key withdrawn: `trust/service-<key>-revoked.json`. A file signed at or after `at` doesn't count. */
+export const ServiceKeyRevocation = z.strictObject({
+  type: z.literal("service-key-revocation"),
+  format: formatOf("service-key-revocation"),
+  key: KeyId,
+  reason: z.string().min(1),
+  at: Timestamp,
+});
+export type ServiceKeyRevocation = z.infer<typeof ServiceKeyRevocation>;
+
+/** The COSE algorithms a passkey proof is checked with: ES256, EdDSA and RS256. */
+export const PASSKEY_ALGS = [-7, -8, -257] as const;
+
+/**
+ * A reviewer's passkey (D139, D159): `trust/passkey-<suffix>.json`, with a `.sig` beside it, written when it's enrolled on
+ * the website. Pinned in CI by hand, as the service's key is; the record's copy serves checks on your machine.
+ */
+export const PasskeyKey = z.strictObject({
+  type: z.literal("passkey-key"),
+  format: formatOf("passkey-key"),
+  account: AccountId,
+  /** The account's handle, for people reading the file. */
+  handle: z.string().min(1),
+  credential: Base64Url,
+  /** The public key, SubjectPublicKeyInfo in base64url, and its COSE algorithm. */
+  public_key: Base64Url,
+  alg: z.literal(PASSKEY_ALGS),
+  enrolled: Timestamp,
+});
+export type PasskeyKey = z.infer<typeof PasskeyKey>;
+
+/**
+ * A passkey's proof that a person made a file (D139, D163): `<file without .json>.passkey.json` beside a verdict on a
+ * hard card, or a preference change that lets more cards past. WebAuthn's assertion as the browser returned it, whose
+ * challenge is the SHA-256 digest of the file's bytes (P16 section 7). Written once, by the relay.
+ */
+export const PasskeyProof = z.strictObject({
+  type: z.literal("passkey-proof"),
+  format: formatOf("passkey-proof"),
+  /** The file it proves, by name, in the same folder. */
+  file: z.string().min(1),
+  credential: Base64Url,
+  authenticator_data: Base64Url,
+  client_data: Base64Url,
+  signature: Base64Url,
+});
+export type PasskeyProof = z.infer<typeof PasskeyProof>;
 
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it. */
 export const Config = z.strictObject({

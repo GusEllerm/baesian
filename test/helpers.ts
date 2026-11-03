@@ -8,6 +8,9 @@ import { Store } from "../src/store.js";
 // Tests never pop OS notifications, and never read the developer's own ~/.config/baesian.
 process.env.BAESIAN_OS_NOTIFY = "0";
 process.env.BAESIAN_CONFIG = "/nonexistent/baesian-test-config.json";
+// Nor keys pinned in a CI that runs them (D142): a test that wants them sets them itself.
+delete process.env.BAESIAN_TRUST;
+delete process.env.BAESIAN_TRUST_FILE;
 
 const made: string[] = [];
 

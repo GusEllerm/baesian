@@ -72,7 +72,8 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
       ],
     };
   }
-  if (card.meta.level === "hard" && status !== "resolved") {
+  // The level in force: the card's, raised in a hosted repo by the relay's signed gate record (P16 section 3).
+  if (store.levelOf(id) === "hard" && status !== "resolved") {
     return {
       card: id,
       problem: "hard-unresolved",
@@ -83,6 +84,11 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
 }
 
 export function evaluate(store: Store, detection: { facts: DetectedFact[]; warnings: string[] }, trailers: Trailers): GateReport {
+  // One consistent read: a card's status reads the others, and in a hosted repo checks each answer's signature (D138).
+  return store.view(() => evaluateIn(store, detection, trailers));
+}
+
+function evaluateIn(store: Store, detection: { facts: DetectedFact[]; warnings: string[] }, trailers: Trailers): GateReport {
   const problems = trailers.cards.map((id) => cardProblem(store, id)).filter((p): p is CardProblem => p !== undefined);
   const usable = trailers.cards.filter((id) => !problems.some((p) => p.card === id));
   const rules = store

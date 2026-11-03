@@ -9,7 +9,7 @@ tags: [baesian, design, formats]
 
 # Formats for v1
 
-> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it. Section 1, the format numbers, is built, and so are sections 2 to 6, as M8a ([[src-routing]], [[File Formats#Routing]]), but for the hosted parts (accounts, signatures, the relay's record and draw, the passkey for loosening), which are M9's.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
+> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it. Section 1, the format numbers, is built, and so are sections 2 to 6, as M8a ([[src-routing]], [[File Formats#Routing]]); their hosted parts (accounts, signatures, the relay's record and draw, the passkey for loosening) and section 7 are built as M9a ([[src-trust]], [[File Formats#The hosted service's proof (M9a)]]). Section 8, the relay's files, is M9b's and M9d's.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
 
 From v1 on, a change to an on-disk format needs a version and a migration (D108). So every format change v1 needs is designed here, while formats are still free. [[File Formats]] stays the description of what's built. This note proposes what changes.
 
@@ -221,6 +221,17 @@ P14 proposes "move this slider?" cards that Baesian files from the audit record 
 Accepting one writes a new preference file whose from_card names the card. The evidence goes in `crux_fact`, so you see it before choosing.
 
 ## 7. Who answered, and the proof (D138, D139, D142, D153)
+
+> **Built (M9a, 2026-11-03),** as D138, D139, D142, D158–D160 and D163 decided, checked offline with Node's crypto ([[src-trust]]; the formats in [[File Formats#The hosted service's proof (M9a)]]). The agent's choices in building it, where this section left them open:
+> - **The pin** is `BAESIAN_TRUST`, the trust files' JSON one per line, or `BAESIAN_TRUST_FILE`, a path to the same lines; set but unreadable, it stops the run. The record's service keys and passkey keys must match it field by field.
+> - **Locally, a repo is hosted** when its live layer or record holds a service key; `Config`'s service field (section 8) is M9d's, and can switch it on too.
+> - **A service key's `public_key`** is in OpenSSH's form, `ssh-ed25519 AAAA…`, so it pastes into an allowed-signers line.
+> - **Every answer on a hard revision takes the passkey,** whatever its response, since a deferral also settles a card at merge.
+> - **A preference change is loosening** against the newest counting file before it, or "Today" in shadow, not against the file its `replaces` names.
+> - **The relay's `draw_proof`** is its SSH signature, bare base64, in the namespace `baesian-draw`, over `<id> r<revision> <the revision's SHA-256>`; the draw is the signature's SHA-256 read as the CLI's is. Its signed gate record also raises the level in force when it shows a card higher.
+> - **A rule's own time** is its `created`.
+> - **A signed file counts only under its own name and folder,** since a signature covers bytes, not names: otherwise a signed answer copied under another card's name would count there. What a verdict's bytes don't name, the card's text and the project, are drafted as cards for the user.
+> - **Not built here:** the relay (M9b), sign-in and enrolment (M9c), and the CLI pulling these files and the config's `service` (M9d).
 
 ### The reviewer's account
 
