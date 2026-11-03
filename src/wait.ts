@@ -75,18 +75,23 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
   try {
     let reason: "timeout" | "away";
     for (;;) {
-      const status = store.status(id);
-      const latest = store.card(id)!;
-      const verdict = store
-        .verdicts(id)
-        .filter((v) => v.revision === latest.meta.revision)
-        .at(-1);
-      if (status === "resolved") {
-        return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
-      }
-      if (status !== "open" && status !== "rerouted") {
-        return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
-      }
+      // Each poll is one fresh view of the live layer: a card's status reads the others, once each.
+      const done = store.view((): WaitOutcome | undefined => {
+        const status = store.status(id);
+        const latest = store.card(id)!;
+        const verdict = store
+          .verdicts(id)
+          .filter((v) => v.revision === latest.meta.revision)
+          .at(-1);
+        if (status === "resolved") {
+          return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
+        }
+        if (status !== "open" && status !== "rerouted") {
+          return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
+        }
+        return undefined;
+      });
+      if (done) return done;
       if (opts.usePresence !== false) {
         const p = store.presence();
         // No heartbeat at all means the client has never run: unknown, so keep waiting. A stale one means away.

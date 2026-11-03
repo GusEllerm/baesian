@@ -31,15 +31,15 @@ The plan the user approved on 2026-11-02, refined with their answers: the hosted
 
 Five agents in parallel, each writing a report with its sources:
 
-- [ ] B1. **How people state how much control they want:** levels of automation (Sheridan, Parasuraman, SAE), settings in products, coding agents' permission modes, code owners and branch protection, consent and preference elicitation.
-- [ ] B2. **Which software decisions need sign-off:** change-approval practice (standard, normal and emergency changes), decision records, one-way and two-way doors, and studies of what engineers want to review and what they skim.
-- [ ] B3. **Decisions in research work:** researcher degrees of freedom, the garden of forking paths, pre-registration, multiverse analysis, analysis decision logs, and what domain experts oversee.
-- [ ] B4. **The classification gate:** models as classifiers and routers; Jev (what it does, benchmarks, pricing, caveats, and sending card text to a third party); the conflict of interest when an agent sorts its own cards; sampling audits; alert fatigue; measuring what a gate misses.
-- [ ] B5. **The hosted service's prior art and security:** relays for local-first software, remote and local MCP servers with OAuth, scoped tokens, signed approvals and attestations, phone approval flows, and web push on phones.
+- [x] B1. **How people state how much control they want:** levels of automation (Sheridan, Parasuraman, SAE), settings in products, coding agents' permission modes, code owners and branch protection, consent and preference elicitation.
+- [x] B2. **Which software decisions need sign-off:** change-approval practice (standard, normal and emergency changes), decision records, one-way and two-way doors, and studies of what engineers want to review and what they skim.
+- [x] B3. **Decisions in research work:** researcher degrees of freedom, the garden of forking paths, pre-registration, multiverse analysis, analysis decision logs, and what domain experts oversee.
+- [x] B4. **The classification gate:** models as classifiers and routers; Jev (what it does, benchmarks, pricing, caveats, and sending card text to a third party); the conflict of interest when an agent sorts its own cards; sampling audits; alert fatigue; measuring what a gate misses.
+- [x] B5. **The hosted service's prior art and security:** relays for local-first software, remote and local MCP servers with OAuth, scoped tokens, signed approvals and attestations, phone approval flows, and web push on phones.
 
 Then:
 
-- [ ] B6. A synthesis agent writes `Research/Preference Sliders and the Gate.md`: candidate axes for software and for research, ways the gate could work, how sliders, the gate, audit cards and convention cards fit together, and the evidence for each.
+- [x] B6. A synthesis agent writes `Research/Preference Sliders and the Gate.md`: candidate axes for software and for research, ways the gate could work, how sliders, the gate, audit cards and convention cards fit together, and the evidence for each.
 - [ ] B7. A fresh reviewer agent checks the synthesis against the reports; I fix what it finds. Start further research agents where the review finds gaps.
 
 ### C. Code, while the research runs (about 3 hours)
@@ -48,8 +48,8 @@ Then:
 - [x] C2. **The sidebar, continued:** answering glides the path into place with the flight; it lines up with where the next card comes to rest; folding and new arrivals move instead of jumping. Reduced motion stays instant.
 - [x] C3. **Re-record the README's GIF** (`npm run readme-media -- gif`) once C1 and C2 land.
 - [x] C4. **Two sessions of one agent on one branch share one inbox.** A card (deck `stability`) on how to separate them, provisional; build my pick.
-- [ ] C5. **Squash merges and rebases break commit links in the ledger.** A card (deck `stability`) with the options; design only.
-- [ ] C6. **A scale test:** 2,000 and 10,000 cards, timing `list`, `inbox`, `wait`'s polling, the server's state endpoint and the client's first render. A report in `Reviews/`; fixes only if trivial.
+- [x] C5. **Squash merges and rebases break commit links in the ledger.** A card (deck `stability`) with the options; design only.
+- [x] C6. **A scale test:** 2,000 and 10,000 cards, timing `list`, `inbox`, `wait`'s polling, the server's state endpoint and the client's first render. A report in `Reviews/`; fixes only if trivial.
 
 ### D. Designs, once the research is in (about 3 hours)
 
@@ -76,7 +76,10 @@ Then:
 - 4:45pm: C2 done. Rows and headings glide from where they sat to where they now sit (380 ms), new rows fade in, the shift eases, the lines are redrawn every frame of a glide, and the flight aims at the settled row. Checked frame by frame on a live demo: the next card's node glides 202 → 133 px, with no jump. Reduced motion is read live in the path (Motion's hook reads it once, at mount, which also applies to the flight: noted, not changed). One new browser test; 41 pass. Committed as `8830e91`.
 - 4:55pm: C3 done: the README's GIF re-recorded with the gliding path (432 frames, 3.2 MB).
 - About 4:20pm: the 5-hour usage limit hit, stopping me and all five research agents (B4 had already written its report). The heartbeat woke me at 6:47pm; B1, B2, B3 and B5 resumed from where they stopped.
-- 7:00pm: C4 done. Card B-ghhym filed (provisional, deck `stability`): every session on a branch hears each verdict once. Built: `Store.inbox` takes a `session` with its own cursor (`cursors/<branch>/<session>.json`), `baesian inbox --session`, and a new hook script, `new-verdicts.mjs`, for `SessionStart` and `UserPromptSubmit`, with `turn-ended.mjs` passing the session too. Five new unit tests; 252 pass. The hooks changed, so rehearse is to be told.
+- 7:00pm: C4 done. Card B-ghhym filed (provisional, deck `stability`): every session on a branch hears each verdict once. Built: `Store.inbox` takes a `session` with its own cursor (`cursors/<branch>/<session>.json`), `baesian inbox --session`, and a new hook script, `new-verdicts.mjs`, for `SessionStart` and `UserPromptSubmit`, with `turn-ended.mjs` passing the session too. Five new unit tests; 252 pass. The hooks changed, so rehearse is to be told. Committed as `aaef34d`; rehearse told.
+- 7:10pm: C5 done: card B-9v5xj (provisional, deck `stability`, design only) on finding a card's commits after a rebase or squash: search the history for the trailer, or keep a patch-id fingerprint in each ledger entry. GitHub's docs don't say whether a default squash message keeps trailers; the card says so.
+- 7:20pm–8:00pm: all five strand reports in (B1 52 sources, B2 43, B3, B4, B5 35); the synthesis written (B6), and reviewed by a fresh agent (B7), which found must-fix problems in fidelity, omissions, neutrality and contradictions with the user's decisions (D86 keeps an audit card's built option visible; holding cards back would revise D31 and D32). Sent back to the synthesis agent to revise.
+- 8:10pm: C6 done. Every command was quadratic in the cards: `baesian list` took about 11 minutes at 2,000. Fixed: a loud `Store.view`, used by `list`, `show`, `inbox`, `topics`, each `wait` poll and filing's checks, building the card list, verdict files by card and claimants once. At 10,000 cards: `list` 1.6 s, the server's state 1.5 s (was 21.5 s), the client's first card 3.3 s (was 45 s). Report: [[2026-11-03 Scale Test]]. Two new unit tests; 254 pass.
 
 ## Debrief
 

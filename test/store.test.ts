@@ -380,3 +380,31 @@ describe("the record (D37)", () => {
     expect(store.syncRecord()).toEqual([]);
   });
 });
+
+describe("reading through a view", () => {
+  it("gives the statuses reading afresh does, and the next view sees what changed in this one", () => {
+    const { store } = repo();
+    const ids = [0, 1, 2].map((i) => store.fileCard(draft({ title: `Card ${i}`, question: `Question ${i}?`, topic: `area${i}/x` }), BODY, { agent: "a", force: true }).card.meta.id);
+    store.addVerdict({ card: ids[0]!, revision: 1, response: "accept", ...REVIEWER });
+    const statuses = (s: typeof store) => s.cards().map((c) => s.status(c.meta.id));
+    const outside = statuses(store);
+    expect(store.view(() => statuses(store))).toEqual(outside);
+    // A verdict written during a view is seen by the next read.
+    store.view(() => {
+      statuses(store);
+      store.addVerdict({ card: ids[1]!, revision: 1, response: "reject", comment: "No.", ...REVIEWER });
+    });
+    expect(store.status(ids[1]!)).toBe("returned");
+    expect(store.view(() => store.status(ids[1]!))).toBe("returned");
+  });
+
+  it("stays loud without a report: a bad file throws, as the CLI needs", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, { agent: "a" }).card.meta.id;
+    writeFileSync(join(store.live, "cards", id, "r1.md"), "---\nnot: a card\n---\n");
+    expect(() => store.view(() => store.cards())).toThrow(/is not valid/);
+    const skipped: string[] = [];
+    expect(store.view(() => store.cards(), (path) => skipped.push(path))).toEqual([]);
+    expect(skipped).toEqual([`cards/${id}/r1.md`]);
+  });
+});

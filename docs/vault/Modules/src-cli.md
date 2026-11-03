@@ -55,7 +55,7 @@ No command resolves a card (D32). When `init` installs the hooks, it records how
 
 ## src/wait.ts
 
-`waitForVerdict` runs in short slices (D101), so a run fits inside any harness's command limit (Claude Code's default is 2 minutes). It polls the store every `POLL_MS` until one of four things happens:
+`waitForVerdict` runs in short slices (D101), so a run fits inside any harness's command limit (Claude Code's default is 2 minutes). Each poll reads through a fresh `Store.view`, so a card's status reads every other card once, not once per question ([[2026-11-03 Scale Test]]). It polls the store every `POLL_MS` until one of four things happens:
 - the card leaves `open` or `rerouted`;
 - the client's heartbeat is older than `PRESENCE_STALE_MS`, so the reviewer is away;
 - the wait's budget, `DEFAULT_TIMEOUT_MS` (9 minutes), is spent. It counts from the card's first run;

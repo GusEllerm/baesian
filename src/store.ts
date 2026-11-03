@@ -202,14 +202,25 @@ export class Store {
   }
 
   /** One consistent read of the live layer, while `view` runs. */
-  private session?: { files: Map<string, unknown>; lists: Map<string, string[]>; report: (path: string, error: string) => void };
+  private session?: {
+    files: Map<string, unknown>;
+    lists: Map<string, string[]>;
+    /** Built once per view, since every card's status asks: all the cards, verdict files by card, and claimants. */
+    cards?: Card[];
+    verdictFiles?: Map<string, string[]>;
+    claims?: Map<string, Card[]>;
+    report: ((path: string, error: string) => void) | undefined;
+  };
 
   /**
-   * Run `fn` over one consistent view of the live layer: each file is read once, and a file that can't be read
-   * (half-written, or invalid) is reported and skipped instead of thrown. The server reads through this (D84).
+   * Run `fn` over one consistent view of the live layer: each file is read once. With `report`, a file that can't be
+   * read (half-written, or invalid) is reported and skipped instead of thrown; the server reads that way (D84).
+   * Without it, a bad file still throws, so the CLI stays loud: commands that read every card read through a view,
+   * since a card's status reads the others, and reading them afresh each time made a listing quadratic.
    */
-  view<T>(fn: () => T, report: (path: string, error: string) => void): T {
+  view<T>(fn: () => T, report?: (path: string, error: string) => void): T {
     const outer = this.session;
+    if (outer && !report) return fn(); // already inside one: share it
     this.session = { files: new Map(), lists: new Map(), report };
     try {
       return fn();
@@ -225,7 +236,7 @@ export class Store {
     try {
       value = parseText(readFileSync(path, "utf8"));
     } catch (e) {
-      if (!this.session) throw e;
+      if (!this.session?.report) throw e;
       this.session.report(relative(this.live, path), e instanceof Error ? e.message : String(e));
     }
     this.session?.files.set(path, value);
@@ -253,9 +264,13 @@ export class Store {
   }
 
   cards(): Card[] {
-    return this.cardIds()
+    // In a view, the list is built once: a card's status reads every other card, so a listing asks for it per card.
+    if (this.session?.cards) return this.session.cards;
+    const all = this.cardIds()
       .map((id) => this.card(id))
       .filter((c): c is Card => c !== undefined);
+    if (this.session) this.session.cards = all;
+    return all;
   }
 
   /**
@@ -316,11 +331,12 @@ export class Store {
    */
   fileCard(draft: unknown, body: string, opts: { agent: string; force?: boolean }): FileResult {
     this.requireInit();
-    const prep = this.prepare(draft);
-    if (!opts.force) {
-      const matches = this.matches(prep.draft);
-      if (matches.length > 0) throw new PossibleDuplicate(matches);
-    }
+    // The checks read every card: once, in a view, which ends before anything is written.
+    const { prep, matches } = this.view(() => {
+      const prep = this.prepare(draft);
+      return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
+    });
+    if (matches.length > 0) throw new PossibleDuplicate(matches);
     const id = newId("B", (candidate) => existsSync(join(this.live, "cards", candidate)));
     const card = this.writeRevision(id, 1, prep.draft, body, opts.agent);
     return { card, nearTopics: prep.nearTopics, ...(prep.hardBecause ? { hardBecause: prep.hardBecause } : {}), warnings: prep.warnings };
@@ -652,10 +668,38 @@ export class Store {
   // ---------------------------------------------------------------- verdicts
 
   verdicts(id: string): Verdict[] {
-    return this.list("verdicts")
-      .filter((f) => verdictFileCard(f) === id)
+    return this.verdictFilesOf(id)
       .flatMap((f) => this.read(join(this.live, "verdicts", f), (t) => parse(Verdict, JSON.parse(t), f)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /** A card's verdict files, oldest first by name. In a view, every card's are sorted out once. */
+  private verdictFilesOf(id: string): string[] {
+    if (!this.session) return this.list("verdicts").filter((f) => verdictFileCard(f) === id);
+    if (!this.session.verdictFiles) {
+      const byCard = new Map<string, string[]>();
+      for (const f of this.list("verdicts")) {
+        const card = verdictFileCard(f);
+        if (card) (byCard.get(card) ?? byCard.set(card, []).get(card)!).push(f);
+      }
+      this.session.verdictFiles = byCard;
+    }
+    return this.session.verdictFiles.get(id) ?? [];
+  }
+
+  /** The cards that supersede `id`, or name it in `conflict_of` (D35). In a view, found once for every card. */
+  private claimants(id: string): Card[] {
+    const build = () => {
+      const by = new Map<string, Card[]>();
+      for (const c of this.cards()) {
+        for (const target of [c.meta.supersedes, ...(c.meta.conflict_of ?? [])]) {
+          if (target) (by.get(target) ?? by.set(target, []).get(target)!).push(c);
+        }
+      }
+      return by;
+    };
+    const by = this.session ? (this.session.claims ??= build()) : build();
+    return by.get(id) ?? [];
   }
 
   /** Record a verdict. Only the client calls this: agents never resolve cards (D32). */
@@ -717,7 +761,7 @@ export class Store {
       const rejectedAfter = this.verdicts(parent).some((v) => v.response === "reject" && v.at >= card.meta.created);
       if (rejectedAfter) return "withdrawn";
     }
-    for (const other of this.cards()) {
+    for (const other of this.claimants(id)) {
       if (seen.has(other.meta.id)) continue;
       const supersedes = other.meta.supersedes === id;
       // A resolved conflict card supersedes the decisions it names that it didn't choose (D35).
