@@ -1,0 +1,10 @@
+{
+  "type": "verdict",
+  "card": "B-j6b75",
+  "revision": 1,
+  "response": "need_context",
+  "comment": "How frequent would a user see a briefing if it was before every deck? If its not frequent, I think we make it default before you start a deck -- you can swipe it away quickly if you dont want to read it so its not a problem, and I think getting more context into this system is needed.",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-03T13:15:35.962Z"
+}

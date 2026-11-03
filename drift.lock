@@ -2809,3 +2809,28 @@ sig = "4afe7880c2ab52c8"
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"
 target = "src/facts.ts#dependencyFacts"
 sig = "8a539918aaa94533"
+
+[[bindings]]
+doc = "docs/vault/Working Agreement.md"
+target = "src/api.ts#ApiCard"
+sig = "a42745f7c5a005da"
+
+[[bindings]]
+doc = "docs/vault/Working Agreement.md"
+target = "src/facts.ts#Change"
+sig = "0f7d2318d9ed3513"
+
+[[bindings]]
+doc = "docs/vault/Working Agreement.md"
+target = "src/ops.ts#ShowData"
+sig = "4fa0bca00ae04bb6"
+
+[[bindings]]
+doc = "docs/vault/Working Agreement.md"
+target = "src/store.ts#Match"
+sig = "1e7a84482a917483"
+
+[[bindings]]
+doc = "docs/vault/Working Agreement.md"
+target = "src/store.ts#Store"
+sig = "0f5663623f22de67"
