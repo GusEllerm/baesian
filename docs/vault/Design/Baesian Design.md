@@ -204,7 +204,7 @@ What the client may show, and where each piece of it comes from, is in [[Client 
   - **blocking:** it waits again, or falls back to its proposal and proceeds provisionally;
   - **hard:** it never proceeds without a verdict. It parks that task and does other work, or stops.
 
-  The MCP server's `get_verdict(wait=…)` is an adapter over the same mechanism.
+  The MCP server's `wait_for_verdict` is an adapter over the same mechanism, in calls of at most 100 seconds, as `baesian wait` runs (D168).
 - **Presence (D41).** While the client is open, it touches a heartbeat file in the live layer every 30 seconds. That gives two benefits:
   - agents don't idle until the timeout when you've stepped away;
   - notifications can go to your desktop or your phone depending on whether you're there.
@@ -456,7 +456,7 @@ The personal-website and live-docs vaults already run this decision process by h
   - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116), passing the harness's session id so each session on a branch hears each verdict once (B-ghhym): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn. When `Stop` brings in a verdict, Claude Code sends one more request on its own, so the agent acts on the answer in a turn of its own;
   - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115). A plan sent back with feedback fires no `PostToolUse`, so it makes no deck (rehearse's probe, Claude Code 2.1.316);
   - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin, and takes `/baesian` when no other command has the name), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
-  - the MCP server.
+  - the MCP server (D165): the plugin's `.mcp.json` runs `baesian mcp` from PATH, as the hooks run `baesian`, with no timeouts, so the one file serves both harnesses. Claude Code starts it when the plugin is enabled, and names its tools `mcp__plugin_baesian_baesian__file_card` and so on. `baesian init` never writes a `.mcp.json` into a repo ([[src-mcp]]).
 - **Codex (tier 2):** Codex reads `AGENTS.md` natively, and reads Claude Code's plugin and marketplace files too: Codex 0.154 installs this repo's plugin unchanged (`codex plugin marketplace add`, then `codex plugin add baesian@baesian`). Codex users get the hooks from the same plugin, each person installing it, rather than from a `.codex/hooks.json` that `baesian init` would commit to the repo (D118). In Codex:
   - the session-start and next-message hooks carry over, since Codex adds their plain output to the agent's context;
   - the `Stop` hook answers Codex in its own form, a block with a reason, since Codex ignores `additionalContext` there (`onTurnEnded` tells the two apart by Codex's `turn_id`);
@@ -464,8 +464,8 @@ The personal-website and live-docs vaults already run this decision process by h
   - the plan hook never fires, since Codex has no plan approval like Claude Code's;
   - Codex runs a plugin's hooks only once the person has reviewed and trusted them.
 
-  Not yet checked: the hooks running inside a Codex session, which needs a trusted hook and a model (rehearse's runs). Also to come: MCP configuration.
-- **The MCP server (tier 2):** `file_card`, `get_verdict(wait=…)`, `list_resolved(since=…)`, as a view over the live layer.
+  Not yet checked: the hooks running inside a Codex session, which needs a trusted hook and a model (rehearse's runs). Codex reads the plugin's `.mcp.json` too; not yet checked there: whether it asks before starting the server, or counts the file in the plugin's trust hash.
+- **The MCP server (tier 2, M7):** `baesian mcp`, over stdio, a view over the live layer: one tool for each agent command (D166, revising the three first planned here), each returning what its command prints ([[MCP Server]], [[src-mcp]]).
 
 ## Open questions
 
