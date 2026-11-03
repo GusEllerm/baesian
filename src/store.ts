@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Repo, openRepo, slug } from "./git.js";
@@ -651,6 +651,9 @@ export class Store {
 
   createDeck(input: { id: string; title: string; from?: string; context_notes?: string[] }, body: string): Deck {
     this.requireInit();
+    // Only a document in the repo is named: a path outside it would show the machine's folders in the record (D105).
+    const from = input.from ? relative(this.repo.toplevel, input.from) : undefined;
+    const inRepo = from !== undefined && from !== "" && from !== ".." && !from.startsWith(`..${sep}`) && !isAbsolute(from);
     const meta = parse(
       DeckMeta,
       {
@@ -658,7 +661,7 @@ export class Store {
         id: input.id,
         title: input.title,
         branch: this.repo.branch,
-        ...(input.from ? { from: relative(this.repo.toplevel, input.from) } : {}),
+        ...(inRepo ? { from } : {}),
         context_notes: input.context_notes ?? [],
         created: now(),
       },

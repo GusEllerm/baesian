@@ -213,6 +213,8 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-03 `[agent decision]` **A deck records the document it came from only when that document is in the repo** (`Store.createDeck`). A file outside the repo was recorded relative to it, climbing out with `../..`, so the decks `formats-v1` and `vault-adapter` name a scratchpad folder under `/private/tmp`, with the user's name in it. Found by M6's builder. Those two files stay as written (record files are written once, and the history has them); the throwaway rewrite of the record at v1 (P16) can drop the field.
+
 - 2026-11-03 `[agent decision]` **Every branch's record gets every rule, retirement and topic alias,** at its next commit or `baesian sync` (`Store.syncRecord`). The vault adapter's design (P17) and the formats design (P16) each found the gap: the client saved a rule only into the record of the worktree it ran in, so a fact a rule covered passed the local gate, which reads the live layer, and failed in CI on any other branch, which reads the commit's record. Aliases had the same gap, and they decide which topics verify treats as one question. [[File Formats]] already said the record holds them. A branch's commits now carry rule files from elsewhere, as verdicts already arrive in unrelated commits.
 - 2026-11-03 `[agent decision]` **Card B-9h3ra was withdrawn and refiled as B-qg3jx,** because the `baesian` on PATH was a build from before D144, so a card touching security was filed as blocking, not hard. Its text is unchanged. The build is fresh now, and no other card was affected.
 

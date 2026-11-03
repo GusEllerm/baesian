@@ -132,6 +132,13 @@ describe("filing", () => {
     store.createDeck({ id: "storage-layer", title: "Storage" }, "## Goal\nPersist runs.\n");
     expect(store.fileCard(draft({ deck: "storage-layer" }), BODY, AGENT).card.meta.deck).toBe("storage-layer");
   });
+
+  it("records the document a deck came from only when it's in the repo, so the record shows no machine's folders (D105)", () => {
+    const { store, dir } = repo();
+    expect(store.createDeck({ id: "plan", title: "The plan", from: join(dir, "docs", "plan.md") }, "").meta.from).toBe("docs/plan.md");
+    expect(store.createDeck({ id: "scratch", title: "A scratch plan", from: join(dir, "..", "elsewhere", "plan.md") }, "").meta).not.toHaveProperty("from");
+    expect(store.createDeck({ id: "tmp", title: "A temp plan", from: "/tmp/plan.md" }, "").meta).not.toHaveProperty("from");
+  });
 });
 
 describe("the filing check (D36, D38)", () => {
