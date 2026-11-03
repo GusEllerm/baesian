@@ -8,7 +8,7 @@ import { main } from "../src/cli.js";
 import { parseDoc } from "../src/frontmatter.js";
 import { openRepo } from "../src/git.js";
 import { userConfig } from "../src/notify.js";
-import { type RunningServer, findRunningServer, snapshot, startServer } from "../src/server.js";
+import { type RunningServer, findRunningServer, serverState, startServer } from "../src/server.js";
 import { FILE_KINDS, type FileKindName, NewerFormat, newestFormat, upgradeFile } from "../src/schema.js";
 import { Store, ValidationError } from "../src/store.js";
 import { verify } from "../src/verify.js";
@@ -325,7 +325,7 @@ describe("a file in a newer format (D157)", () => {
     const r = await run(dir, ["list", "--all"]);
     expect(r.code).toBe(1);
     expect(r.err).toBe(MESSAGE(`cards/${newer}/r1.md`, "card"));
-    const st = snapshot(store, { version: 1, started: new Date().toISOString(), watch: "poll" });
+    const st = serverState(store, { version: 1, started: new Date().toISOString(), watch: "poll" });
     expect(st.cards.map((c) => c.meta.id)).toEqual([ok]);
     expect(st.problems).toEqual([{ path: join("cards", newer, "r1.md"), error: MESSAGE(`cards/${newer}/r1.md`, "card") }]);
   });

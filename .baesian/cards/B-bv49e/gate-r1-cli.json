@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-bv49e",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T174650.891Z-xg8pf.json",
+  "touches": [
+    "money",
+    "user-facing",
+    "public-api"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "money",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "at": "2026-11-03T20:28:38.948Z"
+}

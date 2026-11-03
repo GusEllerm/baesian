@@ -4,6 +4,7 @@ import type { ApiContextNote } from "./api.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type RuleMeta, type RuleRetirement, type Verdict, newestFormat, upgradeFile } from "./schema.js";
 import { type Card, type Status, Store, normalise } from "./store.js";
+import { linkText, parseWikilink } from "./wikilinks.js";
 
 // M6, the vault adapter (docs/vault/Design/Vault Adapter.md, P17; D170–D175). A vault is Markdown in the repo, with
 // Obsidian as its interface. The record stays the source of truth: this module renders one note per decision and per
@@ -820,19 +821,8 @@ export function initVault(store: Store, vault: string): string[] {
 
 // ---------------------------------------------------------------- links from decks (P17 §8)
 
-/** A wikilink's parts: `[[Folder/Name#Heading|text]]`. A bare name is read as a link's target. */
-export function parseWikilink(raw: string): { target: string; heading?: string; text?: string } {
-  let s = raw.trim();
-  if (s.startsWith("!")) s = s.slice(1);
-  if (s.startsWith("[[") && s.endsWith("]]")) s = s.slice(2, -2);
-  const bar = s.indexOf("|");
-  const text = bar >= 0 ? s.slice(bar + 1).trim() : undefined;
-  if (bar >= 0) s = s.slice(0, bar);
-  const hash = s.indexOf("#");
-  const heading = hash >= 0 ? s.slice(hash + 1).trim() : undefined;
-  if (hash >= 0) s = s.slice(0, hash);
-  return { target: s.trim(), ...(heading ? { heading } : {}), ...(text ? { text } : {}) };
-}
+// A wikilink's parts, and what one shows, are in src/wikilinks.ts, which the relay's state module can import.
+export { parseWikilink } from "./wikilinks.js";
 
 /** The vault's Markdown notes, relative to it, with forward slashes and no `.md`. Hidden folders and symlinks are skipped. */
 export function listNotes(vaultDir: string): string[] {
@@ -894,8 +884,8 @@ export function contextNotes(store: Store, links: string[], cache: { notes?: str
   const vault = v && !("problem" in v) && existsSync(v.dir) ? v : undefined;
   const all = vault ? (cache.notes ??= listNotes(vault.dir)) : [];
   return links.map((raw) => {
-    const { target, heading, text } = parseWikilink(raw);
-    const shown = text ?? [target.split("/").at(-1), heading].filter(Boolean).join(" › ");
+    const { target } = parseWikilink(raw);
+    const shown = linkText(raw);
     if (!vault) return { link: raw, text: shown };
     const found = resolveWikilink(all, target);
     if (!found) return { link: raw, text: shown, missing: true as const };

@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-0ag7h",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T174650.891Z-xg8pf.json",
+  "touches": [
+    "public-api"
+  ],
+  "reverse": "moderate",
+  "asked": "blocking",
+  "source": "agent",
+  "row": "public_api",
+  "position": "stop-and-ask",
+  "outcome": "shown",
+  "level": "blocking",
+  "reason": "row",
+  "at": "2026-11-03T20:28:38.754Z"
+}

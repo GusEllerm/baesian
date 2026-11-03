@@ -2,7 +2,7 @@
 type: module
 status: active
 authority: describes
-summary: "src/server.ts and src/api.ts: the local server the client talks to (M4 step 4). How it signs a browser in (D62, D97), its API (a snapshot plus change events, D96), how it watches the live layer (D84), how it reads the live layer without failing on a bad file, and the server file."
+summary: "src/server.ts, src/state.ts and src/api.ts: the local server the client talks to (M4 step 4). How it signs a browser in (D62, D97), its API (a snapshot plus change events, D96), how it watches the live layer (D84), how it reads the live layer without failing on a bad file, and the server file. The state it serves is built apart from the server, so the relay serves the same (B-17wn9)."
 created: 2026-10-24
 updated: 2026-11-03
 reviewed: 2026-10-24
@@ -29,7 +29,7 @@ The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127
 ## The API (D96)
 
 The types are in `src/api.ts`, which imports no Node modules, so the client can share them.
-- **`GET /api/state`** returns `snapshot`, an `ApiState`.
+- **`GET /api/state`** returns `serverState`, an `ApiState`: the state `snapshot` builds (below), with this repo's name and branch, this process, and the vault's notes.
   - **The project:** its name and branch, and the server's pid, start time, clock and watch mode.
   - **Presence, decks and rules,** each rule with its retirement if it has one (D119). Each deck carries its context notes, resolved in the vault (`contextNotes`, [[src-vault]]; M6): each `ApiContextNote` has the link, what to show, and, with a vault, the note's path and `summary:` line, or that it's missing. The vault is listed once per snapshot, and only when a deck has context notes.
   - **One `ApiCard` per card:** the latest revision and its body, the number of revisions, whether its agent has had its reply (`replied`, D104), status, decision, canonical topic, verdicts, dependents, briefs, waiting markers, fallbacks and the number of attachments; and the gate's record for its latest revision (`gate`, M8), with `audit` set on a held card drawn for audit and not answered yet. On a held card the record gives the agent's pick away, so the client hides it until the reviewer has chosen (D151).
@@ -40,7 +40,7 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
   - 201, with the verdict, the card's new status, and `filed`, the IDs of any cards Baesian just proposed (the client's toast says it has a proposal, [[Client Build]] item 15);
   - 409 for a stale revision, 404 for an unknown card, 400 for an invalid verdict (including one that retires a rule its choice doesn't break) or an unexpected field.
 - **`POST /api/preferences`** (D147) takes an `ApiPreferencesInput` and nothing else: `replaces`, the file in force it was made from; a `preset`; the setup survey's `survey_see` and `survey_fine`, which pick a preset when none is named (B-5na1k); and any row, the mode, the rates, the burn-in and a reason, over the file in force. It writes through `Store.writePreferences`, by `reviewerName`, `client: "web"`. 201 with the file's name and contents; 409 when `replaces` isn't the newest file (`StalePreferences`); 400 for an invalid change, such as security below "tell me but carry on", or an unexpected field. It's the only way preferences are written, but for accepting a slider proposal.
-- **`GET /api/presets`** returns `presets` (`ApiPresets`): the rows (with their floors, and the fixed ones marked), the positions (with the level each shows at), each preset with its settings and what it would have held of past cards (`replay()`), the settings in force replayed the same way, and the setup survey's example decisions and question. The client reads it when your preferences or the setup survey are open, and again on each change ([[Client Build]] items 16 and 17); it replays a draft itself.
+- **`GET /api/presets`** returns `presets` (`ApiPresets`, built apart from the server too): the rows (with their floors, and the fixed ones marked), the positions (with the level each shows at), each preset with its settings and what it would have held of past cards (`replay()`), the settings in force replayed the same way, and the setup survey's example decisions and question. The client reads it when your preferences or the setup survey are open, and again on each change ([[Client Build]] items 16 and 17); it replays a draft itself.
 - **`POST /api/presence`** is the client's heartbeat (D41), through `Store.touchPresence`.
 - **`POST /api/aliases`** merges two topics (D111): `{from, to}` (`ApiAliasInput`), through `Store.mergeTopics`, with `by` from `reviewerName`. 201 with the alias, or 400.
 - **`GET /api/health`** is how `findRunningServer` checks that a server is really answering.
@@ -52,6 +52,10 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
   - **Refused:** any path that resolves outside the build (404).
   - **With no build,** a page says to run `npm run build`.
   - **Every file is read before its headers go out.** If a request fails after its headers are sent, the error handler closes the response rather than leave it hanging. A test caught that hang.
+
+## The state, apart from the server (B-17wn9, B-0ag7h)
+
+`snapshot` and `presets` are in `src/state.ts`, which imports nothing from Node and reads only through the store. So the relay (M9b) can serve the same state from a store with no repo ([[src-store]]), and the React client reads either the same way, as B-17wn9 decided. What the store doesn't know comes in a `StateContext`: the `version`; the server's pid, start time and watch mode; the project's name and branch; how a deck's context notes are resolved, and when (`now`, against which a waiting marker is stale). With no resolver, each link shows as its text (`plainNotes`, with `linkText()` from `src/wikilinks.ts`), as it does locally without a vault. `serverState` is the local server's context: `process.pid`, the repo's folder name and branch, and `contextNotes` over the vault, listed once per snapshot.
 
 ## Watching (D84)
 

@@ -5,11 +5,10 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ApiCard, ApiPreferenceFile, ApiPresets, ApiPreferencesInput, ApiRouting, ApiState, ApiVerdictInput } from "./api.js";
+import type { ApiPreferencesInput, ApiState, ApiVerdictInput } from "./api.js";
 import { afterVerdict } from "./proposals.js";
-import { countedCards, replayCards, routingReport } from "./report.js";
-import { ALL_ROWS, LEVEL_AT, POSITIONS, POSITION_NAMES, PRESETS, ROW_FLOOR, ROW_NAMES, SURVEY, SURVEY_QUESTION, type Row, isFixed, replay } from "./routing.js";
 import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
+import { presets, snapshot } from "./state.js";
 import { type Store, StalePreferences, ValidationError } from "./store.js";
 import { contextNotes } from "./vault.js";
 
@@ -114,99 +113,19 @@ function lastPort(path: string): number | undefined {
 
 export const serverUrl = (info: { port: number; token: string }) => `http://127.0.0.1:${info.port}/?token=${info.token}`;
 
-/** The snapshot `GET /api/state` returns, read as one consistent view (D96). */
-export function snapshot(store: Store, extra: { version: number; started: string; watch: WatchMode }): ApiState {
-  const problems: ApiState["problems"] = [];
-  return store.view(() => {
-    const cards: ApiCard[] = [];
-    const all = store.cardIds().flatMap((id) => store.card(id) ?? []);
-    const dependents = new Map<string, string[]>();
-    for (const c of all) for (const p of c.meta.depends_on) dependents.set(p, [...(dependents.get(p) ?? []), c.meta.id]);
-    const nowMs = Date.now();
-    for (const c of all) {
-      const id = c.meta.id;
-      try {
-        const decision = store.decision(id);
-        const status = store.status(id);
-        const gate = store.gateRecord(id, c.meta.revision);
-        cards.push({
-          meta: c.meta,
-          body: c.body,
-          revisions: store.revisions(id).length,
-          replied: store.revisions(id).some((r) => r.meta.reply !== undefined),
-          status,
-          ...(decision !== undefined ? { decision } : {}),
-          canonicalTopic: store.canonicalTopic(c.meta.topic),
-          verdicts: store.verdicts(id),
-          dependents: dependents.get(id) ?? [],
-          briefs: store.briefs(id),
-          waiting: store.waitingOn(id, nowMs).map(({ marker, stale }) => ({ agent: marker.agent, since: marker.since, at: marker.at, stale })),
-          fallbacks: store.fallbacks(id),
-          attachments: store.attachments(id).length,
-          ...(gate ? { gate } : {}),
-          ...(status === "held" && gate?.drawn ? { audit: true as const } : {}),
-        });
-      } catch (e) {
-        problems.push({ path: join("cards", id), error: e instanceof Error ? e.message : String(e) });
-      }
-    }
-    const presence = store.presence();
-    // A deck's context notes, resolved in the vault (M6): the vault is listed once per snapshot, and only if a deck has any.
-    const vaultNotes: { notes?: string[] } = {};
-    return {
-      version: extra.version,
-      server: { pid: process.pid, started: extra.started, now: new Date(nowMs).toISOString(), watch: extra.watch },
-      project: { name: basename(store.repo.toplevel), branch: store.repo.branch },
-      ...(presence ? { presence } : {}),
-      decks: store.decks().map((d) => ({ ...d, notes: contextNotes(store, d.meta.context_notes, vaultNotes) })),
-      rules: store.rules(),
-      cards,
-      routing: routingState(store, problems),
-      problems,
-    };
-  }, (path, error) => problems.push({ path, error }));
-}
-
-/** The preferences in force, their history, and the report per row (M8), for `GET /api/state`. */
-function routingState(store: Store, problems: ApiState["problems"]): ApiRouting {
-  const force = store.inForce();
-  const history = store.preferenceNames().flatMap((name): ApiPreferenceFile[] => {
-    const file = store.preferenceFile(name);
-    return file ? [{ name, file }] : [];
+/**
+ * The state `GET /api/state` returns (D96), as `baesian serve` gives it: built by `snapshot` (src/state.ts, which the
+ * relay serves too), with this repo's name and branch, this process, and a deck's context notes resolved in the vault (M6),
+ * which is listed once per snapshot, and only when a deck has context notes.
+ */
+export function serverState(store: Store, extra: { version: number; started: string; watch: WatchMode }): ApiState {
+  const vaultNotes: { notes?: string[] } = {};
+  return snapshot(store, {
+    version: extra.version,
+    server: { pid: process.pid, started: extra.started, watch: extra.watch },
+    project: { name: basename(store.repo.toplevel), branch: store.repo.branch },
+    notes: (links) => contextNotes(store, links, vaultNotes),
   });
-  let report: ApiRouting["report"];
-  try {
-    report = routingReport(store, force);
-  } catch (e) {
-    problems.push({ path: "preferences", error: e instanceof Error ? e.message : String(e) });
-    report = { rows: {}, pooled: { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 }, beforeGate: 0 };
-  }
-  return {
-    ...(force.name && force.file ? { preferences: { name: force.name, file: force.file } } : {}),
-    ...(force.problem ? { problem: force.problem } : {}),
-    settings: force.settings,
-    history,
-    report,
-  };
-}
-
-/** `GET /api/presets` (M8): the rows and positions, each preset and the settings in force replayed over past cards, and the setup survey. */
-export function presets(store: Store): ApiPresets {
-  return store.view(() => {
-    const cards = replayCards(countedCards(store));
-    const force = store.inForce();
-    return {
-      rows: ALL_ROWS.map((row) => ({ row, name: ROW_NAMES[row], ...(isFixed(row) ? { fixed: true as const } : ROW_FLOOR[row as Row] ? { floor: ROW_FLOOR[row as Row]! } : {}) })),
-      positions: POSITIONS.map((position) => ({ position, name: POSITION_NAMES[position], ...(LEVEL_AT[position] ? { level: LEVEL_AT[position]! } : {}) })),
-      presets: PRESETS.map((p) => {
-        const settings = { ...force.settings, rows: p.rows };
-        return { id: p.id, name: p.name, summary: p.summary, settings, replay: replay(cards, settings) };
-      }),
-      inForce: { settings: force.settings, replay: replay(cards, force.settings) },
-      survey: { ...SURVEY_QUESTION, items: [...SURVEY] },
-    };
-    // A file that can't be read is left out, as the snapshot leaves it, rather than failing the request (D84).
-  }, () => {});
 }
 
 /** A cheap summary of the live layer's files, to tell whether anything changed between two looks. */
@@ -482,7 +401,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
 
       if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
       if (url.pathname === "/api/health") return send(res, 200, { ok: true, pid: process.pid });
-      if (url.pathname === "/api/state") return send(res, 200, snapshot(store, { version, started, watch: watcher.mode() }));
+      if (url.pathname === "/api/state") return send(res, 200, serverState(store, { version, started, watch: watcher.mode() }));
       if (url.pathname === "/api/presets") return send(res, 200, presets(store));
       if (url.pathname === "/api/events") {
         res.writeHead(200, { ...HEADERS, "content-type": "text/event-stream; charset=utf-8", connection: "keep-alive" });
