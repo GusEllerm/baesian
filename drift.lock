@@ -558,12 +558,12 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "11baee0f9eb4cb0e"
+sig = "3b6e43eaf0a0f20d"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Path.tsx"
-sig = "fc8a872b88dd388c"
+sig = "7870c5305f85475c"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
