@@ -49,7 +49,7 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 
 ## Errors
 
-The store's errors come back as tool results with `isError` set, the CLI's message word for word, and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message.
+The store's errors come back as tool results with `isError` set, the CLI's message word for word, and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message: a file in a newer format than this Baesian reads, say (`NewerFormat`, D157), whose message is the CLI's.
 
 ## Waiting (D168)
 
@@ -71,7 +71,7 @@ One name per call, as P18 section 6 has it: the global `--agent` from the regist
 
 ## Tests
 
-`test/mcp.test.ts` runs the server in-process, through `serveStdio` over the SDK's in-memory transport, in both eras: the tool list, the hints and the schemas; each tool against its command; each error code; never answering; waiting with the fake clock (again, the answer, a fallback, parking, progress) and with a real one (cancelling); quoting; naming; and the repo each call acts in. `test/mcp-stdio.test.ts` spawns `baesian mcp` from source and drives it with the SDK's client (a dev dependency only), once in each era, and by hand to check its output and that closing the input stops a wait and exits.
+`test/mcp.test.ts` runs the server in-process, through `serveStdio` over the SDK's in-memory transport, in both eras: the tool list, the hints and the schemas; each tool against its command; each error code, and a file in a newer format; never answering; waiting with the fake clock (again, the answer, a fallback, parking, progress) and with a real one (cancelling); quoting; naming; and the repo each call acts in. `test/mcp-stdio.test.ts` spawns `baesian mcp` from source and drives it with the SDK's client (a dev dependency only), once in each era, and by hand to check its output and that closing the input stops a wait and exits.
 
 ## Not yet
 

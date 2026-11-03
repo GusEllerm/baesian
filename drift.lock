@@ -2232,6 +2232,11 @@ sig = "534d657f6dd40528"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/schema.ts#NewerFormat"
+sig = "db3b4efbb06d836a"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/store.ts#Store"
 sig = "1224bd9bd03fdc68"
 
