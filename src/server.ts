@@ -5,7 +5,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ApiPreferencesInput, ApiState, ApiVerdictInput } from "./api.js";
+import { type ApiPreferencesInput, type ApiState, type ApiVerdictInput, PREFERENCE_FIELDS, VERDICT_FIELDS } from "./api.js";
 import { afterVerdict } from "./proposals.js";
 import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
 import { presets, snapshot } from "./state.js";
@@ -288,12 +288,6 @@ function serveClient(res: ServerResponse, dir: string | undefined, pathname: str
   res.end(body);
 }
 
-const VERDICT_KEYS = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule", "retire_rules", "should_have_asked"]);
-const PREFERENCE_KEYS = new Set([
-  "replaces", "preset", "mode", "rate_agent_decides", "rate_sample", "burn_in", "reason", "survey_see", "survey_fine",
-  ...["public_api", "schema", "dependency", "infra", "user_facing", "security", "privacy", "other"].map((r) => `row_${r}`),
-]);
-
 /** Start the server. It runs until `close`. */
 export async function startServer(store: Store, opts: ServerOptions = {}): Promise<RunningServer> {
   const token = randomBytes(32).toString("base64url");
@@ -340,7 +334,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
         if (!(req.headers["content-type"] ?? "").startsWith("application/json")) return send(res, 415, { error: "send application/json" });
         if (url.pathname === "/api/verdicts") {
           const input = (await readJson(req)) as Record<string, unknown>;
-          const unknown = Object.keys(input ?? {}).filter((k) => !VERDICT_KEYS.has(k));
+          const unknown = Object.keys(input ?? {}).filter((k) => !VERDICT_FIELDS.has(k));
           if (!input || typeof input !== "object" || unknown.length) return send(res, 400, { error: `unexpected fields: ${unknown.join(", ")}` });
           try {
             const verdict = store.addVerdict({ ...(input as unknown as ApiVerdictInput), reviewer, client: "web" });
@@ -380,7 +374,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
         // A change to the preferences (D147): only the client writes them, and only through here.
         if (url.pathname === "/api/preferences") {
           const input = (await readJson(req)) as Record<string, unknown>;
-          const unknown = Object.keys(input ?? {}).filter((k) => !PREFERENCE_KEYS.has(k));
+          const unknown = Object.keys(input ?? {}).filter((k) => !PREFERENCE_FIELDS.has(k));
           if (!input || typeof input !== "object" || Array.isArray(input) || unknown.length) return send(res, 400, { error: `unexpected fields: ${unknown.join(", ")}` });
           try {
             const written = store.writePreferences(input as ApiPreferencesInput, { by: reviewer, client: "web" });

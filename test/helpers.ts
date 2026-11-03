@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { it } from "vitest";
 import { renderDoc } from "../src/frontmatter.js";
 import { MemoryStorage } from "../src/storage.js";
 import { Store, type StorageOptions } from "../src/store.js";
@@ -74,10 +75,17 @@ export function memory(options: Partial<StorageOptions> = {}): { store: Store; s
   return { store: Store.over(storage, { branch: "main", ...options }), storage };
 }
 
-/** The two kinds of storage the store runs over (B-0ag7h), for tests that hold for both: a repo's folder, and memory. */
-export const LAYERS: [string, () => { store: Store }][] = [
-  ["a repo's folder", () => repo()],
-  ["memory, with no repo", () => memory()],
+/** A test in a layer's suite: vitest's own `it`, or one that runs its body where the layer's storage lives. */
+export type LayerIt = (name: string, fn: () => unknown) => void;
+
+/**
+ * The kinds of storage the store runs over (B-0ag7h), for tests that hold for each: a repo's folder, and memory. Each
+ * gives a store, and the `it` its tests run with. The relay's tests run the same suites over its Durable Object's SQLite,
+ * in workerd, putting their own layer here (service/test/store-suite.test.ts): a test there runs inside the object.
+ */
+export const LAYERS: [string, () => { store: Store }, LayerIt][] = [
+  ["a repo's folder", () => repo(), it],
+  ["memory, with no repo", () => memory(), it],
 ];
 
 export function cleanup(): void {

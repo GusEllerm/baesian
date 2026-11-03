@@ -19,10 +19,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            service/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+      # The relay (M9b): its own package, typechecked and tested in workerd, Cloudflare's runtime (B-hx2fn). Nothing
+      # deploys from here, and no Cloudflare account is needed.
+      - run: npm ci --prefix service
+      - run: npm run test:service
+        env:
+          WRANGLER_SEND_METRICS: "false"
 
       # The commit gate, again, for every pushed commit: catches --no-verify and machines without the
       # hooks (D24). Baesian isn't on npm yet, so this repo runs its own build.

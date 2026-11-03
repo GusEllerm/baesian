@@ -88,7 +88,11 @@ export interface ApiContextNote {
 export interface ApiState {
   /** Changes whenever the live layer does; `/api/events` announces each new one. */
   version: number;
-  server: { pid: number; started: string; now: string; watch: "events" | "poll" };
+  /**
+   * What serves it: its process (`baesian serve`'s; absent on the relay, which has none, M9b), when it started, its clock
+   * now, and how it hears of changes. The relay hears of each write as it's made, so it says `events`.
+   */
+  server: { pid?: number; started: string; now: string; watch: "events" | "poll" };
   project: { name: string; branch: string };
   presence?: Presence;
   /** Every deck; the body is its briefing, and `notes` its context notes, resolved in the vault. */
@@ -191,6 +195,15 @@ export type ApiPreferencesInput = Partial<
 /** What the client sends to `POST /api/verdicts`. The server adds `reviewer` and `client`. */
 export type ApiVerdictInput = Pick<Verdict, "card" | "revision" | "response"> &
   Partial<Pick<Verdict, "choice" | "comment" | "first_choice" | "make_rule" | "retire_rules" | "should_have_asked">>;
+
+/** The fields a verdict may be sent with (`ApiVerdictInput`); anything else is refused. The local server and the relay share them. */
+export const VERDICT_FIELDS: ReadonlySet<string> = new Set(["card", "revision", "response", "choice", "comment", "first_choice", "make_rule", "retire_rules", "should_have_asked"]);
+
+/** The fields a preference change may be sent with (`ApiPreferencesInput`); anything else is refused. */
+export const PREFERENCE_FIELDS: ReadonlySet<string> = new Set([
+  "replaces", "preset", "mode", "rate_agent_decides", "rate_sample", "burn_in", "reason", "survey_see", "survey_fine",
+  ...["public_api", "schema", "dependency", "infra", "user_facing", "security", "privacy", "other"].map((r) => `row_${r}`),
+]);
 
 /** What the client sends to `POST /api/aliases` to merge two topics (D44, D111). The server adds who merged them. */
 export interface ApiAliasInput {

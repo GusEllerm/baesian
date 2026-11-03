@@ -12,8 +12,8 @@ import { linkText } from "./wikilinks.js";
 export interface StateContext {
   /** Changes whenever the live layer does; change events announce each new one (D96). */
   version: number;
-  /** The server: its process, when it started, and how it watches the layer. */
-  server: { pid: number; started: string; watch: ApiState["server"]["watch"] };
+  /** The server: its process (none on the relay, M9b), when it started, and how it hears of changes. */
+  server: { pid?: number; started: string; watch: ApiState["server"]["watch"] };
   project: ApiState["project"];
   /** A deck's context notes, resolved where there's a vault (M6). Without it, each link shows as its text. */
   notes?: (links: string[]) => ApiContextNote[];
@@ -64,7 +64,7 @@ export function snapshot(store: Store, ctx: StateContext): ApiState {
     const presence = store.presence();
     return {
       version: ctx.version,
-      server: { pid: ctx.server.pid, started: ctx.server.started, now: new Date(nowMs).toISOString(), watch: ctx.server.watch },
+      server: { ...(ctx.server.pid !== undefined ? { pid: ctx.server.pid } : {}), started: ctx.server.started, now: new Date(nowMs).toISOString(), watch: ctx.server.watch },
       project: ctx.project,
       ...(presence ? { presence } : {}),
       decks: store.decks().map((d) => ({ ...d, notes: notes(d.meta.context_notes) })),

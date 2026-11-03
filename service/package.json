@@ -1,0 +1,19 @@
+{
+  "name": "baesian-relay",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Baesian's hosted relay (M9b): a Cloudflare Worker with one Durable Object per project, running Baesian's own store over each project's files.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev-vars": "node scripts/dev-vars.mjs",
+    "types": "wrangler types --strict-vars=false",
+    "typecheck": "wrangler types --strict-vars=false > /dev/null && tsc --noEmit",
+    "test": "vitest run && vitest run --config vitest.store.config.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.5.1",
+    "vitest": "5.1.0",
+    "wrangler": "4.157.0"
+  }
+}

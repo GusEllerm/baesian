@@ -844,6 +844,46 @@ export const UserConfig = z.strictObject({
 });
 export type UserConfig = z.infer<typeof UserConfig>;
 
+// ---------------------------------------------------------------- the relay's protocol (M9b: D127, D137, P16 section 8)
+
+const Base64 = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/, "base64");
+
+/**
+ * One file in a relay's append-only log (P16 section 8), as `GET /v1/projects/{project}/log` sends it and the CLI will pull
+ * it (M9d). It's part of the relay's protocol, versioned by `/v1/` in its address, not a file on disk, so it has no
+ * `type` or `format` of its own: `format` is the file's. A `.sig` rides in its file's entry, as `sig`, and is never an
+ * entry itself. `enc` is reserved for encryption (D137): absent in v1, and an entry that sets it is refused
+ * (`readRelayEntry()`), so an encrypted entry from a later version fails loudly rather than being read as text.
+ */
+export const RelayEntry = z.strictObject({
+  /** The project's sequence number for it: from 1, strictly increasing, never reused. */
+  seq: z.number().int().min(1),
+  /** Its path in the live layer. */
+  path: z.string().min(1),
+  /** The file's own format number; 1 for a file that names none (D156). */
+  format: z.number().int().min(1),
+  /** Its length in bytes, and the SHA-256 digest of its bytes, which a signature covers. */
+  size: z.number().int().min(0),
+  digest: Sha256,
+  /** Its bytes, in base64. Dropped once it's delivered and its card resolved (D137); the rest of the entry is kept. */
+  body: Base64.optional(),
+  /** Its `.sig`'s bytes, in base64, for the kinds the service signs (D138, D160). */
+  sig: Base64.optional(),
+  /** The signed-in machine that uploaded it, if a machine did (D162: only the relay knows). */
+  machine: z.string().min(1).optional(),
+  /** When the relay accepted it, by the relay's clock. */
+  at: Timestamp,
+});
+export type RelayEntry = z.infer<typeof RelayEntry>;
+
+/** An entry from a relay, checked (P16 section 8). One that sets `enc` is from a later version that encrypts, and is refused by name (D137). */
+export function readRelayEntry(fields: unknown): RelayEntry {
+  if (typeof fields === "object" && fields !== null && "enc" in fields) {
+    throw new Error(`the relay's entry ${JSON.stringify((fields as { path?: unknown }).path ?? "")} is encrypted (enc), which this Baesian can't read: upgrade Baesian`);
+  }
+  return RelayEntry.parse(fields);
+}
+
 /** Format a Zod error for a person reading a terminal. */
 export function describeError(error: z.ZodError): string {
   return z.prettifyError(error);

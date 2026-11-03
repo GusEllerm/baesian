@@ -11,3 +11,8 @@ dist/
 # Playwright (D100)
 /test-results/
 /playwright-report/
+
+# The relay (M9b): its local secrets, its generated types and wrangler's local state
+/service/.dev.vars
+/service/worker-configuration.d.ts
+/service/.wrangler/

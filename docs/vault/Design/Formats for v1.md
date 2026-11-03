@@ -302,6 +302,8 @@ Nothing here needs the network, so CI works offline (D127). Node's own crypto ca
 
 ## 8. What the relay needs in files (D127, D128, D137)
 
+> **Built (M9b, 2026-11-03): the relay's entry,** as `RelayEntry` in `src/schema.ts`, with `enc` reserved: an entry that sets it is refused by name (`readRelayEntry()`). The relay writes it ([[service]]); the CLI will read it (M9d). The agent's choices in building it, where this section left them open: `body` and `sig` are base64, the signature riding in its file's entry rather than as one of its own; an entry's `format` is 1 for a file that names none; `machine` is absent on what the relay writes itself; mutable files (presence, waiting markers) aren't entries; and a project's first entry is the service's key file, so a machine's first pull has it before anything signed. The log is read in pages, `{ entries, head, more }`. [[File Formats#The relay (M9b)]] has it all. Not built here: `relay.json` and the machine's grant (M9d), and dropping a delivered entry's body (M9f).
+
 ### `Config`
 
 | Field | Type | Required | Meaning |
