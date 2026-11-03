@@ -823,12 +823,12 @@ sig = "0a36297400ae2a75"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "11baee0f9eb4cb0e"
+sig = "3b6e43eaf0a0f20d"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Path.tsx"
-sig = "fc8a872b88dd388c"
+sig = "7870c5305f85475c"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1303,12 +1303,12 @@ sig = "2f5a0375591a2517"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "11baee0f9eb4cb0e"
+sig = "3b6e43eaf0a0f20d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Path.tsx"
-sig = "fc8a872b88dd388c"
+sig = "7870c5305f85475c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
