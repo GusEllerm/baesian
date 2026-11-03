@@ -6,7 +6,7 @@ import type { NotifyStatus } from "./notify";
 // M4 step 5e: the menu in the header, its two panels (your calibration, and the keys), and the empty desk.
 // Round 5's, ported: design/explorations/round5/app.js (renderKeys, renderMirror, the menu, next()).
 
-export type PanelKind = "calibration" | "keys";
+export type PanelKind = "calibration" | "keys" | "answers";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
@@ -65,6 +65,25 @@ function Panel({ label, onClose, children }: { label: string; onClose: () => voi
       <h4>{label}</h4>
       {children}
     </aside>
+  );
+}
+
+/** Every answer this session, newest first: the path shows only the last few, round its drum. */
+export function AnswersPanel({ answers, onOpen, onClose }: { answers: { key: string; id: string; name: string; state: string }[]; onOpen: (id: string) => void; onClose: () => void }) {
+  return (
+    <Panel label="Your answers" onClose={onClose}>
+      <p className="sub">This session, newest first. Open one to see it, or change your answer.</p>
+      <ol className="answers">
+        {[...answers].reverse().map((a) => (
+          <li key={a.key}>
+            <button type="button" onClick={() => onOpen(a.id)}>
+              <span className="nm">{a.name}</span>
+              <span className="st">{a.state}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </Panel>
   );
 }
 

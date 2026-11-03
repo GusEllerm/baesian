@@ -38,7 +38,7 @@ sig = "09cf48fc49e2be53"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "3b8950d0cccde826"
+sig = "11baee0f9eb4cb0e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -48,12 +48,12 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "62ff2e855eb70c4a"
+sig = "adc9f12dc768c06b"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "fc8a872b88dd388c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -558,12 +558,12 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "3b8950d0cccde826"
+sig = "11baee0f9eb4cb0e"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "fc8a872b88dd388c"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -823,12 +823,12 @@ sig = "0a36297400ae2a75"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "3b8950d0cccde826"
+sig = "11baee0f9eb4cb0e"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "fc8a872b88dd388c"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -933,12 +933,12 @@ sig = "b7602c05740450f6"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "3b8950d0cccde826"
+sig = "11baee0f9eb4cb0e"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "fc8a872b88dd388c"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -1288,12 +1288,12 @@ sig = "74e1d959a54ecf6f"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "3b8950d0cccde826"
+sig = "11baee0f9eb4cb0e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Path.tsx"
-sig = "a447468bd84edc1d"
+sig = "fc8a872b88dd388c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

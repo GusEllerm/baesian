@@ -279,6 +279,8 @@ Filed as cards in deck `hosted` (2026-11-03, overnight), in the order they're be
 | H7 (B-7bk6y) | `hosted/usage-data` | Usage counts from everyone with an opt-out, or opt-in only? | everyone, with an opt-out | opt-in only |
 | H8 (B-vbqdy) | `hosted/ci-trust-root` | Where does CI get the key it checks answers with? | pinned outside the repo | a file in the repo |
 
+**Answered on 2026-11-03** (all as recommended, but H2): H1 as D137, H3 as D138, H4 as D139, H5 as D143, H6 as D140, H7 as D141, H8 as D142. **H2 came back with a question:** whether to use Globus Auth, so people can sign in with their own organisation's single sign-on, and whether running Baesian's own accounts is a risk; a revised card follows research.
+
 Decisions in this note that aren't drafted as cards yet:
 - whether the relay serves the same API as `baesian serve` (section 1, after H1);
 - one grant per machine and project, or per machine (section 2);

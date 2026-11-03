@@ -312,6 +312,8 @@ The first eight are filed as cards in deck `routing` (2026-11-03, overnight), in
 | 16 | Research rows in v1's formats? | no; rows are keyed by name, so they can be added | reserve them now | — |
 | 17 | Novelty and release stage | not in v1: under D112 nearly every card is the first on its topic | add both now | — |
 
+**Answered on 2026-11-03, all eight as recommended:** 1 as D148, 2 as D144, 3 as D145, 4 as D149, 5 as D150, 6 as D151, 7 as D146, 8 as D147. Items 9 to 17 are still open.
+
 Item 17's reason is the agent's reading: since D112 makes a topic name one question, "the first card on this topic" is true of almost every card, so novelty would need another definition, such as the first card in a topic's area.
 
 ## 7. Open questions

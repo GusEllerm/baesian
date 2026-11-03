@@ -41,6 +41,18 @@ export function layoutProblems(): string[] {
     return el instanceof SVGGeometryElement ? r.width > 0 || r.height > 0 : r.width > 0 && r.height > 0;
   };
   const overlay = (el: Element) => el.closest(OVERLAY) !== null;
+  /**
+   * An element that paints nothing of its own (no text of its own, background, border, shadow or outline) can't be
+   * seen cut off or off the window; its children are checked where they're drawn. The path's drum draws its rows
+   * away from their layout boxes, so the path's own box no longer says where anything is.
+   */
+  const paintsNothing = (el: Element): boolean => {
+    if (el instanceof SVGElement || el instanceof HTMLImageElement) return false;
+    if ([...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim())) return false;
+    const cs = getComputedStyle(el);
+    const clear = (c: string) => c === "transparent" || /rgba\(.*,\s*0\)$/.test(c);
+    return clear(cs.backgroundColor) && cs.backgroundImage === "none" && cs.boxShadow === "none" && cs.outlineStyle === "none" && ["Top", "Right", "Bottom", "Left"].every((s) => cs.getPropertyValue(`border-${s.toLowerCase()}-width`) === "0px");
+  };
 
   /** The box an element paints: its border box, its outer shadows, and its outline. */
   const paint = (el: Element): Box => {
@@ -90,6 +102,7 @@ export function layoutProblems(): string[] {
 
   // 2. Elements cut off by an ancestor that clips: a scroll container may run on downwards, but not sideways or up.
   for (const el of all) {
+    if (paintsNothing(el)) continue;
     const p = paint(el);
     for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
       const cs = getComputedStyle(a);
@@ -176,6 +189,7 @@ export function layoutProblems(): string[] {
 
   // 5. Off the window: sideways or above it, and below it for anything fixed in place.
   for (const el of all) {
+    if (paintsNothing(el)) continue;
     const r = box(el.getBoundingClientRect());
     const fixed = (() => {
       for (let e: Element | null = el; e; e = e.parentElement) if (getComputedStyle(e).position === "fixed") return true;

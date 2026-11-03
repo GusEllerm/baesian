@@ -11,7 +11,7 @@ import { addSpent, loadSpent, useSeen } from "./local";
 import { type Rarity, areaOf, byId, keyOf, liveDependents, parked, queue, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdict } from "./outbox";
-import { CalibrationPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
+import { AnswersPanel, CalibrationPanel, EmptyDesk, KeysPanel, MoreMenu, type PanelKind, moveInMenu } from "./Panels";
 import { type CardMotion, Path } from "./Path";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
@@ -453,11 +453,21 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         <MoreMenu open={menuOpen} notify={notifications.status} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
       {panel === "keys" && <KeysPanel onClose={() => setPanel(undefined)} />}
+      {panel === "answers" && (
+        <AnswersPanel
+          answers={trail}
+          onOpen={(id) => {
+            setPanel(undefined);
+            goTo(id);
+          }}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} onClose={() => setPanel(undefined)} />}
       <main className="desk">
         <Path
           trail={trail}
-          current={current && r ? { id: current.meta.id, rarity: r.rarity, stopped: waitState(current, now) === "waiting", conflict: (current.meta.conflict_of?.length ?? 0) > 0 } : undefined}
+          current={current && r ? { id: current.meta.id, name: current.meta.title, rarity: r.rarity, stopped: waitState(current, now) === "waiting", conflict: (current.meta.conflict_of?.length ?? 0) > 0 } : undefined}
           relations={relations}
           upcoming={nextUp}
           more={Math.max(0, ahead.length - NEXT_MAX)}
@@ -465,6 +475,9 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
           optionLabel={(k) => `${ARROW[sideOf(k)]} “${current?.meta[k] ?? ""}”`}
           onGoTo={goTo}
           layoutKey={`${key}:${mode.kind}`}
+          turnKey={key}
+          onEarlier={() => showPanel("answers")}
+          earlierOpen={panel === "answers"}
           {...(cardMotion ? { card: cardMotion } : {})}
           {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})}
         />
