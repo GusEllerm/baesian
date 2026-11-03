@@ -2,14 +2,14 @@
 type: design
 status: draft
 authority: proposes
-summary: "Proposal P16, not decided: every on-disk format change v1 needs before versioning starts (D108): a format number in every file, preference files, gate records and the held status, audit and convention cards, reviewer accounts, signatures and passkey proofs and how verify checks them, and the relay's files with the encryption field reserved; eight open choices are drafted as cards in deck formats-v1."
+summary: "Proposal P16, its eight cards accepted as D156–D163: every on-disk format change v1 needs before versioning starts (D108): a format number in every file, preference files, gate records and the held status, audit and convention cards, reviewer accounts, signatures and passkey proofs and how verify checks them, and the relay's files with the encryption field reserved; eight open choices are drafted as cards in deck formats-v1."
 created: 2026-11-03
 tags: [baesian, design, formats]
 ---
 
 # Formats for v1
 
-> **Status: proposal P16 (2026-11-03). Nothing here is decided.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
+> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
 
 From v1 on, a change to an on-disk format needs a version and a migration (D108). So every format change v1 needs is designed here, while formats are still free. [[File Formats]] stays the description of what's built. This note proposes what changes.
 
@@ -362,14 +362,14 @@ Filed as cards in deck formats-v1 on 2026-11-03, in the order they're best answe
 
 | Card | Topic | Question | Recommended | Strongest alternative |
 |---|---|---|---|---|
-| formats-1, B-f8k47 | formats/version-field | Where does a file's format version live? | in every file | once per store |
-| formats-2, B-v7zn5 | formats/newer-format | What does an older Baesian do with a newer file? | refuse it, naming the version | read what it knows |
-| formats-3, B-sa8tg | formats/hosted-gate-record | Which gate record holds a card back in a hosted repo? | only the relay's signed one | the CLI's, rechecked by verify |
-| formats-4, B-7hjag | formats/passkey-keys | Where does verify find the reviewer's passkey keys? | pinned in CI | in the record, each new key vouched for by an old one |
-| formats-5, B-grj9v | formats/signature-encoding | How are the service's signatures encoded? | OpenSSH signatures | a small JSON file |
-| formats-6, B-8sx1w | formats/mined-rules | How does a rule found in your answers reach you? | Baesian asks first | an agent drafts it at once |
-| formats-7, B-e907q | formats/card-machine | Does a card name the machine that filed it? | only the relay knows | a field on every card |
-| formats-8, B-8yxrt | formats/preference-proof | Does loosening a preference take your passkey? | yes | the service's signature only |
+| formats-1, B-f8k47: **D156** | formats/version-field | Where does a file's format version live? | in every file | once per store |
+| formats-2, B-v7zn5: **D157** | formats/newer-format | What does an older Baesian do with a newer file? | refuse it, naming the version | read what it knows |
+| formats-3, B-sa8tg: **D158** | formats/hosted-gate-record | Which gate record holds a card back in a hosted repo? | only the relay's signed one | the CLI's, rechecked by verify |
+| formats-4, B-7hjag: **D159** | formats/passkey-keys | Where does verify find the reviewer's passkey keys? | pinned in CI | in the record, each new key vouched for by an old one |
+| formats-5, B-grj9v: **D160** | formats/signature-encoding | How are the service's signatures encoded? | OpenSSH signatures | a small JSON file |
+| formats-6, B-8sx1w: **D161** | formats/mined-rules | How does a rule found in your answers reach you? | Baesian asks first | an agent drafts it at once |
+| formats-7, B-e907q: **D162** | formats/card-machine | Does a card name the machine that filed it? | only the relay knows | a field on every card |
+| formats-8, B-8yxrt: **D163** | formats/preference-proof | Does loosening a preference take your passkey? | yes | the service's signature only |
 
 **The agent's choices in this note, not drafted as cards,** for the user to overturn:
 - a preference file holds every row, and a change made from an old view is refused (section 2);

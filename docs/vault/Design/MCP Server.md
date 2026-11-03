@@ -2,14 +2,14 @@
 type: design
 status: draft
 authority: proposes
-summary: "P18, a proposal for M7: a local stdio MCP server started as baesian mcp and registered by the plugin, whose twelve tools call the same store code as the CLI's agent commands, wait in the CLI's 100-second slices, never answer, quote text others wrote, use the hosted sign-in through the CLI's code later, and are built on the official TypeScript SDK v2; with six open choices drafted as cards."
+summary: "P18, a proposal for M7, its six cards accepted as D164–D169: a local stdio MCP server started as baesian mcp and registered by the plugin, whose twelve tools call the same store code as the CLI's agent commands, wait in the CLI's 100-second slices, never answer, quote text others wrote, use the hosted sign-in through the CLI's code later, and are built on the official TypeScript SDK v2; with six open choices drafted as cards."
 created: 2026-11-03
 tags: [baesian, design, mcp]
 ---
 
 # MCP Server
 
-> **Status: proposal P18, not decided.** Drafted by an agent on 2026-11-03 for M7, for the user to review. Only what cites a D-number is decided. Each open choice is marked **Decision for the user**, with the agent's recommendation and the strongest alternative. Six are drafted as cards MCP-1 to MCP-6 (deck mcp-server, topics under mcp/; see [[#Decisions for the user]]). The security evidence is in [[Hosted Service - Strand B5 Prior Art and Security]] (cited as B5) and [[Hosted Service]] (P15).
+> **Status: proposal P18. Its six cards were accepted as D164–D169 on 2026-11-03, each the agent's pick; the rest is the agent's, standing unless the user overturns it.** Drafted by an agent on 2026-11-03 for M7, for the user to review. Only what cites a D-number is decided. Each open choice is marked **Decision for the user**, with the agent's recommendation and the strongest alternative. Six are drafted as cards MCP-1 to MCP-6 (deck mcp-server, topics under mcp/; see [[#Decisions for the user]]). The security evidence is in [[Hosted Service - Strand B5 Prior Art and Security]] (cited as B5) and [[Hosted Service]] (P15).
 
 ## Already decided
 
@@ -235,12 +235,12 @@ Filed as cards in deck mcp-server on 2026-11-03:
 
 | Card | Topic | Question | Recommended | Strongest alternative |
 |---|---|---|---|---|
-| MCP-1, B-xqwrk | mcp/protocol-library | The official SDK, or the protocol by hand? | the SDK, v2 | by hand, no new dependency |
-| MCP-2, B-06r0a | mcp/registration | How are Claude Code and Codex told to start the server? | the plugin registers it | each person adds it |
-| MCP-3, B-r78qy | mcp/tool-set | Which commands become tools? | all twelve agent commands | the design's three |
-| MCP-4, B-sq20r | mcp/card-input | In what form does file_card take a card? | fields, with a schema | one Markdown document |
-| MCP-5, B-3njn3 | mcp/wait-length | How long does one waiting call last? | 100 seconds, as the CLI | the whole budget |
-| MCP-6, B-cq80s | mcp/foreign-text | How does text others wrote appear to agents? | quoted, author named, CLI too | raw after a label |
+| MCP-1, B-xqwrk: **D164** | mcp/protocol-library | The official SDK, or the protocol by hand? | the SDK, v2 | by hand, no new dependency |
+| MCP-2, B-06r0a: **D165** | mcp/registration | How are Claude Code and Codex told to start the server? | the plugin registers it | each person adds it |
+| MCP-3, B-r78qy: **D166** | mcp/tool-set | Which commands become tools? | all twelve agent commands | the design's three |
+| MCP-4, B-sq20r: **D167** | mcp/card-input | In what form does file_card take a card? | fields, with a schema | one Markdown document |
+| MCP-5, B-3njn3: **D168** | mcp/wait-length | How long does one waiting call last? | 100 seconds, as the CLI | the whole budget |
+| MCP-6, B-cq80s: **D169** | mcp/foreign-text | How does text others wrote appear to agents? | quoted, author named, CLI too | raw after a label |
 
 MCP-2 and MCP-6 touch security, so they're hard. The rest are blocking. MCP-1, MCP-3 and MCP-4 shape the code first, so they're best settled first.
 

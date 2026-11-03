@@ -2,14 +2,14 @@
 type: design
 status: draft
 authority: proposes
-summary: "Proposal P17, not decided: how the vault adapter (M6) writes one note per decision and per rule from the record at each commit, changes them later, embeds one Bases query in the Decision Log, keeps them out of livedocs' checks, takes no rules from notes, links decks and cards to the vault, and what it means for this repo's hand-written Decision Log."
+summary: "Proposal P17, its six cards accepted as D170–D175: how the vault adapter (M6) writes one note per decision and per rule from the record at each commit, changes them later, embeds one Bases query in the Decision Log, keeps them out of livedocs' checks, takes no rules from notes, links decks and cards to the vault, and what it means for this repo's hand-written Decision Log."
 created: 2026-11-03
 tags: [baesian, design, vault]
 ---
 
 # Vault Adapter
 
-> **Status: proposal P17 (2026-11-03). Nothing here is decided.** An agent drafted it for M6 from [[Baesian Design#With a vault: the adapter]] and the code as it stands. Every recommendation is the agent's. Each open choice is marked **For the user**, with its strongest alternative; six are drafted as decision cards for the deck `vault-adapter`. Where the proposal would change the design's text, it says so.
+> **Status: proposal P17 (2026-11-03). Its six cards were accepted as D170–D175 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it.** An agent drafted it for M6 from [[Baesian Design#With a vault: the adapter]] and the code as it stands. Every recommendation is the agent's. Each open choice is marked **For the user**, with its strongest alternative; six are drafted as decision cards for the deck `vault-adapter`. Where the proposal would change the design's text, it says so.
 
 The vault adapter makes a vault (Markdown in the repo, with Obsidian as its interface) show the decisions Baesian records. It's milestone M6, and part of v1 (D125). The record in `.baesian/` stays the source of truth. The notes are its view in the vault. A repo without a vault is unaffected (D8).
 
@@ -373,12 +373,12 @@ Filed as cards in deck vault-adapter on 2026-11-03.
 
 | Card | The question | Recommended | Strongest alternative |
 |---|---|---|---|
-| vault-1, B-ypdgz | When are notes written? | in pre-commit and `baesian sync`, from the record | a command someone runs |
-| vault-2, B-1j3yf | How are notes named? | card ID and title | card ID alone |
-| vault-3, B-s480j | How does a written note change? | frontmatter, and a dated section added | rewritten from the record |
-| vault-4, B-qg3jx | Can vault notes make rules? | no: only the client's rules count | a `Rules/` note with `covers` is a rule |
-| vault-5, B-s3v3x | Do card decisions still get D-rows here? | no: notes and card IDs | a D-row for every decision |
-| vault-6, B-1t7fw | How are notes kept out of livedocs' checks? | a flag in each note | snapshot globs in livedocs' config |
+| vault-1, B-ypdgz: **D170** | When are notes written? | in pre-commit and `baesian sync`, from the record | a command someone runs |
+| vault-2, B-1j3yf: **D171** | How are notes named? | card ID and title | card ID alone |
+| vault-3, B-s480j: **D172** | How does a written note change? | frontmatter, and a dated section added | rewritten from the record |
+| vault-4, B-qg3jx: **D173** | Can vault notes make rules? | no: only the client's rules count | a `Rules/` note with `covers` is a rule |
+| vault-5, B-s3v3x: **D174** | Do card decisions still get D-rows here? | no: notes and card IDs | a D-row for every decision |
+| vault-6, B-1t7fw: **D175** | How are notes kept out of livedocs' checks? | a flag in each note | snapshot globs in livedocs' config |
 | (no card) | Where does the query live? | a `base` code block in the Decision Log | a `.base` file, embedded |
 
 The rest is the agent's to decide while building, and will be logged as agent decisions: the exact sanitising, the section wording, the column choice, and the order of the frontmatter keys.
