@@ -302,19 +302,23 @@ The first eight are filed as cards in deck `routing` (2026-11-03, overnight), in
 | 6 | Are audit cards answered blind? | blind first, then what's built (revises D86) | D86 as it stands | B-wcbec |
 | 7 | How low may security go? | as far as "tell me but carry on" | fixed at "never without me" | B-pn3g1 |
 | 8 | Where do preferences live? | immutable files the client writes, signed when hosted | the service holds them | B-refpb |
-| 9 | What counts as a miss? | a different blind choice, or "should have asked" | a different blind choice only | — |
-| 10 | The audit rates | 1 in 10 and 1 in 3, first 10 per row drawn | a fixed weekly audit budget | — |
-| 11 | Split privacy from security? | not in v1 | split now | — |
-| 12 | What reversibility does | one-way is never held | one stop either way | — |
-| 13 | How a repo starts | "Today" in shadow; questions after about 20 cards | questions at init, enforced at once | — |
-| 14 | The presets | the table in section 4 | tuned from this repo's shadow record first | — |
-| 15 | Several reviewers | one set per repo in v1 | a personal strictest-wins layer now | — |
-| 16 | Research rows in v1's formats? | no; rows are keyed by name, so they can be added | reserve them now | — |
-| 17 | Novelty and release stage | not in v1: under D112 nearly every card is the first on its topic | add both now | — |
+| 9 | What counts as a miss? | a different blind choice, or "should have asked" | a different blind choice only | B-87tkc |
+| 10 | The audit rates | 1 in 10 and 1 in 3, first 10 per row drawn | a fixed weekly audit budget | B-fgc4y |
+| 11 | Split privacy from security? | not in v1 | split now | B-z3agk |
+| 12 | What reversibility does | one-way is never held | one stop either way | B-yebnn |
+| 13 | How a repo starts | "Today" in shadow; questions after about 20 cards | questions at init, enforced at once | B-5na1k |
+| 14 | The presets | the table in section 4 | tuned from this repo's shadow record first | B-wwxa3 |
+| 15 | Several reviewers | one set per repo in v1 | a personal strictest-wins layer now | B-93n77 |
+| 16 | Research rows in v1's formats? | no; rows are keyed by name, so they can be added | reserve them now | settled: a later row is a format 2 (D156) |
+| 17 | Novelty and release stage | not in v1: under D112 nearly every card is the first on its topic | add both now | release stage: B-v7h6m; novelty settled by D145 |
 
 **Answered on 2026-11-03, all eight as recommended:** 1 as D148, 2 as D144, 3 as D145, 4 as D149, 5 as D150, 6 as D151, 7 as D146, 8 as D147. Items 9 to 17 are still open.
 
 Item 17's reason is the agent's reading: since D112 makes a topic name one question, "the first card on this topic" is true of almost every card, so novelty would need another definition, such as the first card in a topic's area.
+
+**Carded on 2026-11-03 for M8, beyond the table:** whether an agent's level keeps a card from being held (**B-chq61**: under D144 a level is a minimum, and agents filed 30 of this repo's first 56 cards as blocking, so the looser presets would hold almost nothing), and whether Baesian files slider proposals in v1 (**B-y6jn6**: the loosening trigger can't fire at this repo's rate of blind agreement).
+
+**Since this note was written, later decisions changed:** an agent can no longer file a security card as provisional (D144, built); the service can read card text (D137), so the "open" questions on encryption here are closed; in a hosted repo only the relay's signed gate record holds a card back, with the relay's own draw (D158); section 5's formats are replaced by [[Formats for v1]] (P16): every row is required, files carry `format` and `replaces`, and `level` stays the level the agent asked for, raised by floors; and a gate error can't show a security card below hard (D144, D146). Two problems with the design as drafted: under "Today" the shadow record never shows a card as would-have-held, so what a looser preset would hold has to come from re-running the rules over past cards; and P16's claim that verify can recheck the draw from the card and the preference file alone fails for the burn-in (a row's first 10 held cards all drawn), which depends on earlier held cards across branches. Where the sections above disagree with those, the decisions hold.
 
 ## 7. Open questions
 
