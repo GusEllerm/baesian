@@ -6,7 +6,9 @@ import { commitSnapshot } from "./facts.js";
 import { type GateReport, describeReport, detectStaged, evaluate } from "./gate.js";
 import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
-import { type Card, RECORD_DIR, Store, normalise } from "./store.js";
+import { TODAY, levelInForce, route } from "./routing.js";
+import { type GateRecord, HARD_BY_DEFAULT } from "./schema.js";
+import { BAESIAN, type Card, RECORD_DIR, Store, drawOf, normalise, settingsOf } from "./store.js";
 import { parseTrailers } from "./trailers.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 
@@ -54,7 +56,7 @@ export interface CommitCheck {
 
 export interface MergeProblem {
   card: string;
-  problem: "missing" | "unanswered" | "rejected";
+  problem: "missing" | "unanswered" | "rejected" | "gate";
   message: string;
 }
 
@@ -119,7 +121,18 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
     }
     const status = head.status(id);
     const last = head.verdicts(id).filter((v) => v.revision === card.meta.revision).at(-1);
+    // The gate's record must recheck against the rules and the preference file it names (P16 section 3), like a fact.
+    const gate = head.gateRecord(id, card.meta.revision);
+    const wrong = gate && gateProblem(head, card, gate);
+    if (wrong) {
+      problems.push({ card: id, problem: "gate", message: `${id}'s gate record doesn't recheck: ${wrong}. Answer the card, or file it again.` });
+      continue;
+    }
     if (status === "resolved") continue;
+    if (status === "held") {
+      notes.push(`${id} is held: the gate let its agent go ahead (D150), so it counts as settled; the reviewer may still answer it.`);
+      continue;
+    }
     if (status === "deferred") {
       notes.push(last?.comment ? `${id} is deferred; ${said("comment", reviewerOf(last), last.comment)}` : `${id} is deferred: no reason given`);
       continue;
@@ -143,6 +156,43 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
     });
   }
   return { problems, conflicts: findConflicts(head, baseRecord), notes };
+}
+
+/**
+ * Why a gate record doesn't recheck, if it doesn't (P16 section 3): the preference file it names must be in the record,
+ * and the rules must give the same outcome, level and draw from the card and that file. The burn-in can't be recounted
+ * from one branch's record, since a row's earlier held cards may be on any branch: the record keeps the count it saw
+ * (`held_before`), and the recheck uses it. Locally that count is the CLI's word, as a verdict is (D62); in a hosted repo
+ * the relay's own record holds a card back (D158).
+ */
+export function gateProblem(s: Store, card: Card, g: GateRecord): string | undefined {
+  let settings = TODAY;
+  if (g.preferences) {
+    let file;
+    try {
+      file = s.preferenceFile(g.preferences);
+    } catch (e) {
+      return `its preference file, preferences/${g.preferences}, can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`;
+    }
+    if (!file) return `it names preferences/${g.preferences}, which isn't in the record`;
+    settings = settingsOf(file);
+  }
+  if (g.mode !== settings.mode) return `it says ${g.mode}, but its preferences say ${settings.mode}`;
+  const m = card.meta;
+  const facts = (x: readonly string[]) => [...x].sort().join(",");
+  if (g.card !== m.id || g.revision !== m.revision || facts(g.touches) !== facts(m.touches) || g.reverse !== m.reverse) return "it doesn't match the card's facts";
+  if (g.source === "agent" && m.source_agent === BAESIAN) return "it gated Baesian's own card as an agent's";
+  if (g.reason === "error") {
+    const floor = m.touches.some((f) => HARD_BY_DEFAULT.has(f));
+    return g.outcome === "shown" && g.level === m.level && (!floor || m.level === "hard") ? undefined : "it says the gate failed, but didn't show the card as a failure must";
+  }
+  const d = route({ touches: m.touches, reverse: m.reverse, asked: g.asked, source: g.source, draw: drawOf(m.id, m.revision), heldBefore: () => g.held_before ?? 0 }, settings);
+  const same = d.row === g.row && d.position === g.position && d.outcome === g.outcome && d.level === g.level && d.reason === g.reason;
+  if (!same) return `the rules give ${d.outcome}${d.level ? ` at ${d.level}` : ""} (${d.row}, ${d.position}, ${d.reason}), not ${g.outcome}${g.level ? ` at ${g.level}` : ""} (${g.row}, ${g.position}, ${g.reason})`;
+  if (d.outcome === "held" && (d.p !== g.p || d.draw !== g.draw || d.burn_in !== g.burn_in || d.drawn !== g.drawn)) return "its audit draw doesn't recompute";
+  const level = levelInForce(d, settings.mode, g.asked);
+  if (m.level !== level) return `the card's level is ${m.level}, but the gate gave it ${level}`;
+  return undefined;
 }
 
 /**

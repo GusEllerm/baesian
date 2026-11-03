@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
+import { TODAY } from "../../src/routing";
 import { areaOf, byId, liveDependents, parked, queue, rarityOf, relationsOf, replyOf, sidesFor, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
@@ -26,10 +27,13 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
     ...rest,
   };
 }
+/** No preference file: "Today", in shadow (M8). */
+const pooled = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 };
+const ROUTING: ApiState["routing"] = { settings: TODAY, history: [], report: { rows: {}, pooled, beforeGate: 0 } };
 function snapshot(cards: ApiCard[], rules: ApiState["rules"] = []): ApiState {
   // Dependents, as the server computes them.
   for (const c of cards) c.dependents = cards.filter((d) => d.meta.depends_on.includes(c.meta.id)).map((d) => d.meta.id);
-  return { version: 1, server: { pid: 1, started: at(0), now: at(100), watch: "events" }, project: { name: "repo", branch: "main" }, decks: [], rules, cards, problems: [] };
+  return { version: 1, server: { pid: 1, started: at(0), now: at(100), watch: "events" }, project: { name: "repo", branch: "main" }, decks: [], rules, cards, routing: ROUTING, problems: [] };
 }
 const rule = (id: string, body: string, topic?: string): ApiState["rules"][number] => ({
   meta: { type: "rule", format: 1, id, covers: [], accepted_by: "gus", created: at(0), ...(topic ? { topic } : {}) },

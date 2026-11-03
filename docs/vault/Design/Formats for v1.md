@@ -9,7 +9,7 @@ tags: [baesian, design, formats]
 
 # Formats for v1
 
-> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it. Section 1, the format numbers, is built.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
+> **Status: proposal P16 (2026-11-03). Its eight cards were accepted as D156–D163 the same day, each the agent's pick; the rest is the agent's, standing unless the user overturns it. Section 1, the format numbers, is built, and so are sections 2 to 6, as M8a ([[src-routing]], [[File Formats#Routing]]), but for the hosted parts (accounts, signatures, the relay's record and draw, the passkey for loosening), which are M9's.** An agent drafted it from D108 and D124–D155, [[Routing and Preferences]] (P14) and [[Hosted Service]] (P15). Only what cites a D-number is decided. Everything else is the agent's recommendation. The eight open choices that matter most are drafted as cards in deck formats-v1 ([[#10. Decisions for the user]]). Once decided, each change is described in [[File Formats]] and defined in `src/schema.ts`.
 
 From v1 on, a change to an on-disk format needs a version and a migration (D108). So every format change v1 needs is designed here, while formats are still free. [[File Formats]] stays the description of what's built. This note proposes what changes.
 
@@ -58,6 +58,8 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
 
 ## 2. Preference files (D146, D147, D148)
 
+> **Built (M8a, 2026-11-03),** as below, with two optional fields more, `survey_see` and `survey_fine`, the setup survey's answers (B-5na1k), and without `account`, which comes with M9. The values are the presets of card B-wwxa3 and the rates of B-fgc4y. A change from an old view is refused with `StalePreferences`, 409 at the server.
+
 - **Path:** preferences/{at}-{suffix}.json, in the live layer and the record. It's named timestamp first, like verdicts (D107).
 - **Written once.**
 - **Written by** the client only, through a new local server endpoint beside `POST /api/verdicts`. In a hosted repo the relay writes it, from a signed-in session, with a signature file beside it (section 7). Never in `Config` (D147).
@@ -84,6 +86,8 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
 - **Does loosening take your passkey?** In a hosted repo, a change that lets more cards past you could also need your passkey, and carry its proof, as a hard-card answer does. **Decision:** card formats-8.
 
 ## 3. Gate records (D144, D145, D148, D150)
+
+> **Built (M8a, 2026-11-03),** the CLI's record only, with these changes from the table below. Three fields more: `source` (an agent's card, Baesian's own, or a revision after an answer, the last two always shown); `draw`, the number the card drew; and `held_before`, the count of the row's earlier held cards the gate saw, across branches. Those keep the draw's inputs in the record, so the relay's draw (D158, M9) can be recorded the same way, and verify rechecks the burn-in from that count rather than recounting, which one branch's record can't. A card's `level` is the level in force at filing (P14's reading): a shown card's level, and a held card's provisional, since its agent goes ahead whatever level it asked for (B-chq61); the level asked for is in the record as `asked`. So the commit gate reads the card's level as before. verify rechecks the records of the cards a branch cites, in the merge gate.
 
 The gate runs at filing, over each card's stated facts (D145). Its record is stored rather than computed, because the settings it applied and its draw must be fixed when it runs.
 
@@ -124,6 +128,8 @@ The gate runs at filing, over each card's stated facts (D145). Its record is sto
 
 ## 4. The held status (D150)
 
+> **Built (M8a, 2026-11-03),** with two changes: a verdict on the latest revision ends it (a revision returned because a parent went the other way is gated anew, and may be held again); and `baesian wait` answers a held card with "go ahead", exit 8 and `next: go`, not exit 5, since card B-chq61 made a hold the answer to a waiting agent.
+
 `Status` gains held. `Store.status` computes it. Nothing stores it.
 
 - **A card is held** when two things are true: the gate record that counts for its latest revision says held, under enforce; and the card has no verdict on any revision. A shadow record never makes a card held.
@@ -134,6 +140,8 @@ The gate runs at filing, over each card's stated facts (D145). Its record is sto
 - **The agent's reading of D150:** a held card drawn for audit still counts as settled at merge ("any held card can be answered later, and audits do"). An audit that overturns a merged decision then meets P14's open question on overturns after merge.
 
 ## 5. Audit cards (D151)
+
+> **Built (M8a, 2026-11-03),** the record's half: the draw, `should_have_asked` (also allowed on a card shadow would have held, whose answers count for its row), an `audit` mark on the server's cards, and a rework brief, `held-answered`, when an answer overturns a held card's pick. The blind-first flow is the client's, M8b.
 
 An audit card is a held card whose gate record says drawn. It needs no new file and no new card field.
 
@@ -158,6 +166,8 @@ A label says it's an audit of a decision the agent went ahead on, without saying
 **Unanswered audits** are computed (drawn, held, no verdict), never stored, and never count as fine.
 
 ## 6. Convention cards (D126)
+
+> **Built (M8a, 2026-11-03),** as D161 decided and below, in a deck of their own, `conventions`. A yes asks for a rule whether or not the client sets `make_rule`. Slider moves are built too, as card B-y6jn6 decided: with the three fields below, in the deck `preferences`, and with no `depends_on`, since a later answer on an evidence card would return them (D80).
 
 D16 gives rules two routes: the "make this a rule" box on an answer, and convention cards mined from your answers. The first is built:
 1. the box sets `make_rule` on the verdict;

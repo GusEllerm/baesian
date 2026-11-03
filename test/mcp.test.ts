@@ -308,13 +308,31 @@ describe("never answering (D32, D62)", () => {
     expect(kinds.map((k) => readdirSync(join(store.live, k)).length)).toEqual(before);
     expect(readFileSync(join(store.live, "presence.json"), "utf8")).toBe(presence);
     expect(store.verdicts(id)).toEqual([]);
+    // Nor a preference file: only the client sets the preferences (D147).
+    expect(store.preferenceNames()).toEqual([]);
   });
 
   it("can't, by its code: the server and the operations never call the store's answering methods", () => {
     for (const path of ["src/mcp.ts", "src/ops.ts"]) {
       const code = readFileSync(join(import.meta.dirname, "..", path), "utf8");
-      for (const method of ["addVerdict", "mergeTopics", "touchPresence", "recordFallback"]) expect(code, `${path} names ${method}`).not.toContain(method);
+      for (const method of ["addVerdict", "mergeTopics", "touchPresence", "recordFallback", "writePreferences"]) expect(code, `${path} names ${method}`).not.toContain(method);
     }
+  });
+});
+
+describe("held cards (D150, B-chq61)", () => {
+  it("file_card says the card is held back, and wait_for_verdict says go, at once", async () => {
+    const { dir, store } = repo();
+    store.writePreferences({ preset: "hands-off", mode: "enforce" }, { by: "gus", client: "test" });
+    const client = await connect(dir, { waitClock: fakeClock(Date.now()) });
+    const filed = await call(client, "file_card", { ...draft({ touches: ["dependency"], level: "blocking" }), body: BODY });
+    expect(filed.text).toContain("held back (Runtime dependencies: let the agent decide): go ahead with your pick");
+    expect(filed.data).toMatchObject({ card: { meta: { level: "provisional" } }, gate: { outcome: "held", mode: "enforce", asked: "blocking" } });
+    const id = (filed.data.card as { meta: { id: string } }).meta.id;
+    const waited = await call(client, "wait_for_verdict", { id });
+    expect(waited.data).toMatchObject({ kind: "held", next: "go", exit: 8 });
+    expect(waited.text).toContain("Go ahead with your pick, as provisional");
+    expect(client.getInstructions()).toContain("A level is a minimum only when the card is shown");
   });
 });
 

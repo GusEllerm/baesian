@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ALL_ROWS, POSITIONS, ROWS, ROW_FLOOR, rank } from "./routing.js";
 
 // The file formats. docs/vault/Design/File Formats.md describes them for people; this module is the
 // definition. Every type is flat (no nested objects) so the Markdown ones read well in Obsidian.
@@ -50,6 +51,8 @@ export const FILE_KINDS = {
   "user-config": { name: "personal config", upgrades: [] },
   "decision-note": { name: "decision note", upgrades: [] },
   "rule-note": { name: "rule note", upgrades: [] },
+  preferences: { name: "preference file", upgrades: [] },
+  gate: { name: "gate record", upgrades: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
@@ -213,6 +216,18 @@ export const CardMeta = z.strictObject({
    */
   rule: Text.optional(),
   rule_covers: z.array(z.string().regex(FACT_PATTERN, "a gate pattern looks like dep:pytest-* or schema:migrations/*")).default([]),
+  /**
+   * A convention card (D161): Baesian found a pattern in your answers, by the same choice on one area's decisions or by
+   * a comment in rule words, and asks whether they should become one rule. Only Baesian sets it.
+   */
+  convention: z.enum(["same-choice", "rule-words"]).optional(),
+  /**
+   * A slider proposal (B-y6jn6): Baesian proposes moving a row of the repo's preferences one stop, from the record.
+   * Accepting it writes a new preference file. Only Baesian sets them, all three together.
+   */
+  pref_row: z.enum(ROWS).optional(),
+  pref_from: z.enum(POSITIONS).optional(),
+  pref_to: z.enum(POSITIONS).optional(),
   caught_at: CaughtAt.optional(),
   confidence: z.number().min(0).max(1).optional(),
   domain: z.array(z.string().min(1)).default([]),
@@ -238,6 +253,10 @@ export const CardDraft = CardMeta.omit({
   reply: true,
   rule: true,
   rule_covers: true,
+  convention: true,
+  pref_row: true,
+  pref_from: true,
+  pref_to: true,
 }).extend({
   type: z.literal("card").optional(),
   format: formatOf("card-draft").optional(),
@@ -352,6 +371,11 @@ export const Verdict = z
     /** The option chosen before the agent's pick was shown (D86, D88). */
     first_choice: OptionKind.optional(),
     make_rule: z.boolean().optional(),
+    /**
+     * "You should have asked me" (D151, B-87tkc): on a card the gate held back, or in shadow would have, the reviewer
+     * would have wanted to see it, whatever they chose. It counts as a miss on the card's row.
+     */
+    should_have_asked: z.boolean().optional(),
     /** Rules the chosen option breaks that the reviewer retired with this answer (D119). */
     retire_rules: z.array(RuleId).optional(),
     reviewer: z.string().min(1),
@@ -533,6 +557,122 @@ export const Cursor = z.strictObject({
   delivered: z.array(z.string().min(1)).optional(),
 });
 export type Cursor = z.infer<typeof Cursor>;
+
+// ---------------------------------------------------------------- routing (M8: D144–D151, P16 sections 2 and 3)
+
+export const Position = z.enum(POSITIONS);
+export const Row = z.enum(ROWS);
+export const Mode = z.enum(["shadow", "enforce"]);
+
+/** A preference file's name: `<at>-<suffix>.json`, timestamp first like a verdict's (D107), so the newest sorts last. */
+export const PREFERENCE_FILE = new RegExp(`^\\d{8}T\\d{6}\\.\\d{3}Z-${SUFFIX}{5}\\.json$`);
+const PreferenceName = z.string().regex(PREFERENCE_FILE, "a preference file is named <at>-<suffix>.json");
+
+/**
+ * One change to a repo's preferences: `preferences/<at>-<suffix>.json`, in the live layer and the record (D147). Written
+ * once, by the client only (or by accepting a slider proposal in it), never by an agent and never in `Config`. The newest
+ * is in force; the rest are the history. Every row is required, so a file means the same whatever a later Baesian's
+ * presets are (P16). Spending, destroying data and publishing have no key: they're fixed at "never without me" (D146).
+ */
+export const Preferences = z
+  .strictObject({
+    type: z.literal("preferences"),
+    format: formatOf("preferences"),
+    /** shadow records what the gate would hold back, and holds nothing (D148). */
+    mode: Mode,
+    row_public_api: Position,
+    row_schema: Position,
+    row_dependency: Position,
+    row_infra: Position,
+    row_user_facing: Position,
+    row_security: Position,
+    row_privacy: Position,
+    row_other: Position,
+    /** The chance a held card is drawn for audit, at each of the two low positions (B-fgc4y). */
+    rate_agent_decides: z.number().min(0).max(1),
+    rate_sample: z.number().min(0).max(1),
+    /** How many of each row's first held cards are all drawn (B-fgc4y). */
+    burn_in: z.number().int().min(0),
+    /** The preset it started from (B-wwxa3). */
+    profile: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
+    /** The file this change was made from; absent only on the first. A change from an older view is refused (P16). */
+    replaces: PreferenceName.optional(),
+    /** The slider proposal it came from (B-y6jn6). */
+    from_card: CardId.optional(),
+    /** The setup survey's answers (B-5na1k): the rows whose example you wanted to see, and those you'd be fine not seeing. */
+    survey_see: z.array(Row).optional(),
+    survey_fine: z.array(Row).optional(),
+    reason: z.string().min(1).optional(),
+    by: z.string().min(1),
+    /** Which client wrote it (D62). */
+    client: z.string().min(1),
+    at: Timestamp,
+  })
+  .superRefine((p, ctx) => {
+    for (const [row, floor] of Object.entries(ROW_FLOOR)) {
+      const key = `row_${row}` as keyof typeof p;
+      if (floor && rank(p[key] as (typeof POSITIONS)[number]) < rank(floor)) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${row} may go no lower than ${floor} (D146)` });
+      }
+    }
+  });
+export type Preferences = z.infer<typeof Preferences>;
+
+/** The gate's outcome for one card revision (P16 section 3). */
+export const GateOutcome = z.enum(["shown", "held"]);
+
+/**
+ * What the gate did with one card revision, and why: `cards/<id>/gate-r<n>-<by>.json`, beside the card, in both layers,
+ * written once at filing (D145). Stored rather than computed, since the settings it applied and its draw are fixed when
+ * it runs. The CLI's (`by: cli`) is the one that counts locally; a hosted repo's relay will write its own, signed (D158).
+ * A classifier's model, score and threshold are reserved for later: a v1 reader refuses a record that sets them, as the
+ * schema is strict.
+ */
+export const GateRecord = z
+  .strictObject({
+    type: z.literal("gate"),
+    format: formatOf("gate"),
+    card: CardId,
+    revision: z.number().int().min(1),
+    by: z.enum(["cli", "relay"]),
+    /** The rules' version: rules-1. */
+    gate: z.string().min(1),
+    /** Copied from the preferences; shadow when there are none. */
+    mode: Mode,
+    /** The preference file it applied; absent when there was none, so "Today" applied, in shadow. */
+    preferences: PreferenceName.optional(),
+    /** What it read from the card. */
+    touches: z.array(Fact).default([]),
+    reverse: Reverse,
+    /** The level the draft asked for, if any. It only raises a shown card's level (D144, B-chq61). */
+    asked: Level.optional(),
+    /** An agent's card; one Baesian filed itself; or a revision that follows an answer, or a reply. The last two are always shown. */
+    source: z.enum(["agent", "baesian", "answer"]),
+    /** The strictest row it fell in, and that row's position. */
+    row: z.enum(ALL_ROWS),
+    position: Position,
+    /** In shadow, what it would have done. */
+    outcome: GateOutcome,
+    /** The level it was shown at, when shown. */
+    level: Level.optional(),
+    reason: z.enum(["row", "floor", "one-way", "agent", "baesian", "answer", "error"]),
+    /** When held: the card's draw (a hash of its ID and revision, read as a number from 0 to 1), the chance it had, the row's earlier held cards the gate counted, and whether it was drawn, and by the burn-in (B-fgc4y). */
+    draw: z.number().min(0).max(1).optional(),
+    p: z.number().min(0).max(1).optional(),
+    held_before: z.number().int().min(0).optional(),
+    burn_in: z.boolean().optional(),
+    drawn: z.boolean().optional(),
+    /** The relay's signature its draw came from (D158): on the relay's record only, from M9. */
+    draw_proof: z.string().min(1).optional(),
+    at: Timestamp,
+  })
+  .superRefine((g, ctx) => {
+    if (g.outcome === "shown" && !g.level) ctx.addIssue({ code: "custom", path: ["level"], message: "a shown card has a level" });
+    if (g.outcome === "held" && (g.drawn === undefined || g.p === undefined || g.draw === undefined || g.held_before === undefined)) {
+      ctx.addIssue({ code: "custom", path: ["drawn"], message: "a held card has its draw: draw, p, held_before and drawn" });
+    }
+  });
+export type GateRecord = z.infer<typeof GateRecord>;
 
 /** `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it. */
 export const Config = z.strictObject({

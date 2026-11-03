@@ -121,14 +121,14 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     expect(blocked.code).toBe(1);
     expect(blocked.err).toContain("baesian: staged");
     expect(sh(dir, "diff", "--cached", "--name-only")).toBe("package.json");
-    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", ".baesian")).toBe(`?? .baesian/cards/${first}/r1.md\n?? .baesian/decks/branch-main.md`);
+    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", ".baesian")).toBe(`?? .baesian/cards/${first}/gate-r1-cli.json\n?? .baesian/cards/${first}/r1.md\n?? .baesian/decks/branch-main.md`);
 
     // A record file you staged yourself stays staged.
     sh(dir, "add", "--", ".baesian");
     const second = store.fileCard(draft({ title: "Where run files are kept", question: "Where should the run files go?", topic: "storage/run-files" }), BODY, { agent: "a" }).card.meta.id;
     expect(commit(dir, "Add hono\n").code).toBe(1);
-    expect(sh(dir, "diff", "--cached", "--name-only").split("\n")).toEqual([`.baesian/cards/${first}/r1.md`, ".baesian/decks/branch-main.md", "package.json"]);
-    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", `.baesian/cards/${second}`)).toBe(`?? .baesian/cards/${second}/r1.md`);
+    expect(sh(dir, "diff", "--cached", "--name-only").split("\n")).toEqual([`.baesian/cards/${first}/gate-r1-cli.json`, `.baesian/cards/${first}/r1.md`, ".baesian/decks/branch-main.md", "package.json"]);
+    expect(sh(dir, "status", "--porcelain", "--untracked-files=all", "--", `.baesian/cards/${second}`)).toBe(`?? .baesian/cards/${second}/gate-r1-cli.json\n?? .baesian/cards/${second}/r1.md`);
 
     // The commit that gets through takes the whole record, as before.
     expect(commit(dir, "Add hono\n\nBaesian-Ack: dep:hono a small router\n").code).toBe(0);

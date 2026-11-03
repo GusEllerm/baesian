@@ -64,6 +64,8 @@ function everyKind() {
   store.attach(d, "codex");
   store.recordFallback(d, "timeout", "claude-code");
   store.writeLedger(a, { commit: "0123456789abcdef" }, "Built in `0123456789`.\n");
+  // A preference file, which only the client writes (D147); every card above has its gate record.
+  store.writePreferences({ preset: "fewer-interruptions" }, { by: "gus", client: "web" });
   // The mutable files: presence, a waiting marker, and the cursors, the branch's and a session's, with a delivery.
   store.touchPresence("web");
   store.startWaiting(d, "claude-code");
