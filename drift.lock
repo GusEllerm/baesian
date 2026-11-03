@@ -1063,7 +1063,7 @@ sig = "2540e01ffa9d34c6"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/cli.ts"
-sig = "e5bffe1d0120df3f"
+sig = "9137aba546320166"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1333,7 +1333,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "66264a46fdcb8c95"
+sig = "297b7e184fc90a6b"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -1768,7 +1768,7 @@ sig = "0c87b03c3046c3cb"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "66264a46fdcb8c95"
+sig = "297b7e184fc90a6b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"

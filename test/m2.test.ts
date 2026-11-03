@@ -117,6 +117,8 @@ describe("cli: M2 commands", () => {
     const a = repo();
     const r = await run(a.dir, ["init"]);
     expect(r.out).toMatch(/AGENTS.md: +instructions created/);
+    // With no preferences yet, it points to the setup survey in the client (B-5na1k).
+    expect(r.out).toMatch(/preferences: none yet\. Run `baesian serve`: the client asks about a few example decisions/);
     const b = repo();
     await run(b.dir, ["init", "--no-agents"]);
     expect(existsSync(join(b.dir, "AGENTS.md"))).toBe(false);

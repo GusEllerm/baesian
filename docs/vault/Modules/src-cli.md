@@ -21,7 +21,7 @@ The agent commands' logic is in `src/ops.ts` (below), which the MCP server calls
 
 | Command | Does |
 |---|---|
-| `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]). `--vault` records the vault, in a config that may already exist, turns Obsidian's Bases on and adds the Decision Log's query (`initVault`, [[src-vault]]); it refuses a path outside the repo |
+| `init [--vault <path>] [--no-agents] [--no-hooks]` | sets up both layers, writes the AGENTS.md block, and installs the commit gate ([[src-gate]]). `--vault` records the vault, in a config that may already exist, turns Obsidian's Bases on and adds the Decision Log's query (`initVault`, [[src-vault]]); it refuses a path outside the repo. With no preference file yet, it says that `baesian serve` opens the client's setup survey (B-5na1k), since only the client writes preferences (D147) |
 | `template [--json]` | prints a card draft (`CARD_TEMPLATE`). Unfilled, it fails validation |
 | `file [path]` | files a card from a file or stdin; prints what the gate did with it (`gateLine`: shown at a level and why, or held back, which means go ahead with the pick, as provisional), notifies for blocking and hard cards, and prints notes on long fields |
 | `revise <id> [path] [--json]` | the next revision of a returned card |
