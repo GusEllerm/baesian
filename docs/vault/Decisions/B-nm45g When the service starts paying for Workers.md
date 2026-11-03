@@ -1,0 +1,85 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "When the service starts paying for Workers: Free plan until just before others sign up (B-nm45g)."
+created: 2026-11-03
+updated: 2026-11-03
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-nm45g
+card: B-nm45g
+revision: 1
+title: When the service starts paying for Workers
+question: Should the service's Cloudflare account move to Workers Paid, $5 a month plus usage, when M9's build starts, or stay free until others can sign up?
+answer: Free plan until just before others sign up
+response: accept
+not_chosen:
+  - Workers Paid from the start of M9's build
+answered: 2026-11-03T16:49:50.394Z
+answered_by: Gus Ellerm
+topic: hosted/workers-paid
+deck: hosted
+level: hard
+reverse: cheap
+touches:
+  - money
+  - infra
+filed: 2026-11-03T15:26:48.187Z
+filed_by: claude-code
+branch: v1/next
+depends_on:
+  - "[[B-rca1z Where the hosted service runs|B-rca1z]]"
+---
+
+# When the service starts paying for Workers
+
+Should the service's Cloudflare account move to Workers Paid, $5 a month plus usage, when M9's build starts, or stay free until others can sign up?
+
+**Decided:** Free plan until just before others sign up, the agent's pick. The prototype and your own dogfooding run on the free plan, where going over a daily limit fails instead of billing. Workers Paid starts before the first outside sign-up, with a budget alert; until then, codes go only to your own address.
+
+**Not chosen:** Workers Paid from the start of M9's build. The account pays $5 a month from the first deploy, so the prototype runs under the limits it will have in production, such as 30 seconds of CPU per request and email to any address. Usage past what's included is billed, with no cap.
+
+**It turned on:** Is building on the plan the service will run on worth about $5 a month before anyone else uses it? (a preference) Not worth it: Free plan until just before others sign up. Worth it: Workers Paid from the start of M9's build.
+
+**The fact given:** Prices as published on 2026-11-03. Free: 100,000 requests a day and 10 ms of CPU per request; Durable Objects get 100,000 requests and 13,000 GB-s a day, and 5 GB in all. Past a free limit, requests fail with an error and nothing is billed. Paid: $5 a month minimum, with 10 million requests, 30 million CPU-ms and 1 million object requests included. Past that, usage is billed with no spending cap; budget alerts only send an email, a day late. Email to any address needs Paid; email to your own verified address is free on both. B-rca1z's check was a prototype on the free plan.
+
+**First chose:** Workers Paid from the start of M9's build, then switched once the agent's pick was shown.
+
+**The agent's case:** Nothing in the prototype needs Paid. Its codes can go to your own verified address, and the free plan's limits work as a spending cap while nobody else depends on the service. B-rca1z already asks for the prototype on the free plan.
+
+**Wrong if:** The prototype hits the 10 ms CPU limit on ordinary requests, such as working out a project's state (B-17wn9), so what it measures doesn't carry over to Paid. **To check:** Watch CPU time per request in the Worker's metrics during the prototype; if working out the state of a few hundred cards nears 10 ms, move to Paid then.
+
+Answered by Gus Ellerm on 2026-11-03, through Baesian (card B-nm45g, revision 1). Filed by claude-code on v1/next, in the deck “The hosted service”.
+
+The record is in `.baesian/cards/B-nm45g/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+D140 (B-rca1z) chose Cloudflare Workers with a Durable Object per repo and said "spending itself still comes to the user as a card". This is that card. It covers only when the Workers subscription starts. Two other costs aren't decided here: the email sender's (hosted/email-sender) and a domain for the website (not yet carded; see the last paragraph).
+
+**What each plan gives** (Cloudflare's docs, read 2026-11-03):
+
+| | Workers Free | Workers Paid |
+|---|---|---|
+| Workers requests | 100,000 a day | 10 million a month, then $0.30 a million |
+| CPU per request | 10 ms | 30 seconds by default, up to 5 minutes; 30 million CPU-ms a month, then $0.02 a million |
+| Durable Object requests | 100,000 a day | 1 million a month, then $0.15 a million |
+| Durable Object duration | 13,000 GB-s a day | 400,000 GB-s a month, then $12.50 a million GB-s |
+| Durable Object storage | 5 GB in all | 5 GB-month, then $0.20 a GB-month |
+| Email to any address | not available | 3,000 a month, then $0.35 per 1,000 |
+
+- *Past a free limit:* "If you exceed any one of the free tier limits, further operations of that type will fail with an error" (Durable Objects pricing). For Workers requests, Cloudflare returns Error 1027, or bypasses the Worker if its route is set to fail open (Workers limits).
+- *The 10 ms limit* has "some built-in flexibility" for occasional overruns (Workers limits). Cloudflare's docs say the average Worker uses about 2.2 ms, and that authentication or parsing large payloads typically takes 10 to 20 ms. Whether Baesian's requests fit is *unverified*: that is this card's check.
+- *No spending cap on Paid.* Budget alerts email you when usage-based spend passes a threshold. They are "informational only", fire the day after, and don't cap usage. Since July 2026, eligible pay-as-you-go accounts get one at $10 by default (Cloudflare changelog, 2026-07-20). A Worker can set `limits.cpu_ms` and `limits.subrequests` to bound runaway code (changelog, 2026-02-11). Neither caps the bill.
+- *Email in the prototype:* "Sending to verified destination addresses in your account is free on all plans" (Email Service pricing).
+
+**P15's cost illustration counts requests only.** Durable Objects are also billed for wall-clock duration while active, at 128 MB per object, "regardless of actual usage" (Durable Objects pricing). P15 section 1 has `baesian wait` long-poll the relay. A poll held open inside a project's object keeps it active: one object held 8 hours a day on 22 days is about 81,000 GB-s a month. Twenty-five such projects would pass the included 400,000 GB-s by about 1.6 million GB-s, about $25 a month (billing rounds up to the next million). Hibernating WebSockets, or short polls, avoid most of it. That is the agent's arithmetic, not a measurement, and a design point for M9 under either option.
+
+**Not covered here: the website's domain.** Cloudflare's Email Sending needs the sending domain's DNS on Cloudflare ("You must be using Cloudflare DNS to use Email Service"), and passkeys are bound to the website's domain. So are the origin and relying party pinned in CI (P16 section 7, D159). Changing the domain later would strand every passkey, so it deserves its own card (a URL scheme, and a small yearly cost).
+
+Sources, all read 2026-11-03: Cloudflare, Workers pricing (updated 2026-10-02) and Workers limits <https://developers.cloudflare.com/workers/platform/pricing/>, <https://developers.cloudflare.com/workers/platform/limits/>; Durable Objects pricing (updated 2026-10-18) <https://developers.cloudflare.com/durable-objects/platform/pricing/>; Email Service pricing <https://developers.cloudflare.com/email-service/platform/pricing/>; changelog entries "Budget alerts now on by default" (2026-07-20) and "Workers are no longer limited to 1000 subrequests" (2026-02-11).

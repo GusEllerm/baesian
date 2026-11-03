@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-nk97q",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T164913.864Z-fq8r2.json",
+  "touches": [
+    "dependency",
+    "security"
+  ],
+  "reverse": "cheap",
+  "asked": "hard",
+  "source": "agent",
+  "row": "security",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-03T16:57:17.520Z"
+}

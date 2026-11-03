@@ -1,0 +1,25 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-qrga1",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T164913.864Z-fq8r2.json",
+  "touches": [
+    "user-facing",
+    "money",
+    "security",
+    "infra"
+  ],
+  "reverse": "one-way",
+  "asked": "hard",
+  "source": "agent",
+  "row": "money",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "at": "2026-11-03T16:57:17.318Z"
+}

@@ -1,0 +1,75 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "Which service sends the service's emails: Cloudflare's Email Sending (B-pvye0)."
+created: 2026-11-03
+updated: 2026-11-03
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-pvye0
+card: B-pvye0
+revision: 1
+title: Which service sends the service's emails
+question: Should the hosted service send its emails, such as sign-up and recovery codes, through Cloudflare's Email Sending or through a dedicated email provider?
+answer: Cloudflare's Email Sending
+response: accept
+not_chosen:
+  - A dedicated sender, such as Postmark
+answered: 2026-11-03T16:50:04.121Z
+answered_by: Gus Ellerm
+topic: hosted/email-sender
+deck: hosted
+level: hard
+reverse: cheap
+touches:
+  - privacy
+  - security
+  - money
+  - user-facing
+filed: 2026-11-03T15:26:48.335Z
+filed_by: claude-code
+branch: v1/next
+depends_on:
+  - "[[B-9tk9m How people sign up and sign in|B-9tk9m]]"
+  - "[[B-jzgy4 How someone who lost every passkey gets back in|B-jzgy4]]"
+  - "[[B-rca1z Where the hosted service runs|B-rca1z]]"
+---
+
+# Which service sends the service's emails
+
+Should the hosted service send its emails, such as sign-up and recovery codes, through Cloudflare's Email Sending or through a dedicated email provider?
+
+**Decided:** Cloudflare's Email Sending, the agent's pick. The Worker sends through a binding, with no API key to keep, and Cloudflare stays the only company handling the service's data. It needs Workers Paid and the domain's DNS on Cloudflare; 3,000 emails a month included, then $0.35 per 1,000.
+
+**Not chosen:** A dedicated sender, such as Postmark. A company that only sends transactional email sends the codes, with its own record of reaching inboxes. It is a second sub-processor seeing every address and message, with an API key as a Workers secret; Postmark is $15 a month for 10,000.
+
+**It turned on:** Which matters more for the codes: one company fewer holding users' email, or a sender with a long record of reaching inboxes? (a preference) One company fewer: Cloudflare's Email Sending. A long record: A dedicated sender, such as Postmark.
+
+**The fact given:** Whoever sends sees each recipient's address and every message, codes included, and is named in the privacy policy. Cloudflare's Email Sending has been in public beta since 16 April 2026; a new account starts on a conservative daily quota that grows with its reputation. Postmark: free for 100 emails a month, $15 for 10,000. Amazon SES: $0.10 per 1,000. The service sends a few emails per account per month: sign-up and recovery codes, the notices recovery and new passkeys trigger, and the push fallback, which gives counts only (B-mjf3g). A code that lands in spam blocks a sign-up or a recovery (B-jzgy4).
+
+**The agent's case:** The volumes are tiny and Cloudflare already processes everything the service holds, so it adds no company, contract or key. Moving to another sender later is a small change if its deliverability disappoints.
+
+**Wrong if:** Codes from the beta land in spam or arrive late at common mailboxes (Gmail, Outlook, university mail), or a new account's daily quota holds up sign-ups. **To check:** Before the first outside sign-up, send test codes to Gmail, Outlook and a university address and check each reaches the inbox within a minute; check whether Email Sending has left beta.
+
+Answered by Gus Ellerm on 2026-11-03, through Baesian (card B-pvye0, revision 1). Filed by claude-code on v1/next, in the deck “The hosted service”.
+
+The record is in `.baesian/cards/B-pvye0/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+D153 (B-9tk9m) has people sign up with a passkey and an email, and B-jzgy4 makes recovery take an emailed code and a saved one. NIST asks that every recovery send a notice (SP 800-63B-4, 4.2.3, as [[Sign-in for the Hosted Service]] F10 reads it). P15 section 7 makes email the fallback when push is refused, and P15 section 6 lists "the email sender" as a sub-processor. So the service needs a sender whatever else is chosen. Which one is the question here.
+
+**What was checked** (2026-11-03):
+- *Cloudflare Email Sending:* "Email Sending Beta sends outbound transactional emails. Available on Workers Paid plan." Public beta since 2026-04-16. It sends through a Workers binding, the REST API or SMTP. "You must be using Cloudflare DNS to use Email Service": onboarding a domain adds SPF, DKIM and DMARC records. "New accounts start with a conservative daily quota and scale up over time based on your sending behavior"; no numbers are published. Up to 50 recipients per email. Pricing: 3,000 a month included on Paid, then $0.35 per 1,000; bounces count, sends blocked by the suppression list don't.
+- *Postmark* (pricing page, undated): Free, 100 emails a month; Basic, $15 a month for 10,000, then $1.80 per 1,000; 45 days of message retention on paid plans.
+- *Amazon SES* (pricing page): $0.10 per 1,000 outbound emails à la carte, with no minimum.
+- *Not checked:* Resend's prices; whether Cloudflare's customer DPA covers Email Sending as it covers Workers (likely, *unverified*); any sender's EU hosting; inbox placement for any of them. Nothing here measures deliverability.
+
+**What follows either way.** The sender holds the addresses of everyone who signs up, so P15 section 6's sub-processor list names it. Under the first option that list is Cloudflare alone, plus Globus as the sign-in provider for those who choose it (D153). Recovery codes pass through the sender, but a code alone doesn't recover an account (B-jzgy4).
+
+Sources: Cloudflare Email Service overview (updated 2026-10-15) <https://developers.cloudflare.com/email-service/>, pricing <https://developers.cloudflare.com/email-service/platform/pricing/>, limits (updated 2026-10-30) <https://developers.cloudflare.com/email-service/platform/limits/>, "Send emails" <https://developers.cloudflare.com/email-service/get-started/send-emails/>, changelog "Email Sending now in public beta" (2026-04-16); Postmark pricing <https://postmarkapp.com/pricing>; Amazon SES pricing <https://aws.amazon.com/ses/pricing/>. All read 2026-11-03.

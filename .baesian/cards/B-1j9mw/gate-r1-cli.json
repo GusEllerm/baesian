@@ -1,0 +1,20 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-1j9mw",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T164913.864Z-fq8r2.json",
+  "touches": [],
+  "reverse": "cheap",
+  "asked": "provisional",
+  "source": "baesian",
+  "row": "other",
+  "position": "sample",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "baesian",
+  "at": "2026-11-03T16:49:50.498Z"
+}
