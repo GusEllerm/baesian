@@ -1,0 +1,11 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-shndb",
+  "revision": 1,
+  "response": "accept",
+  "first_choice": "proposal",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-03T20:05:26.780Z"
+}

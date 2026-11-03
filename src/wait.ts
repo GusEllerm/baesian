@@ -156,7 +156,8 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
       }
     }
 
-    const level = store.card(id)!.meta.level;
+    // The level in force: in a hosted repo, the relay's signed gate record may have raised it (P16 section 3).
+    const level = store.view(() => store.levelOf(id)) ?? store.card(id)!.meta.level;
     const proceed = level !== "hard";
     let recorded = false;
     if (level === "blocking") {

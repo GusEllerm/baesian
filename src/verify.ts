@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { commitSnapshot } from "./facts.js";
@@ -8,8 +8,9 @@ import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { TODAY, levelInForce, route } from "./routing.js";
 import { type GateRecord, HARD_BY_DEFAULT } from "./schema.js";
-import { BAESIAN, type Card, RECORD_DIR, Store, drawOf, normalise, settingsOf } from "./store.js";
+import { BAESIAN, type Card, RECORD_DIR, Store, type StoreTrust, drawOf, normalise, settingsOf } from "./store.js";
 import { parseTrailers } from "./trailers.js";
+import { TRUST_ENV, type TrustRoot, drawOfProof, pinProblems, pinnedTrust } from "./trust.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 
 // M3b: `baesian verify`, the same gate in CI, plus the merge gate (D31) and conflicts (D35, D38).
@@ -19,7 +20,11 @@ import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 export class RecordAt {
   private readonly dirs: string[] = [];
 
-  constructor(private readonly repo: Repo) {}
+  /** `trust` holds CI's pinned keys, which every commit's record is checked with whatever it says (D142). */
+  constructor(
+    private readonly repo: Repo,
+    private readonly trust: StoreTrust = {},
+  ) {}
 
   store(rev: string): Store {
     const dir = mkdtempSync(join(tmpdir(), "baesian-record-"));
@@ -39,7 +44,7 @@ export class RecordAt {
       });
       execFileSync("tar", ["-x", "-C", dir], { input: tar });
     }
-    return Store.overRecord(this.repo, out);
+    return Store.overRecord(this.repo, out, this.trust);
   }
 
   dispose(): void {
@@ -52,6 +57,9 @@ export interface CommitCheck {
   subject: string;
   cards: string[];
   report: GateReport;
+  /** The record's keys that CI doesn't pin, or pins differently (D142, D159): each fails the commit. */
+  trust: string[];
+  ok: boolean;
 }
 
 export interface MergeProblem {
@@ -78,7 +86,12 @@ export interface VerifyResult {
   base: string;
   commits: CommitCheck[];
   merge?: MergeCheck;
-  /** Advice that doesn't fail the check: the vault's missing notes (M6). */
+  /**
+   * In a hosted repo (D138): where the keys came from, CI's pin or the record's copy, and the files a person writes in the
+   * record at HEAD that don't count, which are ignored, with a note.
+   */
+  hosted?: { keys: "pinned" | "record"; skipped: { file: string; why: string }[] };
+  /** Advice that doesn't fail the check: the vault's missing notes (M6); keys checked against the record's copy alone. */
   warnings?: string[];
   ok: boolean;
 }
@@ -100,13 +113,20 @@ function commitsIn(repo: Repo, base: string): string[] {
   return out ? out.split("\n") : [];
 }
 
-/** Check one commit the way the local commit-msg hook did: its diff, its message, its own record. */
-export function checkCommit(repo: Repo, records: RecordAt, sha: string): CommitCheck {
+/**
+ * Check one commit the way the local commit-msg hook did: its diff, its message, its own record. In a hosted repo the
+ * record's answers count only when signed (D138), and with keys pinned in CI, the record's copy must match them (D142).
+ */
+export function checkCommit(repo: Repo, records: RecordAt, sha: string, pinned?: TrustRoot): CommitCheck {
   const record = records.store(sha);
   const message = git(repo.toplevel, ["log", "-1", "--format=%B", sha]);
   const trailers = parseTrailers(message, repo.toplevel);
-  const report = evaluate(record, detectStaged(record, commitSnapshot(repo.toplevel, sha)), trailers);
-  return { sha, subject: message.split("\n")[0] ?? "", cards: trailers.cards, report };
+  return record.view(() => {
+    const report = evaluate(record, detectStaged(record, commitSnapshot(repo.toplevel, sha)), trailers);
+    const keys = record.trustFiles();
+    const trust = pinned ? pinProblems(pinned, [...keys.service, ...keys.passkeys]) : [];
+    return { sha, subject: message.split("\n")[0] ?? "", cards: trailers.cards, report, trust, ok: report.ok && trust.length === 0 };
+  });
 }
 
 /** The merge gate (D31): every card the branch cites is resolved or deferred, in the record at HEAD. */
@@ -121,9 +141,10 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
     }
     const status = head.status(id);
     const last = head.verdicts(id).filter((v) => v.revision === card.meta.revision).at(-1);
-    // The gate's record must recheck against the rules and the preference file it names (P16 section 3), like a fact.
-    const gate = head.gateRecord(id, card.meta.revision);
-    const wrong = gate && gateProblem(head, card, gate);
+    // The gate's records must recheck against the rules and the preference file each names (P16 section 3), like a fact:
+    // the CLI's, which set the card's level, and in a hosted repo the relay's signed one, which alone holds it (D158).
+    const records = [head.gateRecordBy(id, card.meta.revision, "cli"), head.hosted() ? head.gateRecordBy(id, card.meta.revision, "relay") : undefined];
+    const wrong = records.map((g) => g && gateProblem(head, card, g)).find(Boolean);
     if (wrong) {
       problems.push({ card: id, problem: "gate", message: `${id}'s gate record doesn't recheck: ${wrong}. Answer the card, or file it again.` });
       continue;
@@ -163,7 +184,8 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
  * and the rules must give the same outcome, level and draw from the card and that file. The burn-in can't be recounted
  * from one branch's record, since a row's earlier held cards may be on any branch: the record keeps the count it saw
  * (`held_before`), and the recheck uses it. Locally that count is the CLI's word, as a verdict is (D62); in a hosted repo
- * the relay's own record holds a card back (D158).
+ * the relay's own record holds a card back (D158), with the relay's count, and a draw recomputed from its signed proof.
+ * The relay's record doesn't set the card's level, which the CLI wrote at filing: it can only raise the level in force.
  */
 export function gateProblem(s: Store, card: Card, g: GateRecord): string | undefined {
   let settings = TODAY;
@@ -174,7 +196,10 @@ export function gateProblem(s: Store, card: Card, g: GateRecord): string | undef
     } catch (e) {
       return `its preference file, preferences/${g.preferences}, can't be read (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`;
     }
-    if (!file) return `it names preferences/${g.preferences}, which isn't in the record`;
+    if (!file) {
+      const judged = existsSync(join(s.live, "preferences", g.preferences)) ? s.judge(`preferences/${g.preferences}`) : undefined;
+      return judged && !judged.ok ? `it names preferences/${g.preferences}, which doesn't count: ${judged.why}` : `it names preferences/${g.preferences}, which isn't in the record`;
+    }
     settings = settingsOf(file);
   }
   if (g.mode !== settings.mode) return `it says ${g.mode}, but its preferences say ${settings.mode}`;
@@ -182,16 +207,26 @@ export function gateProblem(s: Store, card: Card, g: GateRecord): string | undef
   const facts = (x: readonly string[]) => [...x].sort().join(",");
   if (g.card !== m.id || g.revision !== m.revision || facts(g.touches) !== facts(m.touches) || g.reverse !== m.reverse) return "it doesn't match the card's facts";
   if (g.source === "agent" && m.source_agent === BAESIAN) return "it gated Baesian's own card as an agent's";
+  const relay = g.by === "relay";
   if (g.reason === "error") {
     const floor = m.touches.some((f) => HARD_BY_DEFAULT.has(f));
-    return g.outcome === "shown" && g.level === m.level && (!floor || m.level === "hard") ? undefined : "it says the gate failed, but didn't show the card as a failure must";
+    return g.outcome === "shown" && (relay || g.level === m.level) && (!floor || g.level === "hard") ? undefined : "it says the gate failed, but didn't show the card as a failure must";
   }
-  const d = route({ touches: m.touches, reverse: m.reverse, asked: g.asked, source: g.source, draw: drawOf(m.id, m.revision), heldBefore: () => g.held_before ?? 0 }, settings);
+  let draw = drawOf(m.id, m.revision);
+  if (relay && g.outcome === "held") {
+    // The relay's draw is its own signature over the card (D158): checked, then read as the CLI's is.
+    const root = s.hosted()?.root;
+    if (!root || !g.draw_proof) return "it holds the card back without the relay's draw proof";
+    const proved = drawOfProof(root, g.draw_proof, m.id, m.revision, s.bytes(`cards/${m.id}/r${m.revision}.md`), g.at);
+    if ("problem" in proved) return proved.problem;
+    draw = proved.draw;
+  }
+  const d = route({ touches: m.touches, reverse: m.reverse, asked: g.asked, source: g.source, draw, heldBefore: () => g.held_before ?? 0 }, settings);
   const same = d.row === g.row && d.position === g.position && d.outcome === g.outcome && d.level === g.level && d.reason === g.reason;
   if (!same) return `the rules give ${d.outcome}${d.level ? ` at ${d.level}` : ""} (${d.row}, ${d.position}, ${d.reason}), not ${g.outcome}${g.level ? ` at ${g.level}` : ""} (${g.row}, ${g.position}, ${g.reason})`;
   if (d.outcome === "held" && (d.p !== g.p || d.draw !== g.draw || d.burn_in !== g.burn_in || d.drawn !== g.drawn)) return "its audit draw doesn't recompute";
   const level = levelInForce(d, settings.mode, g.asked);
-  if (m.level !== level) return `the card's level is ${m.level}, but the gate gave it ${level}`;
+  if (!relay && m.level !== level) return `the card's level is ${m.level}, but the gate gave it ${level}`;
   return undefined;
 }
 
@@ -230,27 +265,39 @@ export function findConflicts(head: Store, baseRecord: Store): Conflict[] {
   return out;
 }
 
-/** Run every check for `base..HEAD`. */
-export function verify(repo: Repo, base: string, opts: { merge: boolean }): VerifyResult {
-  const records = new RecordAt(repo);
+/**
+ * Run every check for `base..HEAD`. `pinned` is CI's pinned keys (D142, D159); by default they're read from CI's settings
+ * (`BAESIAN_TRUST`, `BAESIAN_TRUST_FILE`), and `null` pins none. With keys pinned, every commit is checked as hosted,
+ * whatever its record says; without, a commit is hosted when its record holds the service's keys.
+ */
+export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?: TrustRoot | null }): VerifyResult {
+  const pinned = opts.pinned !== undefined ? (opts.pinned ?? undefined) : pinnedTrust();
+  const records = new RecordAt(repo, { pinned: pinned ?? null });
   try {
     git(repo.toplevel, ["rev-parse", "--verify", "-q", `${base}^{commit}`]);
   } catch {
     throw new Error(`unknown base "${base}": in CI, check out with full history (fetch-depth: 0)`);
   }
   try {
-    const commits = commitsIn(repo, base).map((sha) => checkCommit(repo, records, sha));
+    const commits = commitsIn(repo, base).map((sha) => checkCommit(repo, records, sha, pinned));
     const head = records.store("HEAD");
-    let merge: MergeCheck | undefined;
-    if (opts.merge) {
-      const cited = [...new Set(commits.flatMap((c) => c.cards))];
-      merge = checkMerge(head, records.store(base), cited);
-    }
-    const ok =
-      commits.every((c) => c.report.ok) && (!merge || (merge.problems.length === 0 && merge.conflicts.length === 0));
-    // M6: the vault's notes are a view, so a missing note or vault is a warning, never a failure.
-    const warnings = vaultWarnings(head, vaultFilesAt(repo, head, "HEAD"));
-    return { base, commits, ...(merge ? { merge } : {}), ...(warnings.length ? { warnings } : {}), ok };
+    return head.view(() => {
+      let merge: MergeCheck | undefined;
+      if (opts.merge) {
+        const cited = [...new Set(commits.flatMap((c) => c.cards))];
+        const baseRecord = records.store(base);
+        merge = baseRecord.view(() => checkMerge(head, baseRecord, cited));
+      }
+      const ok = commits.every((c) => c.ok) && (!merge || (merge.problems.length === 0 && merge.conflicts.length === 0));
+      // M6: the vault's notes are a view, so a missing note or vault is a warning, never a failure.
+      const warnings = vaultWarnings(head, vaultFilesAt(repo, head, "HEAD"));
+      const h = head.hosted();
+      if (h && !h.pinned) {
+        warnings.push(`the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (${TRUST_ENV}, D142)`);
+      }
+      const hosted = h ? { hosted: { keys: h.pinned ? ("pinned" as const) : ("record" as const), skipped: head.uncounted() } } : {};
+      return { base, commits, ...(merge ? { merge } : {}), ...hosted, ...(warnings.length ? { warnings } : {}), ok };
+    });
   } finally {
     records.dispose();
   }
@@ -262,11 +309,15 @@ export function describeVerify(r: VerifyResult): string[] {
   // The local gate's advice about previewing and bypassing doesn't apply to commits already made.
   const localOnly = (l: string) =>
     l.startsWith("baesian: commit blocked") || l.includes("--no-verify") || l.includes("`baesian check` previews");
+  if (r.hosted) {
+    out.push(`hosted: only answers the service signed count (D138), checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}`);
+  }
   for (const c of r.commits) {
-    out.push(`${c.report.ok ? "  ok  " : "  FAIL"} ${c.sha.slice(0, 10)} ${c.subject}`);
+    out.push(`${c.ok ? "  ok  " : "  FAIL"} ${c.sha.slice(0, 10)} ${c.subject}`);
     if (!c.report.ok) {
       for (const line of describeReport(c.report).filter((l) => !localOnly(l))) out.push(`      ${line}`);
     }
+    for (const t of c.trust) out.push(`      ${t}`);
   }
   if (r.commits.some((c) => !c.report.ok)) {
     out.push("  To fix a failed commit, reword its message to add the trailers (e.g. `git rebase -i`, then reword).");
@@ -287,6 +338,8 @@ export function describeVerify(r: VerifyResult): string[] {
     }
     for (const n of r.merge.notes) out.push(`  note: ${n}`);
   }
+  // A file that doesn't count is ignored, not an error (D138): an answer given outside the website, say.
+  for (const s of r.hosted?.skipped ?? []) out.push(`note: ${s.file} doesn't count: ${s.why}`);
   for (const w of r.warnings ?? []) out.push(`warning: ${w}`);
   out.push(r.ok ? "baesian verify: ok" : "baesian verify: failed");
   return out;

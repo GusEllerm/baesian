@@ -114,6 +114,19 @@ const tellMe: Record<Row, Position> = {
   other: "tell-me",
 };
 
+/**
+ * What a preference change loosens, against the settings in force before it (D163): each row moved toward held, and
+ * enforcing turned on. Either lets more cards past you, so in a hosted repo it takes your passkey; tightening doesn't.
+ */
+export function loosening(before: Settings, after: Settings): string[] {
+  const out: string[] = [];
+  if (before.mode === "shadow" && after.mode === "enforce") out.push("it turns enforcing on");
+  for (const row of ROWS) {
+    if (rank(after.rows[row]) < rank(before.rows[row])) out.push(`it moves ${row} from ${before.rows[row]} to ${after.rows[row]}`);
+  }
+  return out;
+}
+
 /** The three presets (B-wwxa3), from P14 section 4's table: security and privacy at "never without me" in all three. */
 export const PRESETS: readonly Preset[] = [
   { id: "today", name: "Today", summary: "Every card reaches you, as it does now.", rows: tellMe },

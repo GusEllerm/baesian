@@ -48,7 +48,7 @@ Computed from the record, never stored (P14 section 3).
 - **Rules come first.** A decision an accepted rule answers isn't filed (D16), so the gate never sees it; the commit gate still acknowledges what rules cover ([[src-gate]]).
 - **No model** (D145): the record's model, score and threshold stay reserved.
 - **Agents never write preferences** (D147): no CLI command and no MCP tool calls `Store.writePreferences`, and a test reads `src/mcp.ts` and `src/ops.ts` to keep it so.
-- **Hosted repos are M9:** the relay's own signed gate record and draw (D158), and the passkey for loosening (D163).
+- **Hosted repos (M9a):** only the relay's signed gate record holds a card back, with a draw from its signature (D158), and a preference change that lets more past you counts only with your passkey (D163): `loosening()` says what a change loosens, against the settings in force before it, a row moved toward held or enforcing turned on. [[src-store#The hosted service's proof (M9a)]] applies both, and [[src-verify#In a hosted repo (M9a)]] rechecks them. The relay itself is M9b.
 
 ## Tests
 

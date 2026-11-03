@@ -47,7 +47,7 @@ What counts as a signature is livedocs' rule: parameters, defaults, return types
 2. a cited card whose `touches` map to its kind (`KIND_OF_TOUCH`, D53);
 3. a rule whose `covers` matches it, unless the rule is retired (D119).
 
-Separately, it checks every cited card, by the level in force, which the gate at filing wrote on the card ([[src-routing]]):
+Separately, it checks every cited card, by the level in force (`Store.levelOf`): the one the gate at filing wrote on the card ([[src-routing]]), raised in a hosted repo by the relay's signed gate record; all of it in one `Store.view`. In a hosted repo a card's status reads only the answers the service signed (D138, [[src-store#The hosted service's proof (M9a)]]), so a hard card answered only on the machine is still unresolved. A cited card that's:
 - unknown, withdrawn or superseded: blocked;
 - rejected: blocked, with a rework brief listing the commits in its ledger (D30);
 - hard and not resolved: blocked (D46);
