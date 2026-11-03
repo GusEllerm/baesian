@@ -486,7 +486,12 @@ export class Store {
   /** The agent withdraws its own card. */
   withdraw(id: string, reason: string, by: string): Withdrawal {
     this.requireInit();
-    if (!this.card(id)) throw new Error(`no card ${id}`);
+    const card = this.card(id);
+    if (!card) throw new Error(`no card ${id}`);
+    // Only the agent that filed it, or one attached to it, withdraws a card. Names are what agents say they are, so
+    // this guards against mistakes, not against an agent set on it.
+    const mine = card.meta.source_agent === by || this.attachments().some((a) => a.card === id && a.agent === by);
+    if (!mine) throw new ValidationError(`${id} was filed by ${card.meta.source_agent}: only the agent that filed it, or one attached to it, may withdraw it`);
     const w = parse(Withdrawal, { type: "withdrawal", card: id, reason, by, at: now() }, "the withdrawal");
     const rel = join("cards", id, "withdrawn.json");
     this.writeOnce(join(this.live, rel), `${JSON.stringify(w, null, 2)}\n`);

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
-import { CARD_TEMPLATE, agentName, claudeMdMissesAgents, writeAgentsBlock } from "./agents.js";
+import { agentName, CARD_TEMPLATE, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
 import { stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
@@ -30,6 +30,8 @@ export interface Io {
   waitClock?: Pick<WaitOptions, "now" | "sleep" | "pollMs">;
   /** How hooks run Baesian when it isn't on PATH. Defaults to this process's node and script. */
   hookFallback?: readonly string[];
+  /** The environment, for what the harness says about the session; replaceable in tests. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /** The command line that re-runs this CLI, for hooks when `baesian` isn't on PATH (D48). */
@@ -385,7 +387,9 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       s.view(() => {
         let items: InboxItem[];
         try {
-          items = s.inbox({ advance: !opts.peek, ...(opts.session ? { session: opts.session } : {}) });
+          // A hook names its session; an agent's own command runs in one too, which the harness says (B-ghhym).
+          const session = opts.session ?? harnessSession(io.env ?? process.env);
+          items = s.inbox({ advance: !opts.peek, ...(session ? { session } : {}) });
         } catch (e) {
           if (opts.quiet) return;
           throw e;

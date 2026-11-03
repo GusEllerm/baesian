@@ -188,6 +188,10 @@ This vault uses D-numbers for the user's decisions and P-numbers for proposals u
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-03 `[agent decision]` Two fixes found by the MCP server's design (P18), both within what's decided:
+  - **An agent's own `baesian inbox` reads its harness session's place** (`harnessSession()`), as its hooks do (D133). Before, an agent that ran `baesian inbox` itself advanced only the branch's place, so its hooks handed it the same answer again. Claude Code gives commands `CLAUDE_CODE_SESSION_ID`, checked to be the session's ID; Codex gives `CODEX_THREAD_ID`, which rehearse found equals its session's. Tests clear both, so they never run inside the harness's session.
+  - **Only the agent that filed a card, or one attached to it, withdraws it** (`Store.withdraw`), as `baesian withdraw`'s help already said. Agents name themselves, so it's a guard against mistakes.
+
 - 2026-11-03 `[agent decision]` The details of B-vqn69, a warning on likely secrets (accepted by the user through Baesian, 2026-11-03; [[File Formats]], [[src-store]], [[Client Build]]):
   - **Every text field is scanned, lists included, and the body,** on filing and on revising, which share the check. One note per field, naming what the text looks like ("an AWS access key ID"), never the text.
   - **An assignment counts only with a long value of letters and digits,** so `process.env.API_KEY` and prose about tokens don't warn. GitHub's `ghu_` and `ghr_` tokens count beside the four named.

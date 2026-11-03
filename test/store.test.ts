@@ -339,6 +339,14 @@ describe("status (computed, never stored)", () => {
     expect(store.status(id)).toBe("withdrawn");
     expect(() => store.withdraw(id, "again", "claude-code")).toThrow(); // write-once
   });
+
+  it("lets only the agent that filed a card, or one attached to it, withdraw it", () => {
+    const { store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    expect(() => store.withdraw(id, "Not mine to drop.", "codex")).toThrow(/filed by claude-code/);
+    store.attach(id, "codex");
+    expect(store.withdraw(id, "Not needed after all.", "codex").by).toBe("codex");
+  });
 });
 
 describe("parallel worktrees (D34)", () => {

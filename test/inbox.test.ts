@@ -110,3 +110,24 @@ describe("two sessions on one branch (B-ghhym)", () => {
     expect((await run(dir, ["inbox", "--quiet", "--session", "one"])).out).toBe("");
   });
 });
+
+describe("an agent's own inbox, inside a harness session (B-ghhym)", () => {
+  it("reads the same place as that session's hooks, so an answer isn't handed over twice", async () => {
+    const { dir, store } = repo();
+    const id = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    const inSession = (args: string[], env: NodeJS.ProcessEnv) => {
+      const out: string[] = [];
+      const io = { out: (l: string) => out.push(l), err: () => {}, stdin: () => "", cwd: dir, env };
+      return main(["node", "baesian", ...args], io).then(() => out.join("\n"));
+    };
+    await inSession(["inbox", "--quiet", "--session", "s-1"], {}); // each session's hook, at its start
+    await inSession(["inbox", "--quiet", "--session", "s-2"], {});
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER, at: later(2) });
+    // The agent runs `baesian inbox` itself, in Claude Code, which names the session for it.
+    expect(await inSession(["inbox"], { CLAUDE_CODE_SESSION_ID: "s-1" })).toContain(`${id} r1  accept`);
+    // The hook at the end of its turn hears nothing new.
+    expect(await inSession(["inbox", "--quiet", "--session", "s-1"], {})).toBe("");
+    // Codex names it as CODEX_THREAD_ID: another session on the branch hears it too, once.
+    expect(await inSession(["inbox"], { CODEX_THREAD_ID: "s-2" })).toContain(`${id} r1  accept`);
+  });
+});

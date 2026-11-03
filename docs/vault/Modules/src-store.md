@@ -26,7 +26,7 @@ tags: [baesian, module]
 - **Retiring a rule (D119):** a verdict's `retire_rules` names rules the chosen option breaks. `Store.addVerdict` refuses it, writing nothing, unless the verdict chooses an option (`accept` or `alternative`), that option's `_breaks` lists each rule, and none is retired yet. It then writes a `RuleRetirement` beside each rule and copies it into the record.
 - **`Store.replyToCard`** writes the agent's one reply (D89, D104): the next revision, a copy of the last plus `reply`. It's allowed only when `Store.canReply` says so: the latest answer went against the pick (`alternative` or `correction`), and no revision has had a reply. The reply reopens the card. The D81 brief counts the answer the reply was to as the earlier one.
 - **`Store.attach`** records an `Attachment` (with no folder path, D121), and copies the card's revisions into this worktree's record. **`Store.waiting`** counts the filer plus the attachments.
-- **`Store.withdraw`** writes the card's single `Withdrawal`.
+- **`Store.withdraw`** writes the card's single `Withdrawal`, and only for the agent that filed the card or one attached to it. Agents name themselves, so this guards against mistakes, not against an agent set on it.
 - **`Store.addVerdict`** is for the client only. It rejects stale revisions, and keeps `at` strictly increasing per card.
 - **`Store.recordFallback`** notes that an agent proceeded on a blocking card without a verdict (D46). **`Store.fallbacks`** lists them.
 - **`Store.writeLedger`** records that a commit builds on a card (D15). The post-commit hook calls it, and **`Store.ledger`** lists a card's entries, oldest first. A changed answer's brief merges them with the history's trailers (D81, B-9v5xj; below).

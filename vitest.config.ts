@@ -5,5 +5,7 @@ export default defineConfig({
   test: {
     // .claude/ holds agents' worktrees: their copies of the tests aren't this tree's.
     exclude: [...configDefaults.exclude, "e2e/**", ".claude/**"],
+    // Tests run wherever: never inside the session of the harness that runs them.
+    env: { CLAUDE_CODE_SESSION_ID: "", CODEX_THREAD_ID: "" },
   },
 });

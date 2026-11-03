@@ -61,6 +61,15 @@ export function agentName(opt: string | undefined, env: NodeJS.ProcessEnv = proc
 }
 
 /** The harness's own name, from the variables it sets for the commands it runs. */
+/**
+ * The harness session a command runs in, when the harness says: Claude Code gives its commands
+ * `CLAUDE_CODE_SESSION_ID`, and Codex `CODEX_THREAD_ID`, each the same ID its hooks receive as `session_id`. So an
+ * agent's own `baesian inbox` reads its session's place, as the plugin's hooks do (B-ghhym), and never hears twice.
+ */
+export function harnessSession(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.CLAUDE_CODE_SESSION_ID?.trim() || env.CODEX_THREAD_ID?.trim() || undefined;
+}
+
 export function harnessName(env: NodeJS.ProcessEnv): string | undefined {
   // Claude Code sets AI_AGENT to "<name>_<version>_<role>", for example "claude-code_2-1-314_agent".
   const ai = env.AI_AGENT?.trim();
