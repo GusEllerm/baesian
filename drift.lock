@@ -953,7 +953,7 @@ sig = "57fbbc7bd23fb77f"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/trust.ts"
-sig = "48254208530b740e"
+sig = "274bd726002aa008"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -973,7 +973,7 @@ sig = "e34ae93df2f27958"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/trust.ts#parseTrust"
-sig = "df82a5aa7c423fec"
+sig = "7c8fbbf155e33d1b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -983,7 +983,7 @@ sig = "3766373d35389ff4"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/trust.ts#pinnedTrust"
-sig = "7a0886eca33e2fbc"
+sig = "4d3d74959bfda82f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3558,7 +3558,7 @@ sig = "e34ae93df2f27958"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "src/trust.ts#parseTrust"
-sig = "df82a5aa7c423fec"
+sig = "7c8fbbf155e33d1b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
@@ -3568,7 +3568,7 @@ sig = "3766373d35389ff4"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "src/trust.ts#pinnedTrust"
-sig = "7a0886eca33e2fbc"
+sig = "4d3d74959bfda82f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
@@ -3828,7 +3828,7 @@ sig = "3766373d35389ff4"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/trust.ts#pinnedTrust"
-sig = "7a0886eca33e2fbc"
+sig = "4d3d74959bfda82f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"

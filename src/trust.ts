@@ -59,6 +59,11 @@ export function parseTrust(text: string, where: string): TrustRoot {
     }
     addTo(root, readTrustFile(fields, `${where}, line ${i + 1}`));
   });
+  return root;
+}
+
+/** A pin must hold the service's key: one with only passkeys would check nothing the service signs. */
+function needsServiceKey(root: TrustRoot, where: string): TrustRoot {
   if (!root.service.length) throw new BadTrust(`${where} pins no service key: give at least the service's key (D142)`);
   return root;
 }
@@ -85,7 +90,8 @@ export function pinnedTrust(env: NodeJS.ProcessEnv = process.env): TrustRoot | u
     }
     parts.push(parseTrust(text, path));
   }
-  return { service: parts.flatMap((p) => p.service), revoked: parts.flatMap((p) => p.revoked), passkeys: parts.flatMap((p) => p.passkeys) };
+  const root = { service: parts.flatMap((p) => p.service), revoked: parts.flatMap((p) => p.revoked), passkeys: parts.flatMap((p) => p.passkeys) };
+  return needsServiceKey(root, [inline !== undefined ? TRUST_ENV : "", path ?? ""].filter(Boolean).join(" and "));
 }
 
 /** Why `key` couldn't sign at `at`: before it was valid, after it expired, or once it was revoked. */

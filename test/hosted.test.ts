@@ -462,12 +462,18 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     }
   });
 
-  it("reads pinned keys as trust files' JSON, and needs the service's key among them", () => {
+  it("reads pinned keys as trust files' JSON, from either setting or both, and needs the service's key among them", () => {
+    const { dir } = repo();
     const service = new TestService();
+    const passkey = new TestPasskey();
     expect(pinnedTrust({ [TRUST_ENV]: service.pin() })?.service.map((k) => k.key)).toEqual(["test-1"]);
     expect(pinnedTrust({})).toBeUndefined();
-    expect(() => parseTrust(JSON.stringify(new TestPasskey().keyFile()), "the pin")).toThrow(BadTrust);
-    expect(() => parseTrust(JSON.stringify(new TestPasskey().keyFile()), "the pin")).toThrow("the pin pins no service key");
+    expect(parseTrust(JSON.stringify(passkey.keyFile()), "the pin").passkeys).toHaveLength(1);
+    expect(() => pinnedTrust({ [TRUST_ENV]: JSON.stringify(passkey.keyFile()) })).toThrow(BadTrust);
+    expect(() => pinnedTrust({ [TRUST_ENV]: JSON.stringify(passkey.keyFile()) })).toThrow("BAESIAN_TRUST pins no service key");
+    writeFileSync(join(dir, "service.jsonl"), service.pin());
+    const both = pinnedTrust({ [TRUST_ENV]: JSON.stringify(passkey.keyFile()), [TRUST_FILE_ENV]: join(dir, "service.jsonl") });
+    expect([both?.service.length, both?.passkeys.length]).toEqual([1, 1]);
   });
 });
 
