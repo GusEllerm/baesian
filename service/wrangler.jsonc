@@ -20,6 +20,9 @@
     "bindings": [{ "name": "PROJECTS", "class_name": "ProjectRelay" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectRelay"] }],
+  // The daily job (M9f): accounts closed 14 days ago are deleted with their projects (B-b46z3), and ended sign-ins,
+  // machines and flows are cleared (`housekeeping()` in src/index.ts). Once a day, at 04:17 UTC.
+  "triggers": { "crons": ["17 4 * * *"] },
   // The website (M9e): the client's site build, `npm run build` from the root, served as static assets. Every page that
   // isn't a file gets index.html (single-page application); only /v1/ runs the Worker, so the pages cost no Worker
   // request. Its headers, the content security policy among them, are in client/site-public/_headers.

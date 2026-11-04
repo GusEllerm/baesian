@@ -6,6 +6,7 @@ import { type PasskeyKey, ProjectId, type Verdict } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
+import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
@@ -270,7 +271,28 @@ async function accountsRequest(request: Request, url: URL, env: Env, services: S
   return (await signInRoute(s, request, url)) ?? fail(404, `no address ${request.method} ${url.pathname}`);
 }
 
+/**
+ * The service's daily job (M9f), on its cron trigger (`service/wrangler.jsonc#triggers`): accounts closed 14 days ago are
+ * deleted, their projects' relay data first (B-b46z3, `deleteClosed()`), and rows whose time is over are cleared
+ * (`Accounts.clearEnded`). Returns the accounts deleted.
+ */
+export async function housekeeping(env: Env, now: number = Date.now()): Promise<string[]> {
+  if (!env.ACCOUNTS) return [];
+  const accounts = new Accounts(env.ACCOUNTS);
+  const deleted = await deleteClosed(accounts, async (project) => env.PROJECTS.get(env.PROJECTS.idFromName(project)).erase(project), now);
+  await accounts.clearEnded();
+  return deleted;
+}
+
 export default {
+  async scheduled(_controller, env, ctx): Promise<void> {
+    ctx.waitUntil(
+      housekeeping(env).catch((e) => {
+        console.error(`the daily job failed: ${e instanceof Error ? e.message : String(e)}`);
+      }),
+    );
+  },
+
   async fetch(request, env, ctx): Promise<Response> {
     let r: Response;
     try {
@@ -295,12 +317,12 @@ export const changedMessage = (version: number) => JSON.stringify({ type: "chang
  * project on first use, and answers for no other. Everything it does goes through `Relay`; this is the glue.
  */
 export class ProjectRelay extends DurableObject<Env> {
-  private readonly files: SqlFileStorage;
+  private files!: SqlFileStorage;
   private readonly signer: ServiceSigner | undefined;
   private readonly keyProblem: string | undefined;
   private readonly started = new Date().toISOString();
   /** The project's notification state (M9e step 2). */
-  private readonly ledger: PushLedger;
+  private ledger!: PushLedger;
   /** Web push's VAPID tokens, made when first needed and each reused for an hour (B-nk97q). */
   private vapid: Vapid | undefined;
   /** Usage counts (D141, B-7nq85), in the accounts database. */
@@ -308,12 +330,10 @@ export class ProjectRelay extends DurableObject<Env> {
   /** The days and screens whose first visit this object has counted already. */
   private readonly visited = new Set<string>();
   /** Retention's tables (M9f, B-9jqt4, B-ec3kj). */
-  private readonly retention: RetentionLedger;
+  private retention!: RetentionLedger;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.ledger = new PushLedger(ctx.storage.sql);
-    this.retention = new RetentionLedger(ctx.storage.sql);
     this.usage = env.ACCOUNTS ? new Usage(env.ACCOUNTS) : undefined;
     let signer: ServiceSigner | undefined;
     try {
@@ -323,19 +343,58 @@ export class ProjectRelay extends DurableObject<Env> {
       this.keyProblem = e.message;
     }
     this.signer = signer;
-    this.files = new SqlFileStorage(ctx.storage, {
+    this.open();
+    // A ping is answered without waking the object (B-bv49e).
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  /** The object's tables, made if they aren't there: at start, and again after `ProjectRelay.erase` emptied it. */
+  private open(): void {
+    this.ledger = new PushLedger(this.ctx.storage.sql);
+    this.retention = new RetentionLedger(this.ctx.storage.sql);
+    this.files = new SqlFileStorage(this.ctx.storage, {
       sign: (path, bytes) => {
         if (!signedFile(path)) return undefined;
         if (!this.signer) throw new NoKey(this.keyProblem ?? "the relay has no signing key");
         return this.signer.sign(path, bytes);
       },
     });
-    // A ping is answered without waking the object (B-bv49e).
-    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  /**
+   * Erase the project (B-b46z3, M9f): its owner's account is deleted. Every socket is closed, the alarm deleted, and
+   * the object's whole database deleted (`storage.deleteAll`, atomic on SQLite), log and all, so nothing of the project
+   * is left; its tables are made again only if anything asks for it after.
+   */
+  async erase(project: string): Promise<void> {
+    if (this.erased) return;
+    const known = this.files.meta("project");
+    if (known !== undefined && known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(1000, "the project was deleted");
+      } catch {
+        // closing already
+      }
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.visited.clear();
+    this.erased = true;
+  }
+
+  /** Erased (`ProjectRelay.erase`): the tables are made again at the next use, not before. */
+  private erased = false;
+
+  private reopened(): void {
+    if (!this.erased) return;
+    this.erased = false;
+    this.open();
   }
 
   /** The project's relay, after checking this object is that project's. */
   private relay(project: string): Relay {
+    this.reopened();
     const known = this.files.meta("project");
     if (known === undefined) this.files.setMeta("project", project);
     else if (known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
@@ -407,6 +466,7 @@ export class ProjectRelay extends DurableObject<Env> {
    * project's owner that turned them on, settle what it told, and set the alarm for the next time anything's due.
    */
   async alarm(): Promise<void> {
+    if (this.erased) return;
     const project = this.files.meta("project");
     if (project === undefined) return;
     const now = Date.now();

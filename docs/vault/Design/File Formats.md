@@ -293,12 +293,12 @@ Accounts live in one D1 database, `baesian-accounts`, bound as `ACCOUNTS` (B-ytd
 
 | Table | One row per | Columns |
 |---|---|---|
-| `accounts` | account | `id`, Baesian's own (`acct-…`), never a Globus identity (D153); `handle`, unique regardless of case; `created` |
+| `accounts` | account | `id`, Baesian's own (`acct-…`), never a Globus identity (D153); `handle`, unique regardless of case; `created`; `closed`, when its owner deleted it, which closes it for 14 days before it's deleted (B-b46z3, `0005_account_deletion.sql`, M9f), or null |
 | `emails` | email address | `address`, lowercased; `account`; `verified`, when a code to it was checked (null for an address Globus gave); `created` |
 | `passkeys` | passkey | `credential`, its ID, base64url; `account`; `cose`, its key as COSE, base64url, which assertions are checked with; `spki` and `alg`, the same key as its key file has it (`PasskeyKey`); `counter`; `transports`, JSON; `name`; `enrolled`; `last_used` |
 | `recovery_codes` | account | `hash` of the saved recovery code (B-jzgy4), replaced when it's used; `created` |
 | `globus_identities` | linked Globus identity | `sub`, the ID token's subject; `account`, one each way; `linked` |
-| `flows` | flow in progress | `id`, the hash of the secret its browser holds; `kind`: `signup`, `recover`, `signin`, `fresh`, `enrol` or `globus`; `email`, `account`, `handle` as it goes; `code_hash` of its emailed code and `attempts` on it; `verified`; `challenge`, a passkey ceremony's; `globus_sub`; `data`, a Globus round trip's state, nonce, PKCE verifier and binding; `created`, `expires`. Cleared a day after they expire |
+| `flows` | flow in progress | `id`, the hash of the secret its browser holds; `kind`: `signup`, `recover`, `signin`, `fresh`, `enrol`, `globus` or `restore` (a closed account's passkey sign-in, for five minutes, M9f); `email`, `account`, `handle` as it goes; `code_hash` of its emailed code and `attempts` on it; `verified`; `challenge`, a passkey ceremony's; `globus_sub`; `data`, a Globus round trip's state, nonce, PKCE verifier and binding; `created`, `expires`. Cleared a day after they expire |
 | `sessions` | sign-in in a browser | `hash` of its cookie; `id`, which the list shows; `account`; `name`, the browser's short name; `created`; `last_used`; `verified`, its last passkey check; `expires`, 90 days on (B-vtr1r) |
 | `projects` | project | `id`, as `.baesian/config.json` has it; `owner`, the one account that answers there in v1; `name`, what its owner called it when approving its first machine, or later on the website: 1 to 60 characters (B-zqkwk, `0002_project_names.sql`, M9e); `created`. The service never learns the repo's own name |
 | `grants` | machine grant (B-84e0d) | `id`; `account`; `project`; `machine`, its name; `access_hash` and `access_expires`; `refresh_hash`; `created`; `last_used`; `revoked` |
@@ -309,6 +309,8 @@ Accounts live in one D1 database, `baesian-accounts`, bound as `ACCOUNTS` (B-ytd
 | `usage_daily` | day, kind, field and value | `day`; `kind`; `field`, empty for the count of events; `value`, as text; `count`. What's left of the events after 90 days: no ID, key or hour |
 
 **Usage counts' columns elsewhere** (`0004_usage_counts.sql`): `accounts.usage_id`, the account's pseudonymous ID, random (`u-…`), made at its first counted event, and dropped when it opts out; `accounts.usage_opt_out`, when it opted out, or null while it's counted; `projects.usage_key`, the project's random key (`k-…`), made at its first counted event. Neither is derived from anything.
+
+**Deleting an account** (M9f, B-b46z3, [[service#Deleting an account (service/src/deletion.ts)]]) sets `accounts.closed`, deletes its `sessions`, `push_subscriptions` and `flows`, and revokes its `grants`; restoring it clears `closed`. Fourteen days on, the daily job deletes its rows from every table above but `usage_daily`, each named (`Accounts.erase`), after emptying each of its projects' objects. The same job clears what has ended: sign-ins past their time, grants revoked or lapsed more than a day ago with their spent tokens, and flows and device codes a day past expiry (`Accounts.clearEnded`).
 
 **The session cookie** is `__Host-baesian-session`, its value a random token: `Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=7776000` (90 days); the service ends it sooner, after 30 days unused (B-vtr1r). A Globus round trip's binding cookie is `__Host-baesian-globus`, SameSite=Lax, for 10 minutes.
 

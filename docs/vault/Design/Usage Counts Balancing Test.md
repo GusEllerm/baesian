@@ -69,4 +69,4 @@ On the field list proposed, the agent's reading is that the interest holds, the 
 
 - A privacy policy, as a hard card, before anything is published (P15 section 6).
 - Whether people outside the EU and UK need anything else: US state privacy laws weren't covered (B5 F20).
-- Deleting an account deletes its raw events; deleting accounts isn't built yet.
+- Deleting an account (built in M9f, B-b46z3) stops counting it at once, when it's closed, and deletes its raw events with it 14 days later; its daily counts stay, naming no one.

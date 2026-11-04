@@ -32,7 +32,7 @@ export const LIMITS = {
   touchMs: 5 * 60_000,
 } as const;
 
-export type FlowKind = "signup" | "recover" | "signin" | "fresh" | "enrol" | "globus";
+export type FlowKind = "signup" | "recover" | "signin" | "fresh" | "enrol" | "globus" | "restore";
 
 /** A flow in progress (the `flows` table). */
 export interface Flow {
@@ -55,6 +55,8 @@ export interface Account {
   id: string;
   handle: string;
   created: string;
+  /** When its owner closed it, to be deleted 14 days on (B-b46z3); null while it's open. */
+  closed: string | null;
 }
 
 export interface Session {
@@ -166,11 +168,11 @@ export class Accounts {
   // ---------------------------------------------------------------- accounts
 
   account(id: string): Promise<Account | null> {
-    return this.db.prepare("SELECT id, handle, created FROM accounts WHERE id = ?").bind(id).first<Account>();
+    return this.db.prepare("SELECT id, handle, created, closed FROM accounts WHERE id = ?").bind(id).first<Account>();
   }
 
   async accountByEmail(address: string): Promise<Account | null> {
-    return this.db.prepare("SELECT a.id, a.handle, a.created FROM accounts a JOIN emails e ON e.account = a.id WHERE e.address = ?").bind(address).first<Account>();
+    return this.db.prepare("SELECT a.id, a.handle, a.created, a.closed FROM accounts a JOIN emails e ON e.account = a.id WHERE e.address = ?").bind(address).first<Account>();
   }
 
   async handleTaken(handle: string): Promise<boolean> {
@@ -337,7 +339,8 @@ export class Accounts {
   /** The sign-in a cookie holds, if it's still good: not ended, not past 90 days, used in the last 30. Its last use moves. */
   async session(cookieValue: string | undefined): Promise<(Session & { handle: string }) | undefined> {
     if (!cookieValue) return undefined;
-    const s = await this.db.prepare("SELECT s.*, a.handle FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.hash = ?").bind(hashOf(cookieValue)).first<Session & { handle: string }>();
+    // A closed account has no sign-ins (B-b46z3): closing ends them all, and none is taken while it's closed.
+    const s = await this.db.prepare("SELECT s.*, a.handle FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.hash = ? AND a.closed IS NULL").bind(hashOf(cookieValue)).first<Session & { handle: string }>();
     if (!s) return undefined;
     const now = this.now();
     if (s.expires <= now || s.last_used <= this.ago(LIMITS.sessionIdleMs)) {
@@ -569,6 +572,75 @@ export class Accounts {
   /** A project's machines signed in now: its grants not revoked or lapsed, by ID. Retention waits for each (B-9jqt4). */
   async liveGrants(project: string): Promise<string[]> {
     return (await this.db.prepare("SELECT id FROM grants WHERE project = ? AND revoked IS NULL AND last_used > ?").bind(project, this.ago(LIMITS.grantIdleMs)).all<{ id: string }>()).results.map((r) => r.id);
+  }
+
+  // ---------------------------------------------------------------- deleting an account (M9f, B-b46z3)
+
+  /**
+   * Close an account (B-b46z3): from now, every sign-in is ended, every machine's grant revoked, every browser's
+   * subscription to notifications removed, and its flows dropped, in one batch. Returns whether it was open.
+   */
+  async close(account: string): Promise<boolean> {
+    const now = this.now();
+    const [closed] = await this.db.batch([
+      this.db.prepare("UPDATE accounts SET closed = ? WHERE id = ? AND closed IS NULL").bind(now, account),
+      this.db.prepare("DELETE FROM sessions WHERE account = ?").bind(account),
+      this.db.prepare("UPDATE grants SET revoked = ? WHERE account = ? AND revoked IS NULL").bind(now, account),
+      this.db.prepare("DELETE FROM push_subscriptions WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM flows WHERE account = ?").bind(account),
+    ]);
+    return (closed?.meta.changes ?? 0) > 0;
+  }
+
+  /** Open a closed account again (B-b46z3: within 14 days, with its passkey). Returns whether it was closed. */
+  async reopen(account: string): Promise<boolean> {
+    return (await this.db.prepare("UPDATE accounts SET closed = NULL WHERE id = ? AND closed IS NOT NULL").bind(account).run()).meta.changes > 0;
+  }
+
+  /** The accounts closed at or before a time, oldest first: those whose 14 days are over. */
+  async closedBefore(time: string): Promise<string[]> {
+    return (await this.db.prepare("SELECT id FROM accounts WHERE closed IS NOT NULL AND closed <= ? ORDER BY closed").bind(time).all<{ id: string }>()).results.map((r) => r.id);
+  }
+
+  /**
+   * Delete an account and every row under it, in one batch (B-b46z3): its raw usage events, its flows (and those for
+   * its addresses), its machines' grants and spent refresh tokens, device codes it approved or for its projects, its
+   * browsers' subscriptions, sign-ins, Globus identity, recovery code, passkeys, email addresses, projects, and itself.
+   * Each table is named rather than left to the cascades, so nothing rests on the database enforcing them. Daily usage
+   * totals (`usage_daily`) name no one, and stay. The projects' relay data is the caller's to erase first.
+   */
+  async erase(account: string): Promise<void> {
+    const owned = "SELECT id FROM projects WHERE owner = ?";
+    await this.db.batch([
+      this.db.prepare("DELETE FROM usage_events WHERE usage_id IS NOT NULL AND usage_id = (SELECT usage_id FROM accounts WHERE id = ?)").bind(account),
+      this.db.prepare("DELETE FROM flows WHERE account = ? OR email IN (SELECT address FROM emails WHERE account = ?)").bind(account, account),
+      this.db.prepare(`DELETE FROM spent_tokens WHERE grant_id IN (SELECT id FROM grants WHERE account = ? OR project IN (${owned}))`).bind(account, account),
+      this.db.prepare(`DELETE FROM grants WHERE account = ? OR project IN (${owned})`).bind(account, account),
+      this.db.prepare(`DELETE FROM device_codes WHERE approved_by = ? OR project IN (${owned})`).bind(account, account),
+      this.db.prepare("DELETE FROM push_subscriptions WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM sessions WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM globus_identities WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM recovery_codes WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM passkeys WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM emails WHERE account = ?").bind(account),
+      this.db.prepare("DELETE FROM projects WHERE owner = ?").bind(account),
+      this.db.prepare("DELETE FROM accounts WHERE id = ?").bind(account),
+    ]);
+  }
+
+  /**
+   * Rows whose time is over, cleared once a day: sign-ins ended (90 days in all, or 30 unused), machines' grants signed
+   * out or lapsed more than a day ago (their spent tokens with them), and flows and device codes expired a day ago.
+   */
+  async clearEnded(): Promise<void> {
+    const dayAgo = this.ago(DAY);
+    await this.db.batch([
+      this.db.prepare("DELETE FROM sessions WHERE expires <= ? OR last_used <= ?").bind(this.now(), this.ago(LIMITS.sessionIdleMs)),
+      this.db.prepare("DELETE FROM spent_tokens WHERE grant_id IN (SELECT id FROM grants WHERE revoked <= ? OR last_used <= ?)").bind(dayAgo, this.ago(LIMITS.grantIdleMs + DAY)),
+      this.db.prepare("DELETE FROM grants WHERE revoked <= ? OR last_used <= ?").bind(dayAgo, this.ago(LIMITS.grantIdleMs + DAY)),
+      this.db.prepare("DELETE FROM flows WHERE expires <= ?").bind(dayAgo),
+      this.db.prepare("DELETE FROM device_codes WHERE expires <= ?").bind(dayAgo),
+    ]);
   }
 
   /** An account's machines: grants not revoked or lapsed, newest use first. */

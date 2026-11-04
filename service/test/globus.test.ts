@@ -30,6 +30,18 @@ async function roundTrip(b: Browser, purpose: "signin" | "link", who: { sub: str
 const fragment = (u: URL) => Object.fromEntries(new URLSearchParams(u.hash.slice(1)));
 
 describe("signing in through Globus (D153, B-s76hg)", () => {
+  it("doesn't sign in to a closed account (B-b46z3): that's restored only with its passkey", async () => {
+    const p = await signUp();
+    const id = sub();
+    await env.ACCOUNTS!.prepare("INSERT INTO globus_identities (sub, account, linked) VALUES (?, ?, ?)").bind(id, p.account, new Date().toISOString()).run();
+    await env.ACCOUNTS!.prepare("UPDATE accounts SET closed = ? WHERE id = ?").bind(new Date().toISOString(), p.account).run();
+    const b = new Browser();
+    const back = await roundTrip(b, "signin", { sub: id });
+    expect(back.pathname).toBe("/sign-in");
+    expect(fragment(back)).toMatchObject({ error: "closed", message: expect.stringContaining(`the account ${p.handle} is closed: sign in with your passkey to restore it`) });
+    expect(b.session).toBeUndefined();
+  });
+
   it("sends the browser to Globus with PKCE, a nonce and state, asking only for openid and email", async () => {
     const b = new Browser();
     const start = await b.get("/v1/globus/start?purpose=signin");

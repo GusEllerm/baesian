@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { type CreationOptionsJSON, makePasskey } from "../webauthn";
+import { type CreationOptionsJSON, type RequestOptionsJSON, makePasskey } from "../webauthn";
 import { type Account as AccountData, type Ceremony, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
 import { go, takeFragment } from "./nav";
 import { Notifications } from "./Notifications";
-import { Go, Notice, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
+import { Field, Go, Notice, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
 
 // Your account (M9c): your passkeys, and adding one, with its line for CI shown once (D159); where you're signed in, and
 // ending any of it (B-vtr1r, B-7bq05); your machines, and ending any (B-84e0d); Globus, linked or not (D176); and signing
-// out, here or everywhere. What adds a way in asks for your passkey afresh.
+// out, here or everywhere. What adds a way in asks for your passkey afresh. And deleting the account (M9f, B-b46z3): closed
+// at once, restorable with its passkey for 14 days, then deleted.
 
 /** A new passkey's options (`POST /v1/account/passkeys/start`), which take a recent check. */
 const enrolStart = () => call<Ceremony<CreationOptionsJSON>>("POST", "/v1/account/passkeys/start", {});
@@ -228,7 +229,50 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
         </div>
         <p className="small">Everywhere means every browser. Machines stay signed in: sign them out above.</p>
       </Sheet>
+
+      <DeleteAccount handle={account.handle} fresh={freshNow} check={check} />
     </Shell>
+  );
+}
+
+/**
+ * Deleting the account (M9f, B-b46z3, "Closed for 14 days, then deleted"): the handle typed out, and the passkey checked
+ * afresh from the tap when the last check is old. Closed at once; the sign-in page then says until when it can be restored.
+ */
+function DeleteAccount({ handle, fresh, check }: { handle: string; fresh: boolean; check: ReturnType<typeof usePrepared<Ceremony<RequestOptionsJSON>>> }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  const matches = typed.trim().toLowerCase() === handle.toLowerCase();
+  const remove = async () => {
+    setBusy(true);
+    setProblem(undefined);
+    try {
+      if (!fresh) await reauthWith(check.take());
+      const r = await call<{ closed: true; deletes: string }>("POST", "/v1/account/delete", { handle: typed.trim() });
+      go(`/sign-in?closed=${encodeURIComponent(r.deletes)}`, { replace: true });
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet title="Delete your account" sub label="Deleting your account">
+      <p>
+        Deleting closes your account at once: every browser and machine is signed out, and nothing more is relayed or counted. For 14 days, signing in with your passkey can restore it. Then it's deleted for good, with every project you own and all their cards and answers on the service.
+      </p>
+      <p className="small">Your repositories keep their own record. Daily usage totals, which name no one, stay.</p>
+      <p className="small">
+        <To to="/privacy">What else is kept, and for how long</To>
+      </p>
+      <Problem text={problem} />
+      <Field label={`Type your handle, ${handle}, to confirm`} value={typed} onChange={setTyped} autoComplete="off" maxLength={32} />
+      <Go busy={busy} busyText="Waiting for your passkey…" disabled={!matches || (!fresh && !check.ready)} onClick={() => void remove()}>
+        Delete my account
+      </Go>
+      <p className="small">It asks for your passkey first, unless you used it in the last few minutes, and emails you a notice.</p>
+    </Sheet>
   );
 }
 

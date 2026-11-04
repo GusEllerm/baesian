@@ -312,6 +312,29 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(Store.open(b).status(answered)).toBe("open");
       rmSync(b, { recursive: true, force: true });
     });
+
+    it("starts afresh when the project's log is shorter than what it pulled: deleted with its owner's account and made again (B-b46z3)", async () => {
+      const a = await signedIn("proj-13");
+      const id = await fileCard(a.dir, { title: "Filed before the project went" });
+      const state = () => JSON.parse(readFileSync(join(a.store.live, RELAY_STATE), "utf8")) as { pulled: number; uploaded: string[] };
+      expect((await run(a.dir, ["sync"])).code).toBe(0);
+      expect(state().pulled).toBeGreaterThan(0);
+      // The relay's log as a project made again would give it: nothing yet, at first.
+      let remade = true;
+      const urlOf = (input: Parameters<typeof fetch>[0]) => (input instanceof Request ? input.url : String(input));
+      const fresh: typeof fetch = async (input, init) => {
+        if (remade && urlOf(input).includes("/log?") && !urlOf(input).includes("after=0")) {
+          remade = false;
+          return new Response(JSON.stringify({ entries: [], head: 0, more: false }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        return fetch(input, init);
+      };
+      const r = await run(a.dir, ["sync"], { fetch: fresh });
+      expect(r.code, r.err).toBe(0);
+      expect(r.err).toContain("is shorter than what this machine had pulled, so it was deleted and made again: this machine starts afresh");
+      expect(state().uploaded).toContain(`cards/${id}/r1.md`);
+      expect(await relayPaths("proj-13")).toContain(`cards/${id}/r1.md`);
+    });
   });
 
   describe("offline, and when the relay is slow", () => {

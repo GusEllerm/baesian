@@ -343,7 +343,15 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
   for (;;) {
     const r = await client.request("GET", `log?after=${run.w.pulled}`);
     if (r.status !== 200) throw new RelayError(`the relay didn't give its log (${errorOf(r)})`);
-    const page = r.json as { entries?: unknown[]; more?: boolean } | undefined;
+    const page = r.json as { entries?: unknown[]; more?: boolean; head?: unknown } | undefined;
+    // A log shorter than what this machine pulled is a project deleted with its owner's account and made again (B-b46z3,
+    // M9f): this machine starts afresh, so everything an agent wrote here goes up again.
+    if (typeof page?.head === "number" && page.head < run.w.pulled) {
+      run.out.notes.push(`relay: the project's log on ${client.service} is shorter than what this machine had pulled, so it was deleted and made again: this machine starts afresh, and sends everything its agents wrote`);
+      run.w.pulled = 0;
+      run.w.uploaded = new Set();
+      continue;
+    }
     const entries = Array.isArray(page?.entries) ? page.entries : [];
     for (const raw of entries) {
       const e = readRelayEntry(raw);
