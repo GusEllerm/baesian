@@ -5,7 +5,9 @@ import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from 
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
 import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock } from "./hookblock.js";
+import type { Http } from "./login.js";
 import { type Store } from "./store.js";
+import { syncRelay } from "./sync.js";
 import { parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
 
@@ -203,12 +205,19 @@ function stageNotes(store: Store, io: HookIo): string[] {
   });
 }
 
+/** How long `pre-commit` waits for the relay's log in a linked repo (Hosted Service section 1): a commit never waits long. */
+export const PRE_COMMIT_PULL_MS = 3000;
+
 /** Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. */
-export function runHook(store: Store, name: string, args: string[], io: HookIo): number {
+export async function runHook(store: Store, name: string, args: string[], io: HookIo, http: Http = {}): Promise<number> {
   if (!store.isInitialised()) return 0;
   const top = store.repo.toplevel;
   switch (name) {
     case "pre-commit": {
+      // M9d: in a linked repo, pull first, so answers given since come into the record with this commit. Briefly, and
+      // never failing the commit: offline, it commits what's here.
+      const pulled = await syncRelay(store, { ...http, push: false, signal: http.signal ?? AbortSignal.timeout(PRE_COMMIT_PULL_MS) });
+      for (const n of pulled.notes) io.err(`baesian: ${n}`);
       // D37: bring the record up to date, then stage all of it. Staging only what this hook copied
       // would miss the cards `baesian file` wrote into the record when they were filed.
       store.syncRecord();

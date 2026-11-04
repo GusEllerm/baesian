@@ -305,12 +305,15 @@ Nothing here needs the network, so CI works offline (D127). Node's own crypto ca
 
 > **Built (M9b, 2026-11-03): the relay's entry,** as `RelayEntry` in `src/schema.ts`, with `enc` reserved: an entry that sets it is refused by name (`readRelayEntry()`). The relay writes it ([[service]]); the CLI will read it (M9d). The agent's choices in building it, where this section left them open: `body` and `sig` are base64, the signature riding in its file's entry rather than as one of its own; an entry's `format` is 1 for a file that names none; `machine` is absent on what the relay writes itself; mutable files (presence, waiting markers) aren't entries; and a project's first entry is the service's key file, so a machine's first pull has it before anything signed. The log is read in pages, `{ entries, head, more }`. [[File Formats#The relay (M9b)]] has it all. Not built here: `relay.json` and the machine's grant (M9d), and dropping a delivered entry's body (M9f).
 
+> **Built (M9d, 2026-11-04): the CLI's files** ([[src-sync]], [[File Formats#The CLI's side of the relay (M9d)]]), as this section has them: `relay.json` (`RelayState`: `service`, `project`, `pulled`, `uploaded`, `at`), replaced whole after every sync, and the machine's grant (`MachineGrant`), written whole with mode 0600 (B-gq8j1). The agent's choices, where this section left them open: `uploaded` also lists the agent-written files pulled from the relay, since the relay has them; `relay.json` for another service or project, or one that can't be read, is started afresh, since pulling again is harmless; the grant holds no grant ID, and its `access_expires` is computed from `expires_in`. `Config` gains `first_commit` (B-5gnea), set only with `service` and `project`; changing any of the three is a gate fact (B-w4g6c). `CardMeta` gains `secret_reason` (B-jfkv9). The relay's entries are read with `readRelayEntry()`, each checked against its size and digest.
+
 ### `Config`
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | service | URL | no; set with project | the hosted service's address |
 | project | string | no; set with service | the project's random ID on the service. It's no secret, since `.baesian/config.json` is committed |
+| first_commit | commit ID | no; only with service | the repo's first commit, written when it's linked (B-5gnea, M9d) |
 
 ### Relay state (new, live layer only)
 

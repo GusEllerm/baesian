@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/facts.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, reads the trailers, decides coverage, and installs and runs the git hooks."
 created: 2026-10-23
-updated: 2026-11-03
+updated: 2026-11-04
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -31,6 +31,8 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 - If livedocs is missing or fails, that's a warning, never a block.
 
 What counts as a signature is livedocs' rule: parameters, defaults, return types and class heritage. For constants, only a declared type annotation counts. Zod schema constants therefore aren't API facts: in this repo, format changes are caught by listing `src/schema.ts` in `gate_schema`.
+
+**The repo's link to the service (B-w4g6c, M9d).** A commit that changes the service, project or first commit in `.baesian/config.json` (`CONFIG_PATH`) is a fact, `infra:.baesian/config.json`, linking a repo first included, and unlinking it: changing where a repo's cards are sent takes the same sign-off as changing its CI. `linkFact()` (private) compares those three fields between the two versions, and runs before anything is ignored, so neither `DEFAULT_IGNORE`'s `.baesian/**` nor a repo's own `gate_ignore` hides it; the rest of the config and of `.baesian/` stays out of sight. The first commit is among them because it's what ties a checkout to its project (B-5gnea): changing it alone would let a copy sync with the original's. `baesian login` prints the ack that covers the fact when it links a repo (`linkAck()`, [[src-sync]]). CI's `baesian verify` reports it the same way, since it detects with `detectFacts()` too.
 
 `DEFAULT_IGNORE` (`node_modules`, `.baesian/`, vendor, fixtures) is never looked at. A rename counts when either the old or the new path is in scope. A manifest that doesn't parse produces a warning, not a guess. Globs come from `globToRegExp`.
 
@@ -67,8 +69,8 @@ The block is identical on every machine, because `.githooks/` is committed. It c
 
 The first version embedded the fallback's absolute paths in the hook itself. That would have put one machine's paths in the repo, and made every other machine's `init` rewrite the committed hooks.
 
-`runHook` runs each hook:
-- **`pre-commit`** syncs the record and stages all of `.baesian/` (D37). With a vault configured, it then writes the vault's notes from that record (`writeNotes`, [[src-vault]]; D170) and stages them: the notes written now, those `baesian sync` wrote and nobody added, and those whose only unstaged change is Baesian's own (bringing the index's version up to date gives the same note). A note with someone's unstaged edit is left as it is, with a message: staging it would commit their unfinished edit. A missing vault is a warning, never a block. It notes which record files and notes nobody had staged before it, in this worktree's own git directory (`baesian-staged.json`).
+`runHook` runs each hook, and returns the exit code git sees (a promise, since `pre-commit` may reach the relay):
+- **`pre-commit`**, in a linked repo, first pulls the relay's log (M9d, `syncRelay()`, [[src-sync]]), for at most `PRE_COMMIT_PULL_MS` (three seconds), so answers given since come into the record with the commit; offline, or slow, it says so on standard error and commits what's here, never failing. Then it syncs the record and stages all of `.baesian/` (D37). With a vault configured, it then writes the vault's notes from that record (`writeNotes`, [[src-vault]]; D170) and stages them: the notes written now, those `baesian sync` wrote and nobody added, and those whose only unstaged change is Baesian's own (bringing the index's version up to date gives the same note). A note with someone's unstaged edit is left as it is, with a message: staging it would commit their unfinished edit. A missing vault is a warning, never a block. It notes which record files and notes nobody had staged before it, in this worktree's own git directory (`baesian-staged.json`).
 - **`commit-msg`** runs the gate. It skips merge commits, which CI checks. When it blocks a commit, it unstages the record files and notes `pre-commit` staged, back to the last commit's version, and leaves any you staged yourself (D122). The next commit stages them again. A commit blocked by another hook still leaves them staged: livedocs' `pre-commit` runs after Baesian's part, and blocking there means `commit-msg` never runs.
 - **`post-commit`** writes a ledger entry for each `Baesian-Card:` in the commit (D15): one line naming the commit (D120).
 

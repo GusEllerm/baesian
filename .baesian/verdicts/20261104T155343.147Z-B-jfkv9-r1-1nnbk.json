@@ -1,0 +1,11 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-jfkv9",
+  "revision": 1,
+  "response": "need_context",
+  "comment": "Whats the overhead associated with scanning all cards for secretes? How easy / robust is that? Assuming its a git repo there are tools that already scan if pushed to remote.",
+  "reviewer": "Gus Ellerm",
+  "client": "web",
+  "at": "2026-11-04T15:53:43.147Z"
+}

@@ -50,6 +50,7 @@ export function cardDetails(card: Card): string[] {
   if (m.acted) out.push(by(`acted, already built for the ${m.acted_option}`, m.acted));
   if (m.rationale) out.push(by("rationale", m.rationale));
   if (m.wrong_if) out.push(`${by("wrong_if", m.wrong_if)}; check: ${q(m.check ?? "")}`);
+  if (m.secret_reason) out.push(by("secret_reason (filed though it looks like it holds a secret, B-jfkv9)", m.secret_reason));
   if (card.body.trim()) out.push(by("body", card.body.trim()));
   return out;
 }

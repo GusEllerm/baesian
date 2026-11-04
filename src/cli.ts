@@ -26,10 +26,25 @@ import {
   showOp,
   templateOp,
   topicsOp,
-  waitOp,
   withdrawOp,
 } from "./ops.js";
+import {
+  type Http,
+  Offline,
+  firstCommitToLink,
+  linkAck,
+  linkRepo,
+  machineName,
+  newProjectId,
+  readGrant,
+  removeGrant,
+  revokeGrant,
+  signInMachine,
+  writeGrant,
+} from "./login.js";
+import { Origin } from "./schema.js";
 import { findRunningServer, serverUrl, startServer } from "./server.js";
+import { aroundFiling, linkProblem, syncRelay, waitWithRelay } from "./sync.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import { type Card, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { cleanVaultPath, initVault, vaultGuidance, vaultPathProblem, writeNotes } from "./vault.js";
@@ -51,7 +66,14 @@ export interface Io {
   hookFallback?: readonly string[];
   /** The environment, for what the harness says about the session; replaceable in tests. */
   env?: NodeJS.ProcessEnv;
+  /** How the CLI reaches the hosted service (M9d): its fetch and a signal, replaceable in tests. */
+  http?: Http;
+  /** The sleep between `baesian login`'s polls, replaceable in tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** How long `baesian inbox --quiet`, a harness's hook, waits for the relay: a hook must stay quick, and never fail. */
+export const QUIET_SYNC_MS = 5000;
 
 /** The command line that re-runs this CLI, for hooks when `baesian` isn't on PATH (D48). */
 export function selfCommand(argv1: string | undefined = process.argv[1]): string[] {
@@ -112,6 +134,11 @@ function openInBrowser(url: string): void {
   }
 }
 
+/** A draft with `--secret-reason` on it, which files a card that looks like it holds a secret, in a hosted repo (B-jfkv9). */
+function withSecretReason(meta: Record<string, unknown>, reason: string | undefined): Record<string, unknown> {
+  return reason === undefined ? meta : { ...meta, secret_reason: reason };
+}
+
 async function readInput(path: string | undefined, io: Io): Promise<string> {
   return !path || path === "-" ? await io.stdin() : readFileSync(resolve(io.cwd, path), "utf8");
 }
@@ -138,6 +165,16 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   const actor = (): Actor => ({ agent: agentName(program.opts().agent), notify });
   /** Print an operation's lines, or with `--json` its data (P18: what the MCP tool returns as structured content). */
   const print = <T>(op: Op<T>, asJson: boolean | undefined) => (asJson ? json(op.data) : op.lines.forEach((line) => io.out(line)));
+  const http = (): Http => io.http ?? {};
+  /**
+   * A filing command (M9d): in a linked repo, pull first and push after (`aroundFiling()`); what the relay said goes to
+   * standard error, so the output is the command's own, as before.
+   */
+  const filing = async <T>(s: Store, op: () => Op<T>, asJson: boolean | undefined) => {
+    const { value, notes } = await aroundFiling(s, op, http());
+    print(value, asJson);
+    for (const n of notes) io.err(n);
+  };
 
   program
     .command("init")
@@ -206,16 +243,23 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const cancel = () => stop.abort();
       process.once("SIGINT", cancel);
       try {
-        // An answer it gives is marked delivered: `inbox` and the hooks shouldn't hand it over again.
-        const op = await waitOp(store(), id, {
-          agent: agentName(program.opts().agent),
-          timeoutMs: opts.timeout * 1000,
-          sliceMs: opts.slice * 1000,
-          usePresence: opts.presence,
-          signal: stop.signal,
-          ...io.waitClock,
-        });
+        // An answer it gives is marked delivered: `inbox` and the hooks shouldn't hand it over again. In a linked repo it
+        // listens on the relay's socket, and the waiting marker goes up as a heartbeat (M9d, B-bv49e).
+        const { op, notes } = await waitWithRelay(
+          store(),
+          id,
+          {
+            agent: agentName(program.opts().agent),
+            timeoutMs: opts.timeout * 1000,
+            sliceMs: opts.slice * 1000,
+            usePresence: opts.presence,
+            signal: stop.signal,
+            ...io.waitClock,
+          },
+          http(),
+        );
         print(op, opts.json);
+        for (const n of notes) io.err(n);
         state.code = op.data.exit;
       } finally {
         process.off("SIGINT", cancel);
@@ -227,10 +271,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("file a decision card from a Markdown file (or stdin)")
     .argument("[path]", "the card draft; '-' or omitted reads stdin")
     .option("--new", "file even if an open card or a resolved decision looks like the same decision")
+    .option("--secret-reason <text>", "in a hosted repo, file a card that looks like it holds a secret anyway, saying why; kept on the card (B-jfkv9)")
     .option("--json", "print the filed card as JSON")
-    .action(async (path: string | undefined, opts: { new?: boolean; json?: boolean }) => {
+    .action(async (path: string | undefined, opts: { new?: boolean; secretReason?: string; json?: boolean }) => {
       const { meta, body } = parseDoc(await readInput(path, io));
-      print(fileOp(store(), meta, body, { ...actor(), force: opts.new ?? false }), opts.json);
+      const s = store();
+      await filing(s, () => fileOp(s, withSecretReason(meta, opts.secretReason), body, { ...actor(), force: opts.new ?? false }), opts.json);
     });
 
   program
@@ -238,10 +284,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("file the next revision of a returned card: your reply to the reviewer")
     .argument("<id>", "the card")
     .argument("[path]", "the revised card; '-' or omitted reads stdin")
+    .option("--secret-reason <text>", "in a hosted repo, file a revision that looks like it holds a secret anyway, saying why (B-jfkv9)")
     .option("--json", "print the new revision as JSON")
-    .action(async (id: string, path: string | undefined, opts: { json?: boolean }) => {
+    .action(async (id: string, path: string | undefined, opts: { secretReason?: string; json?: boolean }) => {
       const { meta, body } = parseDoc(await readInput(path, io));
-      print(reviseOp(store(), id, meta, body, actor()), opts.json);
+      const s = store();
+      await filing(s, () => reviseOp(s, id, withSecretReason(meta, opts.secretReason), body, actor()), opts.json);
     });
 
   program
@@ -250,7 +298,10 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .argument("<id>", "the card")
     .argument("<text>", "the fact or the check, in a line; not your pick again")
     .option("--json", "print the reply's revision as JSON")
-    .action((id: string, text: string, opts: { json?: boolean }) => print(replyOp(store(), id, text, actor()), opts.json));
+    .action(async (id: string, text: string, opts: { json?: boolean }) => {
+      const s = store();
+      await filing(s, () => replyOp(s, id, text, actor()), opts.json);
+    });
 
   program
     .command("rule")
@@ -259,14 +310,20 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .argument("<text>", "the rule, in a line")
     .option("--covers <patterns...>", "the gate facts it answers, as gate reports name them: dep:pytest-*, schema:migrations/*")
     .option("--json", "print the draft's card as JSON")
-    .action((id: string, text: string, opts: { covers?: string[]; json?: boolean }) => print(ruleOp(store(), id, text, opts.covers ?? [], actor()), opts.json));
+    .action(async (id: string, text: string, opts: { covers?: string[]; json?: boolean }) => {
+      const s = store();
+      await filing(s, () => ruleOp(s, id, text, opts.covers ?? [], actor()), opts.json);
+    });
 
   program
     .command("attach")
     .description("wait on an existing card instead of filing a duplicate")
     .argument("<id>", "the card")
     .option("--json", "print the attachment as JSON")
-    .action((id: string, opts: { json?: boolean }) => print(attachOp(store(), id, agentName(program.opts().agent)), opts.json));
+    .action(async (id: string, opts: { json?: boolean }) => {
+      const s = store();
+      await filing(s, () => attachOp(s, id, agentName(program.opts().agent)), opts.json);
+    });
 
   program
     .command("withdraw")
@@ -274,7 +331,10 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .argument("<id>", "the card")
     .requiredOption("--reason <text>", "why it's no longer needed")
     .option("--json", "print the withdrawal as JSON")
-    .action((id: string, opts: { reason: string; json?: boolean }) => print(withdrawOp(store(), id, opts.reason, agentName(program.opts().agent)), opts.json));
+    .action(async (id: string, opts: { reason: string; json?: boolean }) => {
+      const s = store();
+      await filing(s, () => withdrawOp(s, id, opts.reason, agentName(program.opts().agent)), opts.json);
+    });
 
   program
     .command("deck")
@@ -288,11 +348,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       // machine's layout in the record (as D105 found for worktrees).
       const from = opts.from && opts.from !== "-" ? resolve(io.cwd, opts.from) : undefined;
       const body = opts.from ? await readInput(opts.from, io) : "";
-      const deck = store().createDeck(
-        { id, title: opts.title, ...(from ? { from } : {}), ...(opts.note ? { context_notes: opts.note } : {}) },
-        body,
-      );
-      io.out(`created deck ${deck.meta.id}; file cards into it with "deck: ${deck.meta.id}"`);
+      const s = store();
+      const create = () => {
+        const deck = s.createDeck({ id, title: opts.title, ...(from ? { from } : {}), ...(opts.note ? { context_notes: opts.note } : {}) }, body);
+        return { lines: [`created deck ${deck.meta.id}; file cards into it with "deck: ${deck.meta.id}"`], data: deck };
+      };
+      await filing(s, create, false);
     });
 
   program
@@ -317,11 +378,17 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .option("--json", "print as JSON")
     .option("--quiet", "for a harness hook: print nothing when there's nothing new, or the repo doesn't use Baesian")
     .option("--session <id>", "for a harness hook: the session reading, which keeps its own place, so every session on the branch hears each verdict once")
-    .action((opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
+    .action(async (opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
       // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
       let op: Op<InboxEntry[]>;
       try {
         const s = store();
+        // M9d: in a linked repo, pull first, and push what's waiting to go up. A hook's run is brief and silent.
+        if (s.isInitialised()) {
+          const given = io.http ?? {};
+          const synced = await syncRelay(s, opts.quiet ? { ...given, signal: given.signal ?? AbortSignal.timeout(QUIET_SYNC_MS) } : given).catch(() => undefined);
+          if (!opts.quiet) for (const n of synced?.notes ?? []) io.err(n);
+        }
         // A hook names its session; an agent's own command runs in one too, which the harness says (B-ghhym).
         const session = opts.session ?? harnessSession(io.env ?? process.env);
         op = inboxOp(s, { advance: !opts.peek, ...(session ? { session } : {}) });
@@ -371,9 +438,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
 
   program
     .command("sync")
-    .description("copy new verdicts and ledger entries into this branch's record (.baesian/), and write the vault's notes")
-    .action(() => {
+    .description("in a linked repo, sync with the relay; then copy new verdicts and ledger entries into this branch's record (.baesian/), and write the vault's notes")
+    .action(async () => {
       const s = store();
+      s.requireInit();
+      // M9d: pull the relay's log, and push what it doesn't have, before the record is brought up to date.
+      const relay = await syncRelay(s, http());
+      if (relay.state === "synced") io.out(`relay: received ${relay.pulled.length} file${relay.pulled.length === 1 ? "" : "s"}, sent ${relay.pushed.length}`);
+      for (const n of relay.notes) io.err(n);
       const added = s.syncRecord();
       io.out(added.length ? `added to the record:\n${added.map((p) => `  ${p}`).join("\n")}` : "record is up to date");
       // M6 (D170): the vault's notes too, for verdicts that came after the branch's last commit. Not staged.
@@ -429,8 +501,110 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .description("run a git hook (called by the hooks `baesian init` installs)")
     .argument("<name>", "pre-commit, commit-msg or post-commit")
     .argument("[args...]", "the hook's arguments")
-    .action((name: string, args: string[]) => {
-      state.code = runHook(store(), name, args, io);
+    .action(async (name: string, args: string[]) => {
+      state.code = await runHook(store(), name, args, io, http());
+    });
+
+  program
+    .command("login")
+    .description("sign this machine in to the hosted service for this repo's project, linking the repo first if it isn't (B-62qnz)")
+    .option("--service <url>", "the service's address, for a repo that isn't linked yet (default: $BAESIAN_SERVICE)")
+    .option("--machine <name>", "this machine's name, as the website shows it (default: its hostname)")
+    .action(async (opts: { service?: string; machine?: string }) => {
+      const s = store();
+      s.requireInit();
+      const c = s.config();
+      const asked = opts.service ?? (c.service ? undefined : (io.env ?? process.env).BAESIAN_SERVICE);
+      if (asked !== undefined && !Origin.safeParse(asked).success) throw new ValidationError(`--service: the service's address, an origin such as https://baesian.example, with no path (got ${JSON.stringify(asked)})`);
+      if (c.service && asked && asked !== c.service) {
+        throw new ValidationError(`this repo is linked to ${c.service}, not ${asked}: to move it, change the service and project in .baesian/config.json, a change the commit gate asks a card or an ack for (B-w4g6c)`);
+      }
+      const service = c.service ?? asked;
+      if (!service) throw new ValidationError("this repo isn't linked to the service yet: name it with `baesian login --service <url>`, or set $BAESIAN_SERVICE");
+      // Linking (B-62qnz, B-5gnea): a repo with no project, or a copy of another repo's (its history starts elsewhere),
+      // gets a project of its own; one whose config lacks its first commit has it recorded.
+      const copy = c.project !== undefined && c.first_commit !== undefined && linkProblem(s, c) !== undefined;
+      const link =
+        c.project === undefined || copy
+          ? { service, project: newProjectId(), first_commit: firstCommitToLink(s.repo.toplevel) }
+          : c.first_commit === undefined
+            ? { service, project: c.project, first_commit: firstCommitToLink(s.repo.toplevel) }
+            : undefined;
+      const project = link?.project ?? c.project!;
+      if (!link) {
+        const held = (() => {
+          try {
+            return readGrant(project);
+          } catch {
+            return undefined;
+          }
+        })();
+        if (held?.service === service) {
+          io.out(`this machine is already signed in to project ${project} on ${service}, as ${held.machine}: \`baesian logout\` first to sign in again`);
+          return;
+        }
+      }
+      if (copy) io.out(`this checkout is a copy of another repo, not that repo (B-5gnea): linking it to a project of its own`);
+      const grant = await signInMachine({
+        ...http(),
+        service,
+        project,
+        machine: opts.machine ?? machineName(),
+        ...(io.sleep ? { sleep: io.sleep } : {}),
+        onCode: (code) => {
+          io.out(`To sign this machine in${link && link.project !== c.project ? " and make this repo's project" : ""}, open this page and check it shows the code ${code.user_code}:`);
+          io.out(`  ${code.verification_uri_complete ?? code.verification_uri}`);
+          io.out(`It asks for your passkey. The code lasts ${Math.round(code.expires_in / 60)} minutes; waiting for it to be approved…`);
+        },
+      });
+      writeGrant(grant);
+      if (link) {
+        linkRepo(s, link);
+        io.out(`linked this repo to ${service} as project ${link.project}, in .baesian/config.json (B-62qnz, B-5gnea)`);
+        io.out("Commit it: the commit gate asks a card or an ack for where cards are sent (B-w4g6c). The ack to paste:");
+        io.out(`  ${linkAck(service, link.project)}`);
+      }
+      io.out(`signed in: ${grant.machine} can now file cards and hear answers in project ${project}, never answer them`);
+      // The first sync: the relay's files come down, and everything an agent wrote here goes up (B-6k0rk).
+      const relay = await syncRelay(s, http());
+      if (relay.state === "synced") io.out(`relay: received ${relay.pulled.length} file${relay.pulled.length === 1 ? "" : "s"}, sent ${relay.pushed.length}`);
+      for (const n of relay.notes) io.err(n);
+    });
+
+  program
+    .command("logout")
+    .description("revoke this machine's grant for this repo's project, and delete its tokens")
+    .action(async () => {
+      const s = store();
+      s.requireInit();
+      const { project } = s.config();
+      if (!project) throw new ValidationError("this repo isn't linked to the service, so there's nothing to sign out of");
+      let grant;
+      try {
+        grant = readGrant(project);
+      } catch {
+        removeGrant(project);
+        io.out(`deleted this machine's unreadable grant file for project ${project}; revoke the machine on the website's Machines page`);
+        return;
+      }
+      if (!grant) {
+        io.out(`this machine isn't signed in to project ${project}`);
+        return;
+      }
+      let reached = true;
+      try {
+        await revokeGrant(grant, http());
+      } catch (e) {
+        if (!(e instanceof Offline)) throw e;
+        reached = false;
+        io.err(`relay: ${e.message}`);
+      }
+      removeGrant(project);
+      io.out(
+        reached
+          ? `signed out: revoked this machine's grant for project ${project}, and deleted its tokens`
+          : `deleted this machine's tokens for project ${project}, but couldn't revoke its grant: revoke it on the website's Machines page, or it lapses after 30 days unused`,
+      );
     });
 
   return program;

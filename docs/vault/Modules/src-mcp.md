@@ -2,9 +2,9 @@
 type: module
 status: active
 authority: describes
-summary: "src/mcp.ts: the local MCP server (M7, P18), baesian mcp, over stdio in both protocol eras, on the official SDK v2 (D164). Its twelve tools, one per agent command (D166), call the CLI's operations, so each returns what its command prints; it takes the card's fields with the template's notes (D167), waits in 100-second calls (D168), quotes text others wrote (D169), names errors with codes, and never answers a card."
+summary: "src/mcp.ts: the local MCP server (M7, P18), baesian mcp, over stdio in both protocol eras, on the official SDK v2 (D164). Its twelve tools, one per agent command (D166), call the CLI's operations, so each returns what its command prints; it takes the card's fields with the template's notes (D167), waits in 100-second calls (D168), quotes text others wrote (D169), names errors with codes, and never answers a card. In a linked repo (M9d) it syncs through the relay with the grant `baesian login` made, never signing in itself."
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 reviewed: 2026-11-03
 tags: [baesian, module, mcp]
 ---
@@ -40,7 +40,14 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 
 - **A tool's text is the lines its command prints, and its structured content what `--json` prints.** A list comes wrapped, since structured content is an object: `items` for the inbox, `cards`, `topics`. A test runs each tool and its command on the same fixture and compares both.
 - **Each call opens the store afresh** (`Store.open`), as each command does, so a checkout mid-session files on the new branch. Every tool but `card_template` takes an optional `cwd`, for an agent working in another worktree; by default it's the directory the harness started the server in.
-- **No tool is open-world** yet: none reaches beyond the machine.
+- **No tool is open-world:** what a tool reaches beyond the machine, in a linked repo, is that repo's own relay, with the grant `baesian login` made (below).
+
+## The hosted service (M9d, D128, P18 section 8)
+
+The server syncs as the CLI does, through the same code ([[src-sync]]) and the same grant, `grants/<project>.json`: `file_card`, `revise_card`, `reply_to_card`, `draft_rule`, `attach_to_card` and `withdraw_card` pull first and push after (`aroundFiling()`, through the server's `filed()` helper); `check_inbox` pulls, and pushes what's waiting; `wait_for_verdict` listens on the relay's socket, with the marker as a heartbeat (`waitWithRelay()`). What the relay said follows the tool's text; its structured content is still the command's `--json`. `McpOptions.http` replaces the fetch in tests.
+- **It never signs in itself,** and no tool starts a sign-in, returns a token or takes one. Signed out, a filing tool files the card here, and its text says to ask the person to run `baesian login`: the card is written, so the tool doesn't fail (P18 section 8 had it return `signed_out`; an error would have read as the card not being filed).
+- **The tools list doesn't change:** the same twelve, with the same fixed descriptions. `file_card` and `revise_card` take one more field, `secret_reason`, with its note from `CARD_FIELDS`.
+- **A card that looks like it holds a secret,** in a hosted repo, is refused with its own code, `looks_like_secret` (`LooksLikeSecret`), unless `secret_reason` says why it's filed anyway (B-jfkv9).
 - **The descriptions and the instructions (`MCP_INSTRUCTIONS`, a short form of `AGENTS_BLOCK`) are fixed text,** never built from cards and never fetched. A snapshot test shows any change in review.
 
 ## The card's fields (D167)
@@ -49,7 +56,7 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 
 ## Errors
 
-The store's errors come back as tool results with `isError` set, the CLI's message word for word, and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message: a file in a newer format than this Baesian reads, say (`NewerFormat`, D157), whose message is the CLI's.
+The store's errors come back as tool results with `isError` set, the CLI's message word for word, and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `looks_like_secret` (B-jfkv9), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message: a file in a newer format than this Baesian reads, say (`NewerFormat`, D157), whose message is the CLI's.
 
 ## Waiting (D168)
 
@@ -68,7 +75,7 @@ One name per call, as P18 section 6 has it: the global `--agent` from the regist
 - **Answer a card** (D32, D62). None of `Store.addVerdict`, `Store.mergeTopics`, `Store.touchPresence` or `Store.recordFallback` is named in `src/mcp.ts` or `src/ops.ts`, and a test reads both to keep it so. Another test calls every tool on every path and finds no new verdict, rule or alias, and presence unchanged. A fallback is recorded only by `waitForVerdict`, as for the CLI.
 - **Lower a card's level** (D144): filing goes through `Store.fileCard`, so through the gate, and `file_card` returns its record and prints its outcome, as `baesian file` does. A held card's level is provisional, and the instructions say a level is a minimum only when a card is shown.
 - **Write the repo's preferences** (D147): neither `src/mcp.ts` nor `src/ops.ts` names `Store.writePreferences`, and a test keeps it so.
-- **Listen on a port,** fetch anything, or sign in.
+- **Listen on a port,** sign in, or fetch anything but the linked repo's own relay, with the grant `baesian login` made (M9d).
 
 ## Tests
 
@@ -76,5 +83,5 @@ One name per call, as P18 section 6 has it: the global `--agent` from the regist
 
 ## Not yet
 
-- The hosted sign-in (`signed_out`, P18 section 8) comes with M9.
+- Built in M9d: the hosted service, through the CLI's grant (above); a signed-out tool files here and says so, rather than returning `signed_out`.
 - Not tried in a real harness: rehearse's scenarios for Claude Code and Codex listing the tools, filing and waiting through MCP. Nor checked: the client names each harness sends, and whether Codex asks before starting a plugin's server or counts its `.mcp.json` in the plugin's trust hash.

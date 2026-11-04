@@ -199,6 +199,8 @@ None of this prevents injection; it narrows it (B5 F7).
 
 ## 8. The hosted sign-in, later
 
+> **Built (M9d, 2026-11-04),** as below but for one point ([[src-mcp#The hosted service (M9d, D128, P18 section 8)]]): signed out, a filing tool files the card here and its text says to ask the person to run `baesian login`, rather than returning `signed_out`, since the card is written. `wait_for_verdict` listens on the relay's socket rather than long-polling (B-bv49e).
+
 Following D128, D153 and P15 sections 2, 3 and 5:
 - **The server never signs in itself.** The spec says a stdio server "SHOULD NOT" follow MCP's OAuth, "and instead retrieve credentials from the environment" (B5 F5). It uses the grant baesian login made for that machine and project, read by the same code as the CLI.
 - **No tool starts a sign-in, returns a token, or accepts one** (no passthrough). A tool that started the device flow would let a prompt-injected agent ask you to "approve this code", P15's open question. Without a grant, tools return signed_out, telling the agent to ask the person to run baesian login.

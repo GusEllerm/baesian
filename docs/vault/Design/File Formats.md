@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; the relay's entry (M9b); the accounts database's tables (M9c); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; the relay's entry (M9b); the accounts database's tables (M9c); relay.json and the machine's grant (M9d); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-04
 reviewed: 2026-10-23
@@ -51,8 +51,10 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
 | `port.json` | `LastPort` | yes (mutable) | no | `baesian serve`, kept after it stops (D103) |
-| `config.json` | `Config` | no | yes (mutable) | `baesian init` |
+| `config.json` | `Config` | no | yes (mutable) | `baesian init`; `baesian login` links the repo (M9d) |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
+| `relay.json` | `RelayState` | yes (mutable) | no | the CLI, whenever it syncs with the relay (M9d; [[#The CLI's side of the relay (M9d)]]) |
+| `~/.config/baesian/grants/<project>.json` | `MachineGrant` | — | — | `baesian login`, at each refresh, and `baesian logout` removes it; readable only by the user (B-gq8j1); never in a repo |
 | `<file>.sig` | OpenSSH's signature format (D160) | yes | yes, with its file | the hosted service, beside each file a person writes ([[#The hosted service's proof (M9a)]]) |
 | `verdicts/<name>.passkey.json`, `preferences/<name>.passkey.json` | `PasskeyProof` | yes | yes, with its file | the hosted service, from the browser's assertion (D139, D163) |
 | `trust/service-<key>.json`, `trust/service-<key>-revoked.json` | `ServiceKey`, `ServiceKeyRevocation` | yes | yes, in every branch's record on sync | the CLI, from the service (M9d); pinned in CI too (D142) |
@@ -99,6 +101,7 @@ Frontmatter (`CardMeta`):
 | `conflict_of`, `caught_at` | optional | | conflict cards only: the decisions in conflict, and where it was caught (`filing`, `merge`, `late`; D45) |
 | `reply` | optional string | | the agent's one reply to an answer that went against its pick (D89, D104): a fact or a check. Only `baesian reply` sets it, on a revision that is otherwise the one before; a draft can't carry it |
 | `rule`, `rule_covers` | optional string; list of gate patterns | | a drafted rule (D16, D109, D110): its wording, and the gate facts it answers (`dep:pytest-*`, `schema:migrations/*`). A card that carries one asks you to make it a rule. Only `baesian rule` sets them, on a card that builds on the decision you asked a rule of; a draft can't carry them |
+| `secret_reason` | optional string | | why a card that looks like it holds a secret was filed anyway (B-jfkv9). In a hosted repo filing refuses such a card without it; `baesian file --secret-reason` and the MCP tools' field set it |
 | `convention` | optional `same-choice` \| `rule-words` | | a convention card (D161): which signal found the pattern. Only Baesian sets it; a draft can't carry it |
 | `pref_row`, `pref_from`, `pref_to` | optional row; positions | all or none | a slider proposal (B-y6jn6): the row and the move. Only Baesian sets them; accepting the card writes a preference file |
 | `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
@@ -117,7 +120,7 @@ What an agent writes is a **draft** (`CardDraft`): the same frontmatter without 
 - a facet with only some of its fields (D75);
 - IDs in `depends_on`, `rules` or the `_breaks` lists that don't exist.
 
-**Warnings** (`filingWarnings()`): no length limit has been measured yet, so long fields file anyway, with a note. The limits are 60 characters for the title and option names, 160 for the question, crux and `doing`, and 240 for a `then`. A field or the body that looks like it holds a secret also gets a note, since the record is committed with the code (B-vqn69): a private-key header, an AWS access key ID, a GitHub or Slack token, a JWT, a `token=`, `key=` or `secret=` query parameter with a long value, or an assignment like `api_key = <long value>`. The note names the field and what the text looks like, never the text, and the card files anyway.
+**Warnings** (`filingWarnings()`): no length limit has been measured yet, so long fields file anyway, with a note. The limits are 60 characters for the title and option names, 160 for the question, crux and `doing`, and 240 for a `then`. A field or the body that looks like it holds a secret also gets a note, since the record is committed with the code (B-vqn69): a private-key header, an AWS access key ID, a GitHub or Slack token, a JWT, a `token=`, `key=` or `secret=` query parameter with a long value, or an assignment like `api_key = <long value>`. The note names the field and what the text looks like, never the text, and the card files anyway. **In a hosted repo** (its config names a project), where a card goes to the service as it's filed, such a card is refused instead, and nothing is written, unless the draft gives `secret_reason` (B-jfkv9): the refusal names each field and the kind, never the text (`LooksLikeSecret`, found by `secretsIn()`).
 
 **Conflict cards** are filed by Baesian itself, with no model (D65). They carry a fixed crux (D94): "Was the newer decision made with context the older one lacked?" "If it wasn't" keeps the base branch's decision; "if it was" keeps the branch's. Each option's `_breaks` names the decision it would replace.
 
@@ -283,6 +286,34 @@ Accounts live in one D1 database, `baesian-accounts`, bound as `ACCOUNTS` (B-ytd
 | `device_codes` | machine asking to sign in (RFC 8628) | `hash` of its device code; `user_code`, the code a person types; `project`; `machine`; `created`, `expires`; `last_poll`; `approved_by`; `denied`; `issued` |
 
 **The session cookie** is `__Host-baesian-session`, its value a random token: `Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=7776000` (90 days); the service ends it sooner, after 30 days unused (B-vtr1r). A Globus round trip's binding cookie is `__Host-baesian-globus`, SameSite=Lax, for 10 minutes.
+
+## The CLI's side of the relay (M9d)
+
+What a machine keeps of the hosted service ([[src-sync]]; [[Formats for v1]] section 8). Before v1 these change freely (D108).
+
+**`Config`** gains **`first_commit`**: the repo's first commit, a full commit ID, written by `baesian login` when it links the repo (B-5gnea), and set only with `service` and `project`. A checkout whose history doesn't start there is a copy, not the repo, and doesn't sync; a shallow clone can't see it, and skips the check. Changing `service`, `project` or `first_commit` is a gate fact, `infra:.baesian/config.json` (B-w4g6c).
+
+**`relay.json`** (`RelayState`), in the live layer only, mutable, replaced whole after every sync (`Storage.replace`), never in the record and never sent:
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `relay`, 1 |
+| `service`, `project` | the relay it's for, as the config names it; one for another relay is started afresh |
+| `pulled` | the last sequence number pulled from the log |
+| `uploaded` | the live layer's files the relay has: those it acknowledged an upload of (201 or 200), and the agent-written files pulled from it. What a sync pushes is every agent-written file not listed: at first link, everything (B-6k0rk) |
+| `at` | the last sync |
+
+**The machine's grant** (`MachineGrant`), `grants/<project>.json` in the folder of the personal config (`$BAESIAN_CONFIG`'s, else `$XDG_CONFIG_HOME/baesian/`, else `~/.config/baesian/`), one per machine and project (B-84e0d). Created with mode 0600 in a folder made 0700 (B-gq8j1), and written whole, through a temporary file renamed over the old; each refresh writes the new tokens before they're used. `grants/<project>.json.lock` is held while it's refreshed. Never in a repo, and its tokens are never printed.
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `grant`, 1 |
+| `service`, `project` | what the grant is for: the service's origin and the project |
+| `machine` | this machine's name, as the website shows it (the hostname, or `--machine`) |
+| `access_token`, `access_expires` | the bearer token for the relay, and when it expires (an hour after it's issued) |
+| `refresh_token` | used once, for the next pair (RFC 9700) |
+
+**What a pull writes:** each entry's file into the live layer with an exclusive create, its `.sig` first, as if it had been written there; only in the folders the relay holds (`cards`, `decks`, `verdicts`, `rules`, `topics`, `preferences`, `trust`, `attachments`), and only when its bytes match the entry's size and digest. Where this machine wrote other bytes at the path first, the relay's copy replaces this machine's, in the worktree's record too, since it's everyone's.
 
 ## Vault notes (M6)
 
