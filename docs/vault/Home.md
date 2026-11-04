@@ -17,7 +17,13 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-04.*
 
-- **M9f has begun (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
+- **The hosted service is live at https://baesian.dev (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
+  - `v0.1.0`, tagged on `main` and deployed by CI (B-bk20v).
+  - The custom domain is attached, all five migrations are applied, the daily job is scheduled, and Workers Logs are off.
+  - Sign-up is open (B-mz6qc), but others can't link a repo yet: the CLI isn't published and the repo is private.
+  - **Next:** the user's first real run (sign up, `baesian login`, a card answered on the phone), the checks on real devices, then M10.
+
+- **M9f has begun (2026-11-04)**:
   - **Where it runs:** the user's University of Chicago Cloudflare account (D177), on Workers Paid (D178), at **https://baesian.dev** (B-aa9pc).
   - **Done:**
     - the accounts database, created and migrated;
