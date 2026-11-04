@@ -321,6 +321,11 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .held-list .parked-row .nm { grid-column: 1; font: var(--t-option); font-size: 16px; }
 .held-list .parked-row .st { grid-column: 1; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .held-list .parked-row .go { grid-column: 2; grid-row: 1 / span 2; font: var(--t-meta); font-stretch: 88%; color: var(--right); }
+/* Held back and past 90 days, their text removed (M9f): listed, not answerable, so plain rows. */
+.held-gone-h { margin-top: 14px; }
+.held-list.held-gone { list-style: none; margin: 0; padding: 0; }
+.held-list.held-gone .parked-row { background: none; border: 1px solid var(--line); cursor: default; }
+.held-list.held-gone .parked-row:hover { background: none; }
 .empty .more-held { align-self: flex-start; border: 0; background: none; padding: 4px 2px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
 
 /* Your preferences: each row as five stops in words (P14), the two lowest holding cards back */

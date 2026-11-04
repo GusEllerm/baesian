@@ -232,6 +232,13 @@ interface Run {
   w: Working;
   out: SyncReport;
   refiles: Refile[];
+  /** Files the relay had removed the text of before this machine pulled them, and which it has nowhere (M9f). */
+  missing: string[];
+}
+
+/** Whether the worktree's record holds a file of the live layer's. */
+function inRecord(store: Store, rel: string): boolean {
+  return store.hasRepo && existsSync(join(store.record, ...rel.split("/")));
 }
 
 /**
@@ -310,8 +317,12 @@ function apply(store: Store, e: RelayEntry, run: Run): void {
     run.out.notes.push(`relay: skipped ${rel}, which isn't a kind of file the relay holds`);
     return;
   }
-  // Its body is dropped once it's delivered and its card resolved (D137): nothing to write.
-  if (e.body === undefined) return;
+  // Its body was removed by retention once it was delivered and its card finished (D137, B-9jqt4, B-ec3kj, M9f):
+  // nothing to write. What this machine already has, here or in the record, is unchanged; if it has neither, it's told.
+  if (e.body === undefined) {
+    if (!store.storage.read(rel) && !inRecord(store, rel)) run.missing.push(rel);
+    return;
+  }
   const bytes = Buffer.from(e.body, "base64");
   if (bytes.byteLength !== e.size || sha256(bytes) !== e.digest) {
     run.out.notes.push(`relay: skipped ${rel}, whose bytes don't match the digest its entry gives`);
@@ -340,6 +351,13 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
       run.w.pulled = Math.max(run.w.pulled, e.seq);
     }
     if (!page?.more || !entries.length) break;
+  }
+  const missing = run.missing.splice(0);
+  if (missing.length) {
+    const cards = [...new Set(missing.map((p) => /(B-[0-9a-hjkmnp-tv-z]{5})/.exec(p)?.[1]).filter((c): c is string => c !== undefined))];
+    run.out.notes.push(
+      `relay: ${missing.length === 1 ? "a file" : `${missing.length} files`}${cards.length ? ` of ${cards.join(", ")}` : ""} had been sent to the project's other machines and then removed from the relay, after the time it keeps them (B-9jqt4, B-ec3kj), before this machine pulled ${missing.length === 1 ? "it" : "them"}: ${missing.length === 1 ? "it isn't" : "they aren't"} here or in this branch's record; a branch where another machine committed ${missing.length === 1 ? "it" : "them"} has ${missing.length === 1 ? "it" : "them"}`,
+    );
   }
   for (const r of run.refiles.splice(0)) {
     if (r.withdrawn) {
@@ -398,14 +416,20 @@ export function unsentBeforeLinking(store: Store, uploaded: ReadonlySet<string>)
 /**
  * Push what the relay doesn't have yet: what agents wrote, then, at first link, the answers from before linking
  * (B-3zjjx). A file another machine wrote first, with other bytes, is refused (409); the pull that follows brings the
- * relay's copy, and tells the agent (`put()`). Anything else refused stays here, and is offered again at the next sync.
- * Returns whether anything was refused for being written elsewhere first.
+ * relay's copy, and tells the agent (`put()`). A card whose text the relay removed (410, M9f) takes nothing more: its
+ * files stay here and in the record, and aren't offered again. Anything else refused stays here, and is offered again at
+ * the next sync. Returns whether anything was refused for being written elsewhere first.
  */
 async function push(store: Store, client: RelayClient, run: Run): Promise<boolean> {
   const blocked = new Set<string>();
+  const removed = new Set<string>();
   let conflicted = false;
   for (const rel of unsent(store, run.w.uploaded)) {
     const card = cardOf(rel);
+    if (card && removed.has(card)) {
+      run.w.uploaded.add(rel);
+      continue;
+    }
     if (card && blocked.has(card)) continue;
     const bytes = store.storage.read(rel);
     if (!bytes) continue;
@@ -413,6 +437,14 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
     if (r.status === 200 || r.status === 201) {
       run.w.uploaded.add(rel);
       run.out.pushed.push(rel);
+      continue;
+    }
+    if (r.status === 410) {
+      // The relay removed this card's text after the time it keeps it (M9f): it takes nothing more for the card. Its files
+      // stay here and in the record, and aren't offered again.
+      run.w.uploaded.add(rel);
+      if (card) removed.add(card);
+      run.out.notes.push(`relay: ${card ?? rel}'s text was removed from the relay after the time it keeps it (B-9jqt4, B-ec3kj), so what's new for it stays here and in the repo's record, and the website won't show it`);
       continue;
     }
     if (card) blocked.add(card);
@@ -442,7 +474,7 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
 /** Pull, push, or both, with this client, keeping `relay.json` up to date with whatever got done. */
 async function syncWith(store: Store, client: RelayClient, o: { pull: boolean; push: boolean }): Promise<SyncReport> {
   const s = readRelayState(store, client.service, client.project);
-  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded) }, out: report("synced"), refiles: [] };
+  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded) }, out: report("synced"), refiles: [], missing: [] };
   try {
     if (o.pull) await pull(store, client, run);
     // A push refused for what another machine wrote first pulls the relay's copy, then pushes again: a card filed again

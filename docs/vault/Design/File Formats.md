@@ -266,6 +266,17 @@ What's logged: every file written once, uploaded or written by the relay. What i
 
 **Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key, the stand-in's grants for the project `proj-dev` and Turnstile's test secret, and prints a `curl` line for a machine and one for a person; `npm run migrate:local` once, to make the local accounts database; then `npm run build` from the root, for the website it serves (M9e), and `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/`. Emails are simulated: logged, and saved under `service/.wrangler/tmp/email/`. `npm run test:service` from the root runs the service's tests in workerd. Deployed, only real sign-ins count (M9c).
 
+**Retention's state** (M9f, B-9jqt4, B-ec3kj, [[service#Retention (service/src/retention.ts)]]): four more tables in each project's object, kept by `RetentionLedger`, never logged, signed or sent. When a card's text goes, its files' rows (and their `.sig`s, and its waiting markers) are deleted from `files`; their `log` rows stay, so `GET log` sends each entry without `body` or `sig`, and an upload of the same path is still known.
+
+| Table | One row per | Columns |
+|---|---|---|
+| `retention_sent` | machine (its grant's ID; a stand-in machine as `dev:<name>`) | `seq`, the furthest a `GET log` reply sent it; `at` |
+| `retention_delivered` | card found delivered | `seq`, the card's last entry then; `at`, when it was found (ms) |
+| `retention_removed` | card whose text went | `revision`, `level` (in force), `ended` (`answered`, `withdrawn` or `held`), `filed`, `settled`, `removed` (ISO times), `size` (its files' bytes) |
+| `retention_held` | writer and row | `n`: held cards' gate records removed, still counted by the burn-in |
+
+The state (`ApiState`) carries the removed cards as `removed`, a list of `ApiRemovedCard`: `id`, `revision`, `level`, `ended`, `filed`, `settled`, `removed`. Only the relay sets it.
+
 **Notifications' state** (M9e step 2, B-advkh, [[service#Notifications (service/src/notify.ts)]]): three more tables in each project's object, apart from its files and log, never logged, signed or sent, kept by `PushLedger`. Times are milliseconds since 1970.
 
 | Table | One row per | Columns |

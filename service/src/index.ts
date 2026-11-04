@@ -4,9 +4,10 @@ import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import type { Settings } from "../../src/routing.js";
 import { type PasskeyKey, ProjectId, type Verdict } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
-import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal } from "./access.js";
+import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";
 import type { GlobusConfig } from "./globus.js";
@@ -166,7 +167,8 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       const after = Number(url.searchParams.get("after") ?? 0);
       const limit = Number(url.searchParams.get("limit") ?? MAX_ENTRIES);
       if (!Number.isInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1) return fail(400, "after is a sequence number from 0, and limit a count from 1");
-      return reply(await stub.log(project, after, limit));
+      // A machine's read is noted by its grant, for retention (B-9jqt4); the stand-in's machines, by name.
+      return reply(await stub.log(project, after, limit, who.kind === "machine" ? (who.grant ?? `dev:${who.machine}`) : undefined));
     }
     case "state":
       return reply(await stub.state(project));
@@ -282,6 +284,9 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+/** The meta key for when a project's object next looks at retention (M9f). */
+const SWEEP_AT = "retention_next";
+
 /** What a live update says (B-bv49e): the state changed, and its version now. The client reads the state again. */
 export const changedMessage = (version: number) => JSON.stringify({ type: "changed", version });
 
@@ -302,10 +307,13 @@ export class ProjectRelay extends DurableObject<Env> {
   private readonly usage: Usage | undefined;
   /** The days and screens whose first visit this object has counted already. */
   private readonly visited = new Set<string>();
+  /** Retention's tables (M9f, B-9jqt4, B-ec3kj). */
+  private readonly retention: RetentionLedger;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ledger = new PushLedger(ctx.storage.sql);
+    this.retention = new RetentionLedger(ctx.storage.sql);
     this.usage = env.ACCOUNTS ? new Usage(env.ACCOUNTS) : undefined;
     let signer: ServiceSigner | undefined;
     try {
@@ -331,7 +339,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const known = this.files.meta("project");
     if (known === undefined) this.files.setMeta("project", project);
     else if (known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
-    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started);
+    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention);
   }
 
   /** Run one address's work, and tell every listener if it changed anything. */
@@ -354,8 +362,8 @@ export class ProjectRelay extends DurableObject<Env> {
     }
   }
 
-  async log(project: string, after: number, limit: number): Promise<Reply> {
-    return this.run(project, (r) => r.log(after, limit));
+  async log(project: string, after: number, limit: number, machine?: string): Promise<Reply> {
+    return this.run(project, (r) => r.log(after, limit, machine));
   }
 
   async state(project: string): Promise<Reply> {
@@ -379,6 +387,7 @@ export class ProjectRelay extends DurableObject<Env> {
       const fields = this.relay(project).filedUsage(m[1]!, Number(m[2]));
       if (fields) await this.usage?.record({ project }, "card_filed", fields);
     }
+    if (out.status < 300) await this.keepAlarm();
     return out;
   }
 
@@ -411,7 +420,41 @@ export class ProjectRelay extends DurableObject<Env> {
         console.error(`notifying project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (d.next !== undefined) await this.ctx.storage.setAlarm(Math.max(d.next, Date.now() + 1000));
+    // Retention (M9f): once a day, the text of cards whose time has come is removed.
+    let sweep = Number(this.files.meta(SWEEP_AT) ?? 0);
+    if (sweep <= now) {
+      try {
+        await this.sweep(project, now);
+      } catch (e) {
+        console.error(`retention in project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      sweep = now + RETENTION.everyMs;
+      this.files.setMeta(SWEEP_AT, String(sweep));
+    }
+    await this.ctx.storage.setAlarm(Math.max(Math.min(d.next ?? Number.POSITIVE_INFINITY, sweep), Date.now() + 1000));
+  }
+
+  /**
+   * Retention's daily look (M9f, B-9jqt4, B-ec3kj): the machines signed in to the project now, from the accounts database
+   * (and, locally and in tests, the stand-in's for it), then `Relay.sweep`. Listeners hear of what changed.
+   */
+  async sweep(project: string, now: number = Date.now()): Promise<string[]> {
+    const live = new Set<string>();
+    if (this.env.ACCOUNTS) for (const g of await new Accounts(this.env.ACCOUNTS).liveGrants(project)) live.add(g);
+    if (isLocal(this.env) && this.env.BAESIAN_DEV_ACCESS) for (const m of readGrants(this.env.BAESIAN_DEV_ACCESS).machines) if (m.project === project) live.add(`dev:${m.machine}`);
+    let removed: string[] = [];
+    this.run(project, (r) => {
+      removed = r.sweep(now, live);
+      return { status: 200 };
+    });
+    return removed;
+  }
+
+  /** After a write, an alarm is always set, so retention looks at the project at least once a day. */
+  private async keepAlarm(): Promise<void> {
+    if ((await this.ctx.storage.getAlarm()) !== null) return;
+    const sweep = Number(this.files.meta(SWEEP_AT) ?? 0);
+    await this.ctx.storage.setAlarm(Math.max(sweep || Date.now() + RETENTION.everyMs, Date.now() + 1000));
   }
 
   /**
@@ -448,6 +491,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = this.relay(project).settings();
     const out = this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
     if (out.status === 201) await this.countAnswer(project, who.account, kind === "verdicts" ? "verdict" : kind === "aliases" ? "alias" : "preferences", out, before);
+    if (out.status === 201) await this.keepAlarm();
     return out;
   }
 
@@ -474,6 +518,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = relay.settings();
     const out = this.run(project, (r) => r.prove(id, account, assertion, key));
     if (out.status === 201 && kind) await this.countAnswer(project, account, kind === "verdict" ? "verdict" : "preferences", out, before);
+    if (out.status === 201) await this.keepAlarm();
     return out;
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
-import { agentOf, areaOf, byId, heldBack, isHeld, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
+import { agentOf, areaOf, byId, heldBack, heldRemoved, isHeld, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
 
@@ -166,6 +166,21 @@ describe("relations, from stated fields only (D65)", () => {
     const early = card({ topic: "storage/db", title: "Decided before linking" }, { status: "resolved", before_linking: true });
     const subject = card({ topic: "storage/db" });
     expect(relationsOf(subject, snapshot([early, subject])).map((r) => [r.kind, r.state])).toEqual([["precedent", "settled before linking"]]);
+  });
+
+  it("names a card whose text the relay removed by how it ended, never by its ID; held ones are listed (M9f)", () => {
+    const removed = (id: string, ended: "answered" | "withdrawn" | "held", settled: string) => ({ id, revision: 1, level: "provisional" as const, ended, filed: at(0), settled, removed: at(90) });
+    const subject = card({ depends_on: ["B-old01"], proposal_breaks: ["B-old02"] });
+    const state = { ...snapshot([subject]), removed: [removed("B-old01", "answered", "2026-08-03T10:00:00.000Z"), removed("B-old02", "withdrawn", at(2)), removed("B-old03", "held", at(1)), removed("B-old04", "held", at(3))] };
+    const rels = relationsOf(subject, state);
+    expect(rels.map((r) => [r.kind, r.name])).toEqual([
+      ["builds-on", "An earlier decision"],
+      ["conflict", "A withdrawn card"],
+    ]);
+    expect(rels[0]!.state).toMatch(/^settled .*2026; its text is no longer on the service$/);
+    expect(JSON.stringify(rels.map((r) => [r.name, r.state]))).not.toContain("B-old");
+    expect(heldRemoved(state).map((r) => r.id)).toEqual(["B-old04", "B-old03"]);
+    expect(heldRemoved(snapshot([subject]))).toEqual([]);
   });
 
   it("lights what an option would replace or break, as the agent declares it", () => {

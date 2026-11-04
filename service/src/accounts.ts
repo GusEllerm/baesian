@@ -566,6 +566,11 @@ export class Accounts {
     return r.meta.changes > 0;
   }
 
+  /** A project's machines signed in now: its grants not revoked or lapsed, by ID. Retention waits for each (B-9jqt4). */
+  async liveGrants(project: string): Promise<string[]> {
+    return (await this.db.prepare("SELECT id FROM grants WHERE project = ? AND revoked IS NULL AND last_used > ?").bind(project, this.ago(LIMITS.grantIdleMs)).all<{ id: string }>()).results.map((r) => r.id);
+  }
+
   /** An account's machines: grants not revoked or lapsed, newest use first. */
   async grants(account: string): Promise<Grant[]> {
     return (await this.db.prepare("SELECT * FROM grants WHERE account = ? AND revoked IS NULL AND last_used > ? ORDER BY last_used DESC").bind(account, this.ago(LIMITS.grantIdleMs)).all<Grant>()).results;

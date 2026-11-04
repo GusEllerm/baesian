@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { parseDoc } from "../../src/frontmatter.js";
 import { type RelayEntry, readRelayEntry } from "../../src/schema.js";
 import { FileExists, type Storage, checkPath } from "../../src/storage.js";
+import { cardOfPath } from "./retention.js";
 
 // The live layer in a Durable Object's SQLite (B-0ag7h, D140): one row per path, and beside it the relay's append-only
 // log of entries (P16 section 8), written in the same transaction. The store runs over it as over a folder.
@@ -26,6 +27,21 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS pending (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS before_linking (path TEXT PRIMARY KEY);
 `;
+
+/** One card's entries in the log, for retention (`SqlFileStorage.cardsInLog`). */
+export interface CardInLog {
+  /** Its last entry's sequence number, and when it arrived. */
+  last: number;
+  lastAt: string;
+  /** When its first revision arrived, and its latest. */
+  firstAt: string | undefined;
+  revisionAt: string | undefined;
+  revision: number;
+  /** Its files' bytes, in all. */
+  size: number;
+  /** Every path of it that's logged. */
+  paths: string[];
+}
 
 /** The folders of what a person writes: an answer, a rule, a topic merge, a preference file (Hosted Service section 3). */
 const ANSWERS = ["verdicts", "rules", "topics", "preferences"];
@@ -276,6 +292,48 @@ export class SqlFileStorage implements Storage {
         at: r.at,
       }),
     );
+  }
+
+  // ---------------------------------------------------------------- retention (M9f, B-9jqt4, B-ec3kj)
+
+  /**
+   * The log, by the card each entry belongs to (`cardOfPath()`): its last entry's sequence number and time, when its
+   * first and latest revisions arrived, its files' bytes in all, and the paths logged. What retention decides from.
+   */
+  cardsInLog(): Map<string, CardInLog> {
+    const out = new Map<string, CardInLog>();
+    for (const r of this.sql.exec<{ seq: number; path: string; size: number; at: string }>("SELECT seq, path, size, at FROM log ORDER BY seq").toArray()) {
+      const card = cardOfPath(r.path);
+      if (!card) continue;
+      const c = out.get(card) ?? { last: 0, lastAt: r.at, firstAt: undefined, revisionAt: undefined, revision: 0, size: 0, paths: [] };
+      c.last = r.seq;
+      c.lastAt = r.at;
+      c.size += r.size;
+      c.paths.push(r.path);
+      const rev = /^cards\/[^/]+\/r(\d+)\.md$/.exec(r.path);
+      if (rev) {
+        if (Number(rev[1]) === 1) c.firstAt = r.at;
+        if (Number(rev[1]) >= c.revision) {
+          c.revision = Number(rev[1]);
+          c.revisionAt = r.at;
+        }
+      }
+      out.set(card, c);
+    }
+    return out;
+  }
+
+  /**
+   * Remove a card's files' bytes (D137): every path given, with its signature, and the card's waiting markers. Their log
+   * entries stay, so the log sends each without its body, and an upload of the same path is still known. One move of the
+   * version, never logged.
+   */
+  dropCard(card: string, paths: readonly string[]): void {
+    this.storage.transactionSync(() => {
+      for (const path of paths) this.sql.exec("DELETE FROM files WHERE path = ? OR path = ?", path, `${path}${SIG}`);
+      this.sql.exec("DELETE FROM files WHERE path >= ? AND path < ?", `waiting/${card}-`, `waiting/${card}.`);
+      this.bump();
+    });
   }
 
   /** Every file, mutable ones too, with its bytes: for tests, and for building a store elsewhere over the same files. */

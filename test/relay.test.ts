@@ -267,6 +267,51 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(await relayPaths("proj-6")).toEqual(expect.arrayContaining([`cards/${now}/r1.md`]));
       rmSync(b, { recursive: true, force: true });
     });
+
+    it("copes with retention (M9f): a card the relay removed (410) isn't offered again; an answer removed before this machine had it is said", async () => {
+      const a = await signedIn("proj-12");
+      // Filed offline, then sent to a relay that removed this card's text: stood in for on its uploads.
+      const filed = await run(a.dir, ["file", "-", "--json"], { stdin: draftFile({ title: "Long finished" }), fetch: offline });
+      const id = JSON.parse(filed.out).card.meta.id as string;
+      const urlOf = (input: Parameters<typeof fetch>[0]) => (input instanceof Request ? input.url : String(input));
+      const removed: typeof fetch = async (input, init) =>
+        init?.method === "PUT" && urlOf(input).includes(`/files/cards/${id}/`)
+          ? new Response(JSON.stringify({ error: `${id}'s text was removed from the relay`, removed: true }), { status: 410, headers: { "content-type": "application/json" } })
+          : fetch(input, init);
+      const first = await run(a.dir, ["sync"], { fetch: removed });
+      expect(first.code, first.err).toBe(0);
+      expect(first.err).toContain(`relay: ${id}'s text was removed from the relay after the time it keeps it`);
+      const puts: string[] = [];
+      const watch: typeof fetch = async (input, init) => {
+        if (init?.method === "PUT") puts.push(urlOf(input));
+        return fetch(input, init);
+      };
+      const again = await run(a.dir, ["sync"], { fetch: watch });
+      expect(again.code, again.err).toBe(0);
+      expect(puts.filter((u) => u.includes(id))).toEqual([]);
+      expect(again.err).not.toContain(id);
+
+      // Another machine's answer, removed from the relay before this clone pulled it, and not in its record.
+      const answered = await fileCard(a.dir, { title: "Answered meanwhile", topic: "storage/meanwhile" });
+      sh(a.dir, "add", "-A");
+      sh(a.dir, "commit", "-q", "-m", "link");
+      const b = `${a.dir}-b`;
+      sh(tmpdir(), "clone", "-q", a.dir, b);
+      Store.open(b).init();
+      expect((await relay.person("proj-12", "POST", "verdicts", { card: answered, revision: 1, response: "accept", client: "hosted-desktop" })).status).toBe(201);
+      const stripped: typeof fetch = async (input, init) => {
+        const r = await fetch(input, init);
+        if (!urlOf(input).includes("/log?")) return r;
+        const page = (await r.json()) as { entries: Record<string, unknown>[] };
+        page.entries = page.entries.map((e) => (String(e.path).startsWith("verdicts/") && String(e.path).includes(answered) ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== "body" && k !== "sig")) : e));
+        return new Response(JSON.stringify(page), { status: 200, headers: { "content-type": "application/json" } });
+      };
+      const pulled = await run(b, ["sync"], { fetch: stripped });
+      expect(pulled.code, pulled.err).toBe(0);
+      expect(pulled.err).toContain(`a file of ${answered} had been sent to the project's other machines and then removed from the relay`);
+      expect(Store.open(b).status(answered)).toBe("open");
+      rmSync(b, { recursive: true, force: true });
+    });
   });
 
   describe("offline, and when the relay is slow", () => {
