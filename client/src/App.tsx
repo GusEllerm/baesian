@@ -15,6 +15,13 @@ export function App() {
       </Shell>
     );
   }
+  if (live.kind === "not-yours") {
+    return (
+      <Shell summary="">
+        <p className="notice">{live.message}</p>
+      </Shell>
+    );
+  }
   if (live.kind === "error") {
     return (
       <Shell summary="">

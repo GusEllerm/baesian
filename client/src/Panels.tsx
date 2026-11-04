@@ -17,7 +17,7 @@ export type PanelKind = "calibration" | "keys" | "deck" | "held" | "preferences"
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
 /** "More": the panels, and notifications. It closes on Esc, on a click elsewhere, and once you've picked. */
-export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number; touch: boolean; onOpen: (open: boolean) => void; onPanel: (kind: PanelKind) => void; onNotify: () => void }) {
+export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number; touch: boolean; site?: boolean; onOpen: (open: boolean) => void; onPanel: (kind: PanelKind) => void; onNotify: () => void }) {
   const menu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!p.open) return;
@@ -59,6 +59,17 @@ export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number;
             <button type="button" role="menuitemcheckbox" aria-checked={p.notify === "on"} onClick={pick(p.onNotify)}>
               Notify me when an agent stops <span className={`state ${p.notify}`}>{NOTIFY_WORDS[p.notify]}</span>
             </button>
+          )}
+          {/* On the website (M9e): the site's own pages. */}
+          {p.site && (
+            <>
+              <a role="menuitem" href="/" className="menu-link">
+                Your projects
+              </a>
+              <a role="menuitem" href="/account" className="menu-link">
+                Your account
+              </a>
+            </>
           )}
         </div>
       )}

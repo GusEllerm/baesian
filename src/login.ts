@@ -288,6 +288,14 @@ export function newProjectId(): string {
   return `p-${randomSuffix(20)}`;
 }
 
+/**
+ * A project's page on the website (M9e): `/projects/{project}`, as the relay's own addresses name it (B-7z97x). `baesian
+ * serve` opens it in a linked repo (D143), and `baesian login` points to it once the machine is in.
+ */
+export function projectPage(service: string, project: string): string {
+  return `${service.replace(/\/+$/, "")}/projects/${encodeURIComponent(project)}`;
+}
+
 /** The ack a commit that links the repo needs, since the link is a gate fact (B-w4g6c). */
 export function linkAck(service: string, project: string): string {
   return `Baesian-Ack: infra:${CONFIG_PATH} linked this repo to ${service} as project ${project} (baesian login, B-62qnz)`;

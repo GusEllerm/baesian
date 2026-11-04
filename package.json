@@ -8,13 +8,14 @@
     "baesian": "dist/bin.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/site"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && vite build --config client/vite.config.ts",
+    "build": "tsc -p tsconfig.build.json && vite build --config client/vite.config.ts && vite build --config client/vite.config.ts --mode site --logLevel warn",
     "typecheck": "tsc --noEmit && tsc -p client --noEmit",
     "test": "vitest run",
     "test:service": "npm --prefix service run typecheck && npm --prefix service test",

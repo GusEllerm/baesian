@@ -70,6 +70,11 @@ export interface ApiCard {
   gate?: GateRecord;
   /** An audit card: held, drawn for audit, and not answered yet (D151). It belongs in the queue, answered blind first. */
   audit?: true;
+  /**
+   * A resolved card decided in the repo before it was linked to the service (B-3zjjx): its answer counts as one from
+   * before linking (B-45xz8), not by the service's signature.
+   */
+  before_linking?: true;
 }
 
 /**

@@ -104,6 +104,27 @@ export function normalEmail(raw: unknown): string | undefined {
   return e.length <= 254 && /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]+$/.test(e) ? e : undefined;
 }
 
+/** The most characters a project's name may have. */
+export const PROJECT_NAME_MAX = 60;
+
+/**
+ * A project's name as its owner typed it (B-zqkwk), tidied: trimmed, its runs of spaces made one, and 1 to 60 characters
+ * with no control characters; or undefined if it isn't one.
+ */
+export function projectName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const name = raw.replace(/\s+/g, " ").trim();
+  return name.length >= 1 && [...name].length <= PROJECT_NAME_MAX && !/[\u0000-\u001f\u007f-\u009f]/.test(name) ? name : undefined;
+}
+
+/** A project on the service: its random ID, its owner, the name its owner gave it (B-zqkwk), and when it was made. */
+export interface Project {
+  id: string;
+  owner: string;
+  name: string | null;
+  created: string;
+}
+
 /** A conflict on a unique column (a handle or an email taken in the meantime). */
 export class Taken extends Error {}
 
@@ -339,12 +360,18 @@ export class Accounts {
 
   // ---------------------------------------------------------------- projects
 
-  project(id: string): Promise<{ id: string; owner: string; created: string } | null> {
-    return this.db.prepare("SELECT id, owner, created FROM projects WHERE id = ?").bind(id).first();
+  project(id: string): Promise<Project | null> {
+    return this.db.prepare("SELECT id, owner, name, created FROM projects WHERE id = ?").bind(id).first<Project>();
   }
 
-  async projectsOf(account: string): Promise<{ id: string; created: string }[]> {
-    return (await this.db.prepare("SELECT id, created FROM projects WHERE owner = ? ORDER BY created").bind(account).all<{ id: string; created: string }>()).results;
+  /** An account's projects, oldest first, each with its name (B-zqkwk). */
+  async projectsOf(account: string): Promise<{ id: string; name: string | null; created: string }[]> {
+    return (await this.db.prepare("SELECT id, name, created FROM projects WHERE owner = ? ORDER BY created").bind(account).all<{ id: string; name: string | null; created: string }>()).results;
+  }
+
+  /** Rename a project its owner owns (B-zqkwk). Returns whether there was one to rename. */
+  async renameProject(account: string, id: string, name: string): Promise<boolean> {
+    return (await this.db.prepare("UPDATE projects SET name = ? WHERE id = ? AND owner = ?").bind(name, id, account).run()).meta.changes > 0;
   }
 
   /** Whether an account may answer in a project: in v1, its owner (P15 section 2). */
@@ -377,15 +404,16 @@ export class Accounts {
   }
 
   /**
-   * A person approves a machine: the project is made for them if it's new, and must be theirs if it isn't. Returns
-   * whether the project was new, or why not.
+   * A person approves a machine: the project is made for them if it's new, with the name they gave it (B-zqkwk), and must
+   * be theirs if it isn't. Returns whether the project was new, or why not.
    */
-  async approveDevice(d: DeviceCode, account: string): Promise<{ created: boolean } | { problem: string }> {
+  async approveDevice(d: DeviceCode, account: string, name?: string): Promise<{ created: boolean } | { problem: string }> {
     const p = await this.project(d.project);
     if (p && p.owner !== account) return { problem: `project ${d.project} belongs to another account: link this repo again, as a new project` };
+    if (!p && !name) return { problem: "a new project needs a name" };
     const now = this.now();
     await this.db.batch([
-      ...(p ? [] : [this.db.prepare("INSERT INTO projects (id, owner, created) VALUES (?, ?, ?)").bind(d.project, account, now)]),
+      ...(p ? [] : [this.db.prepare("INSERT INTO projects (id, owner, name, created) VALUES (?, ?, ?, ?)").bind(d.project, account, name, now)]),
       this.db.prepare("UPDATE device_codes SET approved_by = ? WHERE hash = ? AND approved_by IS NULL AND denied = 0").bind(account, d.hash),
     ]);
     return { created: !p };

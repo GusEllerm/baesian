@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,9 +20,9 @@ export const SITE = "https://baesian.test";
 
 /** The person, and the projects the stand-in lets them answer in, as a session cookie each. */
 export const PERSON = { account: "acct-gus", handle: "gus" };
-export const PROJECTS = ["proj-1", "proj-2", "proj-3", "proj-4", "proj-5", "proj-6", "proj-7", "proj-8", "proj-9", "proj-10"];
+export const PROJECTS = ["proj-1", "proj-2", "proj-3", "proj-4", "proj-5", "proj-6", "proj-7", "proj-8", "proj-9", "proj-10", "proj-11"];
 
-interface D1Like {
+export interface D1Like {
   prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown>; first<T>(): Promise<T | null>; all<T>(): Promise<{ results: T[] }> }; run(): Promise<unknown> };
 }
 
@@ -39,17 +39,31 @@ export interface LocalRelay {
   dispose(): Promise<void>;
 }
 
+/** The accounts database's migrations (service/migrations), in order, as `wrangler d1 migrations apply` applies them. */
+export async function applyMigrations(db: D1Like): Promise<void> {
+  const dir = join(SERVICE_DIR, "migrations");
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+    const sql = readFileSync(join(dir, file), "utf8");
+    for (const statement of sql.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean)) await db.prepare(statement).run();
+  }
+}
+
 export async function startRelay(): Promise<LocalRelay> {
   process.env.WRANGLER_SEND_METRICS = "false";
   const { unstable_startWorker } = (await import(pathToFileURL(WRANGLER).href)) as { unstable_startWorker: (o: unknown) => Promise<any> };
   const persist = mkdtempSync(join(tmpdir(), "baesian-relay-"));
+  mkdirSync(join(persist, "site"));
   const sessions = PROJECTS.map((project) => ({ cookie: randomBytes(24).toString("base64url"), ...PERSON, project }));
   const worker = await unstable_startWorker({
     config: join(SERVICE_DIR, "wrangler.jsonc"),
+    // The CLI's tests don't open the website (M9e), and its build may not be there yet: an empty folder in its place.
+    assets: join(persist, "site"),
     bindings: {
       BAESIAN_ENV: { type: "plain_text", value: "test" },
       BAESIAN_DEV_ACCESS: { type: "plain_text", value: JSON.stringify({ machines: [], sessions }) },
       SERVICE_SIGNING_KEY: { type: "secret_text", value: generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }) as string },
+      // Every test signs in from one address, 127.0.0.1: the limit per address (30 a minute) is raised for them.
+      LIMIT_ADDRESS: { type: "ratelimit", namespace_id: "1001", simple: { limit: 10_000, period: 60 } },
     },
     dev: { persist, server: { hostname: "127.0.0.1", port: 0 }, inspector: false, watch: false, logLevel: "none" },
   });
@@ -63,8 +77,7 @@ export async function startRelay(): Promise<LocalRelay> {
   }
   if (!mf) throw new Error("the relay's local runtime didn't start");
   const db = (await mf.getD1Database("ACCOUNTS")) as D1Like;
-  const sql = readFileSync(join(SERVICE_DIR, "migrations", "0001_accounts.sql"), "utf8");
-  for (const statement of sql.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean)) await db.prepare(statement).run();
+  await applyMigrations(db);
   const now = () => new Date().toISOString();
   await db.prepare("INSERT INTO accounts (id, handle, created) VALUES (?, ?, ?)").bind(PERSON.account, PERSON.handle, now()).run();
   return {

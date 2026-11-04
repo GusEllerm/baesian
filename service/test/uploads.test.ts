@@ -64,11 +64,17 @@ describe("uploads (P15 section 3)", () => {
   });
 
   it("refuses every kind of file a person writes, and anything that isn't an agent's", async () => {
-    const theirs = ["verdicts/20261103T000000.000Z-B-aaaaa-r1-abcde.json", "rules/R-abcde.md", "rules/R-abcde-retired.json", "topics/alias-abcde.json", "preferences/20261103T000000.000Z-abcde.json", "trust/service-x.json", "trust/passkey-abcde.json", "cards/B-aaaaa/gate-r1-relay.json", "decks/x.md.sig"];
+    const theirs = ["trust/service-x.json", "trust/passkey-abcde.json", "cards/B-aaaaa/gate-r1-relay.json", "decks/x.md.sig", "verdicts/x.json.sig", "rules/R-abcde.md.sig"];
     for (const p of theirs) {
       const r = await read(await upload(p, "{}"));
       expect(r.status, p).toBe(403);
       expect(r.body.error, p).toMatch(/only a person writes/);
+    }
+    // The answers, rules, topic merges and preference files from before linking are the one exception (B-3zjjx),
+    // checked as any upload is: these aren't valid ones (before-linking.test.ts has the rest).
+    for (const p of ["verdicts/20261103T000000.000Z-B-aaaaa-r1-abcde.json", "rules/R-abcde.md", "rules/R-abcde-retired.json", "topics/alias-abcde.json", "preferences/20261103T000000.000Z-abcde.json"]) {
+      const r = await read(await upload(p, "{}"));
+      expect(r.status, p).toBe(400);
     }
     for (const p of ["ledger/B-aaaaa-abcde.md", "presence.json", "cursors/main.json", "server.json", "notes/x.md"]) {
       const r = await read(await upload(p, "{}"));

@@ -11,7 +11,9 @@ import { usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
 import { type Rarity, agentOf, areaOf, byId, heldBack, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
-import { Outbox, postVerdict } from "./outbox";
+import { Outbox, postVerdictTo } from "./outbox";
+import { postAnswer, useEndpoints } from "./endpoints";
+import { ProofPrompt } from "./proof";
 import { PHONE, TOUCH, useMedia } from "./media";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path, type PathProps, flyToBar } from "./Path";
@@ -140,6 +142,8 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   /** A draft for the preferences panel to open with: the survey's suggestion, to adjust. */
   const [prefsInitial, setPrefsInitial] = useState<Draft>();
   const project = state.project.name;
+  /** Where it reads and answers: the local server, or on the website the project's relay (M9e). */
+  const endpoints = useEndpoints();
   /** The phone layout (D130), and a screen you touch: see media.ts. */
   const phone = useMedia(PHONE);
   const touch = useMedia(TOUCH);
@@ -215,7 +219,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   // The undo window (D82): one answer waits; undo takes it back; the next answer, or closing the page, sends it.
   const outbox = useRef<Outbox>(undefined);
   if (!outbox.current) {
-    outbox.current = new Outbox(postVerdict, UNDO_MS, {
+    outbox.current = new Outbox(postVerdictTo(endpoints), UNDO_MS, {
       sent: (k, posted) => {
         const a = answeredRef.current.get(k);
         setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "sent" }) : m));
@@ -363,7 +367,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
     const from = current.canonicalTopic;
     const body: ApiAliasInput = { from, to: into };
     try {
-      const r = await fetch("/api/aliases", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
+      const r = await postAnswer(endpoints, endpoints.aliases, body);
       if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `the server answered ${r.status}`);
       say(`Merged: “${from}” now counts as “${into}”.`);
     } catch (e) {
@@ -418,7 +422,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   const setupUse = async () => {
     if (setup?.step !== "result") return;
     setSetupStep({ ...setup, saving: true });
-    const result = await postPreferences(surveyChange(setup.answers, replacesOf(state.routing)));
+    const result = await postPreferences(endpoints, surveyChange(setup.answers, replacesOf(state.routing)));
     if ("ok" in result) {
       const preset = suggestPreset(surveyAnswersOf(setup.answers));
       say(result.ok.file.mode === "shadow" ? `Saved: “${preset.name}”, in shadow. Nothing is held back yet.` : `Saved: “${preset.name}”. It applies to the next cards agents file.`);
@@ -685,12 +689,25 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
   return (
     <>
       <header className="bar">
-        <span className="wordmark">Baesian</span>
+        {endpoints.hosted ? (
+          // On the website (M9e): the wordmark goes to your projects, and the project's name says where you are (B-zqkwk).
+          <>
+            <a className="wordmark" href="/" title="Your projects">
+              Baesian
+            </a>
+            <span className="place" title={endpoints.hosted.name ? undefined : endpoints.hosted.project}>
+              {endpoints.hosted.name ?? "Unnamed project"}
+            </span>
+          </>
+        ) : (
+          <span className="wordmark">Baesian</span>
+        )}
         <p className="summary" aria-live="polite">
           {summary}
         </p>
-        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} touch={touch} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
+        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} touch={touch} site={!!endpoints.hosted} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
+      {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
       {panel === "held" && (

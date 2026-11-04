@@ -1,4 +1,5 @@
 import type { ApiVerdictInput } from "../../src/api";
+import { type Endpoints, postAnswer } from "./endpoints";
 
 // M4 step 5c: the undo window (D82). An answer waits here before it's sent: undo takes it back; the next answer, or
 // the page closing, sends it at once. One answer waits at a time. A plain class, so its timing is tested with fake
@@ -62,15 +63,19 @@ export class Outbox {
   }
 }
 
-/** Send a verdict to the server, with the browser's cookie. Rejects with the server's own reason. */
-export const postVerdict: Post = async (verdict, { keepalive }) => {
-  const r = await fetch("/api/verdicts", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(verdict),
-    credentials: "same-origin",
-    keepalive,
-  });
+/**
+ * Send a verdict to the server, with the browser's cookie: the local server's, or on the website the project's relay,
+ * which may ask for the passkey first (`postAnswer()`). Rejects with the server's own reason.
+ */
+export const postVerdictTo =
+  (e: Endpoints): Post =>
+  async (verdict, { keepalive }) => {
+    const r = await postAnswer(e, e.verdicts, verdict, { keepalive, client: true });
+    return posted(r);
+  };
+
+/** What a recorded answer's reply says, or the server's reason it wasn't recorded. */
+async function posted(r: Response): Promise<Posted> {
   if (r.ok) {
     const { filed } = (await r.json().catch(() => ({}))) as Posted;
     return filed?.length ? { filed } : {};
@@ -82,4 +87,4 @@ export const postVerdict: Post = async (verdict, { keepalive }) => {
     // no JSON: keep the status
   }
   throw new Error(reason);
-};
+}

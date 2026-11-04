@@ -1,10 +1,12 @@
 import { parseDoc } from "../../src/frontmatter.js";
-import { Attachment, CARD_ID, CardMeta, DeckMeta, Fallback, type FileKindName, GateRecord, NewerFormat, Waiting, Withdrawal, describeError, upgradeFile } from "../../src/schema.js";
+import { Attachment, CARD_ID, CardMeta, DeckMeta, Fallback, type FileKindName, GateRecord, NewerFormat, Preferences, RuleMeta, RuleRetirement, TopicAlias, Verdict, Waiting, Withdrawal, describeError, upgradeFile } from "../../src/schema.js";
 import type { Store } from "../../src/store.js";
 
 // What a machine may upload (Hosted Service sections 1 and 3): only the kinds of file an agent writes, each checked
 // against the store's own schema and against its path. Verdicts, rules, topic merges, preferences, signatures, the
-// relay's gate records and trust files are written only by the relay, from a person's session, and signed.
+// relay's gate records and trust files are written only by the relay, from a person's session, and signed. One bounded
+// exception (B-3zjjx): at first link, before the project's first answer on the website, a machine may upload the answers,
+// rules, topic merges and preference files from before linking, which the relay keeps unsigned and apart.
 
 const ID = CARD_ID.source.replace(/^\^|\$$/g, "");
 const SUFFIX = "[0-9a-z]+";
@@ -90,6 +92,66 @@ export const AGENT_KINDS: readonly AgentKind[] = [
   },
 ];
 
+/** What a person wrote before the repo was linked names no account or project: those come only from the website. */
+const unlinked = (f: Record<string, unknown>) => (f.account !== undefined || f.project !== undefined ? "it names an account or a project, which only an answer given on the website does" : undefined);
+/** A file named for its own time, as verdicts and preference files are (D107). */
+const namedAt = (at: string, f: Record<string, unknown>) => (typeof f.at === "string" && f.at.replace(/[-:]/g, "") === at ? undefined : `its name says ${at}, but it says ${String(f.at)}`);
+const ruleHere = (id: string, store: Store) => (store.rules().some((r) => r.meta.id === id) ? undefined : `rule ${id} isn't here yet: upload it first`);
+const RULE = `R-${SUFFIX}`;
+const AT = "\\d{8}T\\d{6}\\.\\d{3}Z";
+
+/**
+ * What a person wrote before the repo was linked, which a machine may upload at first link (B-3zjjx), while nobody has
+ * answered on the website yet. Each is checked as an upload is, and must name no account or project.
+ */
+export const BEFORE_LINKING_KINDS: readonly AgentKind[] = [
+  {
+    name: "an answer from before linking",
+    path: new RegExp(`^verdicts/(${AT})-(${ID})-r(\\d+)-${SUFFIX}\\.json$`),
+    kind: "verdict",
+    schema: Verdict,
+    check: ([, at, id, n], f, store) => unlinked(f) ?? namedAt(at!, f) ?? (f.card !== id || f.revision !== Number(n) ? `it answers ${String(f.card)} r${String(f.revision)}, but its name says ${id} r${n}` : revisionHere(id!, Number(n), store)),
+  },
+  {
+    name: "a rule from before linking",
+    path: new RegExp(`^rules/(${RULE})\\.md$`),
+    kind: "rule",
+    schema: RuleMeta,
+    doc: true,
+    check: ([, id], f) => unlinked(f) ?? (f.id === id ? undefined : `it's rule ${String(f.id)}, but its path says ${id}`),
+  },
+  {
+    name: "a rule's retirement from before linking",
+    path: new RegExp(`^rules/(${RULE})-retired\\.json$`),
+    kind: "rule-retirement",
+    schema: RuleRetirement,
+    check: ([, id], f, store) => unlinked(f) ?? (f.rule === id ? ruleHere(id!, store) : `it retires ${String(f.rule)}, but its path says ${id}`),
+  },
+  {
+    name: "a topic merge from before linking",
+    path: new RegExp(`^topics/alias-${SUFFIX}\\.json$`),
+    kind: "topic-alias",
+    schema: TopicAlias,
+    check: (_parts, f) => unlinked(f),
+  },
+  {
+    name: "a preference file from before linking",
+    path: new RegExp(`^preferences/(${AT})-${SUFFIX}\\.json$`),
+    kind: "preferences",
+    schema: Preferences,
+    check: ([, at], f) => unlinked(f) ?? namedAt(at!, f),
+  },
+];
+
+/** The kind of file from before linking a path is (B-3zjjx), or undefined: then it's no such file. */
+export function beforeLinkingKind(path: string): { kind: AgentKind; parts: string[] } | undefined {
+  for (const kind of BEFORE_LINKING_KINDS) {
+    const m = kind.path.exec(path);
+    if (m) return { kind, parts: [...m] };
+  }
+  return undefined;
+}
+
 /** The kind of agent-written file a path is, or undefined: then a machine may not upload it. */
 export function agentKind(path: string): { kind: AgentKind; parts: string[] } | undefined {
   for (const kind of AGENT_KINDS) {
@@ -104,7 +166,7 @@ export function notAgentWritten(path: string): string {
   const top = path.split("/")[0];
   const theirs = ["verdicts", "rules", "topics", "preferences", "trust"].includes(top!) || path.endsWith(".sig") || /\/gate-r\d+-relay\.json$/.test(path);
   return theirs
-    ? `${path} is a kind of file only a person writes, through the relay, which signs it: a machine never uploads one (P15 section 3)`
+    ? `${path} is a kind of file only a person writes, through the relay, which signs it: a machine never uploads one (P15 section 3), but for the answers from before linking, before anyone answers on the website (B-3zjjx)`
     : `${path} isn't a kind of file an agent writes: a machine uploads card revisions, the CLI's gate records, withdrawals, fallbacks, attachments, decks and waiting markers`;
 }
 

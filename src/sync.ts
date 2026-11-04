@@ -17,7 +17,8 @@ import type { WaitOptions } from "./wait.js";
 // marker's heartbeat. There's no daemon: the commands sync when they already touch the live layer (`syncRelay()`,
 // `aroundFiling()`, `waitWithRelay()`). Offline, or signed out, everything local works as before, and what's new goes up
 // at the next command that reaches the relay. What counts is the store's to say: in a hosted repo, only what the service
-// signed (D138), and what was in the record when the repo was linked (B-45xz8).
+// signed (D138), and what was in the record when the repo was linked (B-45xz8). Those answers from before linking go up
+// once, at first link, before anyone answers on the website (B-3zjjx).
 
 /** `relay.json` in the live layer. */
 export const RELAY_STATE = "relay.json";
@@ -318,7 +319,9 @@ function apply(store: Store, e: RelayEntry, run: Run): void {
   }
   if (e.sig !== undefined) put(store, `${rel}.sig`, Buffer.from(e.sig, "base64"), run);
   put(store, rel, bytes, run);
-  if (agentWritten(rel)) run.w.uploaded.add(rel);
+  // An answer from before linking another machine uploaded (B-3zjjx) is one the relay has: this machine counts it only
+  // where its own record at the linking commit holds it (B-45xz8).
+  if (agentWritten(rel) || e.before_linking) run.w.uploaded.add(rel);
 }
 
 /**
@@ -372,10 +375,31 @@ export function unsent(store: Store, uploaded: ReadonlySet<string>): string[] {
   return [...decks, ...revisions, ...rest].filter((p) => !uploaded.has(p));
 }
 
+/** The folders of what a person writes: answers, rules, topic merges and preference files (Hosted Service section 3). */
+const ANSWERS = ["verdicts", "rules", "topics", "preferences"];
+
 /**
- * Push what the relay doesn't have yet. A file another machine wrote first, with other bytes, is refused (409); the pull
- * that follows brings the relay's copy, and tells the agent (`put()`). Anything else refused stays here, and is offered
- * again at the next sync. Returns whether anything was refused for being written elsewhere first.
+ * Whether someone has answered on the website, as far as this machine has pulled: anything in the answers' folders with
+ * the service's signature. The relay then takes no more answers from before linking (B-3zjjx), so none are offered.
+ */
+function answeredOnWebsite(store: Store): boolean {
+  return ANSWERS.some((dir) => store.storage.list(dir).some((f) => f.endsWith(".sig")));
+}
+
+/**
+ * The answers, rules, topic merges and preference files from before linking that the relay doesn't have yet (B-3zjjx):
+ * those that count here as B-45xz8 counts them, in the order it takes them. None once someone has answered on the website.
+ */
+export function unsentBeforeLinking(store: Store, uploaded: ReadonlySet<string>): string[] {
+  if (answeredOnWebsite(store)) return [];
+  return store.answersFromBeforeLinking().filter((p) => !uploaded.has(p));
+}
+
+/**
+ * Push what the relay doesn't have yet: what agents wrote, then, at first link, the answers from before linking
+ * (B-3zjjx). A file another machine wrote first, with other bytes, is refused (409); the pull that follows brings the
+ * relay's copy, and tells the agent (`put()`). Anything else refused stays here, and is offered again at the next sync.
+ * Returns whether anything was refused for being written elsewhere first.
  */
 async function push(store: Store, client: RelayClient, run: Run): Promise<boolean> {
   const blocked = new Set<string>();
@@ -395,6 +419,22 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
     if (r.status === 503) throw new RelayError(`the relay can't take files just now (${errorOf(r)})`);
     if (r.status === 409) conflicted = true;
     else run.out.notes.push(`relay: refused ${rel} (${errorOf(r)}); it stays here, and is offered again at the next sync`);
+  }
+  for (const rel of unsentBeforeLinking(store, run.w.uploaded)) {
+    const bytes = store.storage.read(rel);
+    if (!bytes) continue;
+    const r = await client.request("PUT", `files/${encodePath(rel)}`, bytes);
+    if (r.status === 200 || r.status === 201) {
+      run.w.uploaded.add(rel);
+      run.out.pushed.push(rel);
+      continue;
+    }
+    if (r.status === 503) throw new RelayError(`the relay can't take files just now (${errorOf(r)})`);
+    if ((r.json as { before_linking?: unknown } | undefined)?.before_linking === "closed") {
+      run.out.notes.push("relay: someone has answered on the website, so the answers from before linking that hadn't gone up stay in git, where they still count (B-45xz8); the website shows their cards as waiting (B-3zjjx)");
+      break;
+    }
+    run.out.notes.push(`relay: refused ${rel}, from before linking (${errorOf(r)}); it stays here, and is offered again at the next sync`);
   }
   return conflicted;
 }

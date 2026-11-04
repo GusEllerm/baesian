@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS log (
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS pending (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS before_linking (path TEXT PRIMARY KEY);
 `;
+
+/** The folders of what a person writes: an answer, a rule, a topic merge, a preference file (Hosted Service section 3). */
+const ANSWERS = ["verdicts", "rules", "topics", "preferences"];
 
 /** Mutable files whose changes the client never needs to hear of: the reviewer's own heartbeat, as `baesian serve` ignores it. */
 const QUIET = new Set(["presence.json"]);
@@ -57,6 +61,7 @@ interface EntryRow extends Record<string, SqlStorageValue> {
   at: string;
   body: ArrayBuffer | null;
   sig: ArrayBuffer | null;
+  before_linking: number;
 }
 
 /**
@@ -70,6 +75,8 @@ export class SqlFileStorage implements Storage {
   private readonly sql: SqlStorage;
   /** The machine an upload came from, while it's written: its entry names it (D162). */
   private machine: string | undefined;
+  /** While an answer from before linking is written (B-3zjjx): unsigned, and kept apart. */
+  private early = false;
   /** What was written once since `SqlFileStorage.mark`, in order. */
   private written: string[] = [];
 
@@ -105,7 +112,8 @@ export class SqlFileStorage implements Storage {
         if (/UNIQUE constraint failed/.test(e instanceof Error ? e.message : String(e))) throw new FileExists(path);
         throw e;
       }
-      const sig = this.opts.sign?.(path, bytes);
+      const sig = this.early ? undefined : this.opts.sign?.(path, bytes);
+      if (this.early) this.sql.exec("INSERT INTO before_linking (path) VALUES (?)", path);
       if (sig !== undefined) this.sql.exec("INSERT INTO files (path, bytes, once) VALUES (?, ?, 1)", `${path}${SIG}`, blob(new TextEncoder().encode(sig)));
       this.sql.exec(
         "INSERT INTO log (path, format, size, digest, machine, at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -156,6 +164,35 @@ export class SqlFileStorage implements Storage {
     } finally {
       this.machine = outer;
     }
+  }
+
+  /**
+   * Write what a person wrote before the repo was linked, as a machine uploaded it at first link (B-3zjjx): never signed,
+   * and kept apart, in `before_linking`, so its entry says so and the relay's store counts it as B-45xz8 does.
+   */
+  asBeforeLinking<T>(fn: () => T): T {
+    const outer = this.early;
+    this.early = true;
+    try {
+      return fn();
+    } finally {
+      this.early = outer;
+    }
+  }
+
+  /** The files written as from before linking (B-3zjjx). */
+  beforeLinking(): Set<string> {
+    return new Set(this.sql.exec<{ path: string }>("SELECT path FROM before_linking").toArray().map((r) => r.path));
+  }
+
+  /**
+   * Whether a person has answered here on the website: anything in their folders that the relay signed. Until then, a
+   * machine may upload the answers from before linking (B-3zjjx); after it, never.
+   */
+  answered(): boolean {
+    const ranges = ANSWERS.map(() => "(path >= ? AND path < ?)").join(" OR ");
+    const args = ANSWERS.flatMap((d) => [`${d}/`, `${d}0`]);
+    return this.sql.exec(`SELECT 1 AS x FROM files WHERE path LIKE '%${SIG}' AND (${ranges}) LIMIT 1`, ...args).toArray().length > 0;
   }
 
   /** Start noting what's written once; `SqlFileStorage.writtenSince` gives it back. */
@@ -218,8 +255,8 @@ export class SqlFileStorage implements Storage {
   private entries(where: string, args: SqlStorageValue[], limit: number): RelayEntry[] {
     const rows = this.sql
       .exec<EntryRow>(
-        `SELECT l.seq, l.path, l.format, l.size, l.digest, l.machine, l.at, f.bytes AS body, s.bytes AS sig
-         FROM log l LEFT JOIN files f ON f.path = l.path LEFT JOIN files s ON s.path = l.path || '${SIG}'
+        `SELECT l.seq, l.path, l.format, l.size, l.digest, l.machine, l.at, f.bytes AS body, s.bytes AS sig, b.path IS NOT NULL AS before_linking
+         FROM log l LEFT JOIN files f ON f.path = l.path LEFT JOIN files s ON s.path = l.path || '${SIG}' LEFT JOIN before_linking b ON b.path = l.path
          ${where} ORDER BY l.seq LIMIT ?`,
         ...args,
         limit,
@@ -235,6 +272,7 @@ export class SqlFileStorage implements Storage {
         ...(r.body ? { body: Buffer.from(r.body).toString("base64") } : {}),
         ...(r.sig ? { sig: Buffer.from(r.sig).toString("base64") } : {}),
         ...(r.machine ? { machine: r.machine } : {}),
+        ...(r.before_linking ? { before_linking: true } : {}),
         at: r.at,
       }),
     );

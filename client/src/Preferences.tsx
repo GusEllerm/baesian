@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { type Endpoints, postAnswer, useEndpoints } from "./endpoints";
 import type { ApiPreferenceFile, ApiPresets, ApiRouting } from "../../src/api";
 import type { ReplayCard, Settings } from "../../src/routing";
 import { Panel } from "./Panels";
@@ -33,10 +34,11 @@ import {
 /** The presets, the rows and the setup survey (`GET /api/presets`), read when needed and again whenever the record changes. */
 export function usePresets(active: boolean, version: number): ApiPresets | undefined {
   const [presets, setPresets] = useState<ApiPresets>();
+  const url = useEndpoints().presets;
   useEffect(() => {
     if (!active) return;
     let stopped = false;
-    fetch("/api/presets", { credentials: "same-origin" })
+    fetch(url, { credentials: "same-origin" })
       .then((r) => (r.ok ? (r.json() as Promise<ApiPresets>) : Promise.reject(new Error(`the server answered ${r.status}`))))
       .then((p) => !stopped && setPresets(p))
       .catch(() => {
@@ -45,14 +47,17 @@ export function usePresets(active: boolean, version: number): ApiPresets | undef
     return () => {
       stopped = true;
     };
-  }, [active, version]);
+  }, [active, version, url]);
   return presets;
 }
 
-/** Send a change to the preferences. Resolves with the new file, or says why not: "stale" is the server's 409. */
-export async function postPreferences(change: ReturnType<typeof changeOf>): Promise<{ ok: ApiPreferenceFile } | { stale: string } | { error: string }> {
+/**
+ * Send a change to the preferences. Resolves with the new file, or says why not: "stale" is the server's 409. On the
+ * website, a change that lets more cards past you asks for the passkey first (D163, `postAnswer()`).
+ */
+export async function postPreferences(e: Endpoints, change: ReturnType<typeof changeOf>): Promise<{ ok: ApiPreferenceFile } | { stale: string } | { error: string }> {
   try {
-    const r = await fetch("/api/preferences", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(change), credentials: "same-origin" });
+    const r = await postAnswer(e, e.preferences, change, { client: true });
     const body = (await r.json().catch(() => ({}))) as { error?: string } & Partial<ApiPreferenceFile>;
     if (r.status === 201) return { ok: body as ApiPreferenceFile };
     if (r.status === 409) return { stale: body.error ?? "the preferences have changed" };
@@ -78,6 +83,7 @@ export function PreferencesPanel(p: {
   onClose: () => void;
 }) {
   const { routing } = p;
+  const endpoints = useEndpoints();
   const [base, setBase] = useState<{ name: string | undefined; settings: Settings }>(() => ({ name: replacesOf(routing), settings: routing.settings }));
   const [draft, setDraft] = useState<Draft>(() => p.initial ?? draftOf(routing.settings));
   const [reason, setReason] = useState("");
@@ -101,7 +107,7 @@ export function PreferencesPanel(p: {
 
   const save = async () => {
     setStatus({ kind: "saving" });
-    const result = await postPreferences(changeOf(draft, base.name, reason));
+    const result = await postPreferences(endpoints, changeOf(draft, base.name, reason));
     if ("ok" in result) {
       setBase({ name: result.ok.name, settings: { ...base.settings, mode: draft.mode, rows: draft.rows } });
       setDraft(draftOf({ ...base.settings, mode: draft.mode, rows: draft.rows }));
