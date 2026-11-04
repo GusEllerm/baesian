@@ -373,12 +373,12 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Counts.tsx"
-sig = "59d4b94e75ded49e"
+sig = "b44b75b17b504210"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -393,7 +393,12 @@ sig = "7476218bd3cd1b97"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Page.tsx"
-sig = "f954ebec4e34ac90"
+sig = "1d997822d13a1544"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/site/Privacy.tsx"
+sig = "02ad56652f552a72"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -418,12 +423,12 @@ sig = "ba8416b3d107ab53"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/SignUp.tsx"
-sig = "edecaafbdc7ace8e"
+sig = "309c1ef1362f1ceb"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Site.tsx"
-sig = "7bf77499cbec6ba4"
+sig = "67e70f4354f508b8"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -948,7 +953,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1863,7 +1868,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2228,12 +2233,17 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/Device.tsx"
 sig = "213385323054c627"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "client/src/site/Privacy.tsx"
+sig = "02ad56652f552a72"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2748,7 +2758,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -3067,6 +3077,11 @@ sig = "de6a8263773b5276"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
+target = "client/src/site/Privacy.tsx"
+sig = "02ad56652f552a72"
+
+[[bindings]]
+doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/access.ts#SESSION_COOKIE"
 sig = "403a6792222deb2d"
 
@@ -3118,12 +3133,12 @@ sig = "bdb6b6d4e9ea6805"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/retention.ts"
-sig = "f7bc0a22ab108788"
+sig = "cb9fba4243351812"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/retention.ts#RETENTION"
-sig = "40d5ec0d02595d01"
+sig = "f48df2a05a9b6e50"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -3553,7 +3568,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -3948,7 +3963,7 @@ sig = "8b6bbedbe69862ea"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/retention.ts#RETENTION"
-sig = "40d5ec0d02595d01"
+sig = "f48df2a05a9b6e50"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5438,7 +5453,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/site/Account.tsx"
-sig = "2c89a089f642e52b"
+sig = "7960fd325d88976f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

@@ -186,6 +186,9 @@ export function SignUp({ onIn }: { onIn: () => Promise<void> }) {
         <p className="small after">
           Have an account? <To to="/sign-in">Sign in</To>.
         </p>
+        <p className="small">
+          What the service keeps about you, why, and for how long: <To to="/privacy">the privacy policy</To>.
+        </p>
       </Sheet>
     </Shell>
   );

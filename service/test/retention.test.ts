@@ -125,9 +125,11 @@ describe("the rules, as pure functions", () => {
     expect(due({ ended: "held", delivered: false, deliveredAt: undefined, arrived: t }, t + 90 * DAY - 1)).toBe(false);
     expect(due({ ended: "held", delivered: false, deliveredAt: undefined, arrived: t }, t + 90 * DAY)).toBe(true);
     expect(due({ ended: undefined, delivered: true, deliveredAt: t, arrived: t }, t + 1000 * DAY)).toBe(false);
-    // Withdrawn cards keep their text until B-dsqyd is answered.
-    expect(RETENTION.withdrawnMs).toBeNull();
-    expect(due({ ended: "withdrawn", delivered: true, deliveredAt: t, arrived: t }, t + 1000 * DAY)).toBe(false);
+    // A withdrawn card, as an answered one (B-dsqyd).
+    expect(RETENTION.withdrawnMs).toBe(30 * DAY);
+    expect(due({ ended: "withdrawn", delivered: true, deliveredAt: t, arrived: t }, t + 30 * DAY - 1)).toBe(false);
+    expect(due({ ended: "withdrawn", delivered: true, deliveredAt: t, arrived: t }, t + 30 * DAY)).toBe(true);
+    expect(due({ ended: "withdrawn", delivered: false, deliveredAt: t, arrived: t }, t + 1000 * DAY)).toBe(false);
   });
 });
 
@@ -269,23 +271,31 @@ describe("what a machine sends for a card whose text went", () => {
   });
 });
 
-describe("cards that keep their text", () => {
-  it("an open card, a returned one and a withdrawn one keep it, however long (B-ec3kj; withdrawn until B-dsqyd)", async () => {
+describe("cards that keep their text, and a withdrawn one (B-dsqyd)", () => {
+  it("an open card and a returned one keep it, however long; a withdrawn one goes 30 days after the withdrawal is delivered", async () => {
     const o = await owner();
     const t0 = now;
     const open = await file(o);
     const returned = await file(o);
-    const withdrawn = await file(o);
+    const withdrawn = await file(o, { title: "A plan given up" });
     await answer(o, { card: returned, response: "question", comment: "Which machines write runs?" });
     o.store.withdraw(withdrawn, "superseded by another plan", "claude-code");
     await upload(o, withdrawn);
     await pull(o);
-    await sweep(o);
+    expect(await sweep(o)).toEqual([]);
+    at(t0 + 30 * DAY - MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([]);
+    at(t0 + 30 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([withdrawn]);
     at(t0 + 400 * DAY);
     await keepSignedIn(o);
     expect(await sweep(o)).toEqual([]);
     const s = await state(o);
-    expect(Object.fromEntries(s.cards.map((c) => [c.meta.id, c.status]))).toEqual({ [open]: "open", [returned]: "returned", [withdrawn]: "withdrawn" });
+    expect(Object.fromEntries(s.cards.map((c) => [c.meta.id, c.status]))).toEqual({ [open]: "open", [returned]: "returned" });
+    expect(s.removed).toEqual([expect.objectContaining({ id: withdrawn, ended: "withdrawn" })]);
+    expect(JSON.stringify(s)).not.toContain("A plan given up");
   });
 });
 

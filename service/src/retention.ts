@@ -2,8 +2,9 @@ import type { ApiRemovedCard } from "../../src/api.js";
 import type { AnyRow } from "../../src/routing.js";
 import { CARD_ID, type GateRecord, type Level } from "../../src/schema.js";
 
-// How long a card's text stays on the relay (M9f), as cards B-9jqt4 ("Keep it 30 days after delivery") and B-ec3kj ("90
-// days, then only its metadata") decided, and D137 ("card text deleted once it's answered"). The relay keeps each
+// How long a card's text stays on the relay (M9f), as cards B-9jqt4 ("Keep it 30 days after delivery"), B-ec3kj ("90
+// days, then only its metadata") and B-dsqyd ("30 days after delivery, as answered") decided, and D137 ("card text
+// deleted once it's answered"); the rule R-1sxpy says the same for every card that's settled, answered or withdrawn. The relay keeps each
 // project's log for good, every entry with its path, size, digest, machine and time; what goes is the files' bytes, so
 // an entry is sent without its body (P16 section 8). Each project's object checks once a day, at its alarm, and keeps
 // what it needs for that in tables of its own (`RetentionLedger`). docs/vault/Modules/service.md describes it.
@@ -16,7 +17,7 @@ export interface Retention {
   answeredMs: number;
   /** A card held back and never answered loses its text this long after its latest revision arrived. */
   heldMs: number;
-  /** A withdrawn card's text, this long after delivery; null keeps it while the project exists (B-dsqyd, unanswered). */
+  /** A withdrawn card's text goes this long after it was delivered, as an answered card's (B-dsqyd); null would keep it. */
   withdrawnMs: number | null;
   /** How often each project's object looks. */
   everyMs: number;
@@ -25,7 +26,7 @@ export interface Retention {
 export const RETENTION: Retention = {
   answeredMs: 30 * DAY,
   heldMs: 90 * DAY,
-  withdrawnMs: null,
+  withdrawnMs: 30 * DAY,
   everyMs: DAY,
 };
 
@@ -46,7 +47,7 @@ export function cardOfPath(path: string): string | undefined {
 
 /**
  * Whether a card's text goes now: an answered card once it's delivered and `answeredMs` has passed since; a withdrawn
- * one likewise, if B-dsqyd's period is set; a held one `heldMs` after its latest revision arrived, delivered or not.
+ * one likewise, `withdrawnMs` after (B-dsqyd); a held one `heldMs` after its latest revision arrived, delivered or not.
  * Anything else, a card in the queue, returned, passed on or deferred, keeps its text (B-ec3kj).
  */
 export function due(c: { ended: Ended | undefined; delivered: boolean; deliveredAt: number | undefined; arrived: number }, now: number, r: Retention = RETENTION): boolean {

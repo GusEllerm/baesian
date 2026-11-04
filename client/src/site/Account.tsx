@@ -275,6 +275,9 @@ function UsageCounts({ counted, reload }: { counted: boolean; reload: () => Prom
       <p className="small">
         <To to="/counts">Every field it counts, and what it never does</To>
       </p>
+      <p className="small">
+        <To to="/privacy">Everything the service keeps, and why</To>
+      </p>
     </Sheet>
   );
 }

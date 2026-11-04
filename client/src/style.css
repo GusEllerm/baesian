@@ -568,6 +568,13 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 .count-kind dd { margin: 0; font: var(--t-body); font-size: 15px; }
 .count-kind dd code { font: 600 0.86em/1 var(--ui); }
 .counts-never { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font: var(--t-body); font-size: 16px; }
+/* the privacy policy (/privacy): lists in a sheet, as /counts has them, and the site's footer on every page */
+.site-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 56ch; font: var(--t-body); font-size: 16px; }
+.site-list code, .site-sheet p a, .site-list a { overflow-wrap: anywhere; }
+.site-list code { font: 600 0.92em/1 var(--ui); }
+.site-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; max-width: 580px; margin: 30px auto 0; }
+.site-foot a { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 2px; }
+.site-foot a:hover { color: var(--ink); }
 /* the project's page, when a machine's cards don't notify for a while (a burst) */
 .desk-notice { margin: 0 0 6px; padding: 8px 12px; border-radius: 8px; background: #fbecc8; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink); }
 
@@ -598,6 +605,8 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
   .site-row .end { height: 44px; }
   .push-install .switch { align-self: stretch; }
   .count-kind dl > div { grid-template-columns: minmax(0, 1fr); }
+  .site-foot { margin-top: 22px; }
+  .site-foot a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
   .desk-notice { margin: 0 0 6px; }
   .once-row { flex-direction: column; align-items: stretch; }
   .once-row .switch { min-height: 44px; }
