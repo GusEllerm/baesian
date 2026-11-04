@@ -15,7 +15,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-11-03.*
+*As of 2026-11-04.*
+
+- **M9c, accounts and sign-in, is built on the service's side (2026-11-04)** ([[service]], [[2026-11-04 M9c Sign-in]]): accounts in one D1 database; sign-up with an email code and a passkey, or through Globus (D176); passkey sign-in with SimpleWebAuthn, whose premise held in workerd; recovery with an emailed code and a saved recovery code; sign-ins of 30 days unused that keep no addresses; machine grants through OAuth's device flow (B-t5wxr); Turnstile and limits; the relay's `Access` for real; and answers proved by the reviewer's passkey, so the relay can hold cards back. 95 tests in workerd, 532 root unit tests and 69 browser tests pass. On its builder's branch, for merging into `v1/next`. Next: M9d, `baesian login` and the CLI's sync; M9e, the website's pages.
 
 - **v1 is being built, on the branch `v1/next` (2026-11-03):** the overnight branch is merged into `main`. Built and merged into `v1/next`: **M6, the vault adapter** (on in this repo: decisions made on cards are notes in `Decisions/`, with no new D-rows, D174), **M7, the MCP server**, **format numbers in every file** (D156, D157), the deck briefing card, and privacy as a fact of its own. **M8, routing and preferences**, is merged too: the gate at filing, held cards, audits, slider and convention proposals, the preferences panel and the setup survey. From **M9, the hosted service**: the phone layout (D130), and **M9a, answers that count**, checked offline, with its three follow-ups (signed files name their project, answers their card's digest, and fewer audits take the passkey). Baesian's own hook block no longer needs acks in a repo's first commit (B-g6ywj). **M9b, the relay, is built** ([[service]]): a Worker with a Durable Object per project, running the same store over SQLite, with live updates over hibernating WebSockets; sign-in is a seam until M9c. 532 root unit tests, 117 relay and store tests in Cloudflare's runtime, and 69 browser tests pass. Next: M9c, accounts and sign-in: [[2026-11-03 v1 Designs]].
 

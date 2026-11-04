@@ -1,6 +1,7 @@
 {
-  // Baesian's hosted relay (M9b): a Worker that routes /v1/projects/{project}/… to that project's Durable Object (D140,
-  // B-7z97x). docs/vault/Modules/service.md describes it. Nothing here is deployed yet (M9f): `npm run dev` runs it locally.
+  // Baesian's hosted service: the relay (M9b), a Worker that routes /v1/projects/{project}/… to that project's Durable
+  // Object (D140, B-7z97x), and accounts and sign-in (M9c), in one D1 database (B-ytdt2). docs/vault/Modules/service.md
+  // describes it. Nothing here is deployed yet (M9f): `npm run dev` runs it locally, with no Cloudflare account.
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "baesian-relay",
   "main": "src/index.ts",
@@ -10,6 +11,17 @@
     "bindings": [{ "name": "PROJECTS", "class_name": "ProjectRelay" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectRelay"] }],
+  // Accounts, passkeys, sign-ins, machine grants and the projects' owners (B-ytdt2). Its ID comes when M9f creates it.
+  "d1_databases": [{ "binding": "ACCOUNTS", "database_name": "baesian-accounts", "migrations_dir": "migrations" }],
+  // Codes and notices by email, through Cloudflare's Email Sending (B-pvye0). Locally it's simulated: logged, and saved
+  // to a file.
+  "send_email": [{ "name": "EMAIL" }],
+  // Limits on sign-in's requests (B-mz6qc): per network address, which is used in passing and never stored (B-7bq05),
+  // and per email address. Each counts per Cloudflare location, over a minute.
+  "ratelimits": [
+    { "name": "LIMIT_ADDRESS", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LIMIT_EMAIL", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } }
+  ],
   "vars": {
     // Who signs: the service key's ID, the website's origin and WebAuthn relying party, and when the key became valid
     // (P16 section 7). The private key is the secret SERVICE_SIGNING_KEY, never in this file.
@@ -17,8 +29,17 @@
     "SERVICE_ORIGIN": "https://baesian.test",
     "SERVICE_RP_ID": "baesian.test",
     "SERVICE_KEY_VALID_AFTER": "2026-11-01T00:00:00.000Z",
-    // Deployed, the relay is production: it refuses every request until M9c's sign-in is built. Only a local run
-    // (.dev.vars) or the tests switch on the stand-in for sign-in.
+    // The address codes and notices come from, on a domain onboarded to Email Sending (M9f).
+    "EMAIL_FROM": "sign-in@baesian.test",
+    // Turnstile's site key, for the website's widget (B-1a03b). This is Cloudflare's published test key, which always
+    // passes; M9f puts the real one here, and its secret in TURNSTILE_SECRET.
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    // Sign-in through Globus (D153, B-s76hg). Off until the app is registered at app.globus.org (M9f) and its client ID
+    // is given here, with its secret in GLOBUS_CLIENT_SECRET.
+    "GLOBUS_ISSUER": "https://auth.globus.org",
+    "GLOBUS_CLIENT_ID": "",
+    // Deployed, the service is production: only real sign-ins count. A local run (.dev.vars) or the tests also switch
+    // on the stand-in for sign-in, and answer Turnstile's test keys without a network.
     "BAESIAN_ENV": "production"
   }
 }

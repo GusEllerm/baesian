@@ -1499,7 +1499,8 @@ export class Store {
     if (!row || !from || !to || v.response !== "accept") return;
     const force = this.inForce();
     if (force.settings.rows[row] !== from) return;
-    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), client: v.client, from_card: card.meta.id });
+    // At the answer's own time, so an answer written again at that time (the relay's, after the passkey) writes the same bytes.
+    this.writePreferences({ replaces: force.name, [`row_${row}`]: to }, { by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), client: v.client, from_card: card.meta.id, at: v.at });
   }
 
   // ---------------------------------------------------------------- preferences (D147)

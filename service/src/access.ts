@@ -1,27 +1,40 @@
 import { AccountId, ProjectId } from "../../src/schema.js";
+import { type Accounts, LIMITS, type Session } from "./accounts.js";
+import { same } from "./secret.js";
 
-// Who may do what on the relay (Hosted Service section 3), before sign-in exists. Accounts, sessions and machine grants
-// are M9c's: it implements `Access`. Until then, `accessFor()` gives a stand-in that exists only for local development
-// and the tests, and in production a relay that refuses everything.
+// Who may do what on the service (Hosted Service section 3). A person signs in in a browser and holds a session cookie;
+// a machine holds a grant's bearer token (B-84e0d). `accountAccess()` reads both from the accounts database (M9c). The
+// stand-in for sign-in from M9b, fixed tokens and cookies, still runs beside it, locally and in the tests only.
 
 /**
- * Who's asking, as sign-in says (M9c). Each session and each machine grant is for one project (P15 section 3).
+ * Who's asking. Each machine grant is for one project (B-84e0d); a session is a person's, and is for the project an
+ * address names only if their account may answer there.
  * - a **session**: a person signed in in a browser, with a cookie made by a passkey sign-in. Only a session answers.
  * - a **machine**: a grant made by `baesian login` on one machine, sent as a bearer token. It files and hears; it never answers.
  */
 export type Principal =
-  | { kind: "session"; account: string; handle: string; project: string }
-  | { kind: "machine"; machine: string; account: string; project: string };
+  | { kind: "session"; account: string; handle: string; project: string | undefined; session?: Session }
+  | { kind: "machine"; machine: string; account: string; project: string; grant?: string };
 
-/** What sign-in gives the relay: who a request is from, or nobody. M9c implements it. */
+/** What sign-in gives the relay: who a request is from, or nobody. */
 export interface Access {
-  /** A name for what's in use, for messages: "M9c", "the stand-in", "none". */
+  /** A name for what's in use, for messages. */
   readonly name: string;
-  identify(request: Request): Promise<Principal | undefined>;
+  /** Who a request is from; for a session, whether it may answer in `project`, the project the address names. */
+  identify(request: Request, project?: string): Promise<Principal | undefined>;
 }
 
-/** The session cookie (P15 section 3): `__Host-`, so it's Secure, host-only and for the whole site. */
+/** The session cookie (Hosted Service section 3): `__Host-`, so it's Secure, host-only and for the whole site. */
 export const SESSION_COOKIE = "__Host-baesian-session";
+
+/**
+ * The session cookie's header (Hosted Service section 3, B-vtr1r): Secure, HttpOnly, SameSite=Strict so no other site's
+ * page sends it, for the whole site, and gone after 90 days whatever happens; the service ends it sooner after 30 days unused.
+ */
+export const sessionCookie = (value: string): string => `${SESSION_COOKIE}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(LIMITS.sessionMaxMs / 1000)}`;
+
+/** A cookie's header that removes it. */
+export const clearCookie = (name: string): string => `${name}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`;
 
 /** The bearer token in an `Authorization` header, if there is one. */
 export function bearer(request: Request): string | undefined {
@@ -38,22 +51,65 @@ export function cookie(request: Request, name: string): string | undefined {
   return undefined;
 }
 
-/** Two secrets compared in time that doesn't depend on where they differ. */
-function same(a: string, b: string): boolean {
-  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
-  if (x.length !== y.length) return false;
-  let d = 0;
-  for (let i = 0; i < x.length; i++) d |= x[i]! ^ y[i]!;
-  return d === 0;
+/**
+ * Why a browser's request may come from another site, or nothing (Hosted Service section 3). SameSite keeps the cookie
+ * off other sites' requests in today's browsers; this refuses them outright, as the fetch metadata and `Origin` say.
+ * A request that changes something must name the site's own origin; one that only reads may also come with no
+ * `Origin` (a navigation, or a tool such as curl), but never from another site.
+ */
+export function crossSite(request: Request, origin: string): string | undefined {
+  const site = request.headers.get("sec-fetch-site");
+  if (site !== null && site !== "same-origin" && site !== "none") return `a request from another site (${site}) is refused: the website's own pages call the service`;
+  const from = request.headers.get("origin");
+  if (from !== null && from !== origin) return `a request from ${from} is refused: only ${origin}'s own pages call the service`;
+  const reads = request.method === "GET" || request.method === "HEAD";
+  if (!reads && from === null) return `a request that changes something must say where it's from (Origin: ${origin})`;
+  return undefined;
 }
 
-/** No sign-in: nobody is anyone, so every request is refused. Production's, until M9c. */
+/** No sign-in at all: nobody is anyone, so every request is refused. What the relay has with no accounts database. */
 export const NO_ACCESS: Access = {
   name: "none",
   async identify() {
     return undefined;
   },
 };
+
+/**
+ * Sign-in from the accounts database (M9c): a bearer token is a machine's grant if its access token is good (B-84e0d);
+ * otherwise the session cookie is a person's sign-in if it's good (B-vtr1r). With an `Authorization` header, only the
+ * header counts, so a machine's request never passes as a person's.
+ */
+export function accountAccess(accounts: Accounts): Access {
+  return {
+    name: "sign-in",
+    async identify(request, project) {
+      if (request.headers.has("authorization")) {
+        const t = bearer(request);
+        const g = t ? await accounts.grantByAccess(t) : undefined;
+        return g && { kind: "machine", machine: g.machine, account: g.account, project: g.project, grant: g.id };
+      }
+      const s = await accounts.session(cookie(request, SESSION_COOKIE));
+      if (!s) return undefined;
+      const member = project !== undefined && (await accounts.member(s.account, project));
+      return { kind: "session", account: s.account, handle: s.handle, project: member ? project : undefined, session: s };
+    },
+  };
+}
+
+/** The first of several ways in that knows who's asking. */
+export function eitherOf(...ways: Access[]): Access {
+  return {
+    name: ways.map((w) => w.name).join(", or "),
+    async identify(request, project) {
+      for (const w of ways) {
+        const who = await w.identify(request, project);
+        if (who) return who;
+      }
+      return undefined;
+    },
+  };
+}
 
 /**
  * The stand-in's grants, from `BAESIAN_DEV_ACCESS` (local development and tests only): fixed machine tokens and session
@@ -77,8 +133,8 @@ export function readGrants(json: string): DevGrants {
 }
 
 /**
- * The stand-in for sign-in: a bearer token names a machine, the session cookie a person. With an `Authorization` header,
- * only the header counts, so a machine's request never passes as a person's.
+ * The stand-in for sign-in: a bearer token names a machine, the session cookie a person, each for one project. With an
+ * `Authorization` header, only the header counts.
  */
 export function devAccess(grants: DevGrants): Access {
   return {
@@ -103,14 +159,16 @@ export interface AccessEnv {
   BAESIAN_DEV_ACCESS?: string;
 }
 
-/** Whether this relay runs locally or in tests: only then may the stand-in run. Unset means production. */
+/** Whether the service runs locally or in tests: only then may the stand-in run. Unset means production. */
 export const isLocal = (env: AccessEnv) => env.BAESIAN_ENV === "development" || env.BAESIAN_ENV === "test";
 
 /**
- * The relay's sign-in. Until M9c builds the real one, production refuses everything (`NO_ACCESS`), and only a local run
- * or the tests, with grants given, get the stand-in.
+ * The service's sign-in: the accounts database's (`accountAccess()`), and, only locally or in the tests with grants
+ * given, the stand-in beside it. With no accounts database, nobody is anyone (`NO_ACCESS`), but the stand-in's.
  */
-export function accessFor(env: AccessEnv): Access {
-  if (!isLocal(env) || !env.BAESIAN_DEV_ACCESS) return NO_ACCESS;
-  return devAccess(readGrants(env.BAESIAN_DEV_ACCESS));
+export function accessFor(env: AccessEnv, accounts?: Accounts): Access {
+  const real = accounts ? accountAccess(accounts) : undefined;
+  const dev = isLocal(env) && env.BAESIAN_DEV_ACCESS ? devAccess(readGrants(env.BAESIAN_DEV_ACCESS)) : undefined;
+  if (real && dev) return eitherOf(dev, real);
+  return real ?? dev ?? NO_ACCESS;
 }

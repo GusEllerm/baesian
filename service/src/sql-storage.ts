@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS log (
   at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pending (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires TEXT NOT NULL);
 `;
 
 /** Mutable files whose changes the client never needs to hear of: the reviewer's own heartbeat, as `baesian serve` ignores it. */
@@ -183,6 +184,20 @@ export class SqlFileStorage implements Storage {
 
   setMeta(key: string, value: string): void {
     this.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", key, value);
+  }
+
+  /** An answer composed and waiting for the reviewer's passkey (D139, D163): kept apart from the live layer, briefly. */
+  putPending(id: string, value: string, expires: string): void {
+    this.sql.exec("DELETE FROM pending WHERE expires < ?", new Date().toISOString());
+    this.sql.exec("INSERT OR REPLACE INTO pending (id, value, expires) VALUES (?, ?, ?)", id, value, expires);
+  }
+
+  pending(id: string): string | undefined {
+    return this.sql.exec<{ value: string }>("SELECT value FROM pending WHERE id = ? AND expires > ?", id, new Date().toISOString()).toArray()[0]?.value;
+  }
+
+  dropPending(id: string): void {
+    this.sql.exec("DELETE FROM pending WHERE id = ?", id);
   }
 
   /** The last sequence number given, or 0. */

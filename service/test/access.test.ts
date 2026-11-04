@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { NO_ACCESS, SESSION_COOKIE, accessFor, isLocal } from "../src/access.js";
+import { Accounts } from "../src/accounts.js";
 import { type Env, handleRequest } from "../src/index.js";
 import { BASE, answer, call, fileCard, grants, headersFor, machineStore, push, upload } from "./client.js";
 
@@ -74,8 +75,8 @@ async function exports_fetch(path: string): Promise<Response> {
   return handleRequest(new Request(`${BASE}${path}`, { headers: headersFor("person") }), env as unknown as Env);
 }
 
-describe("before sign-in is built (M9c)", () => {
-  it("runs the stand-in only locally or in tests, and only with grants given", () => {
+describe("the stand-in beside sign-in, and production (M9c)", () => {
+  it("runs the stand-in only locally or in tests, and only with grants given; production has only real sign-ins", () => {
     expect(isLocal({ BAESIAN_ENV: "test" })).toBe(true);
     expect(isLocal({ BAESIAN_ENV: "development" })).toBe(true);
     expect(isLocal({ BAESIAN_ENV: "production" })).toBe(false);
@@ -84,9 +85,12 @@ describe("before sign-in is built (M9c)", () => {
     expect(accessFor({ BAESIAN_ENV: "production", BAESIAN_DEV_ACCESS: env.BAESIAN_DEV_ACCESS! })).toBe(NO_ACCESS);
     expect(accessFor({ BAESIAN_DEV_ACCESS: env.BAESIAN_DEV_ACCESS! })).toBe(NO_ACCESS);
     expect(accessFor({ BAESIAN_ENV: "test", BAESIAN_DEV_ACCESS: env.BAESIAN_DEV_ACCESS! })).not.toBe(NO_ACCESS);
+    const accounts = new Accounts(env.ACCOUNTS);
+    expect(accessFor({ BAESIAN_ENV: "production", BAESIAN_DEV_ACCESS: env.BAESIAN_DEV_ACCESS! }, accounts).name).toBe("sign-in");
+    expect(accessFor({ BAESIAN_ENV: "test", BAESIAN_DEV_ACCESS: env.BAESIAN_DEV_ACCESS! }, accounts).name).toMatch(/stand-in.*, or sign-in/);
   });
 
-  it("refuses everything in production, whatever the request holds, even the stand-in's own grants", async () => {
+  it("refuses everything in production that sign-in can't identify, the stand-in's own grants included", async () => {
     const production = { ...(env as unknown as Env), BAESIAN_ENV: "production" };
     const requests = [
       ["GET", "state", "machine"],
@@ -104,7 +108,7 @@ describe("before sign-in is built (M9c)", () => {
       );
       const s = await status(r);
       expect(s.status, `${method} ${path}`).toBe(401);
-      expect(s.error).toMatch(/sign-in isn't built yet \(M9c\)/);
+      expect(s.error).toMatch(/not signed in/);
     }
   });
 });

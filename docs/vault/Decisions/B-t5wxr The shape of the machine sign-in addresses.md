@@ -1,0 +1,70 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "The shape of the machine sign-in addresses: OAuth's standard endpoints (B-t5wxr)."
+created: 2026-11-04
+updated: 2026-11-04
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-t5wxr
+card: B-t5wxr
+revision: 1
+title: The shape of the machine sign-in addresses
+question: Should a machine get and refresh its grant through OAuth's standard endpoints (RFC 8628's device flow, form-encoded, with OAuth's error codes), or through JSON addresses in the relay's own style?
+answer: OAuth's standard endpoints
+response: accept
+not_chosen:
+  - JSON in the relay's style
+answered: 2026-11-04T15:04:18.081Z
+answered_by: Gus Ellerm
+topic: hosted/machine-grant-api
+deck: branch-worktree-agent-a0d5a6ea839febbd1
+level: blocking
+reverse: cheap
+touches:
+  - public-api
+filed: 2026-11-04T15:04:00.548Z
+filed_by: claude-code
+branch: worktree-agent-a0d5a6ea839febbd1
+---
+
+# The shape of the machine sign-in addresses
+
+Should a machine get and refresh its grant through OAuth's standard endpoints (RFC 8628's device flow, form-encoded, with OAuth's error codes), or through JSON addresses in the relay's own style?
+
+**Decided:** OAuth's standard endpoints, the agent's pick. POST /v1/machines/device and POST /v1/machines/token follow RFC 8628 and RFC 6749: form-encoded requests, OAuth's error codes (authorization_pending, slow_down, expired_token, access_denied, invalid_grant), refresh tokens that rotate. POST /v1/machines/revoke follows RFC 7009. Any OAuth device-flow client can sign in; M9d's CLI writes the few requests itself.
+
+**Not chosen:** JSON in the relay's style. The same steps as JSON requests and replies, with errors as { error } and HTTP statuses as the relay gives them. One style across the service; nothing outside Baesian can use the endpoints without reading its docs.
+
+**It turned on:** Should anything other than Baesian's own CLI be able to sign a machine in? It may: OAuth's standard endpoints. Only Baesian's CLI: JSON in the relay's style.
+
+**The fact given:** A machine's grant is one per machine and project (B-84e0d); it files cards and hears answers, and never answers (Hosted Service section 3). P15 section 2 names the device authorization grant (RFC 8628), single-use refresh tokens that rotate, and revocation. The website's own sign-in addresses are JSON either way. Before v1, interfaces change freely (D108).
+
+**The agent's case:** The device flow is a standard with a fixed request and error vocabulary; following it costs nothing extra on the service, lets M9d test its client against a known shape, and leaves room for other clients (an IDE plugin, a CI job) later.
+
+**Wrong if:** M9d finds the form-encoded requests or OAuth's error vocabulary awkward enough that the CLI wraps them in its own layer anyway. **To check:** When M9d builds baesian login, count the lines spent adapting to the form; compare with the relay's JSON calls.
+
+Answered by Gus Ellerm on 2026-11-04, through Baesian (card B-t5wxr, revision 1). Filed by claude-code on worktree-agent-a0d5a6ea839febbd1, in the deck “Decisions on worktree-agent-a0d5a6ea839febbd1”.
+
+The record is in `.baesian/cards/B-t5wxr/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+**Every address M9c adds, under either option** (the website's are JSON; cookies as Hosted Service section 3 sets them):
+
+| Address | Who | What |
+|---|---|---|
+| `POST /v1/signup/email` | anyone (Turnstile) | sends a code to an email address, for a new account |
+| `POST /v1/signup/verify` | the same browser | checks the code; with a handle, returns passkey registration options |
+| `POST /v1/signup/finish` | the same browser | enrols the passkey; makes the account, a recovery code to keep, and a sign-in |
+| `POST /v1/signin/start`, `POST /v1/signin/finish` | anyone | passkey sign-in |
+| `POST /v1/recover/email`, `/verify`, `/finish` | anyone (Turnstile on the email) | an emailed code and a saved recovery code, then a new passkey (B-jzgy4) |
+| `GET /v1/globus/start`, `GET /v1/globus/callback` | a browser | sign in, sign up or link through Globus (D153, B-s76hg) |
+| `GET /v1/account`, `POST /v1/account/passkeys/…`, `GET`/`DELETE /v1/account/sessions…`, `GET`/`DELETE /v1/account/machines…`, `POST /v1/account/machines/approve`, `POST /v1/account/signout`, `POST /v1/account/reauth/…` | a session | the account, enrolling another passkey, sign-ins, machines, approving a machine's code, signing out |
+| `POST /v1/machines/device`, `POST /v1/machines/token`, `POST /v1/machines/revoke` | a machine | **this card's question** |
+| `POST /v1/projects/{p}/proofs` | a session | a passkey's assertion for a composed answer (D139, D163) |

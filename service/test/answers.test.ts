@@ -73,7 +73,7 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     expect((await json(await answer({ card: id, revision: 1, response: "accept", client: "cli" }))).status).toBe(400);
   });
 
-  it("refuses an answer on a hard card: it takes the passkey (D139), which comes with sign-in (M9c)", async () => {
+  it("composes an answer on a hard card and waits for the passkey (D139): nothing is written until it signs (proofs.test.ts)", async () => {
     const laptop = machineStore();
     const id = fileCard(laptop, { touches: ["security"], wrong_if: "a token leaks", check: "the audit log" });
     expect(laptop.card(id)!.meta.level).toBe("hard");
@@ -81,8 +81,8 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     const head = (await pullLog()).at(-1)!.seq;
     for (const response of ["accept", "defer"]) {
       const r = await json(await answer({ card: id, revision: 1, response, ...(response === "defer" ? { comment: "later" } : {}) }));
-      expect(r.status).toBe(403);
-      expect(r.body.error).toMatch(/hard card: an answer on it takes your passkey \(D139\).*M9c/);
+      expect(r.status).toBe(202);
+      expect(r.body.passkey).toMatchObject({ proving: "verdict", step: 1, of: 1, challenge: expect.any(String) });
     }
     expect((await pullLog()).at(-1)!.seq).toBe(head);
   });
@@ -101,7 +101,7 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     expect((await json(await call("POST", "aliases", { as: "person", json: { from: "storage/runs", to: "storage/run-metadata" } }))).status).toBe(400);
   });
 
-  it("takes a preference change that tightens, signed, and refuses one that loosens: that takes the passkey (D163)", async () => {
+  it("takes a preference change that tightens, signed, and composes one that loosens, which waits for the passkey (D163)", async () => {
     const s0 = await state();
     const replaces = s0.routing.preferences?.name;
     const tighter = await json(await call("POST", "preferences", { as: "person", json: { ...(replaces ? { replaces } : {}), row_dependency: "stop-and-ask" } }));
@@ -112,8 +112,8 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     expect(mine.inForce().settings.rows.dependency).toBe("stop-and-ask");
     for (const change of [{ mode: "enforce" }, { row_dependency: "sample" }, { burn_in: 0 }]) {
       const looser = await json(await call("POST", "preferences", { as: "person", json: { replaces: tighter.body.name, ...change } }));
-      expect(looser.status, JSON.stringify(change)).toBe(403);
-      expect(looser.body.error).toMatch(/lets more cards past you.*D163/);
+      expect(looser.status, JSON.stringify(change)).toBe(202);
+      expect(looser.body.passkey).toMatchObject({ proving: "preferences" });
     }
     expect((await json(await call("POST", "preferences", { as: "person", json: { row_dependency: "never-without-me" } }))).status).toBe(409);
     expect((await state()).routing.preferences?.name).toBe(tighter.body.name);

@@ -18,7 +18,7 @@ sig = "364fbf96655ef81a"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "service/package.json"
-sig = "cdf0a365897a1804"
+sig = "3a81827590b308fe"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -28,7 +28,7 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -383,17 +383,17 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "15c662d46fc01282"
+sig = "b6747a7efbadc124"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -448,7 +448,7 @@ sig = "b47fdfa303b0df16"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -479,6 +479,16 @@ sig = "0101404b91b31a70"
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "service/src/relay.ts#Reply"
 sig = "ec61eda1775f97ce"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "service/src/turnstile.ts#Turnstile"
+sig = "9dd1fedaac62e032"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "service/src/turnstile.ts#Verdict"
+sig = "6cc0e62db8cf0fa2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -592,11 +602,6 @@ sig = "69f3946bb9eaced9"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
-target = "src/schema.ts#Verdict"
-sig = "0b7b4923867436d1"
-
-[[bindings]]
-doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/similarity.ts#jaccard"
 sig = "dfbb76a367fb442c"
 
@@ -613,7 +618,7 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -642,6 +647,11 @@ sig = "efe5f04ec19d44f5"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "client/src/model.ts#hash"
+sig = "84750b500b379bba"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round3/app.js#answered"
 sig = "e551cc38bdd94395"
 
@@ -649,6 +659,11 @@ sig = "e551cc38bdd94395"
 doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round3/app.js#commit"
 sig = "8c865dbaaeaba05f"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round3/app.js#hash"
+sig = "3f652df1360ba8fe"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -669,6 +684,11 @@ sig = "e551cc38bdd94395"
 doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round4/app.js#commit"
 sig = "921b8df87db21e45"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round4/app.js#hash"
+sig = "a9e191fbc9a00a4f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -697,6 +717,11 @@ sig = "e6313b8380995e2f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "design/explorations/round5/app.js#hash"
+sig = "a9e191fbc9a00a4f"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "design/explorations/round5/app.js#mode"
 sig = "4afe7880c2ab52c8"
 
@@ -722,8 +747,48 @@ sig = "4724db53562a6d66"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "service/src/access.ts#DevGrants"
+sig = "341d02ae9e119f88"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/accounts.ts#Accounts"
+sig = "0f906428724b66ee"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/accounts.ts#DeviceCode"
+sig = "0e16a753f0d71898"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/accounts.ts#Flow"
+sig = "95b25333426263b3"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/accounts.ts#Grant"
+sig = "2f94697b5698b8ea"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/accounts.ts#Session"
+sig = "eccfe5de591bc61e"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/globus.ts#client"
+sig = "c96dc974039c26ee"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "15c662d46fc01282"
+sig = "b6747a7efbadc124"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/index.ts#Services"
+sig = "4788716bc2ecc7ee"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -732,8 +797,23 @@ sig = "0101404b91b31a70"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "service/src/relay.ts#Changed"
+sig = "50b84c6c2b06b24e"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/relay.ts#Pending"
+sig = "2978169497b935ec"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/relay.ts#Person"
+sig = "cd4af2280d048625"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -742,18 +822,63 @@ sig = "ec61eda1775f97ce"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "service/src/relay.ts#keyFileName"
+sig = "8b6bbedbe69862ea"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/secret.ts#token"
+sig = "53be3d91d6787922"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "service/src/signer.ts#ServiceSigner"
 sig = "1b884cfaa4d81e4b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "service/src/signin.ts#SignIn"
+sig = "6d24b7bd9849950c"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/signin.ts#enrolled"
+sig = "23fa3379132e48f0"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/signin.ts#kind"
+sig = "49f1bd3c57b0852d"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/turnstile.ts#Turnstile"
+sig = "9dd1fedaac62e032"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/turnstile.ts#Verdict"
+sig = "6cc0e62db8cf0fa2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/uploads.ts#AgentKind"
 sig = "bdfbdefc09bfe0c1"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/webauthn.ts#NewPasskey"
+sig = "9ddf6bc4f7e87292"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/webauthn.ts#StoredPasskey"
+sig = "00b19142874c61e7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -808,7 +933,7 @@ sig = "65c14c7f02d629db"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/passkey.ts"
-sig = "8a37464cc3ae3988"
+sig = "65722576f9e18110"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -987,11 +1112,6 @@ sig = "56c2813e14a8941b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
-target = "src/schema.ts#Verdict"
-sig = "0b7b4923867436d1"
-
-[[bindings]]
-doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Waiting"
 sig = "72615353e26390ab"
 
@@ -1067,6 +1187,16 @@ sig = "d12a14f566fd8074"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#Claim"
+sig = "9ce66a8d9f5f7181"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#Hosted"
+sig = "ba02b78ecc0f1359"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#Match"
 sig = "1e7a84482a917483"
 
@@ -1083,7 +1213,12 @@ sig = "69d7b63372cb6df6"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/store.ts#TrustFiles"
+sig = "ec75d8d98bce06c4"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1104,6 +1239,11 @@ sig = "274bd726002aa008"
 doc = "docs/vault/Design/File Formats.md"
 target = "src/trust.ts#BadTrust"
 sig = "c70a2cfe94d6d10b"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/trust.ts#TrustRoot"
+sig = "b7c81f3fc676059f"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1178,17 +1318,57 @@ sig = "25947ba483764636"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/accounts.ts#Accounts"
+sig = "0f906428724b66ee"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/accounts.ts#DeviceCode"
+sig = "0e16a753f0d71898"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/accounts.ts#Flow"
+sig = "95b25333426263b3"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/accounts.ts#Grant"
+sig = "2f94697b5698b8ea"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/accounts.ts#Session"
+sig = "eccfe5de591bc61e"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/globus.ts#client"
+sig = "c96dc974039c26ee"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "service/src/index.ts#Route"
-sig = "69cce10fc7cdd58b"
+sig = "90ed8960b6e78005"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/relay.ts#Pending"
+sig = "2978169497b935ec"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/relay.ts#Person"
+sig = "cd4af2280d048625"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1197,8 +1377,18 @@ sig = "1b884cfaa4d81e4b"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/turnstile.ts#Verdict"
+sig = "6cc0e62db8cf0fa2"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
 target = "service/src/uploads.ts#AgentKind"
 sig = "bdfbdefc09bfe0c1"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "service/src/webauthn.ts#StoredPasskey"
+sig = "00b19142874c61e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1209,6 +1399,11 @@ sig = "4a889f934759c0aa"
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/api.ts#ApiRouting"
 sig = "b4e4f34e1d212ad5"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "src/api.ts#ApiState"
+sig = "eff5600d674d6244"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1307,11 +1502,6 @@ sig = "56c2813e14a8941b"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
-target = "src/schema.ts#Verdict"
-sig = "0b7b4923867436d1"
-
-[[bindings]]
-doc = "docs/vault/Design/Formats for v1.md"
 target = "src/schema.ts#Waiting"
 sig = "72615353e26390ab"
 
@@ -1337,6 +1527,21 @@ sig = "a687e84739c0a4d6"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
+target = "src/state.ts#StateContext"
+sig = "7e659d6c1e31d667"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "src/store.ts#Claim"
+sig = "9ce66a8d9f5f7181"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "src/store.ts#Hosted"
+sig = "ba02b78ecc0f1359"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
 target = "src/store.ts#InForce"
 sig = "93fa6a79bb7dd919"
 
@@ -1353,7 +1558,7 @@ sig = "69d7b63372cb6df6"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1393,22 +1598,37 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "service/src/accounts.ts#Session"
+sig = "eccfe5de591bc61e"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "service/src/index.ts#Route"
-sig = "69cce10fc7cdd58b"
+sig = "90ed8960b6e78005"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "service/src/turnstile.ts#Verdict"
+sig = "6cc0e62db8cf0fa2"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "service/src/uploads.ts#AgentKind"
 sig = "bdfbdefc09bfe0c1"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "service/src/webauthn.ts#StoredPasskey"
+sig = "00b19142874c61e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -1447,11 +1667,6 @@ sig = "56c2813e14a8941b"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
-target = "src/schema.ts#Verdict"
-sig = "0b7b4923867436d1"
-
-[[bindings]]
-doc = "docs/vault/Design/Hosted Service.md"
 target = "src/schema.ts#Waiting"
 sig = "72615353e26390ab"
 
@@ -1473,7 +1688,7 @@ sig = "93fa6a79bb7dd919"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -1533,22 +1748,27 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/package.json"
-sig = "cdf0a365897a1804"
+sig = "3a81827590b308fe"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Implementation Plan.md"
+target = "service/src/http.ts#respond"
+sig = "d828e18d910b6f80"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1723,7 +1943,7 @@ sig = "a5a5e57ff6a04c98"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -1793,17 +2013,17 @@ sig = "9f8bbe9695c33412"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "service/src/index.ts#Route"
-sig = "69cce10fc7cdd58b"
+sig = "90ed8960b6e78005"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1863,7 +2083,7 @@ sig = "93fa6a79bb7dd919"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -1973,7 +2193,7 @@ sig = "cd910b37964e86aa"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -2042,6 +2262,11 @@ sig = "5e500011f99b3490"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
+target = "service/src/turnstile.ts#Verdict"
+sig = "6cc0e62db8cf0fa2"
+
+[[bindings]]
+doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/api.ts#Status"
 sig = "61b2c38f5750106a"
 
@@ -2087,13 +2312,8 @@ sig = "9a44c6ce35f5f2bb"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
-target = "src/schema.ts#Verdict"
-sig = "0b7b4923867436d1"
-
-[[bindings]]
-doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -2143,12 +2363,17 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "15c662d46fc01282"
+sig = "b6747a7efbadc124"
+
+[[bindings]]
+doc = "docs/vault/Design/Vault Adapter.md"
+target = "service/src/relay.ts#Pending"
+sig = "2978169497b935ec"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -2223,7 +2448,7 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -2272,23 +2497,43 @@ sig = "4724db53562a6d66"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = "service/src/access.ts#Access"
+sig = "e3b2293e4667d9d7"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "service/src/signer.ts#ServiceSigner"
 sig = "1b884cfaa4d81e4b"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "service/wrangler.jsonc"
-sig = "9e7dc0212adf8e9f"
+sig = "5fc991a190bcf6c3"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/verify.ts#VerifyResult"
 sig = "3a47560fd57a01aa"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "design/explorations/round3/app.js#pending"
+sig = "8b82adf4f0fee308"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "design/explorations/round4/app.js#pending"
+sig = "7871414a5c16aa74"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "design/explorations/round5/app.js#pending"
+sig = "7871414a5c16aa74"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2298,12 +2543,12 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/package.json"
-sig = "cdf0a365897a1804"
+sig = "3a81827590b308fe"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2313,7 +2558,7 @@ sig = "a9715a692abf1bc6"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/access.ts#Principal"
-sig = "a749defb3094603a"
+sig = "969da24e12f02c58"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2323,7 +2568,17 @@ sig = "403a6792222deb2d"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/access.ts#accessFor"
-sig = "2244d1b3b4811c6a"
+sig = "5e643e13b76c8272"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/access.ts#accountAccess"
+sig = "dae99683620e73f8"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/access.ts#crossSite"
+sig = "159a600f4211dd02"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2332,13 +2587,83 @@ sig = "15738551d908a095"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/access.ts#eitherOf"
+sig = "a22095ef65db2bf1"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/access.ts#readGrants"
 sig = "dea8227cfad2a766"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/accounts.ts#Accounts"
+sig = "0f906428724b66ee"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/accounts.ts#DeviceCode"
+sig = "0e16a753f0d71898"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/accounts.ts#Flow"
+sig = "95b25333426263b3"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/accounts.ts#Grant"
+sig = "2f94697b5698b8ea"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/accounts.ts#LIMITS"
+sig = "38f25208791e3834"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts"
+sig = "406886ce21d3f239"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#GlobusConfig"
+sig = "01aca3c57a190cf6"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#GlobusIdentity"
+sig = "74134afeb54e335b"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#authorizationUrl"
+sig = "6a03e6c25cf08062"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#client"
+sig = "c96dc974039c26ee"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#identityFrom"
+sig = "4c242673056d466a"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/http.ts#browserName"
+sig = "cdb9c393fd798be7"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "15c662d46fc01282"
+sig = "b6747a7efbadc124"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/index.ts#Services"
+sig = "4788716bc2ecc7ee"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2348,12 +2673,47 @@ sig = "e3fd80a1ffba8898"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#handleRequest"
-sig = "f76570ffa543ab0f"
+sig = "1d07374a963b3c39"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "service/src/relay.ts#NeedsPasskey"
-sig = "69ea38abb8ae8eef"
+target = "service/src/index.ts#servicesFor"
+sig = "a8c6b0d9fe0943c8"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/machines.ts#CLIENT_ID"
+sig = "bbf2749cb7f866f6"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/machines.ts#machinesRoute"
+sig = "12e47282ce2fbc29"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/mail.ts"
+sig = "b85348cd61906bd4"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/mail.ts#bindingMailer"
+sig = "fb1f95284492630e"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/mail.ts#mails"
+sig = "15ba17a5cef8cf18"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#Changed"
+sig = "50b84c6c2b06b24e"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#Pending"
+sig = "2978169497b935ec"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2363,12 +2723,37 @@ sig = "509350cb13abdd33"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#Relay"
-sig = "0b4b9a2da2b44f7d"
+sig = "bffbf2cbade3aa97"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#keyFileName"
+sig = "8b6bbedbe69862ea"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/secret.ts"
+sig = "f0b6216dca1ea187"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/secret.ts#hashOf"
+sig = "5fd9fb24f742a6e6"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/secret.ts#recoveryCode"
+sig = "d526a0fc18ec47bc"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/signer.ts#ServiceSigner"
 sig = "1b884cfaa4d81e4b"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/signin.ts#signInRoute"
+sig = "5c2c949e8c6c1243"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2378,7 +2763,22 @@ sig = "afe55a5cab388d11"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/turnstile.ts"
+sig = "5808ff81b2d697f5"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/turnstile.ts#TEST_SECRETS"
+sig = "46b98994331a0318"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/turnstile.ts#turnstile"
+sig = "b7f411697590e109"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2402,8 +2802,43 @@ sig = "070eda923769515a"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#authenticationOptions"
+sig = "d9bb991c14d6fe2b"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#keyFile"
+sig = "625771c549626851"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#pinLine"
+sig = "2e22dcd2cb1a4a09"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#registrationOptions"
+sig = "9f8eb4534af247c9"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#spkiOf"
+sig = "52040bbeae5464a9"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#verifyAssertion"
+sig = "11ec42423799730b"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#verifyRegistration"
+sig = "80fbde1084563a89"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/vitest.config.ts"
-sig = "0d61565c562b5e69"
+sig = "4d40fc8334c704b6"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2413,7 +2848,7 @@ sig = "d94d095b6e51a0e1"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/wrangler.jsonc"
-sig = "9e7dc0212adf8e9f"
+sig = "5fc991a190bcf6c3"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2442,18 +2877,28 @@ sig = "65c14c7f02d629db"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "src/passkey.ts#proofProblem"
+sig = "657f28e5d9353c20"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "src/proposals.ts#afterVerdict"
 sig = "dcd523c16d9b019d"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "src/schema.ts#Config"
-sig = "87044dab18c4315d"
+target = "src/schema.ts#Origin"
+sig = "3767b8ec53ed26e7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "src/schema.ts#ProjectId"
-sig = "e15f5c46e189b9c8"
+target = "src/schema.ts#PASSKEY_ALGS"
+sig = "092e9d4a7a53fbe4"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "src/schema.ts#PasskeyProof"
+sig = "16386adebb84b1cf"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2488,7 +2933,7 @@ sig = "6df844e7ff6fe29e"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -2798,7 +3243,7 @@ sig = "3d72bfeabe92b76f"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -2888,7 +3333,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/package.json"
-sig = "cdf0a365897a1804"
+sig = "3a81827590b308fe"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -3033,7 +3478,7 @@ sig = "517284c2dd8a5ec6"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -3278,7 +3723,7 @@ sig = "db3b4efbb06d836a"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -3553,7 +3998,7 @@ sig = "3fea88c79e5b6529"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -3583,12 +4028,12 @@ sig = "08edb50adba5b658"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "service/src/access.ts#Access"
-sig = "e8f3352f9c681faf"
+sig = "e3b2293e4667d9d7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "service/src/index.ts#Route"
-sig = "69cce10fc7cdd58b"
+sig = "90ed8960b6e78005"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -3793,7 +4238,7 @@ sig = "69d7b63372cb6df6"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -3863,7 +4308,7 @@ sig = "0101404b91b31a70"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d133bfdb970e8d96"
+sig = "d8d8f5b790dabc70"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -4138,7 +4583,7 @@ sig = "a0f0aae1195778ed"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -4198,7 +4643,7 @@ sig = "a0c9f58082496f49"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "src/passkey.ts#proofProblem"
-sig = "e8a6b60e3651c4bd"
+sig = "657f28e5d9353c20"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
@@ -4307,6 +4752,11 @@ sig = "4724db53562a6d66"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
+target = "service/src/relay.ts#Changed"
+sig = "50b84c6c2b06b24e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-vault.md"
 target = "src/agents.ts"
 sig = "56ae8216617c36a1"
 
@@ -4338,7 +4788,7 @@ sig = "cb04b0f174427522"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -4523,7 +4973,7 @@ sig = "dc5382809f227897"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "service/package.json"
-sig = "cdf0a365897a1804"
+sig = "3a81827590b308fe"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
@@ -4543,7 +4993,7 @@ sig = "7845908818f54ba2"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
@@ -4673,4 +5123,4 @@ sig = "1e7a84482a917483"
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
 target = "src/store.ts#Store"
-sig = "1986570ce9078f98"
+sig = "9848ab5afc8b98a7"
