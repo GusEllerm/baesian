@@ -18,9 +18,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 *As of 2026-11-04.*
 
 - **M9f has begun (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
-  - **Where it runs:** the user's University of Chicago Cloudflare account (D177), on Workers Paid (D178), at the domain **baesian.dev**. The accounts database is created and migrated.
-  - **Waiting on the user:** B-aa9pc (the bare domain or a subdomain), turning on Email Sending for the domain, and the dashboard checks (paid plan, auto-renew, DNSSEC).
-  - **Then:** the Turnstile widget, the Globus app, the service's secrets, and the first deployment from CI on a tag (B-bk20v).
+  - **Where it runs:** the user's University of Chicago Cloudflare account (D177), on Workers Paid (D178), at **https://baesian.dev** (B-aa9pc).
+  - **Done:** the accounts database is created and migrated, Email Sending is on for the domain, and the Turnstile widget exists.
+  - **Waiting on the user:** the Globus app's registration and the dashboard checks (paid plan, auto-renew, DNSSEC).
+  - **Then:** the service's secrets, the CI deploy workflow, and the first deployment on a tag (B-bk20v).
 
 - **M9e is done: the website installs as an app, sends notifications, and keeps usage counts (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
   - **Notifications:** web push on Baesian's own code (B-nk97q), giving counts and levels only, in the project's name. Stopping cards notify at once and the rest come in a digest (B-advkh).
