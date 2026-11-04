@@ -25,7 +25,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
     - the Globus app;
     - the Worker's four secrets;
     - the deploy workflow and its token (B-bk20v).
-  - **Before the first deployment:** retention, the privacy policy and deleting an account. A builder is on them, with two hard cards. Then the user merges `v1/next` into `main` and pushes a release tag.
+    - retention, the privacy policy at `/privacy`, and deleting an account, all built and merged;
+    - Workers Logs, turned off.
+  - **Left before the first deployment:** the policy's legal review if wanted, its date, then the user merges `v1/next` into `main` and pushes a release tag.
 
 - **M9e is done: the website installs as an app, sends notifications, and keeps usage counts (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
   - **Notifications:** web push on Baesian's own code (B-nk97q), giving counts and levels only, in the project's name. Stopping cards notify at once and the rest come in a digest (B-advkh).
