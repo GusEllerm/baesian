@@ -1,9 +1,12 @@
 {
   // Baesian's hosted service: the relay (M9b), a Worker that routes /v1/projects/{project}/… to that project's Durable
   // Object (D140, B-7z97x), and accounts and sign-in (M9c), in one D1 database (B-ytdt2). docs/vault/Modules/service.md
-  // describes it. Nothing here is deployed yet (M9f): `npm run dev` runs it locally, with no Cloudflare account.
+  // describes it. Nothing here is deployed yet (M9f): `npm run dev` runs it locally, with no Cloudflare login.
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "baesian-relay",
+  // The Cloudflare account the service runs in (D177), so no command here reaches another account. Locally, wrangler's
+  // auth profile `baesian` is bound to this repo; CI uses an API token for this account (B-bk20v).
+  "account_id": "8cb1d1242aba4c38d18f4d19f8aa2db4",
   "main": "src/index.ts",
   // Node's APIs are on by default from 2026-08-04: the store imports node:crypto, node:buffer and, unused here, node:fs.
   "compatibility_date": "2026-11-01",
