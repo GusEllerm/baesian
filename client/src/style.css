@@ -506,6 +506,9 @@ a.wordmark { color: inherit; text-decoration: none; }
 .site-main { min-height: 0; overflow-y: auto; padding: 18px 28px 56px; }
 .site-page { display: flex; flex-direction: column; gap: 26px; max-width: 580px; margin: 0 auto; }
 .site-page.wide { max-width: 680px; }
+/* A page of reading, such as the privacy policy: the sheet is as wide as its lines, about 70 characters, so the text fills it. */
+.site-page.prose { max-width: 540px; }
+.site-page.prose .site-sheet .lead, .site-page.prose .site-sheet > p, .site-page.prose .site-list { max-width: none; }
 .site-sheet, .panel.proof { --c: var(--ink); }
 .site-sheet { display: flex; flex-direction: column; gap: 14px; padding: 24px 30px 26px; border-radius: 13px; background: var(--face); box-shadow: 0 0 0 5px #cdbe8c, 0 24px 36px -24px #2e234380; }
 .site-sheet h1 { margin: 0; font: var(--t-question); text-wrap: balance; }
