@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -52,9 +52,12 @@ export async function startRelay(): Promise<LocalRelay> {
   process.env.WRANGLER_SEND_METRICS = "false";
   const { unstable_startWorker } = (await import(pathToFileURL(WRANGLER).href)) as { unstable_startWorker: (o: unknown) => Promise<any> };
   const persist = mkdtempSync(join(tmpdir(), "baesian-relay-"));
+  mkdirSync(join(persist, "site"));
   const sessions = PROJECTS.map((project) => ({ cookie: randomBytes(24).toString("base64url"), ...PERSON, project }));
   const worker = await unstable_startWorker({
     config: join(SERVICE_DIR, "wrangler.jsonc"),
+    // The CLI's tests don't open the website (M9e), and its build may not be there yet: an empty folder in its place.
+    assets: join(persist, "site"),
     bindings: {
       BAESIAN_ENV: { type: "plain_text", value: "test" },
       BAESIAN_DEV_ACCESS: { type: "plain_text", value: JSON.stringify({ machines: [], sessions }) },

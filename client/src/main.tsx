@@ -6,9 +6,10 @@ import "./style.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { Site } from "./site/Site";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+// One client, two builds (D130, M9e): `baesian serve`'s (dist/client/), and the website's (dist/site/, `vite build --mode
+// site`), which the Worker serves. Vite fixes the mode at build time, so each build carries only its own.
+const HOSTED = import.meta.env.MODE === "site";
+
+createRoot(document.getElementById("root")!).render(<StrictMode>{HOSTED ? <Site /> : <App />}</StrictMode>);

@@ -18,12 +18,16 @@ function runningServer(): { port: number; token: string } | undefined {
   }
 }
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   const server = command === "serve" ? runningServer() : undefined;
+  // The website's build (M9e, `--mode site`): the same client, into dist/site/, which the Worker serves as its assets
+  // (service/wrangler.jsonc), with the headers in client/site-public/_headers. It isn't in the npm package.
+  const site = mode === "site";
   return {
     root: import.meta.dirname,
     plugins: [react()],
-    build: { outDir: join(import.meta.dirname, "..", "dist", "client"), emptyOutDir: true },
+    publicDir: site ? join(import.meta.dirname, "site-public") : false,
+    build: { outDir: join(import.meta.dirname, "..", "dist", site ? "site" : "client"), emptyOutDir: true, chunkSizeWarningLimit: 600 },
     server: {
       port: 5317,
       strictPort: true,

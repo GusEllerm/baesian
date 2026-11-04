@@ -11,6 +11,15 @@
     "bindings": [{ "name": "PROJECTS", "class_name": "ProjectRelay" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectRelay"] }],
+  // The website (M9e): the client's site build, `npm run build` from the root, served as static assets. Every page that
+  // isn't a file gets index.html (single-page application); only /v1/ runs the Worker, so the pages cost no Worker
+  // request. Its headers, the content security policy among them, are in client/site-public/_headers.
+  "assets": {
+    "directory": "../dist/site",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/v1/*"]
+  },
   // Accounts, passkeys, sign-ins, machine grants and the projects' owners (B-ytdt2). Its ID comes when M9f creates it.
   "d1_databases": [{ "binding": "ACCOUNTS", "database_name": "baesian-accounts", "migrations_dir": "migrations" }],
   // Codes and notices by email, through Cloudflare's Email Sending (B-pvye0). Locally it's simulated: logged, and saved

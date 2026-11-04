@@ -162,6 +162,12 @@ describe("relations, from stated fields only (D65)", () => {
     ]);
   });
 
+  it("says a card decided in the repo before it was linked was settled then (B-3zjjx)", () => {
+    const early = card({ topic: "storage/db", title: "Decided before linking" }, { status: "resolved", before_linking: true });
+    const subject = card({ topic: "storage/db" });
+    expect(relationsOf(subject, snapshot([early, subject])).map((r) => [r.kind, r.state])).toEqual([["precedent", "settled before linking"]]);
+  });
+
   it("lights what an option would replace or break, as the agent declares it", () => {
     const decided = card({ title: "Tokens live in a cookie" }, { status: "resolved" });
     const subject = card({ proposal_breaks: [decided.meta.id, "R-aaaaa"] });

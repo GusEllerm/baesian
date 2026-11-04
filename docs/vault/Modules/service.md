@@ -123,6 +123,10 @@ JSON for the website's pages (M9e) to call; `signInRoute()`. Every one refuses a
 
 **Turnstile** (`service/src/turnstile.ts`, B-1a03b): `turnstile()` checks a token with Cloudflare's siteverify, with the address in passing. Cloudflare's published test secrets (`TEST_SECRETS`) are answered locally with no network, and refused in production; a missing secret refuses everything.
 
+## The website (M9e)
+
+The Worker serves the website too: the client's site build, `dist/site/` (`npm run build` from the root), as static assets (`service/wrangler.jsonc#assets`, binding `ASSETS`). Every page that isn't a file gets `index.html` (`not_found_handling: single-page-application`), and only `/v1/*` runs the Worker (`run_worker_first`), so the pages cost no Worker request and every address of the service stays the Worker's. The assets' headers are in `client/site-public/_headers`: the local client's content security policy, but for Turnstile's script and frame from `challenges.cloudflare.com` (*unverified* against Turnstile's own list until it runs deployed, M9f), `nosniff`, no referrer, `Cross-Origin-Opener-Policy`, and hashed assets cached for good. The pages are [[Client Build]] item 19: sign-up, sign-in, recovery, the account, `/device`, your projects, and each project's desk at `/projects/{project}`, mirroring the relay's `/v1/projects/{project}/` (B-7z97x). A local run (`npm run dev`) needs the build first; the CLI's tests (`test/relay-harness.ts`) give the Worker an empty folder in its place.
+
 ## Machines (service/src/machines.ts)
 
 OAuth's standard endpoints (B-t5wxr), form-encoded, for `baesian login` (M9d): `machinesRoute()`. The client is `CLIENT_ID`, `baesian-cli`, a public client.
@@ -144,4 +148,5 @@ SimpleWebAuthn (B-jp22m), with user verification required everywhere and attesta
 - `proofs.test.ts`: answers and preference changes proved by the passkey, counted by a machine with the pin (`Store.judge`) and not without; the relay holding a card back; a slider proposal's two proofs; the key files.
 - `globus.test.ts`: signing up and in through Globus, linking, and the callback's refusals.
 - `sql-storage.test.ts`, `uploads.test.ts`, `answers.test.ts`, `gate.test.ts`, `live.test.ts`, `access.test.ts`: the relay (M9b), as before.
+- The website, end to end, is the root's browser tests (`e2e/site.spec.ts`, `e2e/site-desk.spec.ts`, [[Client Build]] item 19), against this Worker run locally with its assets.
 - `store-suite.test.ts`, run by `service/vitest.store.config.ts`: B-0ag7h's check, the store's own suites in `test/store.test.ts` over the relay's SQLite and over memory, in workerd.

@@ -115,6 +115,8 @@ The relay holds what's waiting (D127). The record in git is the archive. **Propo
 > - **The local MCP server** uses the same grant and code, never signs in itself, and, signed out, files here and says to ask the person to run `baesian login` (section 5).
 > - **A card that looks like it holds a secret,** in a hosted repo, is refused unless the agent gives a reason, kept on the card as `secret_reason` (B-jfkv9; section 5's scan).
 
+> **Built (M9e step 1, 2026-11-04): the website's pages** ([[Client Build]] item 19, [[service#The website (M9e)]]). The Worker serves the client's site build as static assets: sign-up (an email address behind Turnstile, the emailed code, a handle, a passkey; or from Globus, a handle and a passkey), sign-in with a passkey or through Globus, getting back in with an emailed code and the recovery code, and the account (passkeys, sign-ins and machines, each endable, Globus, signing out here or everywhere). The recovery code and each passkey's line for CI are shown exactly once. The approval page, `/device`, says which machine asks for which project, what it can do and that it can never answer; approving checks the passkey afresh, and approving a project the service hasn't seen says plainly that it makes a new project, yours, and asks what to call it. **A project's name (B-zqkwk, "You name it, on the service")** is typed there, kept with the project in the accounts database (`projects.name`, where step 2's pushes read it), changed on your projects page, and shown on every page; the CLI never sends the repo's name. Each project's desk is at `/projects/{project}`, as the relay's addresses have it (B-7z97x).
+
 ### Accounts and projects
 
 - **A person signs up on the website.** How they prove who they are is H2. The recommended default is a Baesian account with an email address and a passkey. The strongest alternative is "Sign in with GitHub".
@@ -227,6 +229,8 @@ D128 makes the local MCP server the usual way in. Its tools are the ones [[Baesi
 - **Hard cards ask for the passkey check** (section 3) at the moment of answering.
 - **It is the same React app as the desktop client** (D32, D98), with a phone layout, served by the relay as a progressive web app (a website that can be installed to the Home Screen).
 
+> **Built (M9e step 1, 2026-11-04): the layout on the website.** The website is the same React app (D130), its phone layout included, served by the relay's Worker; the hard card's passkey is asked at the moment of answering, from a prompt whose button starts it ([[Client Build]] item 19). Not yet: installing it as an app, and the notifications below, which are step 2.
+
 ### Notifications
 
 Following B5 F16–F18 and R5:
@@ -259,6 +263,8 @@ A rough illustration, the agent's arithmetic and not a measurement: 100 machines
 **Decision for the user (H6).** *Recommended default:* Cloudflare Workers with a Durable Object per repo. *Reason:* isolation built in, about $5 a month, and very little to operate for one person running a service for others. *Strongest alternative:* a small server of its own (Fly.io or a VPS). It's portable and has the same runtime, at the cost of operations work.
 
 ## 9. How the local client relates
+
+> **Built (M9e, 2026-11-04):** H5 was decided as D143 (B-k216t): in a linked repo, `baesian serve` prints and opens the project's page on the website, `/projects/{project}`, and doesn't start the local client ([[src-server]]).
 
 `baesian serve` (`startServer()`) is the local server: 127.0.0.1, a fresh token, Host checks, no CORS (D62, D97, D103). It serves the same React client the website would.
 

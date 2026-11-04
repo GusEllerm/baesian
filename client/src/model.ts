@@ -232,7 +232,8 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
   const out = new Map<string, Relation>();
   const describe = (id: string): { name: string; state: string } | undefined => {
     const c = cards.get(id);
-    if (c) return { name: c.meta.title, state: STATE_WORDS[c.status] };
+    // Decided in the repo before it was linked to the service (B-3zjjx): the website says so.
+    if (c) return { name: c.meta.title, state: c.before_linking ? "settled before linking" : STATE_WORDS[c.status] };
     const r = rules.get(id);
     if (r) return { name: ruleName(r.body), state: r.retired ? "retired rule" : "your rule" };
     return undefined;
