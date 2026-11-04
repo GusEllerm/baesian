@@ -23,8 +23,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/v1/*"]
   },
-  // Accounts, passkeys, sign-ins, machine grants and the projects' owners (B-ytdt2). Its ID comes when M9f creates it.
-  "d1_databases": [{ "binding": "ACCOUNTS", "database_name": "baesian-accounts", "migrations_dir": "migrations" }],
+  // Accounts, passkeys, sign-ins, machine grants and the projects' owners (B-ytdt2), created by M9f in eastern North
+  // America (one default location, B-grrr9).
+  "d1_databases": [{ "binding": "ACCOUNTS", "database_name": "baesian-accounts", "database_id": "bf6f32ce-3fba-471b-8cfa-7dc54994748f", "migrations_dir": "migrations" }],
   // Codes and notices by email, through Cloudflare's Email Sending (B-pvye0). Locally it's simulated: logged, and saved
   // to a file.
   "send_email": [{ "name": "EMAIL" }],

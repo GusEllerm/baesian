@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-aa9pc",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T174650.891Z-xg8pf.json",
+  "touches": [
+    "user-facing",
+    "public-api",
+    "infra"
+  ],
+  "reverse": "one-way",
+  "asked": "blocking",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-04T19:27:32.724Z"
+}

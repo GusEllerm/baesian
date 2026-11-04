@@ -3283,7 +3283,7 @@ sig = "1b884cfaa4d81e4b"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "service/wrangler.jsonc"
-sig = "4a86191982262e5a"
+sig = "e12736e201e8199e"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -3868,7 +3868,7 @@ sig = "d94d095b6e51a0e1"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/wrangler.jsonc"
-sig = "4a86191982262e5a"
+sig = "e12736e201e8199e"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5933,7 +5933,7 @@ sig = "003b572422cd5da3"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "service/wrangler.jsonc"
-sig = "4a86191982262e5a"
+sig = "e12736e201e8199e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
