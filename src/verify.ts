@@ -8,7 +8,7 @@ import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { TODAY, levelInForce, route } from "./routing.js";
 import { type GateRecord, HARD_BY_DEFAULT } from "./schema.js";
-import { BAESIAN, type Card, RECORD_DIR, Store, type StoreTrust, drawOf, normalise, settingsOf } from "./store.js";
+import { BAESIAN, type Card, RECORD_DIR, SHALLOW_HISTORY, Store, type StoreTrust, drawOf, normalise, settingsOf } from "./store.js";
 import { parseTrailers } from "./trailers.js";
 import { TRUST_ENV, type TrustRoot, drawOfProof, pinProblems, pinnedTrust } from "./trust.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
@@ -44,7 +44,7 @@ export class RecordAt {
       });
       execFileSync("tar", ["-x", "-C", dir], { input: tar });
     }
-    return Store.overRecord(this.repo, out, this.trust);
+    return Store.overRecord(this.repo, out, this.trust, rev);
   }
 
   dispose(): void {
@@ -90,7 +90,7 @@ export interface VerifyResult {
    * In a hosted repo (D138): where the keys came from, CI's pin or the record's copy, and the files a person writes in the
    * record at HEAD that don't count, which are ignored, with a note.
    */
-  hosted?: { keys: "pinned" | "record"; skipped: { file: string; why: string }[] };
+  hosted?: { keys: "pinned" | "record"; skipped: { file: string; why: string }[]; shallow?: true };
   /** Advice that doesn't fail the check: the vault's missing notes (M6); keys checked against the record's copy alone. */
   warnings?: string[];
   ok: boolean;
@@ -295,8 +295,12 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
       if (h && !h.pinned) {
         warnings.push(`the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (${TRUST_ENV}, D142)`);
       }
-      const hosted = h ? { hosted: { keys: h.pinned ? ("pinned" as const) : ("record" as const), skipped: head.uncounted() } } : {};
-      return { base, commits, ...(merge ? { merge } : {}), ...hosted, ...(warnings.length ? { warnings } : {}), ok };
+      const skipped = h ? head.uncounted() : [];
+      // Answers from before the repo was linked count as they are (B-45xz8), which takes the commit that linked it: a
+      // shallow clone may not have it, and then the run fails, saying to fetch the full history.
+      const shallow = skipped.some((s) => s.why === SHALLOW_HISTORY);
+      const hosted = h ? { hosted: { keys: h.pinned ? ("pinned" as const) : ("record" as const), skipped, ...(shallow ? { shallow: true as const } : {}) } } : {};
+      return { base, commits, ...(merge ? { merge } : {}), ...hosted, ...(warnings.length ? { warnings } : {}), ok: ok && !shallow };
     });
   } finally {
     records.dispose();
@@ -338,8 +342,9 @@ export function describeVerify(r: VerifyResult): string[] {
     }
     for (const n of r.merge.notes) out.push(`  note: ${n}`);
   }
+  if (r.hosted?.shallow) out.push("  FAIL answers from before the repo was linked can't be checked in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)");
   // A file that doesn't count is ignored, not an error (D138): an answer given outside the website, say.
-  for (const s of r.hosted?.skipped ?? []) out.push(`note: ${s.file} doesn't count: ${s.why}`);
+  for (const s of r.hosted?.skipped ?? []) if (s.why !== SHALLOW_HISTORY) out.push(`note: ${s.file} doesn't count: ${s.why}`);
   for (const w of r.warnings ?? []) out.push(`warning: ${w}`);
   out.push(r.ok ? "baesian verify: ok" : "baesian verify: failed");
   return out;

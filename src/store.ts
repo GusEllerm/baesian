@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { FolderStorage } from "./folder-storage.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
-import { type Repo, openRepo, slug } from "./git.js";
+import { type Repo, git, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
 import {
   type AnyRow,
@@ -55,6 +55,7 @@ import {
   Withdrawal,
   filingProblems,
   filingWarnings,
+  secretsIn,
   describeError,
   type FileKindName,
   newestFormat,
@@ -243,6 +244,22 @@ export interface InForce {
 /** The card fails its schema or a filing rule. */
 export class ValidationError extends Error {}
 
+/**
+ * In a hosted repo, a draft that looks like it holds a secret, with no `secret_reason` (B-jfkv9): nothing is written. The
+ * message names each field and what it looks like, never the text, as filing's warning does (D136).
+ */
+export class LooksLikeSecret extends ValidationError {
+  constructor(readonly secrets: Map<string, string>) {
+    super(
+      [
+        "nothing filed: in a hosted repo a card goes to the service as it's filed, and this one looks like it holds a secret (B-jfkv9):",
+        ...[...secrets].map(([field, kind]) => `  - ${field} looks like it holds ${kind}`),
+        "Take it out and file again. If it isn't a secret, file it anyway with a reason, kept on the card: --secret-reason \"<why>\" (secret_reason in the MCP tools).",
+      ].join("\n"),
+    );
+  }
+}
+
 /** Raised by `fileCard` when the decision may already be open or decided (D36, D38). */
 export class PossibleDuplicate extends Error {
   constructor(readonly matches: Match[]) {
@@ -289,6 +306,66 @@ export class NeedsRepo extends Error {
  */
 export interface StoreTrust {
   pinned?: TrustRoot | null;
+}
+
+/**
+ * Why an unsigned answer from before a repo was linked can't be checked (B-45xz8): in a shallow clone, the commit that
+ * linked the repo may be beyond its history.
+ */
+export const SHALLOW_HISTORY =
+  "it isn't signed, and whether it was in the record when the repo was linked can't be told in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)";
+
+/**
+ * What was in the record at the commit that linked the repo (B-45xz8): its files' blob IDs by their path in the layer, or
+ * why that can't be told. Before the link is committed, the record at the commit being checked stands in for it.
+ */
+type BeforeLinking = { commit: string; blobs: Map<string, string>; objectFormat: string } | { problem: string };
+
+/** The record at the first commit in `rev`'s history whose config names `project` (B-45xz8), or at `rev` before there is one. */
+function recordAtLinking(top: string, rev: string, project: string): BeforeLinking | undefined {
+  const config = `${RECORD_DIR}/config.json`;
+  let changed: string[];
+  try {
+    changed = git(top, ["log", "--full-history", "--reverse", "--format=%H", rev, "--", config]).split("\n").filter(Boolean);
+  } catch {
+    return undefined; // no commits yet
+  }
+  const names = (commit: string) => {
+    try {
+      return (JSON.parse(git(top, ["show", `${commit}:${config}`])) as { project?: unknown }).project === project;
+    } catch {
+      return false;
+    }
+  };
+  let commit = changed.find(names);
+  if (commit === undefined) {
+    try {
+      commit = git(top, ["rev-parse", "--verify", "-q", `${rev}^{commit}`]);
+    } catch {
+      return undefined;
+    }
+  } else {
+    // A shallow clone's oldest commits seem to add every file: the real link may be further back.
+    let shallow: string[] = [];
+    try {
+      shallow = readFileSync(git(top, ["rev-parse", "--path-format=absolute", "--git-path", "shallow"]), "utf8").split("\n");
+    } catch {
+      // not shallow
+    }
+    if (shallow.includes(commit)) return { problem: SHALLOW_HISTORY };
+  }
+  const blobs = new Map<string, string>();
+  for (const entry of git(top, ["ls-tree", "-r", "-z", commit, "--", RECORD_DIR]).split("\0")) {
+    const m = /^\d+ blob ([0-9a-f]+)\t(.+)$/.exec(entry);
+    if (m && m[2]!.startsWith(`${RECORD_DIR}/`)) blobs.set(m[2]!.slice(RECORD_DIR.length + 1), m[1]!);
+  }
+  let objectFormat = "sha1";
+  try {
+    objectFormat = git(top, ["rev-parse", "--show-object-format"]) || "sha1";
+  } catch {
+    // an older git: SHA-1
+  }
+  return { commit, blobs, objectFormat };
 }
 
 /** A store over storage alone, with no repo and no record (B-0ag7h): what it takes in their place. */
@@ -348,7 +425,7 @@ export class Store {
     /** The live layer (B-0ag7h): a folder on your machine, the relay's table, or memory. */
     readonly storage: Storage,
     private readonly local: Local | undefined,
-    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean },
+    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean; commit?: string },
   ) {
     this.readOnly = options.readOnly;
   }
@@ -361,10 +438,11 @@ export class Store {
 
   /**
    * Read a record as if it were the live layer. This is how CI sees cards and verdicts: it has no
-   * live layer, only what was committed (D34).
+   * live layer, only what was committed (D34). `commit` is the one whose record it is, whose history holds the commit
+   * that linked the repo (B-45xz8); by default, HEAD.
    */
-  static overRecord(repo: Repo, dir: string, trust?: StoreTrust): Store {
-    return new Store(new FolderStorage(dir), { repo, live: dir, record: dir }, { trust: trust ?? {}, readOnly: true });
+  static overRecord(repo: Repo, dir: string, trust?: StoreTrust, commit?: string): Store {
+    return new Store(new FolderStorage(dir), { repo, live: dir, record: dir }, { trust: trust ?? {}, readOnly: true, ...(commit ? { commit } : {}) });
   }
 
   /**
@@ -455,6 +533,18 @@ export class Store {
     mkdirSync(record, { recursive: true });
     writeFileSync(join(record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), vault }, "config"), null, 2)}\n`);
     return true;
+  }
+
+  /**
+   * Link the repo to a project on the hosted service (M9d, B-5gnea): the service, the project and the repo's first commit,
+   * in this worktree's config, keeping its other keys. A gate fact when committed (B-w4g6c).
+   */
+  setLink(link: { service: string; project: string; first_commit: string }): void {
+    const { record } = this.need("linking the repo");
+    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
+    const { service: _s, project: _p, first_commit: _f, ...rest } = this.config();
+    mkdirSync(record, { recursive: true });
+    writeFileSync(join(record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), ...link }, "config"), null, 2)}\n`);
   }
 
   /** Throws `NotSetUp` unless the live layer exists. */
@@ -619,6 +709,37 @@ export class Store {
   }
 
   /**
+   * The record at the commit that linked the repo (B-45xz8), found once: in this store's commit's history (HEAD's on your
+   * machine), the first whose config names the project. A store with no repo, as the relay's, has none.
+   */
+  private linking(): BeforeLinking | undefined {
+    if (this.linkCache) return this.linkCache.value;
+    const project = this.config().project;
+    const value = this.local && project ? recordAtLinking(this.local.repo.toplevel, this.options.commit ?? "HEAD", project) : undefined;
+    this.linkCache = { value };
+    return value;
+  }
+  private linkCache?: { value: BeforeLinking | undefined };
+
+  /**
+   * An unsigned file a person wrote counts as it is when it was in the record, with these bytes, at the commit that linked
+   * the repo (B-45xz8): answers from before linking were trusted then (D62). Anything added later needs the service's
+   * signature. Undefined when that isn't so, or the file is signed; a judgement that it can't be told, in a shallow clone.
+   */
+  private fromBeforeLinking(rel: string): Judgement | undefined {
+    if (this.storage.read(`${rel}.sig`) !== undefined) return undefined;
+    const b = this.linking();
+    if (!b) return undefined;
+    if ("problem" in b) return doesnt(b.problem);
+    const blob = b.blobs.get(rel);
+    if (!blob) return undefined;
+    const bytes = this.storage.read(rel);
+    if (!bytes) return undefined;
+    const id = createHash(b.objectFormat === "sha256" ? "sha256" : "sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+    return id === blob ? COUNTS : undefined;
+  }
+
+  /**
    * Whether a file a person writes counts (D138): in a hosted repo, only with the service's signature, and for an answer
    * on a hard card (D139) or a preference change that lets more cards past you (D163), with a passkey proof that checks
    * against a trusted passkey key for the file's account. Outside a hosted repo, everything counts, as before. Files are
@@ -647,6 +768,11 @@ export class Store {
   private judgeAfresh(rel: string, h: Hosted): Judgement {
     const [dir, a, b] = rel.split("/");
     if (dir === "preferences") return this.preferenceJudgements(h).get(a!) ?? doesnt("it isn't a preference file");
+    // What a person wrote before the repo was linked counts as it is (B-45xz8); the relay's gate records are never from then.
+    if (dir !== "cards") {
+      const before = this.fromBeforeLinking(rel);
+      if (before) return before;
+    }
     let claim: Claim;
     const elsewhere = (says: string) => doesnt(`its name or folder doesn't match what it says (${says}), so it was copied or renamed`);
     if (dir === "verdicts" && a && verdictFileCard(a)) {
@@ -752,7 +878,7 @@ export class Store {
         continue;
       }
       const loose = loosening(before, settingsOf(file));
-      const j = this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, project: file.project, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
+      const j = this.fromBeforeLinking(`preferences/${name}`) ?? this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, project: file.project, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
       out.set(name, j);
       if (j.ok) before = settingsOf(file);
     }
@@ -834,7 +960,7 @@ export class Store {
    * Validate and normalise a draft, without writing anything. The body is optional context (D92): the
    * strongest alternative is a field now, and the filing rules check it (D12, D77).
    */
-  private prepare(draft: unknown, body = ""): { draft: CardDraft; nearTopics: string[]; warnings: string[] } {
+  private prepare(draft: unknown, body = "", agentDraft = false): { draft: CardDraft; nearTopics: string[]; warnings: string[] } {
     const parsed = readAs("card-draft", CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
     if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -844,6 +970,13 @@ export class Store {
       topic = this.canonicalTopic(topic);
       const known = this.topics();
       if (!known.has(topic)) near = nearTopics(topic, known);
+    }
+    // In a hosted repo a card goes to the service as it's filed, and its first version can't be taken back: a draft an agent
+    // files or revises that looks like it holds a secret is refused, before anything is written, unless it says why it's
+    // filed anyway (B-jfkv9). Elsewhere, and for the cards Baesian drafts itself, it's a warning (D136).
+    if (agentDraft && this.config().project !== undefined && !parsed.secret_reason) {
+      const secrets = secretsIn(parsed, body);
+      if (secrets.size) throw new LooksLikeSecret(secrets);
     }
     // The draft's `level` is what the agent asks for; the gate sets the level the card is written with (D144, D145).
     return { draft: { ...parsed, topic }, nearTopics: near, warnings: filingWarnings(parsed, body) };
@@ -1026,7 +1159,7 @@ export class Store {
     this.requireInit();
     // The checks read every card: once, in a view, which ends before anything is written.
     const { prep, matches } = this.view(() => {
-      const prep = this.prepare(draft, body);
+      const prep = this.prepare(draft, body, true);
       return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
     });
     if (matches.length > 0) throw new PossibleDuplicate(matches);
@@ -1063,7 +1196,7 @@ export class Store {
     if (!latest) throw new NoCard(id);
     const status = this.status(id);
     if (status !== "returned") throw new NotAllowed(`${id} is ${status}; only a returned card takes a new revision`);
-    const prep = this.prepare(draft, body);
+    const prep = this.prepare(draft, body, true);
     // A revision that follows your answer is shown; one returned because a parent went the other way (D80) is a new
     // decision, so it's gated as one (P16 section 3).
     const own = this.latestVerdict(latest);
@@ -1938,7 +2071,7 @@ export class Store {
    * it when the wait ends. A wait that runs in short slices (D101) picks up its own fresh marker again, so `since`
    * is when it first started waiting. An agent killed mid-wait leaves its marker behind, to go stale.
    */
-  startWaiting(id: string, agent: string, at: string = now()): { since: string; refresh(at?: string): void; stop(): void } {
+  startWaiting(id: string, agent: string, at: string = now()): { since: string; path: string; refresh(at?: string): void; stop(): void } {
     this.requireInit();
     const card = this.card(id);
     if (!card) throw new NoCard(id);
@@ -1961,7 +2094,7 @@ export class Store {
       this.storage.replace(rel, encode(`${JSON.stringify(w)}\n`));
     };
     write(at);
-    return { since, refresh: (beat = now()) => write(beat), stop: () => this.storage.remove(rel) };
+    return { since, path: rel, refresh: (beat = now()) => write(beat), stop: () => this.storage.remove(rel) };
   }
 
   /** The agents waiting on a card, and whether each has gone quiet: stopped waiting without returning (D90). */

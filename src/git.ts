@@ -36,6 +36,27 @@ function currentBranch(toplevel: string): string {
   }
 }
 
+/**
+ * The commits HEAD's history starts from (B-5gnea): one, or several where unrelated histories were merged. Undefined
+ * before the first commit. A shallow clone's boundary looks like a root: ask `isShallow()` first.
+ */
+export function rootCommits(toplevel: string): string[] | undefined {
+  try {
+    return git(toplevel, ["rev-list", "--max-parents=0", "HEAD"]).split("\n").filter(Boolean);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether this clone is shallow, so its oldest commits aren't the history's first (B-5gnea). */
+export function isShallow(toplevel: string): boolean {
+  try {
+    return git(toplevel, ["rev-parse", "--is-shallow-repository"]) === "true";
+  } catch {
+    return false;
+  }
+}
+
 /** `feat/run-store` → `feat-run-store`. */
 export function slug(text: string): string {
   return (

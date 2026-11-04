@@ -277,6 +277,42 @@ function dependencyFacts(snap: Snapshot, change: Change, warnings: string[]): De
   return facts;
 }
 
+// ---------------------------------------------------------------- the repo's link to the service (B-w4g6c)
+
+/** The committed config, where a repo names the service and project it syncs with (P16 section 8). */
+export const CONFIG_PATH = ".baesian/config.json";
+
+/** What ties a repo to a project on the service: where its cards go (B-w4g6c), and which history is the repo's (B-5gnea). */
+const LINK_FIELDS = ["service", "project", "first_commit"] as const;
+
+/**
+ * Changing where a repo's cards are sent is a gate fact, like a CI file (B-w4g6c): `infra:.baesian/config.json` when a
+ * commit changes the config's service, project or first commit, linking the repo first included. The rest of
+ * `.baesian/` stays out of the gate's sight (`DEFAULT_IGNORE`), and so does the rest of the config.
+ */
+function linkFact(snap: Snapshot, change: Change, warnings: string[]): DetectedFact | undefined {
+  if (change.path !== CONFIG_PATH && change.oldPath !== CONFIG_PATH) return undefined;
+  const read = (text: string | undefined, side: string): Record<string, unknown> | undefined => {
+    if (text === undefined) return {};
+    try {
+      const v = JSON.parse(text) as unknown;
+      return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+    } catch {
+      warnings.push(`couldn't parse the ${side} version of ${CONFIG_PATH}; whether it changes the repo's service or project wasn't checked`);
+      return undefined;
+    }
+  };
+  // Renamed onto the config's path, it had no config before; renamed away, it has none after.
+  const wasThere = change.status !== "A" && (change.oldPath === undefined || change.oldPath === CONFIG_PATH);
+  const before = read(wasThere ? snap.before(CONFIG_PATH) : undefined, "old");
+  const after = read(change.path === CONFIG_PATH && change.status !== "D" ? snap.after(CONFIG_PATH) : undefined, "new");
+  if (!before || !after) return undefined;
+  const moved = LINK_FIELDS.filter((k) => before[k] !== after[k]);
+  if (!moved.length) return undefined;
+  const detail = after.project === undefined ? `unlinked the repo from ${String(before.service)} (project ${String(before.project)})` : before.project === undefined ? `linked the repo to ${String(after.service)} as project ${String(after.project)}` : `changed the repo's ${moved.join(", ")} in ${CONFIG_PATH}`;
+  return { id: `infra:${CONFIG_PATH}`, kind: "infra", path: CONFIG_PATH, detail };
+}
+
 // ---------------------------------------------------------------- detection
 
 const VERB: Record<string, string> = { A: "added", M: "changed", D: "deleted", R: "renamed", C: "copied", T: "changed" };
@@ -291,6 +327,9 @@ export function detectFacts(snap: Snapshot, opts: DetectOptions = {}): Detection
     if (!facts.has(f.id)) facts.set(f.id, f);
   };
   for (const change of snap.changes()) {
+    // Checked before what's ignored: `.baesian/` is, and a repo's own gate_ignore mustn't hide where its cards go (B-w4g6c).
+    const link = linkFact(snap, change, warnings);
+    if (link) add(link);
     if (ignored(change.path)) continue;
     const verb = VERB[change.status] ?? "changed";
     const what = change.oldPath ? `${verb} ${change.oldPath} → ${change.path}` : `${verb} ${change.path}`;

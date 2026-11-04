@@ -199,6 +199,10 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "confidence", value: "", template: false, note: "your confidence in your pick, from 0 to 1: recorded, not used for routing" },
   { field: "domain", value: "", template: false, note: "routing tags" },
   { field: "evidence", value: "", template: false, note: "links that bear on the decision" },
+  {
+    field: "secret_reason", value: "", template: false,
+    note: "why you file a card that looks like it holds a secret: in a hosted repo filing refuses one without it (B-jfkv9). Kept on the card, where reviewers see it",
+  },
 ];
 
 function templateLine(f: CardField): string {

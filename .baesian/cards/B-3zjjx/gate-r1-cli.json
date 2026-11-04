@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-3zjjx",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T174650.891Z-xg8pf.json",
+  "touches": [
+    "security",
+    "public-api",
+    "user-facing"
+  ],
+  "reverse": "moderate",
+  "asked": "hard",
+  "source": "agent",
+  "row": "security",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-04T16:04:53.734Z"
+}

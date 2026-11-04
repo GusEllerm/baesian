@@ -62,6 +62,11 @@ export interface WaitOptions {
   signal?: AbortSignal;
   /** Called at each beat of the marker (every `WAITING_BEAT_MS`): the MCP server reports progress then. */
   onBeat?: (beat: { waitedMs: number; leftMs: number }) => void;
+  /**
+   * Called whenever the waiting marker is written, refreshed or removed, with its path in the live layer: in a linked
+   * repo it goes to the relay too, as a heartbeat (M9d, `waitWithRelay()`).
+   */
+  onMarker?: (marker: { path: string; removed: boolean }) => void;
 }
 
 /** The wait was stopped through its signal before it had an outcome. */
@@ -104,7 +109,20 @@ export async function waitForVerdict(store: Store, id: string, opts: WaitOptions
   // The waiting marker (D90): while it's fresh, "stopped for you" is true. A run that ends with "again" keeps it,
   // and the next run picks it up, so the wait's budget counts from when it first started (D101). It's removed when
   // the wait is over; an agent killed mid-wait leaves it behind, and it goes stale.
-  const marker = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+  const started = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+  const told = (removed: boolean) => opts.onMarker?.({ path: started.path, removed });
+  const marker = {
+    since: started.since,
+    refresh(at: string) {
+      started.refresh(at);
+      told(false);
+    },
+    stop() {
+      started.stop();
+      told(true);
+    },
+  };
+  told(false);
   const budgetEnd = Date.parse(marker.since) + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const sliceEnd = now() + (opts.sliceMs ?? SLICE_MS);
   let beat = now();

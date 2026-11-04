@@ -352,6 +352,12 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
       {held && <HeldFacts card={card} />}
       <div className="reasoning">
         {(m.rationale || m.wrong_if || !card.body.trim()) && <ReasonLine card={card} />}
+        {/* B-jfkv9: filed in a hosted repo though it looks like it holds a secret, with the agent's reason. */}
+        {m.secret_reason && (
+          <p className="small">
+            {agent} filed it though it looks like it holds a secret: <q>{m.secret_reason}</q>
+          </p>
+        )}
         {/* The body is context, shown with the agent's case (D92): open by itself when it's all the reasoning there is. */}
         {card.body.trim() && (
           <details className="context" open={!(m.rationale || m.wrong_if)}>

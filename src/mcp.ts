@@ -5,6 +5,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { CARD_FIELDS, agentName, harnessSession } from "./agents.js";
 import { NotARepo } from "./git.js";
+import type { Http } from "./login.js";
 import { notifyFiled } from "./notify.js";
 import {
   type Actor,
@@ -20,11 +21,11 @@ import {
   showOp,
   templateOp,
   topicsOp,
-  waitOp,
   withdrawOp,
 } from "./ops.js";
 import { CardDraft, CardId } from "./schema.js";
-import { type Card, NoCard, NoDeck, NotAllowed, NotSetUp, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { type Card, LooksLikeSecret, NoCard, NoDeck, NotAllowed, NotSetUp, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { aroundFiling, syncRelay, waitWithRelay } from "./sync.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions } from "./wait.js";
 
 // The local MCP server (M7, P18): `baesian mcp`, over stdio only, started by the harness through the plugin's
@@ -45,15 +46,18 @@ export interface McpOptions {
   notify?: (card: Card) => void;
   /** The clock and sleep for waiting; tests replace them. */
   waitClock?: Pick<WaitOptions, "now" | "sleep" | "pollMs">;
+  /** How it reaches the hosted service in a linked repo (M9d), with the CLI's grant; tests replace it. */
+  http?: Http;
 }
 
 /** The error codes a tool returns, with `isError` set (P18 section 3). A protocol error is only for an unknown tool or bad arguments. */
-export type ErrorCode = "not_a_repo" | "not_set_up" | "possible_duplicate" | "invalid_card" | "no_card" | "not_allowed" | "no_deck";
+export type ErrorCode = "not_a_repo" | "not_set_up" | "possible_duplicate" | "looks_like_secret" | "invalid_card" | "no_card" | "not_allowed" | "no_deck";
 
 export function errorCode(e: unknown): ErrorCode | undefined {
   if (e instanceof NotARepo) return "not_a_repo";
   if (e instanceof NotSetUp) return "not_set_up";
   if (e instanceof PossibleDuplicate) return "possible_duplicate";
+  if (e instanceof LooksLikeSecret) return "looks_like_secret";
   if (e instanceof ValidationError) return "invalid_card";
   if (e instanceof NoCard) return "no_card";
   if (e instanceof NotAllowed) return "not_allowed";
@@ -157,6 +161,19 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       return failed(e);
     }
   };
+  /** What the relay said, after the tool's own lines; its structured content is the command's `--json`, unchanged. */
+  const withNotes = <T>(op: Op<T>, notes: string[]): Op<T> => (notes.length ? { lines: [...op.lines, ...notes], data: op.data } : op);
+  /**
+   * A filing tool (M9d): in a linked repo it pulls first and pushes after, with the grant `baesian login` made, as its
+   * command does (P18 section 8). The server never signs in itself: signed out, the card is filed here and its text says
+   * to ask the person to run `baesian login`.
+   */
+  const filed = (dir: string | undefined, fn: (s: Store) => Op<unknown>) =>
+    run(async () => {
+      const s = store(dir);
+      const { value, notes } = await aroundFiling(s, () => fn(s), opts.http);
+      return withNotes(value, notes);
+    });
 
   server.registerTool(
     "file_card",
@@ -169,7 +186,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       inputSchema: CardFields.extend({ body, new: z.boolean().optional().describe("file even if an open card or a resolved decision looks like the same decision"), cwd }),
       annotations: WRITES,
     },
-    async ({ body: text, new: force, cwd: dir, ...card }, ctx) => run(() => fileOp(store(dir), card, text ?? "", { ...actor(ctx), force: force ?? false })),
+    async ({ body: text, new: force, cwd: dir, ...card }, ctx) => filed(dir, (s) => fileOp(s, card, text ?? "", { ...actor(ctx), force: force ?? false })),
   );
 
   server.registerTool(
@@ -180,7 +197,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       inputSchema: CardFields.extend({ id: cardId, body, cwd }),
       annotations: WRITES,
     },
-    async ({ id, body: text, cwd: dir, ...card }, ctx) => run(() => reviseOp(store(dir), id, card, text ?? "", actor(ctx))),
+    async ({ id, body: text, cwd: dir, ...card }, ctx) => filed(dir, (s) => reviseOp(s, id, card, text ?? "", actor(ctx))),
   );
 
   server.registerTool(
@@ -192,7 +209,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       inputSchema: z.object({ id: cardId, text: z.string().min(1).describe("the fact or the check, in a line"), cwd }),
       annotations: WRITES,
     },
-    async ({ id, text: reply, cwd: dir }, ctx) => run(() => replyOp(store(dir), id, reply, actor(ctx))),
+    async ({ id, text: reply, cwd: dir }, ctx) => filed(dir, (s) => replyOp(s, id, reply, actor(ctx))),
   );
 
   server.registerTool(
@@ -208,7 +225,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       }),
       annotations: WRITES,
     },
-    async ({ id, rule, covers, cwd: dir }, ctx) => run(() => ruleOp(store(dir), id, rule, covers ?? [], actor(ctx))),
+    async ({ id, rule, covers, cwd: dir }, ctx) => filed(dir, (s) => ruleOp(s, id, rule, covers ?? [], actor(ctx))),
   );
 
   server.registerTool(
@@ -219,7 +236,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       inputSchema: z.object({ id: cardId, cwd }),
       annotations: WRITES,
     },
-    async ({ id, cwd: dir }, ctx) => run(() => attachOp(store(dir), id, agentOf(ctx))),
+    async ({ id, cwd: dir }, ctx) => filed(dir, (s) => attachOp(s, id, agentOf(ctx))),
   );
 
   server.registerTool(
@@ -230,7 +247,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       inputSchema: z.object({ id: cardId, reason: z.string().min(1).describe("why it's no longer needed"), cwd }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
-    async ({ id, reason, cwd: dir }, ctx) => run(() => withdrawOp(store(dir), id, reason, agentOf(ctx))),
+    async ({ id, reason, cwd: dir }, ctx) => filed(dir, (s) => withdrawOp(s, id, reason, agentOf(ctx))),
   );
 
   server.registerTool(
@@ -261,17 +278,24 @@ export function buildMcpServer(opts: McpOptions): McpServer {
             params: { progressToken: token!, progress: Math.round(beat.waitedMs / 1000), total: Math.round((beat.waitedMs + beat.leftMs) / 1000), message: `waiting on ${id}; the reviewer is still there` },
           })
           .catch(() => {});
-      return run(() =>
-        waitOp(store(dir), id, {
-          agent: agentOf(ctx),
-          timeoutMs: (timeout_seconds ?? DEFAULT_TIMEOUT_MS / 1000) * 1000,
-          sliceMs: (slice_seconds ?? SLICE_MS / 1000) * 1000,
-          usePresence: presence ?? true,
-          signal: ctx.mcpReq.signal,
-          ...(token !== undefined ? { onBeat } : {}),
-          ...opts.waitClock,
-        }),
-      );
+      // In a linked repo it listens on the relay's socket, and the waiting marker goes up as a heartbeat (M9d, B-bv49e).
+      return run(async () => {
+        const { op, notes } = await waitWithRelay(
+          store(dir),
+          id,
+          {
+            agent: agentOf(ctx),
+            timeoutMs: (timeout_seconds ?? DEFAULT_TIMEOUT_MS / 1000) * 1000,
+            sliceMs: (slice_seconds ?? SLICE_MS / 1000) * 1000,
+            usePresence: presence ?? true,
+            signal: ctx.mcpReq.signal,
+            ...(token !== undefined ? { onBeat } : {}),
+            ...opts.waitClock,
+          },
+          opts.http,
+        );
+        return withNotes(op, notes);
+      });
     },
   );
 
@@ -290,10 +314,12 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       annotations: WRITES,
     },
     async ({ peek, session, cwd: dir }) =>
-      run(() => {
+      run(async () => {
         const s = store(dir);
+        // In a linked repo, pull first, and push what's waiting to go up, as `baesian inbox` does (M9d).
+        const synced = s.isInitialised() ? await syncRelay(s, opts.http) : undefined;
         const where = session ?? harnessSession(env);
-        return inboxOp(s, { advance: !peek, ...(where ? { session: where } : {}) });
+        return withNotes(inboxOp(s, { advance: !peek, ...(where ? { session: where } : {}) }), synced?.notes ?? []);
       }, "items"),
   );
 

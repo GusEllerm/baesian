@@ -60,6 +60,9 @@ export const FILE_KINDS = {
   "service-key": { name: "service key", upgrades: [] },
   "service-key-revocation": { name: "service key revocation", upgrades: [] },
   "passkey-key": { name: "passkey key", upgrades: [] },
+  // M9d, the CLI's side of the hosted service (P16 section 8): what it keeps of the relay, and the machine's grant.
+  relay: { name: "relay state", upgrades: [] },
+  grant: { name: "machine grant", upgrades: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
@@ -172,6 +175,9 @@ export const ProjectId = z.string().max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$
 /** A SHA-256 digest, in lowercase hex. */
 const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, "a SHA-256 digest in lowercase hex");
 
+/** A git commit's full ID, in lowercase hex: SHA-1's 40 digits, or SHA-256's 64. */
+const CommitId = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "a commit's full ID, in lowercase hex");
+
 /** Bytes as base64url, with no padding, as WebAuthn gives them. */
 const Base64Url = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/, "base64url, with no padding");
 
@@ -241,6 +247,11 @@ export const CardMeta = z.strictObject({
    */
   rule: Text.optional(),
   rule_covers: z.array(z.string().regex(FACT_PATTERN, "a gate pattern looks like dep:pytest-* or schema:migrations/*")).default([]),
+  /**
+   * Why a card that looks like it holds a secret was filed all the same (B-jfkv9). In a hosted repo, where a card goes to
+   * the service when it's filed, filing refuses such a card unless the agent gives this; elsewhere it only warns (D136).
+   */
+  secret_reason: Text.optional(),
   /**
    * A convention card (D161): Baesian found a pattern in your answers, by the same choice on one area's decisions or by
    * a comment in rule words, and asks whether they should become one rule. Only Baesian sets it.
@@ -339,19 +350,16 @@ function looksLikeSecret(text: string): string | undefined {
 }
 
 /**
- * Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn; and a field,
- * or the body, that looks like it holds a secret (B-vqn69), named without quoting it.
+ * The fields of a draft, and its body, that look like they hold a secret (B-vqn69), each with what it looks like: the
+ * field's name and the kind, never the text. `secret_reason`, the reason for filing one anyway (B-jfkv9), isn't read.
  */
-export function filingWarnings(d: CardDraft, body = ""): string[] {
-  const long: [string, string | undefined, number][] = [
-    ["title", d.title, 60], ["proposal", d.proposal, 60], ["alternative", d.alternative, 60],
-    ["question", d.question, 160], ["crux", d.crux, 160], ["doing", d.doing, 160],
-    ["proposal_then", d.proposal_then, 240], ["alternative_then", d.alternative_then, 240],
-  ];
+export function secretsIn(d: CardDraft, body = ""): Map<string, string> {
   const texts: [string, string][] = [
-    ...Object.entries(d).flatMap(([name, v]): [string, string][] =>
-      typeof v === "string" ? [[name, v]] : Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => [name, x]) : [],
-    ),
+    ...Object.entries(d)
+      .filter(([name]) => name !== "secret_reason")
+      .flatMap(([name, v]): [string, string][] =>
+        typeof v === "string" ? [[name, v]] : Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => [name, x]) : [],
+      ),
     ["the body", body],
   ];
   const secrets = new Map<string, string>();
@@ -359,9 +367,23 @@ export function filingWarnings(d: CardDraft, body = ""): string[] {
     const kind = secrets.has(name) ? undefined : looksLikeSecret(text);
     if (kind) secrets.set(name, kind);
   }
+  return secrets;
+}
+
+/**
+ * Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn; and a field,
+ * or the body, that looks like it holds a secret (B-vqn69), named without quoting it. In a hosted repo the store refuses
+ * such a draft instead, unless it gives `secret_reason` (B-jfkv9).
+ */
+export function filingWarnings(d: CardDraft, body = ""): string[] {
+  const long: [string, string | undefined, number][] = [
+    ["title", d.title, 60], ["proposal", d.proposal, 60], ["alternative", d.alternative, 60],
+    ["question", d.question, 160], ["crux", d.crux, 160], ["doing", d.doing, 160],
+    ["proposal_then", d.proposal_then, 240], ["alternative_then", d.alternative_then, 240],
+  ];
   return [
     ...long.filter(([, v, max]) => v !== undefined && v.length > max).map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`),
-    ...[...secrets].map(([name, kind]) => `${name} looks like it holds a secret (${kind}): the record is committed with the code, so check it before the next commit`),
+    ...[...secretsIn(d, body)].map(([name, kind]) => `${name} looks like it holds a secret (${kind}): the record is committed with the code, so check it before the next commit`),
   ];
 }
 
@@ -729,7 +751,7 @@ export type GateRecord = z.infer<typeof GateRecord>;
 // ---------------------------------------------------------------- the hosted service's proof (M9a: D138, D139, D142, D159, D160)
 
 /** A website's origin: its scheme and host, with no path. */
-const Origin = z.string().regex(/^https?:\/\/[^\s/?#]+$/, "an origin: https://host, with no path");
+export const Origin = z.string().regex(/^https?:\/\/[^\s/?#]+$/, "an origin: https://host, with no path");
 
 /** A service key's ID, chosen by the service: `trust/service-<key>.json`. */
 const KeyId = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a key ID is a lowercase slug");
@@ -811,6 +833,11 @@ export const Config = z
     service: Origin.optional(),
     /** The project's random ID on the service. No secret, since this file is committed. */
     project: ProjectId.optional(),
+    /**
+     * The repo's first commit, written when it's linked (B-5gnea): a checkout whose history doesn't start there is a copy
+     * of the repo, not the repo, and doesn't sync with the project. Set only with `service`.
+     */
+    first_commit: CommitId.optional(),
     /** Globs for the schema detector; replace the defaults (D25). */
     gate_schema: z.array(z.string().min(1)).optional(),
     /** Globs for the CI, infra and deploy detector; replace the defaults. */
@@ -826,6 +853,9 @@ export const Config = z
   .superRefine((c, ctx) => {
     if ((c.service === undefined) !== (c.project === undefined)) {
       ctx.addIssue({ code: "custom", path: [c.service === undefined ? "service" : "project"], message: "service and project are set together" });
+    }
+    if (c.first_commit !== undefined && c.service === undefined) {
+      ctx.addIssue({ code: "custom", path: ["first_commit"], message: "first_commit is set only in a linked repo, with service and project" });
     }
   });
 export type Config = z.infer<typeof Config>;
@@ -883,6 +913,42 @@ export function readRelayEntry(fields: unknown): RelayEntry {
   }
   return RelayEntry.parse(fields);
 }
+
+/**
+ * What the CLI keeps of a relay (M9d, P16 section 8): `relay.json` in the live layer, mutable, replaced whole whenever it
+ * syncs. Never in the record, and never sent. For one service and project: a repo linked to another starts afresh.
+ */
+export const RelayState = z.strictObject({
+  type: z.literal("relay"),
+  format: formatOf("relay"),
+  service: Origin,
+  project: ProjectId,
+  /** The last sequence number pulled from the relay's log. */
+  pulled: z.number().int().min(0),
+  /** The live layer's files the relay has: those it acknowledged an upload of, and those pulled from it. */
+  uploaded: z.array(z.string().min(1)),
+  /** The last sync. */
+  at: Timestamp,
+});
+export type RelayState = z.infer<typeof RelayState>;
+
+/**
+ * A machine's grant for one project (B-84e0d, B-gq8j1, M9d): `grants/<project>.json` beside the personal config,
+ * readable only by the user (mode 0600). Written by `baesian login`, replaced whole at each refresh, before the new
+ * tokens are used, since a refresh token is used once (RFC 9700); removed by `baesian logout`. Never in a repo.
+ */
+export const MachineGrant = z.strictObject({
+  type: z.literal("grant"),
+  format: formatOf("grant"),
+  service: Origin,
+  project: ProjectId,
+  /** The name the website's Machines page shows. */
+  machine: z.string().min(1),
+  access_token: z.string().min(16),
+  access_expires: Timestamp,
+  refresh_token: z.string().min(16),
+});
+export type MachineGrant = z.infer<typeof MachineGrant>;
 
 /** Format a Zod error for a person reading a terminal. */
 export function describeError(error: z.ZodError): string {

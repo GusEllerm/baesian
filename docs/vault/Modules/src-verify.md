@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/verify.ts: baesian verify, the commit gate rerun in CI against committed records, plus the merge gate and conflicting decisions; in a hosted repo, only signed answers count, checked offline with keys pinned in CI (M9a). Includes a GitHub Actions example, and how to check an answer by hand with ssh-keygen."
 created: 2026-10-23
-updated: 2026-11-03
+updated: 2026-11-04
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -56,6 +56,8 @@ Only answers the service signs count (D138): every verdict, rule, retirement, to
 - **Per commit** (`checkCommit()`): the commit gate as before, over the answers that count, so a hard card answered only on the machine, or without the reviewer's passkey (D139), is still unresolved. And the record's keys must match the pin: a service key or passkey key in the record that CI doesn't pin, or pins differently, fails the commit (`CommitCheck.trust`, from `pinProblems()`; D142, D159), with its line to add if it's yours. A revocation in the record applies whether pinned or not.
 - **The merge gate** reads statuses from the answers that count, so a card answered only on the machine is unanswered. `checkMerge` rechecks the CLI's gate record, which set the card's level, and the relay's signed one too (`Store.gateRecordBy`). The relay's is rechecked the same way, but its draw is read from its `draw_proof`, which must be the service's signature over the card revision (`drawOfProof()`), and it doesn't set the card's level. A card the relay hasn't gated isn't held (D158), so it needs an answer.
 - **Notes.** The files a person writes at HEAD that don't count are listed with why (`VerifyResult.hosted`, from `Store.uncounted`): ignored, not an error (D138).
+- **Answers from before linking (B-45xz8, M9d)** count as they are: an unsigned answer in the record at the commit that linked the repo, with the same bytes ([[src-store#The hosted service's proof (M9a)]]). Each commit's record is read with that commit's history (`RecordAt` passes it to `Store.overRecord`), so the linking commit is found in the config's history. CI needs that history: in a shallow checkout, where the commit found is the clone's boundary, such an answer can't be told from one added later, and the run fails (`VerifyResult.hosted.shallow`), saying to fetch the full history (`fetch-depth: 0`, as the workflow below has it).
+- **Linking the repo** is a gate fact, `infra:.baesian/config.json` (B-w4g6c, [[src-gate]]), so the commit that links it needs a card or the ack `baesian login` prints.
 
 ## Checking an answer by hand
 

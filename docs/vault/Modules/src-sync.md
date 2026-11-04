@@ -1,0 +1,53 @@
+---
+type: module
+status: active
+authority: describes
+summary: "src/login.ts and src/sync.ts (M9d): the CLI's side of the hosted service. Signing a machine in through OAuth's device flow (B-t5wxr), one grant per machine and project (B-84e0d) kept in a 0600 file (B-gq8j1), refreshed before use and revoked at logout; linking a repo with its first commit (B-5gnea, B-62qnz); and syncing the live layer through the relay: pulling the log, pushing what agents write (everything at first link, B-6k0rk), relay.json, and baesian wait on the relay's socket (B-bv49e). No daemon; offline, everything works as before."
+created: 2026-11-04
+updated: 2026-11-04
+reviewed: 2026-11-04
+tags: [baesian, module, hosted]
+---
+
+# src/login.ts and src/sync.ts: the CLI's side of the hosted service (M9d)
+
+The design is [[Hosted Service]] sections 1, 2 and 5 and [[Formats for v1]] section 8, as the cards in deck `hosted` decided them. The service's side is [[service]]; the formats are in [[File Formats#The CLI's side of the relay (M9d)]]. The commands that use these are in [[src-cli]], the MCP server's tools in [[src-mcp]].
+
+## src/login.ts: signing a machine in
+
+**The grant file (B-gq8j1).** `grants/<project>.json` beside the personal config (`grantsDir()`, `grantPath()`, from `userConfigPath()`), a `MachineGrant`. **`writeGrant()`** writes it whole: a temporary file created with mode 0600 in a folder made 0700, renamed over the old, so nobody else can read it and a reader sees the old tokens or the new. **`readGrant()`** reads it; one it can't read throws `SignedOut` without quoting it, since it holds tokens. **`removeGrant()`** deletes it. No token is ever printed, logged or put in an error.
+
+**The device flow (RFC 8628, B-t5wxr).** **`signInMachine()`** posts `client_id` (`CLIENT_ID`, `baesian-cli`), the project and the machine's name to `/v1/machines/device`, shows the code (`onCode`), and polls `/v1/machines/token` at the interval the service gives, five seconds more after each `slow_down`. A refusal or an expired code throws `SignInFailed`. It returns the grant; the caller writes it. **`machineName()`** makes the hostname into a name the service takes.
+
+**Refreshing (RFC 6749, RFC 9700).** **`refreshGrant()`** runs holding the project's lock file, `grants/<project>.json.lock` (`withGrantLock()`, private; a lock older than 30 seconds is taken over), because a refresh token is used once and the service revokes a grant whose refresh token comes back: two commands refreshing at once would end the grant. Under the lock it reads the grant file again; if another command refreshed meanwhile, it takes those tokens and sends nothing. Otherwise it refreshes, writes the new pair, and only then returns it. A grant the service refuses (`invalid_grant`: revoked, lapsed, or its refresh token seen twice) is removed here, and `SignedOut` says to run `baesian login`.
+
+**Revoking (RFC 7009).** **`revokeGrant()`** posts the refresh token to `/v1/machines/revoke`, which ends the grant and its access token.
+
+**Errors.** `Offline`: the service couldn't be reached, or didn't answer within `REQUEST_MS` (10 seconds a request), or the command's signal stopped it; `reason()` says why in a few words. `SignedOut`: this machine has no grant that works for the project. `SignInFailed`: signing in didn't finish.
+
+**Linking (B-62qnz, B-5gnea, B-w4g6c).** **`newProjectId()`** makes a project's ID, `p-` and 20 characters of Crockford's base32 (100 bits): the CLI picks it, and approving it makes it the approver's (M9c). **`firstCommitToLink()`** is the commit the repo's history starts from, the oldest of `rootCommits()`; it refuses a shallow clone, which can't see it (`isShallow()`), and a repo with no commits. **`linkRepo()`** writes the service, the project and the first commit into the config (`Store.setLink`). **`linkAck()`** is the trailer that covers the gate fact the link is (B-w4g6c), which `baesian login` prints.
+
+## src/sync.ts: syncing through the relay
+
+**Is this repo linked, and is this machine in?** **`relayFor()`** gives a `Link`: `off` when the config names no project (nothing changes, as before M9d); `stopped` when **`linkProblem()`** finds this checkout isn't the project's repo (B-5gnea: its history doesn't start at the config's `first_commit`, or the config has none, or there are no commits yet; a shallow clone skips the check); `signed-out` when there's no grant for the config's service and project; else `on`, with a **`RelayClient`**.
+
+**`RelayClient`** calls the project's addresses, `/v1/projects/{project}/…` (B-7z97x), with the access token as `Authorization: Bearer`. **`RelayClient.token`** refreshes when the token has less than a minute left; on a 401 it reads the grant file again (another command may have refreshed), else refreshes, and tries once more. **`RelayClient.liveUrl`** is the live socket's address.
+
+**Pulling.** The log after `pulled` (`GET log`), page by page; each entry is read with `readRelayEntry()` (an encrypted one is refused, D137) and written into the live layer as if it had been written here, with an exclusive create, its `.sig` first, so no reader sees a signed file without its signature. Only the folders the relay holds are written (`cards`, `decks`, `verdicts`, `rules`, `topics`, `preferences`, `trust`, `attachments`; never presence, cursors, markers or `relay.json`); an entry whose bytes don't match its size and digest is skipped, and one whose body was dropped (D137) has nothing to write. A path this machine wrote first with other bytes takes the relay's copy, in the worktree's record too, and the agent is told (`put()`):
+- a revision: it was **revised on another machine first**, so this machine's wasn't sent, as the local API's 409 says of a stale verdict;
+- a card's first revision this machine never sent: **another machine's new card took its ID**, so this machine's card is taken out (`takeOut()`) and, once the pull is done, **filed again under a new ID** (`Store.fileCard`, with the level its agent asked for, from its gate record), and the agent is told the new ID.
+
+**Pushing.** **`agentWritten()`** says which files a machine pushes, the kinds the relay takes from one (`agentKind()` in `service/src/uploads.ts`; a test keeps the two in step): card revisions, the CLI's gate records, withdrawals, fallbacks, attachments and decks. **`unsent()`** lists those the relay doesn't have yet, in its order: decks, then revisions, each card's in order, then the rest. When a repo is first linked that's everything in the live layer (B-6k0rk). Each goes up with `PUT files/{path}`; a 409 (written first elsewhere) is followed by a pull that brings the relay's copy, and the push runs again, at most three rounds; anything else refused stays here, with a note, and is offered again next time.
+
+**`relay.json`** (`RELAY_STATE`, `RelayState`): `pulled`, the last sequence number pulled, and `uploaded`, the files the relay has (acknowledged, or pulled from it), for one service and project. **`readRelayState()`** starts afresh when there's none, when it's another relay's, or when it can't be read: pulling again is harmless, since every file is written once. It's replaced whole after every sync, whatever got done (`Storage.replace`).
+
+**When it syncs** (Hosted Service section 1; there's no daemon):
+- **`syncRelay()`**: pull, then push. It never throws for the network, the grant or the relay: its `SyncReport` says `synced`, `offline`, `signed-out` or `stopped`, with the notes for the agent;
+- **`aroundFiling()`**, for the filing commands and the MCP filing tools: pull, run the command, push. When the pull couldn't reach the relay, the push isn't tried, so a command never waits twice;
+- **`waitWithRelay()`**, for `baesian wait` and `wait_for_verdict` (B-bv49e): pull and push first, so the card is on the relay and an answer already given is here; then the wait as ever, with a `Listener` (private) beside it: the relay's live socket, opened with the bearer token in Node's WebSocket headers, whose `changed` messages each start a pull, so the wait's own poll finds an answer within a moment; the waiting marker sent up at each beat (`WaitOptions.onMarker`) and removed when the wait ends; and the reviewer's presence, read from the relay's state at each beat and written into the live layer when it's newer, so the wait knows when they're away (D41). A socket that closes is opened again, after 1, 2, 5 and then 10 seconds.
+
+**Offline, or signed out,** everything local works as before: the command's own output is unchanged, a note goes to standard error (or after an MCP tool's text), and what's new goes up at the next command that reaches the relay. A quiet hook prints nothing.
+
+## Tests
+
+`test/relay.test.ts` runs the CLI against the real relay: the service's own Worker, from `service/wrangler.jsonc`, started in workerd by Wrangler's `unstable_startWorker` from the service's packages (`test/relay-harness.ts`), its accounts database migrated, a signing key and the stand-in's sessions made for the run, nothing reached but 127.0.0.1. A machine's code is approved in the accounts database, as a person on the website (M9e) would. It covers signing in and linking, a refusal, refreshing (and a refresh token used twice ending the grant), signing out, pushing and pulling between two clones, a signed answer counting, everything going up at first link, a revision revised elsewhere, a new card's ID taken elsewhere, offline, `inbox --quiet` staying quiet, `pre-commit`'s timeout against a relay that never answers, `baesian wait` hearing an answer over the socket with its marker on the relay, the MCP server syncing with the same grant and saying when it's signed out, and the first-commit check on a template-style copy and a shallow clone. Without the service's packages installed, those tests are skipped. `test/linking.test.ts` covers the gate fact (B-w4g6c) and answers from before linking (B-45xz8).
