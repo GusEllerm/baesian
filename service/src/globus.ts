@@ -5,6 +5,17 @@ import * as oauth from "oauth4webapi";
 // Globus's discovery lists), and the ID token checked, its signature included. Only `openid` and `email` are asked
 // for. Globus's tokens are used once, to learn who signed in, and never kept.
 
+/**
+ * client_secret_basic as Globus reads it: `client_id:secret` in base64, as they are, as Globus's own SDK sends them.
+ * oauth4webapi's `ClientSecretBasic` form-encodes both first (RFC 6749 section 2.3.1), so a secret holding `+`, `/` or
+ * `=`, as Globus's base64 secrets do, reached Globus as `%2B`, `%2F` or `%3D`, and it answered invalid_client.
+ */
+export function globusBasic(clientSecret: string): oauth.ClientAuth {
+  return (_as, client, _body, headers) => {
+    headers.set("authorization", `Basic ${btoa(`${client.client_id}:${clientSecret}`)}`);
+  };
+}
+
 export interface GlobusConfig {
   /** Globus Auth's issuer: `https://auth.globus.org` (wrangler.jsonc's `GLOBUS_ISSUER`). */
   issuer: string;
@@ -70,7 +81,7 @@ export async function identityFrom(c: GlobusConfig, callback: URL, trip: RoundTr
   const as = await server(c);
   const cl = client(c);
   const params = oauth.validateAuthResponse(as, cl, callback, trip.state);
-  const response = await oauth.authorizationCodeGrantRequest(as, cl, oauth.ClientSecretBasic(c.clientSecret), params, c.redirectUri, trip.verifier, options(c));
+  const response = await oauth.authorizationCodeGrantRequest(as, cl, globusBasic(c.clientSecret), params, c.redirectUri, trip.verifier, options(c));
   const result = await oauth.processAuthorizationCodeResponse(as, cl, response, { expectedNonce: trip.nonce, requireIdToken: true });
   await oauth.validateApplicationLevelSignature(as, response, options(c));
   const claims = oauth.getValidatedIdTokenClaims(result);

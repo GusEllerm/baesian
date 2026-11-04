@@ -87,7 +87,10 @@ export class GlobusStandIn {
 
   private async token(request: Request): Promise<Response> {
     const auth = request.headers.get("authorization") ?? "";
-    const [id, secret] = Buffer.from(auth.replace(/^Basic /, ""), "base64").toString().split(":").map((x) => decodeURIComponent(x.replace(/\+/g, " ")));
+    // As Globus reads it: the ID and secret as they are, not form-decoded.
+    const plain = Buffer.from(auth.replace(/^Basic /, ""), "base64").toString();
+    const at = plain.indexOf(":");
+    const [id, secret] = [plain.slice(0, at), plain.slice(at + 1)];
     if (id !== this.clientId || secret !== this.clientSecret) return Response.json({ error: "invalid_client" }, { status: 401 });
     const form = new URLSearchParams(await request.text());
     const grant = this.codes.get(form.get("code") ?? "");

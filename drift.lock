@@ -3108,12 +3108,12 @@ sig = "38f25208791e3834"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/globus.ts"
-sig = "406886ce21d3f239"
+sig = "30c03d22896fdb0b"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/globus.ts#identityFrom"
-sig = "4c242673056d466a"
+sig = "e6fc6c4c854f1182"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -3753,7 +3753,7 @@ sig = "3b0b08da73c97dfc"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/globus.ts"
-sig = "406886ce21d3f239"
+sig = "30c03d22896fdb0b"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -3777,8 +3777,13 @@ sig = "c96dc974039c26ee"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/globus.ts#globusBasic"
+sig = "769351bc79eca7f4"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/globus.ts#identityFrom"
-sig = "4c242673056d466a"
+sig = "e6fc6c4c854f1182"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -4173,7 +4178,7 @@ sig = "80fbde1084563a89"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/vitest.config.ts"
-sig = "721bcf42e8f799cd"
+sig = "fd52da7ed3a02a7c"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"

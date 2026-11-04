@@ -62,7 +62,8 @@ export async function startSite(): Promise<LocalSite> {
   const port = await freePort();
   const url = `http://localhost:${port}`;
   const persist = mkdtempSync(join(tmpdir(), "baesian-site-"));
-  const secret = randomBytes(24).toString("base64url");
+  // Like a real Globus secret, base64 with `+`, `/` and `=` in it.
+  const secret = `${randomBytes(24).toString("base64url")}+/=`;
   const globus = new GlobusStandIn("baesian-site-test", secret);
   const pushes: SentPush[] = [];
   const pushAnswer = new Map<string, number>();
