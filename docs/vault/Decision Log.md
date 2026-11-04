@@ -80,6 +80,7 @@ views:
 
 | ID | Date | Decision | Source |
 |---|---|---|---|
+| D179 | 2026-11-04 | **The hosted service is published as soon as it's ready, with the privacy policy as drafted and no legal review for now.** The questions for a lawyer stay listed in [[Privacy Policy]]. | the user, in conversation |
 | D178 | 2026-11-04 | **The service's Cloudflare account moves to Workers Paid now,** if it isn't on it already, instead of staying on the Free plan until just before others sign up. **Revises B-nm45g.** Paid is $5 a month with usage past its allowances billed and no spending cap, and it lets Email Sending reach any address. | the user, in conversation |
 | D177 | 2026-11-04 | **The hosted service runs in the Cloudflare account under the user's University of Chicago address,** not the one under their personal address: the Worker, its Durable Objects, the D1 accounts database, the domain's zone, Email Sending and Turnstile all live there (M9f). | the user, in conversation |
 | D176 | 2026-11-04 | **Globus's terms allow Baesian's Globus sign-in, for every user:** D153's check is done, so Globus sign-in (oauth4webapi, B-s76hg) is built in M9c with the rest of sign-in. The user works for Globus Labs, and confirmed it. | the user, in conversation |
