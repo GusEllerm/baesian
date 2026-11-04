@@ -17,6 +17,12 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-04.*
 
+- **M9e is done: the website installs as an app, sends notifications, and keeps usage counts (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
+  - **Notifications:** web push on Baesian's own code (B-nk97q), giving counts and levels only, in the project's name. Stopping cards notify at once and the rest come in a digest (B-advkh).
+  - **Usage counts:** ten kinds of event with fixed values (B-7nq85), with an opt-out, listed at `/counts`. The [[Usage Counts Balancing Test]] waits for the user's check.
+  - **Tests:** 562 root unit tests, 125 relay tests and 96 browser tests pass.
+  - **Next, M9f, which needs the user:** a Cloudflare account and domain, the D1 database, the email domain, Turnstile keys, the Globus app, and the `VAPID_KEY` secret. The checks on real devices follow it.
+
 - **M9e step 1, the website, is built and merged (2026-11-04)** ([[2026-11-04 M9c Sign-in]]): the Worker serves the client as a website for signing up, signing in, recovery, the account, approving machines (`/device`, which names a new project, B-zqkwk), your projects, and each project's desk at `/projects/{project}`, live over the relay's socket, with the passkey asked for on hard answers. Answers from before linking go up once, at first link (B-3zjjx). `baesian serve` in a linked repo opens the project's page. Nothing waits on the user. 560 root unit tests, 98 relay tests and 84 browser tests pass. Next: M9e step 2, web push, installing as an app, and usage counts.
 
 - **M9d, the CLI's side of the hosted service, is built (2026-11-04)** ([[2026-11-04 M9c Sign-in]]): `baesian login` signs a machine in and links an unlinked repo, and the CLI and the MCP server sync through the relay; offline, everything works as before. Waiting on the user: B-3zjjx, whether answers from before linking go up to the relay. 557 root unit tests, 95 relay tests and 69 browser tests pass. Next: M9e, the website.
