@@ -21,7 +21,12 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - `v0.1.0`, tagged on `main` and deployed by CI (B-bk20v).
   - The custom domain is attached, all five migrations are applied, the daily job is scheduled, and Workers Logs are off.
   - Sign-up is open (B-mz6qc), but others can't link a repo yet: the CLI isn't published and the repo is private.
-  - **Next:** the user's first real run (sign up, `baesian login`, a card answered on the phone), the checks on real devices, then M10.
+  - **`v0.1.1`** fixed Globus sign-in (the client's credentials weren't sent as Globus reads them) and the privacy page's width. The user has signed up.
+  - **Next:**
+    - link this repo: add `BAESIAN_TRUST` to `ci.yml` and as a repo variable, then run `baesian login` here;
+    - confirm Globus sign-in;
+    - the checks on real devices;
+    - then M10.
 
 - **M9f has begun (2026-11-04)**:
   - **Where it runs:** the user's University of Chicago Cloudflare account (D177), on Workers Paid (D178), at **https://baesian.dev** (B-aa9pc).
