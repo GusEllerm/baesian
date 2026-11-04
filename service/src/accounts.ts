@@ -125,6 +125,21 @@ export interface Project {
   created: string;
 }
 
+/** A browser's subscription to web push (the `push_subscriptions` table, M9e step 2). */
+export interface PushSubscriptionRow {
+  id: string;
+  account: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  name: string;
+  created: string;
+  last_sent: string | null;
+}
+
+/** The most browsers an account gets notifications on. */
+export const PUSH_MAX = 20;
+
 /** A conflict on a unique column (a handle or an email taken in the meantime). */
 export class Taken extends Error {}
 
@@ -377,6 +392,47 @@ export class Accounts {
   /** Whether an account may answer in a project: in v1, its owner (P15 section 2). */
   async member(account: string, project: string): Promise<boolean> {
     return (await this.db.prepare("SELECT 1 AS x FROM projects WHERE id = ? AND owner = ?").bind(project, account).first()) !== null;
+  }
+
+  // ---------------------------------------------------------------- push subscriptions (M9e step 2, B-nk97q)
+
+  /**
+   * A browser's subscription to web push, for an account: one per account and browser. A browser's endpoint is its own,
+   * so subscribing again from it replaces its keys, and moves it to this account if another had it (two accounts signed
+   * in, one after the other, in one browser). An account has at most `PUSH_MAX`. Returns the row.
+   */
+  async subscribe(account: string, s: { endpoint: string; p256dh: string; auth: string }, name: string): Promise<PushSubscriptionRow | { problem: string }> {
+    const had = await this.db.prepare("SELECT * FROM push_subscriptions WHERE endpoint = ?").bind(s.endpoint).first<PushSubscriptionRow>();
+    if (!had || had.account !== account) {
+      const n = await this.db.prepare("SELECT COUNT(*) AS n FROM push_subscriptions WHERE account = ?").bind(account).first<{ n: number }>();
+      if ((n?.n ?? 0) >= PUSH_MAX) return { problem: `an account gets notifications on at most ${PUSH_MAX} browsers: remove one first` };
+    }
+    const row: PushSubscriptionRow = { id: had?.account === account ? had.id : idWith("push"), account, endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth, name, created: had?.account === account ? had.created : this.now(), last_sent: had?.account === account ? had.last_sent : null };
+    await this.db
+      .prepare("INSERT INTO push_subscriptions (id, account, endpoint, p256dh, auth, name, created, last_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (endpoint) DO UPDATE SET id = excluded.id, account = excluded.account, p256dh = excluded.p256dh, auth = excluded.auth, name = excluded.name, created = excluded.created, last_sent = excluded.last_sent")
+      .bind(row.id, row.account, row.endpoint, row.p256dh, row.auth, row.name, row.created, row.last_sent)
+      .run();
+    return row;
+  }
+
+  /** An account's subscriptions, oldest first. */
+  async subscriptions(account: string): Promise<PushSubscriptionRow[]> {
+    return (await this.db.prepare("SELECT * FROM push_subscriptions WHERE account = ? ORDER BY created").bind(account).all<PushSubscriptionRow>()).results;
+  }
+
+  /** Remove one of an account's subscriptions. Returns whether there was one. */
+  async unsubscribe(account: string, id: string): Promise<boolean> {
+    return (await this.db.prepare("DELETE FROM push_subscriptions WHERE account = ? AND id = ?").bind(account, id).run()).meta.changes > 0;
+  }
+
+  /** A subscription its push service says is gone (404 or 410): deleted. */
+  async dropSubscription(endpoint: string): Promise<void> {
+    await this.db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(endpoint).run();
+  }
+
+  /** When a push last reached a subscription's push service. */
+  async markSent(ids: string[]): Promise<void> {
+    if (ids.length) await this.db.batch(ids.map((id) => this.db.prepare("UPDATE push_subscriptions SET last_sent = ? WHERE id = ?").bind(this.now(), id)));
   }
 
   // ---------------------------------------------------------------- machines (B-84e0d, RFC 8628, RFC 9700)

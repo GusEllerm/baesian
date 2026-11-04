@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { type CreationOptionsJSON, makePasskey } from "../webauthn";
-import { type Account as AccountData, ago, call, day, fresh, projectName, reauth, useConfig } from "./api";
+import { type Account as AccountData, type Ceremony, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
 import { go, takeFragment } from "./nav";
-import { Go, Notice, Problem, Sheet, Shell, ShownOnce } from "./Page";
+import { Notifications } from "./Notifications";
+import { Go, Notice, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
 
 // Your account (M9c): your passkeys, and adding one, with its line for CI shown once (D159); where you're signed in, and
 // ending any of it (B-vtr1r, B-7bq05); your machines, and ending any (B-84e0d); Globus, linked or not (D176); and signing
 // out, here or everywhere. What adds a way in asks for your passkey afresh.
+
+/** A new passkey's options (`POST /v1/account/passkeys/start`), which take a recent check. */
+const enrolStart = () => call<Ceremony<CreationOptionsJSON>>("POST", "/v1/account/passkeys/start", {});
 
 interface SignInRow {
   id: string;
@@ -34,6 +38,12 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
   const [fragment] = useState(takeFragment);
   const [notice, setNotice] = useState<string | undefined>(fragment.get("globus") === "linked" ? "Globus is linked: you can sign in through it from now on." : undefined);
   const [problem, setProblem] = useState<string | undefined>(fragment.get("message") ?? undefined);
+  // What asks for your passkey afresh (adding one, linking Globus) starts it from the tap itself, with options fetched
+  // before it: the check's while the last one is old, the new passkey's once it's recent (M9e step 2).
+  const freshNow = useFresh(account.fresh_until);
+  const check = usePrepared(freshNow ? undefined : reauthStart);
+  const enrol = usePrepared(freshNow ? enrolStart : undefined);
+  const [checked, setChecked] = useState(false);
 
   const lists = async () => {
     const [s, m] = await Promise.all([call<{ sessions: SignInRow[] }>("GET", "/v1/account/sessions"), call<{ machines: MachineRow[] }>("GET", "/v1/account/machines")]);
@@ -57,11 +67,20 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
     }
   };
 
+  // Two taps when the last check is old: one for a passkey you have, then one to make the new one, since each starts a
+  // passkey and a browser starts one only from a tap.
   const addPasskey = () =>
     run("passkey", async () => {
-      const start = await fresh(() => call<{ flow: string; options: CreationOptionsJSON }>("POST", "/v1/account/passkeys/start", {}));
-      const response = await makePasskey(start.options);
-      const r = await call<{ passkey: { name: string; pin: string } }>("POST", "/v1/account/passkeys/finish", { flow: start.flow, response });
+      if (!freshNow) {
+        await reauthWith(check.take());
+        await reload();
+        setChecked(true);
+        return setNotice("That's you. Now make the new passkey.");
+      }
+      const c = enrol.take();
+      const response = await makePasskey(c.options);
+      const r = await call<{ passkey: { name: string; pin: string } }>("POST", "/v1/account/passkeys/finish", { flow: c.flow, response });
+      setChecked(false);
       setAdded(r.passkey);
       await reload();
     });
@@ -89,7 +108,7 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
 
   const linkGlobus = () =>
     run("globus", async () => {
-      if (Date.parse(account.fresh_until) < Date.now() + 30_000) await reauth();
+      if (!freshNow) await reauthWith(check.take());
       location.assign("/v1/globus/start?purpose=link");
     });
 
@@ -106,6 +125,8 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
         <Problem text={problem} />
         <Notice text={notice} />
       </Sheet>
+
+      <Notifications vapidKey={config === undefined ? undefined : config.vapid_public_key} />
 
       <Sheet title="Passkeys" sub label="Your passkeys" lead="They sign you in, and confirm your answers on hard cards. Add one on each device you answer from.">
         <ul className="site-rows">
@@ -129,10 +150,10 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
             }
           />
         )}
-        <Go busy={busy === "passkey"} busyText="Waiting for your passkey…" onClick={() => void addPasskey()}>
-          Add a passkey
+        <Go busy={busy === "passkey"} busyText="Waiting for your passkey…" disabled={!(freshNow ? enrol.ready : check.ready)} onClick={() => void addPasskey()}>
+          {checked && freshNow ? "Make the new passkey" : "Add a passkey"}
         </Go>
-        <p className="small">Adding one asks for a passkey you have first, and emails you a notice.</p>
+        <p className="small">Adding one asks for a passkey you have first, unless you used it in the last few minutes, and emails you a notice.</p>
       </Sheet>
 
       <Sheet title="Where you're signed in" sub label="Your sign-ins" lead="Each browser stays signed in until 30 days unused, or 90 days in all. Only its name and when it was last used are kept.">
@@ -187,12 +208,14 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
               Unlink Globus
             </button>
           ) : (
-            <Go busy={busy === "globus"} onClick={() => void linkGlobus()}>
+            <Go busy={busy === "globus"} disabled={!check.ready} onClick={() => void linkGlobus()}>
               Link Globus
             </Go>
           )}
         </Sheet>
       )}
+
+      <UsageCounts counted={account.usage.counted} reload={reload} />
 
       <Sheet title="Sign out" sub label="Signing out">
         <div className="site-actions">
@@ -206,5 +229,52 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
         <p className="small">Everywhere means every browser. Machines stay signed in: sign them out above.</p>
       </Sheet>
     </Shell>
+  );
+}
+
+/**
+ * Usage counts (D141, B-7nq85): every account is counted unless it opts out, here. Opting out stops counting and deletes
+ * what was kept for the account; the public page lists every field.
+ */
+function UsageCounts({ counted, reload }: { counted: boolean; reload: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  // What the box shows: the answer just given, while the service is told, then the account's own.
+  const [shown, setShown] = useState<boolean>();
+  const [notice, setNotice] = useState<string>();
+  const [problem, setProblem] = useState<string>();
+  const set = async (on: boolean) => {
+    setBusy(true);
+    setShown(on);
+    setNotice(undefined);
+    setProblem(undefined);
+    try {
+      await call("POST", "/v1/account/usage", { counted: on });
+      await reload();
+      setNotice(on ? "Your use is counted again, under a new ID that isn't linked to before." : "Nothing more is counted for your account, and what was kept for it is deleted.");
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setShown(undefined);
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      title="Usage counts"
+      sub
+      label="Usage counts"
+      lead="The service counts how it's used, to know whether it works and what it costs: how many cards are filed and answered, how long they wait, whether notifications arrive. Never what a card says, nor anyone's name."
+    >
+      <Problem text={problem} />
+      <Notice text={notice} />
+      <label className="site-check">
+        <input type="checkbox" checked={shown ?? counted} disabled={busy} onChange={(e) => void set(e.target.checked)} />
+        Count my use of the service
+      </label>
+      <p className="small">Unticking it deletes what was kept for your account at once.</p>
+      <p className="small">
+        <To to="/counts">Every field it counts, and what it never does</To>
+      </p>
+    </Sheet>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type RequestOptionsJSON, signWithPasskey } from "../webauthn";
 
 // The service's account addresses (M9c, docs/vault/Modules/service.md), as the website's pages call them: JSON, with
@@ -40,6 +40,8 @@ export interface SiteConfig {
   rp_id: string;
   turnstile_site_key: string;
   globus: boolean;
+  /** Web push's VAPID key, base64url, for browsers to subscribe with; null when the service can't send (M9e step 2). */
+  vapid_public_key: string | null;
 }
 
 let config: Promise<SiteConfig> | undefined;
@@ -82,6 +84,8 @@ export interface Account {
   globus: { linked: string } | null;
   projects: Project[];
   fresh_until: string;
+  /** Whether the account's usage is counted (D141): yes unless it opted out. */
+  usage: { counted: boolean };
 }
 
 export type Me = { kind: "loading" } | { kind: "signed-out" } | { kind: "error"; message: string } | { kind: "in"; account: Account };
@@ -103,21 +107,108 @@ export function useMe(): Me & { reload: () => Promise<void> } {
   return { ...me, reload };
 }
 
-/** Check your passkey afresh (M9c): what adds a way in, or approves a machine, asks for a check in the last 5 minutes. */
-export async function reauth(): Promise<void> {
-  const start = await call<{ flow: string; options: RequestOptionsJSON }>("POST", "/v1/account/reauth/start", {});
-  await call("POST", "/v1/account/reauth/finish", { flow: start.flow, response: await signWithPasskey(start.options) });
+// ---------------------------------------------------------------- passkeys from a tap (M9e step 2)
+// Safari starts a passkey only from a tap: `navigator.credentials` must be called in the tap's own handler, with no
+// request to the service before it. So a page fetches a ceremony's options when it opens (`usePrepared()`), keeps them
+// fresh while it's open, and the tap uses them at once. If they weren't ready (the device slept, say), the tap fetches
+// them and asks for one more tap.
+
+/** How long prepared options are used: under the service's 5 minutes for a ceremony (`LIMITS.ceremonyMs`). */
+export const PREPARED_MS = 4 * 60_000;
+
+/** A ceremony's options from the service, with the flow they belong to. */
+export interface Ceremony<O> {
+  flow: string;
+  options: O;
 }
 
-/** Run something that may need a fresh passkey check: if the service says so (403, `reauth`), check, then run it again. */
-export async function fresh<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (e) {
-    if (!(e instanceof ApiError && e.body.reauth === true)) throw e;
+/** The tap came before the passkey was ready; it is now. */
+export class TapAgain extends Error {
+  constructor() {
+    super("your passkey wasn't ready yet. Tap again to use it");
   }
-  await reauth();
-  return run();
+}
+
+/**
+ * Options for a passkey ceremony, fetched before the tap that uses them, and again before they expire while the page is
+ * open. `take()` hands them over at once, with nothing awaited before the passkey (a flow is used once, so it fetches the
+ * next); with none ready, it starts fetching them and throws `TapAgain`, so the page asks for another tap. `ready` is
+ * false only while the first options are on their way, for the button to wait on; with no `load`, nothing is prepared,
+ * and it's ready.
+ */
+export function usePrepared<T>(load: (() => Promise<T>) | undefined): { take: () => T; ready: boolean } {
+  const held = useRef<{ value: T; at: number } | undefined>(undefined);
+  const loading = useRef<Promise<void> | undefined>(undefined);
+  const [ready, setReady] = useState(!load);
+  const refresh = useCallback(() => {
+    if (!load) return Promise.resolve();
+    loading.current ??= load()
+      .then((value) => {
+        held.current = { value, at: Date.now() };
+      })
+      .catch(() => {
+        // Failed: the tap fetches them again, and says to tap once more.
+        held.current = undefined;
+      })
+      .finally(() => {
+        loading.current = undefined;
+        setReady(true);
+      });
+    return loading.current;
+  }, [load]);
+  useEffect(() => {
+    held.current = undefined;
+    setReady(!load);
+    if (!load) return;
+    void refresh();
+    const stale = () => !held.current || Date.now() - held.current.at > PREPARED_MS;
+    const t = setInterval(() => stale() && void refresh(), 15_000);
+    const back = () => document.visibilityState === "visible" && stale() && void refresh();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [load, refresh]);
+  return {
+    ready,
+    take: () => {
+      const h = held.current;
+      held.current = undefined;
+      // The next options are fetched after this tap's passkey has started, never before it.
+      setTimeout(() => void refresh(), 0);
+      if (h && Date.now() - h.at <= PREPARED_MS) return h.value;
+      throw new TapAgain();
+    },
+  };
+}
+
+/** A fresh check's options (`POST /v1/account/reauth/start`). */
+export const reauthStart = () => call<Ceremony<RequestOptionsJSON>>("POST", "/v1/account/reauth/start", {});
+
+/**
+ * Check your passkey afresh (M9c), with options prepared before the tap: what adds a way in, approves a machine or links
+ * Globus asks for a check in the last 5 minutes. `navigator.credentials.get()` is the first thing it does.
+ */
+export async function reauthWith(c: Ceremony<RequestOptionsJSON>): Promise<void> {
+  const response = await signWithPasskey(c.options);
+  await call("POST", "/v1/account/reauth/finish", { flow: c.flow, response });
+}
+
+/**
+ * Whether the sign-in's last passkey check is recent enough for what asks for it, with half a minute to spare; it
+ * changes as time passes, so it's read again when it would lapse.
+ */
+export function useFresh(freshUntil: string): boolean {
+  const until = Date.parse(freshUntil) - 30_000;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const left = until - Date.now();
+    if (left <= 0) return;
+    const t = setTimeout(() => tick((n) => n + 1), left + 50);
+    return () => clearTimeout(t);
+  }, [until]);
+  return until > Date.now();
 }
 
 /** A date, as the pages say it: "4 Nov 2026". */

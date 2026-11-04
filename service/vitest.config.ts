@@ -33,6 +33,8 @@ export default defineConfig(async () => ({
           GLOBUS_ISSUER: "https://globus.test",
           GLOBUS_CLIENT_ID: "baesian-test-client",
           GLOBUS_CLIENT_SECRET: secret(),
+          // Web push's VAPID key (B-nk97q): a P-256 private key as a JWK, made for this run.
+          VAPID_KEY: JSON.stringify(generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" })),
           TEST_MIGRATIONS: await readD1Migrations("./migrations"),
         },
       },

@@ -10,5 +10,7 @@ declare namespace Cloudflare {
     TURNSTILE_SECRET?: string;
     /** The Globus app's client secret (B-s76hg), from its registration at app.globus.org. */
     GLOBUS_CLIENT_SECRET?: string;
+    /** The VAPID key for web push (RFC 8292, B-nk97q): a P-256 private key as a JWK. Without it, nothing is pushed. */
+    VAPID_KEY?: string;
   }
 }

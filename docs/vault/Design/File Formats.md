@@ -266,6 +266,14 @@ What's logged: every file written once, uploaded or written by the relay. What i
 
 **Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key, the stand-in's grants for the project `proj-dev` and Turnstile's test secret, and prints a `curl` line for a machine and one for a person; `npm run migrate:local` once, to make the local accounts database; then `npm run build` from the root, for the website it serves (M9e), and `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/`. Emails are simulated: logged, and saved under `service/.wrangler/tmp/email/`. `npm run test:service` from the root runs the service's tests in workerd. Deployed, only real sign-ins count (M9c).
 
+**Notifications' state** (M9e step 2, B-advkh, [[service#Notifications (service/src/notify.ts)]]): three more tables in each project's object, apart from its files and log, never logged, signed or sent, kept by `PushLedger`. Times are milliseconds since 1970.
+
+| Table | One row per | Columns |
+|---|---|---|
+| `push_arrivals` | card revision a machine uploaded | `card`, `revision`; `machine`, the uploading machine's name; `arrived`; `settled`, when a notification told it, it was seen while you were present, or it never would notify (a burst), else null. Settled rows go after an hour |
+| `push_sent` | notification sent | `at`; kept an hour, for the cap |
+| `push_pauses` | machine that filed a burst | `machine`; `cards`, how many new cards it filed in the window; `since`, the window's first; `until`, when its cards notify again; kept an hour after |
+
 **Answers proved by the passkey** (M9c, [[service#Answers that take the passkey (D139, D163, M9c)]]): the relay writes a verdict or preference file that needs a proof only with it, in the same transaction, each as its own entry: the file and its `sig`, then `<file>.passkey.json`. A passkey key file is `trust/passkey-<suffix>.json` with the suffix the first 12 hex digits of the SHA-256 of its credential ID (`keyFileName()`), so every project holds the same bytes at the same path; it's put in each project of its account, signed, before any proof made with it.
 
 ## Accounts (M9c)
@@ -285,6 +293,11 @@ Accounts live in one D1 database, `baesian-accounts`, bound as `ACCOUNTS` (B-ytd
 | `grants` | machine grant (B-84e0d) | `id`; `account`; `project`; `machine`, its name; `access_hash` and `access_expires`; `refresh_hash`; `created`; `last_used`; `revoked` |
 | `spent_tokens` | refresh token used | `hash`; `grant_id`; `spent`: one presented again revokes its grant (RFC 9700) |
 | `device_codes` | machine asking to sign in (RFC 8628) | `hash` of its device code; `user_code`, the code a person types; `project`; `machine`; `created`, `expires`; `last_poll`; `approved_by`; `denied`; `issued` |
+| `push_subscriptions` | browser that gets notifications (M9e step 2, `0003_push_subscriptions.sql`) | `id`; `account`; `endpoint`, unique, its push service's address for it: one row per browser, moved to the account that subscribed it last; `p256dh` and `auth`, the keys a push is encrypted to (RFC 8291), base64url; `name`, the browser's, as a sign-in's; `created`; `last_sent`, the last push its push service took. Deleted when its push service answers 404 or 410; at most 20 an account (`PUSH_MAX`) |
+| `usage_events` | counted event (D141, B-7nq85, `0004_usage_counts.sql`) | `usage_id`, the account's; `project`, the project's usage key; `kind`, one of the ten in `USAGE_KINDS`; `hour`, UTC, `YYYY-MM-DDTHH`; `fields`, JSON, only the kind's own fields (`usageProblem()`). An error has no `usage_id` or `project`. Kept 90 days (`USAGE_RAW_DAYS`) |
+| `usage_daily` | day, kind, field and value | `day`; `kind`; `field`, empty for the count of events; `value`, as text; `count`. What's left of the events after 90 days: no ID, key or hour |
+
+**Usage counts' columns elsewhere** (`0004_usage_counts.sql`): `accounts.usage_id`, the account's pseudonymous ID, random (`u-…`), made at its first counted event, and dropped when it opts out; `accounts.usage_opt_out`, when it opted out, or null while it's counted; `projects.usage_key`, the project's random key (`k-…`), made at its first counted event. Neither is derived from anything.
 
 **The session cookie** is `__Host-baesian-session`, its value a random token: `Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=7776000` (90 days); the service ends it sooner, after 30 days unused (B-vtr1r). A Globus round trip's binding cookie is `__Host-baesian-globus`, SameSite=Lax, for 10 minutes.
 

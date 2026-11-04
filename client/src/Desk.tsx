@@ -111,7 +111,7 @@ function messy(id: string, depth: number) {
   return { r: ((h % 9) - 4) * 0.55 + (depth % 2 ? 0.9 : -0.9), dx: ((h >> 4) % 9) - 4, dy: 3 + depth * 3 + ((h >> 8) % 3) };
 }
 
-export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number }) {
+export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt: number; notice?: string | undefined }) {
   const salt = useMemo(() => Math.random().toString(36).slice(2), []);
   const reduced = useReducedMotion();
   const [answered, setAnswered] = useState<Map<string, Answered>>(() => new Map());
@@ -747,6 +747,12 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
         {/* On a phone, the path is in the sheet, below. */}
         {!phone && <Path {...pathProps} {...(cardMotion ? { card: cardMotion } : {})} {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})} />}
         <section className="stage" aria-label="The card to answer">
+          {/* On the website (M9e step 2): a machine whose cards don't notify for now, after a burst. */}
+          {notice && (
+            <p className="desk-notice" role="status">
+              {notice}
+            </p>
+          )}
           <p className="crumbs">
             {setup ? (
               <>

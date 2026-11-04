@@ -1,10 +1,12 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import type { PasskeyKey } from "../../src/schema.js";
-import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, Taken, normalEmail, projectName } from "./accounts.js";
+import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, type PushSubscriptionRow, Taken, normalEmail, projectName } from "./accounts.js";
 import { SESSION_COOKIE, clearCookie, cookie, crossSite, sessionCookie } from "./access.js";
 import { type GlobusConfig, authorizationUrl, identityFrom, newRoundTrip, whyNot } from "./globus.js";
 import { addressOf, browserName, fail, readObject, respond } from "./http.js";
 import { type Mailer, mails } from "./mail.js";
+import { readSubscription } from "./push.js";
+import type { Usage } from "./usage.js";
 import { emailCode, hashOf, idWith, normalRecoveryCode, normalUserCode, recoveryCode, same, token } from "./secret.js";
 import type { Turnstile } from "./turnstile.js";
 import { type NewPasskey, type RelyingParty, type StoredPasskey, authenticationOptions, keyFile, passkeyName, pinLine, registrationOptions, verifyAssertion, verifyRegistration } from "./webauthn.js";
@@ -28,6 +30,12 @@ export interface SignIn {
   globus: GlobusConfig | undefined;
   /** Put an account's passkeys' key files into one of its projects, signed (P16 section 7). */
   putKeys(project: string, keys: PasskeyKey[]): Promise<void>;
+  /** Web push (M9e step 2): the VAPID key's public half, for browsers to subscribe with, if the service has the key. */
+  vapidPublicKey: string | undefined;
+  /** Whether a subscription may name the stand-in push service (a local run, or a test). */
+  testPush: boolean;
+  /** Usage counts (D141, B-7nq85). */
+  usage: Usage | undefined;
 }
 
 const GLOBUS_COOKIE = "__Host-baesian-globus";
@@ -142,7 +150,7 @@ async function session(s: SignIn, request: Request) {
 export async function signInRoute(s: SignIn, request: Request, url: URL): Promise<Response | undefined> {
   const path = url.pathname;
   const m = request.method;
-  if (path === "/v1/config" && m === "GET") return respond({ status: 200, body: { origin: s.rp.origin, rp_id: s.rp.rpID, turnstile_site_key: s.turnstileSiteKey, globus: !!s.globus } });
+  if (path === "/v1/config" && m === "GET") return respond({ status: 200, body: { origin: s.rp.origin, rp_id: s.rp.rpID, turnstile_site_key: s.turnstileSiteKey, globus: !!s.globus, vapid_public_key: s.vapidPublicKey ?? null } });
   if (path.startsWith("/v1/globus/") && m === "GET") return globusRoute(s, request, url);
   if (path.startsWith("/v1/account")) return accountRoute(s, request, path, m, url);
   const flows: Record<string, (r: Request) => Promise<Response>> = {
@@ -199,6 +207,7 @@ async function signupFinish(s: SignIn, request: Request): Promise<Response> {
   }
   const account = (await s.accounts.account(f.account))!;
   const stored = (await s.accounts.passkey(p.credential))!;
+  await s.usage?.record({ account: account.id }, "account_created", { via: f.globus_sub ? "globus" : "email" });
   return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored, account) });
 }
 
@@ -293,6 +302,7 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
         globus: globus ? { linked: globus.linked } : null,
         projects: await s.accounts.projectsOf(account.id),
         fresh_until: new Date(Date.parse(ses.verified) + LIMITS.freshMs).toISOString(),
+        usage: { counted: s.usage ? await s.usage.counted(account.id) : false },
       },
     });
   }
@@ -385,6 +395,7 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     if (!s.accounts.fresh(ses)) return fail(403, "approving a machine asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
     const r = await s.accounts.approveDevice(d, account.id, name);
     if ("problem" in r) return fail(409, r.problem);
+    await s.usage?.record({ account: account.id, project: d.project }, "machine_approved", { new_project: r.created });
     if (r.created) {
       try {
         await s.putKeys(d.project, await keysOf(s, account));
@@ -394,11 +405,54 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     }
     return respond({ status: 200, body: { approved: true, machine: d.machine, project: d.project, new_project: r.created, name: name ?? known?.name ?? null } });
   }
+  // Web push (M9e step 2): the browsers that get notifications, one per account and browser; each removable.
+  if (route === "GET /push") {
+    return respond({ status: 200, body: { subscriptions: (await s.accounts.subscriptions(account.id)).map(subscriptionRow) } });
+  }
+  if (route === "POST /push") {
+    if (!s.vapidPublicKey) return fail(503, "this service can't send notifications yet: it has no VAPID key");
+    const input = await body();
+    if (input instanceof Response) return input;
+    const sub = readSubscription(input, s.testPush);
+    if (typeof sub === "string") return fail(400, sub);
+    const row = await s.accounts.subscribe(account.id, sub, browserName(request.headers.get("user-agent")));
+    if ("problem" in row) return fail(409, row.problem);
+    return respond({ status: 201, body: { subscription: subscriptionRow(row) } });
+  }
+  // A notification opened (the service worker says so): its minutes since it was shown, counted (B-7nq85).
+  if (route === "POST /push/opened") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    const minutes = typeof input.minutes_after === "number" && Number.isFinite(input.minutes_after) ? Math.max(0, Math.round(input.minutes_after)) : undefined;
+    if (minutes === undefined) return fail(400, "send { minutes_after, project }");
+    const project = typeof input.project === "string" && (await s.accounts.member(account.id, input.project)) ? input.project : undefined;
+    await s.usage?.record({ account: account.id, ...(project ? { project } : {}) }, "push_opened", { minutes_after: Math.min(minutes, 10_000_000) });
+    return respond({ status: 204 });
+  }
+  // Usage counts (D141): counted unless the account opts out; out deletes its raw events at once.
+  if (route === "POST /usage") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    if (typeof input.counted !== "boolean") return fail(400, "send { counted: true } or { counted: false }");
+    if (!s.usage) return fail(503, "this service keeps no usage counts");
+    await s.usage.setCounted(account.id, input.counted);
+    return respond({ status: 200, body: { counted: input.counted } });
+  }
+  if (m === "DELETE" && path.startsWith("/v1/account/push/") && tail.length === 1) {
+    return (await s.accounts.unsubscribe(account.id, tail[0]!)) ? respond({ status: 204 }) : fail(404, "no browser of yours gets notifications with that ID");
+  }
   if (route === "DELETE /globus") {
     return (await s.accounts.unlinkGlobus(account.id)) ? respond({ status: 204 }) : fail(404, "no Globus identity is linked to this account");
   }
   return fail(404, `no address ${m} ${path}`);
 }
+
+/**
+ * A subscription as the account page lists it: its browser's name, its push service's host, when it was added and last
+ * sent to, and `key`, the first 16 hex of its endpoint's SHA-256, so the page can tell which is this browser's without
+ * the service handing endpoints back.
+ */
+const subscriptionRow = (r: PushSubscriptionRow) => ({ id: r.id, name: r.name, service: new URL(r.endpoint).hostname, key: hashOf(r.endpoint).slice(0, 16), created: r.created, last_sent: r.last_sent });
 
 // ---------------------------------------------------------------- Globus (D153, D176, B-s76hg)
 

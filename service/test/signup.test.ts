@@ -167,8 +167,8 @@ describe("what sign-up refuses (B-1a03b, B-mz6qc, Hosted Service section 3)", ()
     await expect(bindingMailer(env.EMAIL, env.EMAIL_FROM).send(mails.signupCode("someone@example.test", "123456", ORIGIN))).resolves.toBeUndefined();
   });
 
-  it("gives the website what it needs to show sign-up: the relying party, Turnstile's site key, and whether Globus is on", async () => {
+  it("gives the website what it needs to show sign-up: the relying party, Turnstile's site key, whether Globus is on, and web push's key", async () => {
     const r = await new Browser().get("/v1/config");
-    expect(r.body).toEqual({ origin: ORIGIN, rp_id: env.SERVICE_RP_ID, turnstile_site_key: env.TURNSTILE_SITE_KEY, globus: true });
+    expect(r.body).toEqual({ origin: ORIGIN, rp_id: env.SERVICE_RP_ID, turnstile_site_key: env.TURNSTILE_SITE_KEY, globus: true, vapid_public_key: expect.stringMatching(/^[A-Za-z0-9_-]{87}$/) });
   });
 });

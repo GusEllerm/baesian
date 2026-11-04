@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, call, fresh, projectName } from "./api";
+import { ApiError, call, projectName, reauthStart, reauthWith, useFresh, usePrepared } from "./api";
 import { Field, Go, Problem, Sheet, Shell, To } from "./Page";
 
 // Approving a machine (B-t5wxr, B-84e0d): `baesian login` prints a code and this page's address. The page says which
@@ -24,13 +24,15 @@ const tidy = (code: string) => {
   return c.length === 8 ? `${c.slice(0, 4)}-${c.slice(4)}` : code.trim().toUpperCase();
 };
 
-export function Device({ handle }: { handle: string }) {
+export function Device({ handle, freshUntil }: { handle: string; freshUntil: string }) {
   const given = new URLSearchParams(location.search).get("code") ?? "";
   const [code, setCode] = useState(given);
   const [step, setStep] = useState<Step>({ step: "code" });
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<string>();
   const [problem, setProblem] = useState<string>();
+  const freshNow = useFresh(freshUntil);
+  const check = usePrepared(freshNow ? undefined : reauthStart);
 
   const look = async (c: string) => {
     setBusy("look");
@@ -57,7 +59,9 @@ export function Device({ handle }: { handle: string }) {
         await call("POST", "/v1/account/machines/approve", { code: s.code, approve: false });
         return setStep({ step: "refused", machine: s.asked.machine });
       }
-      const r = await fresh(() => call<{ machine: string; project: string; name: string | null }>("POST", "/v1/account/machines/approve", { code: s.code, approve: true, ...(s.asked.new_project ? { name } : {}) }));
+      // The passkey is checked afresh first, when the last check is old, started by this tap with options fetched before it.
+      if (!freshNow) await reauthWith(check.take());
+      const r = await call<{ machine: string; project: string; name: string | null }>("POST", "/v1/account/machines/approve", { code: s.code, approve: true, ...(s.asked.new_project ? { name } : {}) });
       setStep({ step: "approved", machine: r.machine, project: r.project, name: r.name });
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -124,7 +128,7 @@ export function Device({ handle }: { handle: string }) {
           <Problem text={problem} />
           <div className="site-actions">
             {a.yours && (
-              <Go busy={busy === "approve"} busyText="Waiting for your passkey…" disabled={(a.new_project && !name.trim()) || busy !== undefined} onClick={() => void answer(step, true)}>
+              <Go busy={busy === "approve"} busyText="Waiting for your passkey…" disabled={(a.new_project && !name.trim()) || busy !== undefined || !check.ready} onClick={() => void answer(step, true)}>
                 Approve with your passkey
               </Go>
             )}
