@@ -5,7 +5,7 @@
   "description": "Baesian's hosted service: the relay (M9b), a Cloudflare Worker with one Durable Object per project running Baesian's own store over each project's files, and accounts and sign-in (M9c) in one D1 database.",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --local-upstream localhost:8787",
     "dev-vars": "node scripts/dev-vars.mjs",
     "migrate:local": "wrangler d1 migrations apply baesian-accounts --local",
     "types": "wrangler types --strict-vars=false",

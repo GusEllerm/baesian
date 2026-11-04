@@ -73,6 +73,9 @@ export async function startSite(): Promise<LocalSite> {
       BAESIAN_ENV: plain("test"),
       SERVICE_ORIGIN: plain(url),
       SERVICE_RP_ID: plain("localhost"),
+      // Turnstile's test site key and a local sender, not the deployed service's (wrangler.jsonc).
+      TURNSTILE_SITE_KEY: plain("1x00000000000000000000AA"),
+      EMAIL_FROM: plain("sign-in@baesian.test"),
       SERVICE_SIGNING_KEY: { type: "secret_text", value: generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }) as string },
       TURNSTILE_SECRET: { type: "secret_text", value: ["1x", "0".repeat(31), "AA"].join("") },
       GLOBUS_ISSUER: plain(ISSUER),
@@ -87,6 +90,8 @@ export async function startSite(): Promise<LocalSite> {
     dev: {
       persist,
       server: { hostname: "localhost", port },
+      // Or the local server would pose as the route's host, baesian.dev (B-aa9pc), and the site's requests look cross-site.
+      inferOriginFromRoutes: false,
       inspector: false,
       watch: false,
       logLevel: "none",

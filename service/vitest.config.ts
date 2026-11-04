@@ -27,6 +27,11 @@ export default defineConfig(async () => ({
       miniflare: {
         bindings: {
           BAESIAN_ENV: "test",
+          // The tests' own address and Turnstile's test site key, not the deployed service's (wrangler.jsonc).
+          SERVICE_ORIGIN: "https://baesian.test",
+          SERVICE_RP_ID: "baesian.test",
+          EMAIL_FROM: "sign-in@baesian.test",
+          TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           BAESIAN_DEV_ACCESS: JSON.stringify(TEST_GRANTS),
           SERVICE_SIGNING_KEY: generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }) as string,
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",

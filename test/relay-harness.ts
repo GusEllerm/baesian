@@ -60,12 +60,18 @@ export async function startRelay(): Promise<LocalRelay> {
     assets: join(persist, "site"),
     bindings: {
       BAESIAN_ENV: { type: "plain_text", value: "test" },
+      // The tests' own address and Turnstile's test site key, not the deployed service's (wrangler.jsonc).
+      SERVICE_ORIGIN: { type: "plain_text", value: SITE },
+      SERVICE_RP_ID: { type: "plain_text", value: new URL(SITE).hostname },
+      EMAIL_FROM: { type: "plain_text", value: `sign-in@${new URL(SITE).hostname}` },
+      TURNSTILE_SITE_KEY: { type: "plain_text", value: "1x00000000000000000000AA" },
       BAESIAN_DEV_ACCESS: { type: "plain_text", value: JSON.stringify({ machines: [], sessions }) },
       SERVICE_SIGNING_KEY: { type: "secret_text", value: generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }) as string },
       // Every test signs in from one address, 127.0.0.1: the limit per address (30 a minute) is raised for them.
       LIMIT_ADDRESS: { type: "ratelimit", namespace_id: "1001", simple: { limit: 10_000, period: 60 } },
     },
-    dev: { persist, server: { hostname: "127.0.0.1", port: 0 }, inspector: false, watch: false, logLevel: "none" },
+    // inferOriginFromRoutes: false, or the local server would pose as the route's host, baesian.dev (B-aa9pc).
+    dev: { persist, server: { hostname: "127.0.0.1", port: 0 }, inspector: false, watch: false, logLevel: "none", inferOriginFromRoutes: false },
   });
   await worker.ready;
   const url = (await worker.url).origin as string;

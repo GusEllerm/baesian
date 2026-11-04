@@ -29,7 +29,18 @@ const turnstileTest = ["1x", "0".repeat(31), "AA"].join("");
 const pemValue = `"${pem.trim().replace(/\n/g, "\\n")}"`;
 writeFileSync(
   path,
-  [`BAESIAN_ENV=development`, `SERVICE_SIGNING_KEY=${pemValue}`, `BAESIAN_DEV_ACCESS='${JSON.stringify(grants)}'`, `TURNSTILE_SECRET=${turnstileTest}`, `VAPID_KEY='${vapid}'`, ""].join("\n"),
+  [
+    `BAESIAN_ENV=development`,
+    // The local address, and Turnstile's test site key, in place of the deployed service's (wrangler.jsonc).
+    `SERVICE_ORIGIN=http://localhost:8787`,
+    `SERVICE_RP_ID=localhost`,
+    `TURNSTILE_SITE_KEY=${["1x", "0".repeat(20), "AA"].join("")}`,
+    `SERVICE_SIGNING_KEY=${pemValue}`,
+    `BAESIAN_DEV_ACCESS='${JSON.stringify(grants)}'`,
+    `TURNSTILE_SECRET=${turnstileTest}`,
+    `VAPID_KEY='${vapid}'`,
+    "",
+  ].join("\n"),
   { mode: 0o600 },
 );
 console.log(`Wrote ${path}. With \`npm run dev\` running (http://localhost:8787):`);
