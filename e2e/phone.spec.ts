@@ -320,7 +320,7 @@ for (const size of PHONES) {
       const deck = page.getByRole("complementary", { name: "The storage layer" });
       await check(page, problems, "a deck's panel");
       await shot(page, "28-deck-panel");
-      await deck.getByRole("button", { name: other }).tap();
+      await deck.getByRole("button", { name: "Where run files are kept" }).tap();
       await expect(page.getByRole("heading", { name: "Where should run files go?" })).toBeVisible();
       for (let i = 0; i < 2; i++) {
         await page.locator(`${CARD} .opt[data-kind="proposal"]`).tap();

@@ -19,14 +19,16 @@ test.afterEach(async () => {
 
 const agent = { agent: "claude-code", force: true };
 
-test("a deck's briefing comes before its first card, once; its name opens it again, and a card ID in it leads to the card", async ({ page }) => {
+test("a deck's briefing comes before its first card, once; its name opens it again, and a card it names leads to the card", async ({ page }) => {
   const r = repo();
   mkdirSync(join(r.dir, "docs/vault/Design"), { recursive: true });
   r.store.setVault("docs/vault");
-  r.store.createDeck({ id: "storage", title: "The storage layer", context_notes: ["[[Storage Design]]", "[[Nowhere]]"] }, "Where runs and their files are kept, and why.\n");
+  r.store.createDeck({ id: "storage", title: "The storage layer", context_notes: ["[[Storage Design]]", "[[Nowhere]]", "[[Run Files]]"] }, "Where runs and their files are kept, and why.\n");
   r.store.fileCard(draft({ deck: "storage", reverse: "cheap" }), BODY, agent);
   const other = r.store.fileCard(draft({ title: "Where run files are kept", question: "Where should run files go?", topic: "storage/run-files", reverse: "cheap" }), BODY, agent).card.meta.id;
   writeFileSync(join(r.dir, "docs/vault/Design/Storage Design.md"), `---\nsummary: "How runs are stored; the open question is ${other}."\n---\n\n# Storage Design\n`);
+  // A decision note's summary starts with its card's title, and ends with its ID (the vault adapter's form).
+  writeFileSync(join(r.dir, "docs/vault/Design/Run Files.md"), `---\nsummary: "Where run files are kept: In the run's own folder (${other})."\n---\n\n# Run Files\n`);
   server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
   await skipSetup(page, r.dir);
   await page.goto(server.url);
@@ -34,7 +36,10 @@ test("a deck's briefing comes before its first card, once; its name opens it aga
   await expect(card).toBeVisible();
   await expect(card).toContainText("1 card in this work is waiting for you.");
   await expect(card).toContainText("Where runs and their files are kept, and why.");
-  await expect(card.locator("li").nth(0)).toContainText(`Storage DesignHow runs are stored; the open question is ${other}.`);
+  // A card the client knows is named by its title, never its ID (D69), which is only the link's tooltip.
+  await expect(card.locator("li").nth(0)).toHaveText("Storage DesignHow runs are stored; the open question is Where run files are kept.");
+  await expect(card.locator("li").nth(2)).toHaveText("Run FilesWhere run files are kept: In the run's own folder.");
+  await expect(card.getByRole("button", { name: "Where run files are kept" }).first()).toHaveAttribute("title", other);
   expect(await page.evaluate(layoutProblems)).toEqual([]);
   // Any arrow goes on to the card, and chooses nothing.
   await page.keyboard.press("ArrowRight");
@@ -50,11 +55,11 @@ test("a deck's briefing comes before its first card, once; its name opens it aga
   const panel = page.getByRole("complementary", { name: "The storage layer" });
   await expect(panel).toBeVisible();
   await expect(panel).toContainText("Where runs and their files are kept, and why.");
-  await expect(panel.locator("li").nth(0)).toContainText(`Storage DesignHow runs are stored; the open question is ${other}.`);
+  await expect(panel.locator("li").nth(0)).toHaveText("Storage DesignHow runs are stored; the open question is Where run files are kept.");
   await expect(panel.locator("li").nth(1)).toContainText("NowhereNot in the vault.");
   expect(await page.evaluate(layoutProblems)).toEqual([]);
 
-  await panel.getByRole("button", { name: other }).click();
+  await panel.locator("li").nth(0).getByRole("button", { name: "Where run files are kept" }).click();
   await expect(panel).toBeHidden();
   // A branch's own deck has no briefing card: its briefing is one generated line (D29).
   await expect(page.getByRole("heading", { name: "Where should run files go?" })).toBeVisible();

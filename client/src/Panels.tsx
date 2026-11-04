@@ -284,39 +284,62 @@ function HeldRow({ card, onOpen }: { card: ApiCard; onOpen: (id: string) => void
   );
 }
 
-/** A card ID in text from the vault, which becomes a link to its card (P17 §8). */
-const CARD_ID = /\b(B-[0-9a-hjkmnp-tv-z]{5})\b/;
+/** A card ID in text from the vault (P17 §8). */
+const CARD_ID = /\bB-[0-9a-hjkmnp-tv-z]{5}\b/g;
 
-/** Text with the IDs of cards the client knows as links to them. */
-function withCardLinks(text: string, known: (id: string) => boolean, onOpen: (id: string) => void): ReactNode[] {
-  return text.split(CARD_ID).map((part, i) =>
-    i % 2 === 1 && known(part) ? (
-      <button type="button" key={i} className="card-link" onClick={() => onOpen(part)}>
-        {part}
-      </button>
-    ) : (
-      part
-    ),
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Text from the vault with the cards the client knows as links to them (P17 §8), each named by its title, never by its
+ * ID (D69), which is the link's tooltip. A decision note's summary already starts with its card's title ("Title: answer
+ * (B-7f3kq)."), so there the title becomes the link and the bracketed ID goes. An ID the client doesn't know stays as
+ * written: there's no title to name it by.
+ */
+function withCardLinks(text: string, titleOf: (id: string) => string | undefined, onOpen: (id: string) => void): ReactNode[] {
+  const named = new Map<string, string>();
+  let t = text;
+  for (const id of new Set(text.match(CARD_ID))) {
+    const title = titleOf(id);
+    if (!title || !t.includes(title)) continue;
+    named.set(title, id);
+    t = t.replace(new RegExp(`\\s*\\(${id}\\)`, "g"), "");
+  }
+  const link = (id: string, title: string, key: number) => (
+    <button type="button" key={key} className="card-link" title={id} onClick={() => onOpen(id)}>
+      {title}
+    </button>
   );
+  const out: ReactNode[] = [];
+  let at = 0;
+  const pattern = new RegExp([...[...named.keys()].map(escape), CARD_ID.source].join("|"), "g");
+  for (const m of t.matchAll(pattern)) {
+    const id = named.get(m[0]) ?? m[0];
+    const title = named.has(m[0]) ? m[0] : titleOf(m[0]);
+    if (!title) continue;
+    out.push(t.slice(at, m.index), link(id, title, m.index));
+    at = m.index + m[0].length;
+  }
+  out.push(t.slice(at));
+  return out;
 }
 
 /**
  * The work a card belongs to: its deck's briefing, then the vault notes the deck links to, each with its summary line
  * (M6, P17 §8). Without a vault the links are plain text; with one, a note that isn't there says so.
  */
-export function DeckPanel(p: { deck: ApiState["decks"][number]; known: (id: string) => boolean; onOpen: (id: string) => void; onClose: () => void }) {
+export function DeckPanel(p: { deck: ApiState["decks"][number]; titleOf: (id: string) => string | undefined; onOpen: (id: string) => void; onClose: () => void }) {
   const { deck } = p;
   return (
     <Panel label={deck.meta.title} onClose={p.onClose} id="deck-panel">
       <p className="sub">The briefing for this work.</p>
       {!deck.body.trim() && <p className="sub">It has no briefing.</p>}
-      <DeckBriefing deck={deck} known={p.known} onOpen={p.onOpen} />
+      <DeckBriefing deck={deck} titleOf={p.titleOf} onOpen={p.onOpen} />
     </Panel>
   );
 }
 
 /** A deck's briefing and its context notes, each with its summary line: in its panel, and on its briefing card. */
-export function DeckBriefing(p: { deck: ApiState["decks"][number]; known: (id: string) => boolean; onOpen: (id: string) => void }) {
+export function DeckBriefing(p: { deck: ApiState["decks"][number]; titleOf: (id: string) => string | undefined; onOpen: (id: string) => void }) {
   const { deck } = p;
   return (
     <>
@@ -332,7 +355,7 @@ export function DeckBriefing(p: { deck: ApiState["decks"][number]; known: (id: s
             {deck.notes.map((n) => (
               <li key={n.link} title={n.path}>
                 <b>{n.text}</b>
-                {n.summary && <span className="note-summary">{withCardLinks(n.summary, p.known, p.onOpen)}</span>}
+                {n.summary && <span className="note-summary">{withCardLinks(n.summary, p.titleOf, p.onOpen)}</span>}
                 {n.missing && <span className="missing">Not in the vault.</span>}
               </li>
             ))}

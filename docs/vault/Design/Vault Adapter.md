@@ -314,7 +314,7 @@ This changes the design's text: "reads routing rules" becomes "points agents to 
 
 ### From the vault to cards
 
-- **In the client:** a card ID in any text the client shows from the vault becomes a link to that card. The server can also find the hand-written notes that mention a card's ID, and the client can list them with the card's context ("Mentioned in [[Hosted Service]]"). IDs are random and prefixed, so a match is reliable enough for D71. That list is optional for M6, and a matter for the client's design.
+- **In the client:** a card ID in any text the client shows from the vault becomes a link to that card, named by its title, not its ID (D69; built for context-note summaries, [[Client Build]] item 12). The server can also find the hand-written notes that mention a card's ID, and the client can list them with the card's context ("Mentioned in [[Hosted Service]]"). IDs are random and prefixed, so a match is reliable enough for D71. That list is optional for M6, and a matter for the client's design.
 - **In Obsidian:** each decision note's alias is its ID, so typing the ID in a link finds it, and plain mentions show as unlinked mentions. Decision notes link to each other (depends_on, `supersedes`, superseded_by) and to their deck's context notes. So in the graph, they sit beside the design they came from.
 - **Not linked: commits.** They differ by branch (§2), so the client shows them, as today.
 

@@ -718,7 +718,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
       {panel === "deck" && deck && (
         <DeckPanel
           deck={deck}
-          known={(id) => cards.has(id)}
+          titleOf={(id) => cards.get(id)?.meta.title}
           onOpen={(id) => {
             setPanel(undefined);
             goTo(id);
@@ -797,7 +797,7 @@ export function Desk({ state, fetchedAt }: { state: ApiState; fetchedAt: number 
                   key={`brief:${briefing.meta.id}`}
                   deck={briefing}
                   waiting={ordered.filter((c) => c.meta.deck === briefing.meta.id).length}
-                  known={(id) => cards.has(id)}
+                  titleOf={(id) => cards.get(id)?.meta.title}
                   onOpen={(id) => {
                     dismissBriefing();
                     goTo(id);
@@ -1048,7 +1048,7 @@ function LiveCard(p: {
  * A deck's briefing, before the first of its cards you reach (B-j6b75): its briefing and context notes, then on to
  * the card with any arrow, Enter, a drag or a two-finger swipe. A vertical swipe scrolls a long briefing.
  */
-function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; known: (id: string) => boolean; onOpen: (id: string) => void; onDone: () => void }) {
+function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; titleOf: (id: string) => string | undefined; onOpen: (id: string) => void; onDone: () => void }) {
   const reduced = useReducedMotion();
   const present = useIsPresent();
   const x = useMotionValue(0);
@@ -1108,7 +1108,7 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; kno
           <b>{cards}</b> in this work {p.waiting === 1 ? "is" : "are"} waiting for you.
         </p>
         <h1>{p.deck.meta.title}</h1>
-        <DeckBriefing deck={p.deck} known={p.known} onOpen={p.onOpen} />
+        <DeckBriefing deck={p.deck} titleOf={p.titleOf} onOpen={p.onOpen} />
         <div className="briefing-foot">
           <button type="button" className="confirm" onClick={p.onDone}>
             Go to its cards <kbd>→</kbd>
