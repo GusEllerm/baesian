@@ -134,7 +134,7 @@ When this policy changes, the date at the top changes. If a change affects what'
 
 - **privacy@baesian.dev must reach the operator** (B-8xxrc): turn on Cloudflare's Email Routing for baesian.dev in the dashboard, which adds the domain's MX records, verify the inbox it forwards to, add a rule forwarding `privacy@` there, and send a test message from an outside address. No agent may do this here. Check sign-in codes still arrive after.
 - **The date:** set `POLICY_CHANGED` to the day it's published.
-- **Workers Logs:** confirm in the dashboard that the Worker has no Workers Logs or Logpush turned on, or say on the page what they keep (below).
+- **Workers Logs:** off in the Worker's configuration since 2026-11-04 (below), which every deployment applies. After the first deployment, confirm in the dashboard that the Worker shows no Workers Logs and the account no Logpush job.
 
 ## For a lawyer's eye
 
@@ -153,5 +153,5 @@ Things the agent couldn't settle, and which should be checked before the policy 
 - **The 14 days after deletion** (B-b46z3): everything is kept, closed, for 14 days after someone asks for it to go. Whether that's "without undue delay" (Article 17) when the request is made by deleting, and whether the page should offer deletion at once on request.
 - **Children:** the page says nothing about age. The service doesn't ask. Whether a minimum age should be stated.
 - **US state laws:** not covered (as [[Usage Counts Balancing Test]] notes); the service is likely below every threshold, *unverified*.
-- **Cloudflare's own logs:** the Worker's configuration enables no Workers Logs or Logpush (`service/wrangler.jsonc` has no `observability`), so the service keeps no request logs of its own. *Unverified* what Cloudflare keeps for its own operation.
+- **Cloudflare's own logs:** the Worker's configuration turns Workers Logs off (`service/wrangler.jsonc#observability`, `enabled: false`; Cloudflare's docs say every new Worker has them on unless its configuration says otherwise) and sets up no Logpush, so the service keeps no request logs of its own. *Unverified* what Cloudflare keeps for its own operation.
 - **Email Sending's own retention** of messages and recipients: not checked.

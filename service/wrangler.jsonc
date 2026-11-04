@@ -14,6 +14,9 @@
   "routes": [{ "pattern": "baesian.dev", "custom_domain": true }],
   "workers_dev": false,
   "preview_urls": false,
+  // No Workers Logs or traces: the privacy policy says the service keeps no request logs of its own, and Cloudflare turns
+  // Workers Logs on for every new Worker unless this says otherwise.
+  "observability": { "enabled": false },
   // Node's APIs are on by default from 2026-08-04: the store imports node:crypto, node:buffer and, unused here, node:fs.
   "compatibility_date": "2026-11-01",
   "durable_objects": {
