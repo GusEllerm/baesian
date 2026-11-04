@@ -53,10 +53,10 @@
     // Turnstile's site key, for the website's widget (B-1a03b) on baesian.dev; its secret is TURNSTILE_SECRET. Local
     // runs and the tests use Cloudflare's published test keys instead.
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFz2JTZRO9H03Ooa",
-    // Sign-in through Globus (D153, B-s76hg). Off until the app is registered at app.globus.org (M9f) and its client ID
-    // is given here, with its secret in GLOBUS_CLIENT_SECRET.
+    // Sign-in through Globus (D153, B-s76hg): the app registered at app.globus.org (M9f), whose redirect is
+    // https://baesian.dev/v1/globus/callback. Its secret is GLOBUS_CLIENT_SECRET.
     "GLOBUS_ISSUER": "https://auth.globus.org",
-    "GLOBUS_CLIENT_ID": "",
+    "GLOBUS_CLIENT_ID": "38def42f-8774-4aa9-83b5-12e6d34e1de4",
     // Deployed, the service is production: only real sign-ins count. A local run (.dev.vars) or the tests also switch
     // on the stand-in for sign-in, and answer Turnstile's test keys without a network.
     "BAESIAN_ENV": "production"
