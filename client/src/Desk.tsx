@@ -9,7 +9,7 @@ import { laterSuperseded, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
 import { usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
-import { type Rarity, agentOf, areaOf, byId, heldBack, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdictTo } from "./outbox";
 import { postAnswer, useEndpoints } from "./endpoints";
@@ -158,6 +158,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
   const aside = parked(state).filter((c) => !answered.has(keyOf(c)));
   const held = heldBack(state).filter((c) => !answered.has(keyOf(c)));
+  // Held back, never answered, past 90 days: listed without their text (B-ec3kj, M9f).
+  const heldGone = heldRemoved(state);
   const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
   // The card in front of you stays until you answer it or move on. When the queue re-sorts (an answer reaching
   // the server, an agent starting to wait), that changes what comes next, never the card you're reading (5f).
@@ -705,7 +707,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         <p className="summary" aria-live="polite">
           {summary}
         </p>
-        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length} touch={touch} site={!!endpoints.hosted} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
+        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length + heldGone.length} touch={touch} site={!!endpoints.hosted} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
       {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
@@ -713,6 +715,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       {panel === "held" && (
         <HeldPanel
           held={held}
+          gone={heldGone}
           mode={state.routing.settings.mode}
           onOpen={(id) => {
             setPanel(undefined);

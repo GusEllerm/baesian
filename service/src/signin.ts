@@ -2,6 +2,7 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simp
 import type { PasskeyKey } from "../../src/schema.js";
 import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, type PushSubscriptionRow, Taken, normalEmail, projectName } from "./accounts.js";
 import { SESSION_COOKIE, clearCookie, cookie, crossSite, sessionCookie } from "./access.js";
+import { closeAccount, deletesAt, restoreAccount } from "./deletion.js";
 import { type GlobusConfig, authorizationUrl, identityFrom, newRoundTrip, whyNot } from "./globus.js";
 import { addressOf, browserName, fail, readObject, respond } from "./http.js";
 import { type Mailer, mails } from "./mail.js";
@@ -13,8 +14,8 @@ import { type NewPasskey, type RelyingParty, type StoredPasskey, authenticationO
 
 // Accounts and sign-in for the website (M9c), as JSON for its pages (M9e) to call: sign up with an email and a passkey
 // (D153), sign in with a passkey, get back in with an emailed code and a saved recovery code (B-jzgy4), through Globus
-// (D153, D176), and, signed in, the account: passkeys, sign-ins, machines and signing out. Every address here is listed in
-// docs/vault/Modules/service.md.
+// (D153, D176), and, signed in, the account: passkeys, sign-ins, machines, signing out, and deleting it, which closes it
+// for 14 days first (B-b46z3, M9f). Every address here is listed in docs/vault/Modules/service.md.
 
 /** What the account addresses work with, made once per request by the Worker. */
 export interface SignIn {
@@ -92,11 +93,13 @@ async function sendCode(s: SignIn, request: Request, kind: "signup" | "recover")
   if (sent.hour >= LIMITS.codesPerHour || sent.day >= LIMITS.codesPerDay) return fail(429, `too many codes to this address: at most ${LIMITS.codesPerHour} an hour and ${LIMITS.codesPerDay} a day`);
   const account = await s.accounts.accountByEmail(email);
   const code = emailCode();
+  // A closed account (B-b46z3) is restored only with its passkey: getting back in treats it as no account.
+  const recoverable = !!account && !account.closed;
   // The reply is the same whether the address has an account or not, so nobody learns which addresses do.
-  const real = kind === "signup" ? !account : !!account;
-  const flow = await s.accounts.startFlow(kind, { email, account: kind === "recover" ? (account?.id ?? null) : null, code_hash: real ? hashOf(code) : hashOf(token()) }, LIMITS.codeMs);
+  const real = kind === "signup" ? !account : recoverable;
+  const flow = await s.accounts.startFlow(kind, { email, account: kind === "recover" && recoverable ? account!.id : null, code_hash: real ? hashOf(code) : hashOf(token()) }, LIMITS.codeMs);
   if (kind === "signup") await s.mail.send(account ? mails.alreadySignedUp(email, s.rp.origin) : mails.signupCode(email, code, s.rp.origin));
-  else if (account) await s.mail.send(mails.recoveryCode(email, code, s.rp.origin));
+  else if (recoverable) await s.mail.send(mails.recoveryCode(email, code, s.rp.origin));
   return respond({ status: 202, body: { flow, expires_in: LIMITS.codeMs / 1000 } });
 }
 
@@ -159,6 +162,7 @@ export async function signInRoute(s: SignIn, request: Request, url: URL): Promis
     "/v1/signup/finish": (r) => signupFinish(s, r),
     "/v1/signin/start": (r) => signinStart(s, r),
     "/v1/signin/finish": (r) => signinFinish(s, r),
+    "/v1/signin/restore": (r) => signinRestore(s, r),
     "/v1/recover/email": (r) => sendCode(s, r, "recover"),
     "/v1/recover/verify": (r) => recoverVerify(s, r),
     "/v1/recover/finish": (r) => recoverFinish(s, r),
@@ -218,7 +222,10 @@ async function signinStart(s: SignIn, _request: Request): Promise<Response> {
   return respond({ status: 200, body: { flow, options } });
 }
 
-/** Sign-in, step 2: the passkey's assertion, checked; signed in. */
+/**
+ * Sign-in, step 2: the passkey's assertion, checked; signed in. A closed account (B-b46z3) isn't signed in: the reply
+ * (409, `closed`) says when it will be deleted, with a flow that restores it, for five minutes.
+ */
 async function signinFinish(s: SignIn, request: Request): Promise<Response> {
   const input = await readObject(request);
   if (input instanceof Response) return input;
@@ -226,7 +233,23 @@ async function signinFinish(s: SignIn, request: Request): Promise<Response> {
   if (!f) return fail(400, "no sign-in with that flow, or it expired: start again");
   const a = await asserted(s, f.challenge, input.response);
   if (a instanceof Response) return a;
-  return signedIn(s, request, (await s.accounts.account(a.passkey.account))!, 200, {});
+  const account = (await s.accounts.account(a.passkey.account))!;
+  if (account.closed) {
+    const restore = await s.accounts.startFlow("restore", { account: account.id }, LIMITS.ceremonyMs);
+    return fail(409, `the account ${account.handle} is closed, and will be deleted with everything in it on ${deletesAt(account.closed).slice(0, 10)}: restore it to keep it`, { closed: { handle: account.handle, deletes: deletesAt(account.closed) }, restore });
+  }
+  return signedIn(s, request, account, 200, {});
+}
+
+/** Restoring a closed account (B-b46z3): the flow its passkey's sign-in gave, once; open again, a notice sent, and signed in. */
+async function signinRestore(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.takeFlow(input.restore, "restore");
+  const account = f?.account ? await s.accounts.account(f.account) : null;
+  if (!account) return fail(400, "no restore with that flow, or it expired: sign in with your passkey again");
+  if (account.closed && !(await restoreAccount(s.accounts, account, s.mail, s.rp.origin))) return fail(409, "this account was restored already");
+  return signedIn(s, request, (await s.accounts.account(account.id))!, 200, { restored: true });
 }
 
 /** Recovery, step 2: the emailed code and the saved recovery code, together (B-jzgy4); returns a new passkey's options. */
@@ -444,6 +467,15 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
   if (route === "DELETE /globus") {
     return (await s.accounts.unlinkGlobus(account.id)) ? respond({ status: 204 }) : fail(404, "no Globus identity is linked to this account");
   }
+  // Deleting the account (B-b46z3): its passkey checked afresh and its handle typed out; closed at once, deleted 14 days on.
+  if (route === "POST /delete") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    if (typeof input.handle !== "string" || input.handle.trim().toLowerCase() !== account.handle.toLowerCase()) return fail(400, `type your handle, ${account.handle}, to delete the account`, { needs_handle: true });
+    if (!s.accounts.fresh(ses)) return fail(403, "deleting the account asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
+    const { deletes } = await closeAccount(s.accounts, account, s.mail, s.rp.origin);
+    return respond({ status: 200, body: { closed: true, deletes } }, [["set-cookie", clearCookie(SESSION_COOKIE)]]);
+  }
   return fail(404, `no address ${m} ${path}`);
 }
 
@@ -522,6 +554,8 @@ async function globusRoute(s: SignIn, request: Request, url: URL): Promise<Respo
   }
   if (linked) {
     const account = (await s.accounts.account(linked))!;
+    // A closed account (B-b46z3) is restored only with its passkey.
+    if (account.closed) return back(s, "/sign-in", { error: "closed", message: `the account ${account.handle} is closed: sign in with your passkey to restore it before ${deletesAt(account.closed).slice(0, 10)}` }, [clear]);
     const { token: t } = await s.accounts.startSession(account.id, browserName(request.headers.get("user-agent")));
     return back(s, "/", { signed_in: account.handle }, [clear, sessionCookie(t)]);
   }

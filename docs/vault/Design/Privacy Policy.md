@@ -1,0 +1,157 @@
+---
+type: design
+status: draft
+authority: proposes
+summary: "The hosted service's privacy policy, which Hosted Service section 6 puts before anything is published: who runs it (Gus Ellerm, as an individual, B-mkryw), what it keeps and why, the lawful basis, how long (B-9jqt4, B-ec3kj, B-dsqyd), who else handles it, deleting an account (B-b46z3), people's rights, and where to write (privacy@baesian.dev, forwarded, B-8xxrc). The website's /privacy page carries this text. Not legal advice; what needs a lawyer is listed at the end."
+created: 2026-11-04
+updated: 2026-11-04
+reviewed: 2026-11-04
+tags: [baesian, design, hosted, privacy]
+---
+
+# Privacy Policy
+
+> **Status: built as a page, not published.** Drafted by the builder of M9f's last pieces on 2026-11-04, because [[Hosted Service]] section 6 puts a privacy policy before anything is published, and filled in as the cards in deck `hosted` decided it: **who runs it**, B-mkryw, "You, as an individual"; **where to write**, B-8xxrc, "An address on baesian.dev, forwarded"; **deleting an account**, B-b46z3, "Closed for 14 days, then deleted"; and **a withdrawn card's text**, B-dsqyd, "30 days after delivery, as answered". Every statement below is meant to be one the code bears out; [[#Where each statement comes from]] says where. The website shows this text at `/privacy` (`<Privacy />`), linked from every page's footer, signing up, `/counts` and the account page; nothing is published until a release is tagged (B-bk20v). The agent isn't a lawyer, and this isn't legal advice: [[#For a lawyer's eye]] lists what should be checked, and [[#Before it's published]] what must be true first.
+
+## The policy, as the page says it
+
+*Last changed 4 November 2026* (`POLICY_CHANGED`; set it to the day it's published).
+
+Baesian's hosted service, at baesian.dev, passes your coding agents' design decisions to you as cards, and your answers back to them. This page says what it keeps about you and your projects, why, for how long, who else handles it, and how to have it corrected or deleted.
+
+### Who runs it
+
+Gus Ellerm runs the service, as an individual, and decides what it keeps, which makes Gus Ellerm the controller of your data under data protection law. It isn't a service of the University of Chicago or of Globus, though you can sign in through Globus. To write about your data, use privacy@baesian.dev.
+
+### In short
+
+- The service keeps what it needs to sign you in and to pass cards and answers between your machines and you.
+- It can read what your cards say, so it can show them to you and hold some back under your settings. It deletes that text on a schedule, below. Your repository keeps its own record, which the service never sees.
+- There are no passwords, no advertising, no selling of data, and no tracking across other sites. The service never stores your network address or where you are.
+- It counts how the service is used, never what a card says, unless you turn that off.
+- Your account page shows what's kept about your account, and you can delete the account there.
+
+### What it keeps, and why
+
+**Your account, to sign you in and to tell you about changes to it:**
+- Your handle, and your email address. One that Globus gave is marked as not checked by us.
+- Your passkeys: each one's public key, its name, and when it was added and last used. The private key never leaves your device.
+- Your recovery code, kept only as a one-way hash, so it can be checked but not read.
+- If you link Globus, the identifier Globus gives for you, and when you linked it.
+- Where you're signed in: each browser's name, such as "Firefox on a Mac", and when it signed in and was last used. Not its network address or location.
+
+**Your projects, to pass cards and answers between your machines and you:**
+- Each project's name, as you typed it, and its random ID.
+- Each machine you approve with `baesian login`: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
+- What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, and when.
+- What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.
+- While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.
+
+**Notifications, if you turn them on:** for each browser, the address its push service gives for it, the keys a notification is encrypted to, and the browser's name. A notification says how many cards are waiting, at which levels, in which project. Never what a card says.
+
+**Usage counts:** counts and timings of how the service is used, such as how many cards are answered and how long they waited. Never what a card says, nor anyone's name. Every field is listed at /counts. Every account is counted unless it turns this off on the account page.
+
+**What it doesn't keep:**
+- Your network address, which is used in passing to limit how often sign-in can be tried and to check for bots, then forgotten.
+- Passwords: there are none.
+- Your repository: its code, branches, file paths and name never reach the service. Only what an agent writes in a card does.
+
+**In your browser:**
+- The sign-in cookie while you're signed in, and a second cookie for ten minutes during a Globus sign-in. No other cookies.
+- On a project's page, which cards you've seen and how long you spent on each, to show what's new. That stays in your browser.
+
+### Why it's allowed to
+
+- **To provide the service you signed up for:** your account, signing in, passing cards and answers, and the notifications you turn on. This is necessary to perform the contract with you (GDPR Article 6(1)(b)).
+- **To keep it safe and to know how it's used:** the limits on sign-in, the bot check at sign-up, and the usage counts. These are legitimate interests (Article 6(1)(f)): the interest in a service that works and can be paid for, weighed against yours, with the counts limited to fixed values and a way to turn them off.
+
+### How long it's kept
+
+| What | How long |
+|---|---|
+| A card's text, once answered or withdrawn | 30 days after every machine signed in to the project has the answer or the withdrawal. Then only its ID, times, sizes and level stay. |
+| A card's text, held back by your settings and never answered | 90 days after it arrived. Then only its ID, times, sizes and level stay. |
+| A card's text, waiting for you | Until it's answered or withdrawn. |
+| Your rules, topic merges and gate settings | While the project exists. |
+| Usage events | 90 days, then only daily totals, with no ID. |
+| A sign-in | Until you sign out, or 30 days unused, or 90 days in all. |
+| A machine | Until you sign it out, or 30 days unused. |
+| An emailed code | 15 minutes. |
+| Your account, and everything listed under it | Until you delete it, and 14 days after, while it can still be restored. |
+
+### Who else handles it
+
+- **Cloudflare, Inc.** runs the service: everything above is stored on its platform, it sends the service's emails, and it runs the bot check at sign-up (Turnstile). It carries every request, so it sees your network address. For the bot check it also uses what it sees to improve its own bot detection, for its own purposes.
+- **Globus**, run by the University of Chicago, if you sign in through it: you sign in at Globus, which tells the service your Globus identifier and email address. Globus's own privacy policy covers your Globus account.
+- **Your browser's push service** (Google's, Mozilla's, Apple's or Microsoft's), if you turn on notifications: it carries each one to your browser, encrypted so it can't read it.
+
+Nobody else. Your data isn't sold, shared for advertising, or used to train models.
+
+### Where it's kept
+
+On Cloudflare's platform, in its default locations; the accounts database is in eastern North America. If you're in the EU or the UK, your data goes to the United States under Cloudflare's data processing terms.
+
+### Your rights
+
+You can ask to see what the service keeps about you, to have it corrected or deleted, to have a copy you can take elsewhere, and to restrict or object to how it's used. You can also complain to your data protection authority.
+
+Much of it you can do yourself, on your account page: see your account, passkeys, sign-ins and machines; sign any of them out; turn off usage counts; and delete your account. For anything else, write to privacy@baesian.dev. You'll have an answer within a month.
+
+### Deleting your account
+
+Deleting it, on your account page, asks for your passkey and your handle. The account is closed at once: every sign-in and machine is signed out, nothing more is relayed or counted, and a notice is emailed to you.
+
+For 14 days, signing in with your passkey can restore it as it was. Then everything goes for good: your account, email addresses, passkeys, recovery code, Globus link, sign-ins, machines, notifications and raw usage events, and every project you own, with all its cards and answers on the service. Daily usage totals, which name no one, stay. Your repositories keep their own record.
+
+### Security
+
+- Every connection is encrypted, and Cloudflare encrypts what it stores.
+- Sign-in tokens, emailed codes and recovery codes are kept only as hashes.
+- Signing in takes a passkey, and adding a way in, approving a machine or deleting the account asks for it again.
+- Baesian's command line refuses to send a card that looks like it holds a password or key, unless the agent gives a reason.
+- The service can read what cards say, so its operator technically could. The operator doesn't look at a project's cards unless its owner asks for help with them, or to deal with abuse or a security problem.
+
+### Changes
+
+When this policy changes, the date at the top changes. If a change affects what's kept or why, account holders are emailed before it takes effect.
+
+## Where each statement comes from
+
+- **Who runs it, and where to write:** cards B-mkryw and B-8xxrc; `OPERATOR` and `PRIVACY_CONTACT` in `<Privacy />`.
+- **The account's rows:** `Accounts.createAccount`, the tables in `service/migrations/` ([[File Formats#Accounts (M9c)]]). Recovery codes, tokens and emailed codes as hashes: `hashOf()`. A Globus email kept unverified, and only the `sub`: `identityFrom()`, [[service]].
+- **Sign-ins:** a browser's name from `browserName()`, the lifetimes in `LIMITS` (`sessionIdleMs`, `sessionMaxMs`, `grantIdleMs`, `codeMs`). The cookies: `SESSION_COOKIE`, and the Globus round trip's ten-minute cookie (`service/src/globus.ts`).
+- **Nothing about where a sign-in came from** (B-7bq05): the address is passed to the rate limiter and Turnstile's siteverify (`turnstile()`) and never written.
+- **What the relay keeps:** `SqlFileStorage` and its log (`RelayEntry`); the machine's name on an entry (D162); an answer's handle, account, project and client (`Relay.verdict`); presence and waiting markers, stale after 90 seconds (`PRESENCE_STALE_MS`).
+- **Retention:** `RETENTION` in `service/src/retention.ts` (B-9jqt4, B-ec3kj, B-dsqyd); usage events, `USAGE_RAW_DAYS`.
+- **Deleting an account:** B-b46z3, [[service#Deleting an account (service/src/deletion.ts)]].
+- **Notifications:** `pushText()` (counts and levels only, B-mjf3g), `encrypt()` (RFC 8291), `pushServiceAllowed()` (the four push services).
+- **Usage counts:** `USAGE_KINDS` and `NEVER_COUNTED`, which `/counts` shows.
+- **In the browser:** the client's `storageKey()` (seen cards, time spent, notifications), never sent.
+- **The secret check:** B-jfkv9, `secret_reason` on `CardMeta`.
+- **Where:** the accounts database in eastern North America (`service/wrangler.jsonc#d1_databases`); one default location for every project (B-grrr9).
+
+## Before it's published
+
+- **privacy@baesian.dev must reach the operator** (B-8xxrc): turn on Cloudflare's Email Routing for baesian.dev in the dashboard, which adds the domain's MX records, verify the inbox it forwards to, add a rule forwarding `privacy@` there, and send a test message from an outside address. No agent may do this here. Check sign-in codes still arrive after.
+- **The date:** set `POLICY_CHANGED` to the day it's published.
+- **Workers Logs:** confirm in the dashboard that the Worker has no Workers Logs or Logpush turned on, or say on the page what they keep (below).
+
+## For a lawyer's eye
+
+Things the agent couldn't settle, and which should be checked before the policy is published. None of these is on the page.
+
+- **The operator as an individual** (B-mkryw): the user is personally the controller under the GDPR and similar laws. The service runs in a Cloudflare account under the user's University of Chicago address (D177), and the user works at Globus Labs; the page says it "isn't a service of the University of Chicago or of Globus". Whether the University agrees with that, and whether its rules for accounts under its addresses say otherwise, is worth a check (B-mkryw's own check).
+- **Contact details:** the page gives an email address only. GDPR Article 13(1)(a) asks for "the identity and the contact details of the controller"; whether a postal address is needed too.
+- **An EU or UK representative** (GDPR Article 27, UK GDPR Article 27): a controller outside the EU that offers a service to people in it may need to name one, unless the processing is occasional and low-risk. *Unverified* whether the exemption applies here.
+- **Transfers:** the page says data goes to the United States "under Cloudflare's data processing terms". B-grrr9's research found those rest on the EU-US Data Privacy Framework and standard contractual clauses; whether the operator must also offer clauses to EU organisations, as B-grrr9's alternative mentioned, is open. *Unverified* that Cloudflare's DPA covers Email Sending and Turnstile as it covers Workers (B-pvye0 left that unchecked).
+- **Turnstile's role:** B-mz6qc's research read Cloudflare as a controller of Turnstile's signals, and B-1a03b said Cloudflare's Turnstile privacy addendum would be named in the policy. The page says Cloudflare uses them "for its own purposes" and names no addendum. Whether it must link Cloudflare's own policy or the addendum is for a lawyer.
+- **Legitimate interests** for the bot check, the limits and usage counts: [[Usage Counts Balancing Test]] covers the counts only. Whether security processing needs its own written test.
+- **Contract as the basis** for running the service assumes there are terms of service to perform. None exist yet. Whether the service needs terms before it's published, or the policy should rest on something else until then.
+- **The promise not to look at cards** (Security): a commitment, not a fact of the code. The user should agree to it before it's published, and say what "abuse" covers.
+- **The promise to email before changes** (Changes): likewise a commitment.
+- **"Within a month"**: GDPR Article 12(3)'s period, extendable by two months for complex requests. Whether to say so.
+- **The 14 days after deletion** (B-b46z3): everything is kept, closed, for 14 days after someone asks for it to go. Whether that's "without undue delay" (Article 17) when the request is made by deleting, and whether the page should offer deletion at once on request.
+- **Children:** the page says nothing about age. The service doesn't ask. Whether a minimum age should be stated.
+- **US state laws:** not covered (as [[Usage Counts Balancing Test]] notes); the service is likely below every threshold, *unverified*.
+- **Cloudflare's own logs:** the Worker's configuration enables no Workers Logs or Logpush (`service/wrangler.jsonc` has no `observability`), so the service keeps no request logs of its own. *Unverified* what Cloudflare keeps for its own operation.
+- **Email Sending's own retention** of messages and recipients: not checked.

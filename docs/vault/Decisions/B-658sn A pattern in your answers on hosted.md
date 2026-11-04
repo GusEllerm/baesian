@@ -31,7 +31,7 @@ filed_by: baesian
 branch: v1/next
 depends_on:
   - "[[B-9jqt4 How long an answered card's text stays on the relay|B-9jqt4]]"
-  - B-dsqyd
+  - "[[B-dsqyd Withdrawn cards their text on the relay|B-dsqyd]]"
 ---
 
 # A pattern in your answers on hosted

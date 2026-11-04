@@ -7,9 +7,11 @@ import { CARD_ID, type PasskeyKey, type PasskeyProof, Preferences, type RelayEnt
 import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
 import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
+import type { ApiRemovedCard } from "../../src/api.js";
 import { checkSigned, readTrustFile } from "../../src/trust.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
 import type { Waiting } from "./notify.js";
+import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due } from "./retention.js";
 import { harnessOf } from "./usage.js";
 import type { ServiceSigner } from "./signer.js";
 import { NoKey } from "./signer.js";
@@ -86,6 +88,19 @@ class NeedsProof extends Error {
 /** The project changed between composing an answer and its proof: written again, its bytes are other bytes. */
 export class Changed extends Error {}
 
+/** Removing a card's text would change another card: nothing is kept. */
+class WouldChange extends Error {}
+
+/** A card whose text goes, with what stays of it, its logged paths, and its held gate records for the burn-in. */
+interface Removal {
+  row: Parameters<RetentionLedger["removed"]>[0];
+  paths: string[];
+  held: { by: "cli" | "relay"; row: Parameters<RetentionLedger["heldGone"]>[1] }[];
+}
+
+/** At most this many cards are tried one at a time in a sweep, when removing them together would change another card. */
+const SWEEP_ONE_BY_ONE = 50;
+
 const fail = (status: number, error: string): Reply => ({ status, body: { error } });
 const isObject = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const json = (x: object) => `${JSON.stringify(x, null, 2)}\n`;
@@ -110,6 +125,8 @@ export class Relay {
     private readonly origin: string,
     /** When this instance of the object started: the state's `server.started`. */
     private readonly started: string,
+    /** Retention's own tables (M9f): what each machine was sent, and the cards whose text went. */
+    private readonly retention?: RetentionLedger,
   ) {}
 
   /**
@@ -120,7 +137,15 @@ export class Relay {
    */
   store(): Store {
     const pinned = this.signer ? { ...this.signer.trust(), passkeys: this.passkeys() } : null;
-    return Store.over(this.files, { branch: RELAY_BRANCH, config: { service: this.origin, project: this.project }, trust: { pinned }, beforeLinking: this.files.beforeLinking() });
+    const retention = this.retention;
+    return Store.over(this.files, {
+      branch: RELAY_BRANCH,
+      config: { service: this.origin, project: this.project },
+      trust: { pinned },
+      beforeLinking: this.files.beforeLinking(),
+      // The held cards whose gate records retention removed still count in the burn-in (M9f).
+      ...(retention ? { heldEarlier: (row, by) => retention.heldEarlier(row, by) } : {}),
+    });
   }
 
   /** The passkey key files in the project's `trust/`, each signed by the service's key. */
@@ -144,19 +169,23 @@ export class Relay {
 
   // ---------------------------------------------------------------- reading
 
-  /** The log after a sequence number (P16 section 8): `GET /v1/projects/{project}/log?after={seq}`. */
-  log(after: number, limit: number): Reply {
+  /**
+   * The log after a sequence number (P16 section 8): `GET /v1/projects/{project}/log?after={seq}`. A machine's read notes
+   * how far it has been sent the log, for retention (B-9jqt4): an entry sent to every machine is delivered.
+   */
+  log(after: number, limit: number, machine?: string): Reply {
     const entries = this.files.after(after, Math.min(Math.max(limit, 1), MAX_ENTRIES));
     const head = this.files.head();
+    if (machine !== undefined) this.retention?.sent(machine, Math.min(Math.max(after, entries.at(-1)?.seq ?? 0), head), new Date().toISOString());
     return { status: 200, body: { entries, head, more: (entries.at(-1)?.seq ?? head) < head } };
   }
 
   /** The state, as `baesian serve`'s `/api/state` gives it (B-17wn9), built by `snapshot()` over the project's store. */
   state(): Reply {
-    return {
-      status: 200,
-      body: snapshot(this.store(), { version: this.files.version(), server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH } }),
-    };
+    const state = snapshot(this.store(), { version: this.files.version(), server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH } });
+    // The cards whose text retention removed: listed without it (B-ec3kj), and never answerable.
+    const removed = this.retention?.removedCards() ?? [];
+    return { status: 200, body: removed.length ? { ...state, removed } : state };
   }
 
   /**
@@ -266,7 +295,16 @@ export class Relay {
           ? { status: 200, body: { entry: receipt(this.files.entryOf(path)), unchanged: true } }
           : fail(409, `${path} is already here, with other bytes: a file is written once, so it can't change (another machine may have written it first)`);
       }
+      // Logged, with its bytes removed by retention (M9f): its entry still says which bytes were here, and they never come back.
+      const kept = this.files.entryOf(path);
+      if (kept) {
+        return kept.digest === sha256(bytes).toString("hex")
+          ? { status: 200, body: { entry: receipt(kept), unchanged: true } }
+          : fail(409, `${path} was here, with other bytes: a file is written once, so it can't change`);
+      }
     }
+    const gone = this.removedCard(path);
+    if (gone) return gone;
     const problem = uploadProblem(found.kind, found.parts, path, bytes, this.store());
     if (problem) return fail(problem.status, problem.error);
     if (found.kind.mutable) {
@@ -308,6 +346,113 @@ export class Relay {
       throw e;
     }
     return { status: 201, body: { entry: receipt(this.files.entryOf(path)) } };
+  }
+
+  /**
+   * An upload for a card whose text retention removed (M9f): refused with 410, since the relay keeps nothing more of it.
+   * The CLI then stops offering it (`src/sync.ts`); the repo's record still has it.
+   */
+  private removedCard(path: string): Reply | undefined {
+    const card = cardOfPath(path);
+    const gone: ApiRemovedCard | undefined = card === undefined ? undefined : this.retention?.isRemoved(card);
+    if (!gone) return undefined;
+    return { status: 410, body: { error: `${gone.id}'s text was removed from the relay on ${gone.removed.slice(0, 10)}, as retention has it (B-9jqt4, B-ec3kj): the relay takes nothing more for it, and the repo's record keeps it`, removed: true } };
+  }
+
+  // ---------------------------------------------------------------- retention (M9f)
+
+  /**
+   * Remove the text of every card whose time has come (`due()`), keeping its log entries and what `RetentionLedger`
+   * notes of it: an answered card 30 days after it was delivered to every machine signed in to the project (B-9jqt4), a
+   * held card nobody answered 90 days after its latest revision arrived (B-ec3kj), a withdrawn card as B-dsqyd says. A
+   * card whose removal would change another card's status or level (a card that builds on it, one it supersedes or
+   * conflicts with) waits until that one goes too. `live` is the machines whose grants for the project are live. Returns
+   * the cards removed.
+   */
+  sweep(now: number, live: ReadonlySet<string>, r: Retention = RETENTION): string[] {
+    const ledger = this.retention;
+    if (!ledger) return [];
+    const log = this.files.cardsInLog();
+    const sent = ledger.sentTo();
+    const store = this.store();
+    const ready: Removal[] = [];
+    store.view(() => {
+      for (const id of store.cardIds()) {
+        const card = store.card(id);
+        const inLog = log.get(id);
+        if (!card || !inLog) continue;
+        const status = store.status(id);
+        const rev = card.meta.revision;
+        const ended =
+          status === "resolved" || status === "superseded" ? "answered" : status === "withdrawn" ? "withdrawn" : status === "held" && !store.gateRecord(id, rev)?.drawn ? "held" : undefined;
+        if (ended === undefined || ended === "held") ledger.forgetDelivered(id);
+        const isDelivered = delivered(inLog.last, live, sent);
+        let at = ledger.deliveredAt(id, inLog.last);
+        if (ended !== undefined && ended !== "held" && isDelivered && at === undefined) {
+          ledger.setDelivered(id, inLog.last, now);
+          at = now;
+        }
+        const arrived = Date.parse(inLog.revisionAt ?? inLog.lastAt);
+        if (!due({ ended, delivered: isDelivered, deliveredAt: at, arrived }, now, r)) continue;
+        ready.push({
+          row: {
+            id,
+            revision: rev,
+            level: store.levelOf(id) ?? card.meta.level,
+            ended: ended!,
+            filed: inLog.firstAt ?? card.meta.created,
+            settled: ended === "held" ? (inLog.revisionAt ?? inLog.lastAt) : inLog.lastAt,
+            removed: new Date(now).toISOString(),
+            size: inLog.size,
+          },
+          paths: inLog.paths,
+          held: store.gateRecords(id).filter((g) => g.mode === "enforce" && g.outcome === "held").map((g) => ({ by: g.by, row: g.row })),
+        });
+      }
+    });
+    if (!ready.length) return [];
+    if (this.remove(ready)) return ready.map((x) => x.row.id);
+    // Some removal would change another card: each alone, oldest first, keeping those that change nothing.
+    return ready
+      .sort((a, b) => a.row.settled.localeCompare(b.row.settled))
+      .slice(0, SWEEP_ONE_BY_ONE)
+      .filter((x) => this.remove([x]))
+      .map((x) => x.row.id);
+  }
+
+  /** Remove these cards' text in one transaction, unless that changes any other card's status or level: then nothing. */
+  private remove(batch: Removal[]): boolean {
+    const ledger = this.retention!;
+    const ids = new Set(batch.map((x) => x.row.id));
+    const before = this.fingerprint(ids);
+    try {
+      this.files.transaction(() => {
+        for (const x of batch) {
+          for (const h of x.held) ledger.heldGone(h.by, h.row);
+          this.files.dropCard(x.row.id, x.paths);
+          ledger.removed(x.row);
+        }
+        const after = this.fingerprint(ids);
+        if (after.size !== before.size || [...before].some(([id, f]) => after.get(id) !== f)) throw new WouldChange();
+      });
+      return true;
+    } catch (e) {
+      if (e instanceof WouldChange) return false;
+      throw e;
+    }
+  }
+
+  /** Every other card's status and level in force, as the relay's store computes them now. */
+  private fingerprint(skip: ReadonlySet<string>): Map<string, string> {
+    const store = this.store();
+    return store.view(() => {
+      const out = new Map<string, string>();
+      for (const id of store.cardIds()) {
+        if (skip.has(id) || !store.card(id)) continue;
+        out.set(id, `${store.status(id)}:${store.levelOf(id) ?? ""}`);
+      }
+      return out;
+    });
   }
 
   /** A waiting marker stops: `DELETE /v1/projects/{project}/files/waiting/{name}` (D90). Nothing else is ever removed. */

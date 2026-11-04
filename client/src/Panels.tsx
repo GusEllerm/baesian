@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import type { ApiCard, ApiRouting, ApiState } from "../../src/api";
+import type { ApiCard, ApiRemovedCard, ApiRouting, ApiState } from "../../src/api";
 import { type Spent, seconds, timeSpent } from "./calibration";
-import { agentOf } from "./model";
+import { agentOf, dayOf } from "./model";
 import type { NotifyStatus } from "./notify";
 import { ROWS, ROW_NAMES, POSITION_NAMES, type Position, blindWords, reportLines, rowInSentence } from "./prefs";
 import { Prose } from "./Prose";
@@ -261,15 +261,17 @@ function RowLines({ row, report }: { row: string; report: ApiRouting["report"]["
  * The cards your settings held back, whose agents went ahead (D150): any of them opens on the desk, to answer blind
  * first, like an audit (D151). Newest first.
  */
-export function HeldPanel({ held, mode, onOpen, onClose }: { held: ApiCard[]; mode: ApiRouting["settings"]["mode"]; onOpen: (id: string) => void; onClose: () => void }) {
+export function HeldPanel({ held, gone = [], mode, onOpen, onClose }: { held: ApiCard[]; gone?: ApiRemovedCard[]; mode: ApiRouting["settings"]["mode"]; onOpen: (id: string) => void; onClose: () => void }) {
   return (
     <Panel label="Held back" onClose={onClose} id="held-panel">
       <p className="sub">
         {held.length
           ? "Your settings held these back, and their agents went ahead. Any can be answered: you choose first, then see what was done."
-          : mode === "shadow"
-            ? "Nothing is held back: in shadow, every card reaches you."
-            : "Nothing is held back."}
+          : gone.length
+            ? "Nothing held back is waiting to be answered."
+            : mode === "shadow"
+              ? "Nothing is held back: in shadow, every card reaches you."
+              : "Nothing is held back."}
       </p>
       {held.length > 0 && (
         <div className="held-list">
@@ -277,6 +279,24 @@ export function HeldPanel({ held, mode, onOpen, onClose }: { held: ApiCard[]; mo
             <HeldRow key={c.meta.id} card={c} onOpen={onOpen} />
           ))}
         </div>
+      )}
+      {/* Held back, never answered, and past 90 days (B-ec3kj, M9f): the service keeps only when and at what level. */}
+      {gone.length > 0 && (
+        <>
+          <p className="sub held-gone-h">
+            {gone.length === 1 ? "One more was" : `${gone.length} more were`} held back over 90 days ago and never answered, so the service removed {gone.length === 1 ? "its" : "their"} text. Your repo's record keeps {gone.length === 1 ? "it" : "them"}.
+          </p>
+          <ul className="held-list held-gone">
+            {gone.map((r) => (
+              <li key={r.id} className="parked-row">
+                <span className="nm">Held back {dayOf(r.settled)}</span>
+                <span className="st">
+                  {r.level[0]!.toUpperCase() + r.level.slice(1)}; its text was removed {dayOf(r.removed)}.
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Panel>
   );

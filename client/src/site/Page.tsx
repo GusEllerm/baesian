@@ -32,6 +32,15 @@ export function Shell({ who, children, wide }: { who?: string | undefined; child
       </header>
       <main className="site-main">
         <div className={wide ? "site-page wide" : "site-page"}>{children}</div>
+        {/* On every page of the site (M9f): what the service keeps, and what it counts. */}
+        <nav className="site-foot" aria-label="About the service">
+          <a href="/privacy" onClick={follow("/privacy")}>
+            Privacy
+          </a>
+          <a href="/counts" onClick={follow("/counts")}>
+            What the service counts
+          </a>
+        </nav>
       </main>
     </>
   );

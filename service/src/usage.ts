@@ -61,8 +61,9 @@ export class Usage {
 
   /** An account's usage ID, made at its first counted event; none while it has opted out. */
   private async usageId(account: string): Promise<string | null> {
-    const a = await this.db.prepare("SELECT usage_id, usage_opt_out FROM accounts WHERE id = ?").bind(account).first<{ usage_id: string | null; usage_opt_out: string | null }>();
-    if (!a || a.usage_opt_out) return null;
+    // Nothing is counted for an account that opted out, or that's closed, to be deleted (B-b46z3).
+    const a = await this.db.prepare("SELECT usage_id, usage_opt_out, closed FROM accounts WHERE id = ?").bind(account).first<{ usage_id: string | null; usage_opt_out: string | null; closed: string | null }>();
+    if (!a || a.usage_opt_out || a.closed) return null;
     if (a.usage_id) return a.usage_id;
     const id = idWith("u");
     await this.db.prepare("UPDATE accounts SET usage_id = COALESCE(usage_id, ?) WHERE id = ?").bind(id, account).run();

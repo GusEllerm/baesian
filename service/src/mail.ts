@@ -13,7 +13,7 @@ export interface Mail {
   code?: string;
 }
 
-export type MailKind = "signup-code" | "already-signed-up" | "recovery-code" | "recovered" | "passkey-added";
+export type MailKind = "signup-code" | "already-signed-up" | "recovery-code" | "recovered" | "passkey-added" | "account-closed" | "account-restored";
 
 /** What sends the service's emails. */
 export interface Mailer {
@@ -67,5 +67,17 @@ export const mails = {
     kind: "passkey-added",
     subject: "A passkey was added to your Baesian account",
     text: `A new passkey was added to the Baesian account ${handle} at ${origin}.\n\nIf this was you, there's nothing to do: to answer hard cards with it, add its line to your CI's BAESIAN_TRUST, as the website shows. If it wasn't, sign in and remove it.`,
+  }),
+  accountClosed: (to: string, handle: string, origin: string, deletes: string): Mail => ({
+    to,
+    kind: "account-closed",
+    subject: "Your Baesian account is closed",
+    text: `The Baesian account ${handle} at ${origin} was closed, with its passkey. Every sign-in and machine is signed out, and nothing more is relayed or counted.\n\nOn ${deletes} it will be deleted, with every project it owns and all their cards and answers on the service. Your repositories keep their own record.\n\nTo keep it, sign in at ${origin}/sign-in with your passkey before then, and restore it. If this wasn't you, do that now.`,
+  }),
+  accountRestored: (to: string, handle: string, origin: string): Mail => ({
+    to,
+    kind: "account-restored",
+    subject: "Your Baesian account was restored",
+    text: `The Baesian account ${handle} at ${origin} was closed, and has been restored with its passkey: it won't be deleted. Its machines need signing in again with baesian login, and notifications turning on again.\n\nIf this wasn't you, sign in, end the sign-ins you don't recognise, and close it again.`,
   }),
 };

@@ -382,6 +382,11 @@ export interface StorageOptions {
    * before the project's first answer on the website, and keeps them unsigned.
    */
   beforeLinking?: ReadonlySet<string>;
+  /**
+   * Held cards whose gate records are no longer in the storage, per writer and row: the relay counts them in the burn-in
+   * after retention removed their files (B-ec3kj, M9f), so removing a card never changes how the gate holds the next.
+   */
+  heldEarlier?: (row: AnyRow, by: GateRecord["by"]) => number;
 }
 
 /** On your machine: the repo, the live layer's folder, and the worktree's record. */
@@ -431,7 +436,7 @@ export class Store {
     /** The live layer (B-0ag7h): a folder on your machine, the relay's table, or memory. */
     readonly storage: Storage,
     private readonly local: Local | undefined,
-    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean; commit?: string; beforeLinking?: ReadonlySet<string> },
+    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean; commit?: string; beforeLinking?: ReadonlySet<string>; heldEarlier?: StorageOptions["heldEarlier"] },
   ) {
     this.readOnly = options.readOnly;
   }
@@ -456,7 +461,7 @@ export class Store {
    * answers and checks as any store does; what needs git or the record throws `NeedsRepo`, and nothing touches a disk.
    */
   static over(storage: Storage, options: StorageOptions): Store {
-    return new Store(storage, undefined, { branch: options.branch, config: options.config, trust: { pinned: options.trust?.pinned ?? null }, readOnly: false, ...(options.beforeLinking ? { beforeLinking: options.beforeLinking } : {}) });
+    return new Store(storage, undefined, { branch: options.branch, config: options.config, trust: { pinned: options.trust?.pinned ?? null }, readOnly: false, ...(options.beforeLinking ? { beforeLinking: options.beforeLinking } : {}), ...(options.heldEarlier ? { heldEarlier: options.heldEarlier } : {}) });
   }
 
   // ---------------------------------------------------------------- layers
@@ -1064,7 +1069,7 @@ export class Store {
    * counts them (B-fgc4y).
    */
   private heldBefore(row: AnyRow, by: GateRecord["by"] = "cli"): number {
-    let n = 0;
+    let n = this.options.heldEarlier?.(row, by) ?? 0;
     for (const id of this.cardIds()) {
       for (const g of this.gateRecords(id)) if (g.by === by && g.mode === "enforce" && g.outcome === "held" && g.row === row) n++;
     }

@@ -76,6 +76,9 @@ export function Counts({ who }: { who?: string | undefined }) {
         <p>
           To stop it, untick “Count my use of the service” on <To to="/account">your account page</To>. Nothing more is counted, what was kept for your account is deleted at once, and if you turn it on again you get a new usage ID, so nothing before is linked to anything after. Daily counts made before then stay: they say nothing about who.
         </p>
+        <p>
+          Everything else the service keeps, and why, is in <To to="/privacy">the privacy policy</To>.
+        </p>
       </Sheet>
     </Shell>
   );

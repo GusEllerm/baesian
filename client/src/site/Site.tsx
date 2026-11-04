@@ -6,6 +6,7 @@ import { Device } from "./Device";
 import { signInHere, takeFragment, useWhere } from "./nav";
 import { Go, Problem, Sheet, Shell, To } from "./Page";
 import { Project } from "./Project";
+import { Privacy } from "./Privacy";
 import { Projects } from "./Projects";
 import { Recover } from "./Recover";
 import { SignIn } from "./SignIn";
@@ -20,10 +21,11 @@ import { SignUp } from "./SignUp";
 //   /account            passkeys, sign-ins, machines, Globus, signing out
 //   /device?code=       approve a machine `baesian login` is signing in
 //   /counts             what the service counts of its use, every field (D141, B-7nq85): anyone may open it
+//   /privacy            the privacy policy (M9f): anyone may open it
 //   /projects/{project} the project's desk
 
 /** The pages anyone may open; every other needs you signed in. */
-const OPEN = new Set(["/sign-up", "/sign-in", "/recover", "/counts"]);
+const OPEN = new Set(["/sign-up", "/sign-in", "/recover", "/counts", "/privacy"]);
 
 export function Site() {
   const where = useWhere();
@@ -48,6 +50,7 @@ export function Site() {
   if (path === "/sign-in") return <SignIn onIn={me.reload} />;
   if (path === "/recover") return <Recover onIn={me.reload} />;
   if (path === "/counts") return <Counts who={me.kind === "in" ? me.account.handle : undefined} />;
+  if (path === "/privacy") return <Privacy who={me.kind === "in" ? me.account.handle : undefined} />;
 
   if (me.kind === "loading") return <Shell>{null}</Shell>;
   if (me.kind === "error") {

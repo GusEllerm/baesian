@@ -1,5 +1,5 @@
 import type { Replay, Settings, SurveyItem } from "./routing.js";
-import type { CardMeta, DeckMeta, Fallback, GateRecord, Preferences, Presence, RuleMeta, RuleRetirement, Verdict } from "./schema.js";
+import type { CardMeta, DeckMeta, Fallback, GateRecord, Level, Preferences, Presence, RuleMeta, RuleRetirement, Verdict } from "./schema.js";
 
 // The server's API (D96): what `GET /api/state` returns, and what the client may write. Types only, and nothing
 // from Node, so the client can share them. docs/vault/Design/Local Server.md describes the API for people.
@@ -109,6 +109,28 @@ export interface ApiState {
   routing: ApiRouting;
   /** Files that couldn't be read: half-written, or invalid. They're read again on the next change. */
   problems: { path: string; error: string }[];
+  /**
+   * Cards whose text the relay removed (B-9jqt4, B-ec3kj, M9f): only their IDs, times and levels stay, so they're listed
+   * without it, and can't be answered. Only the relay sets it; `baesian serve` never removes anything.
+   */
+  removed?: ApiRemovedCard[];
+}
+
+/** A card the relay keeps only the metadata of (M9f): no title, question or answer, only what retention keeps. */
+export interface ApiRemovedCard {
+  id: string;
+  /** Its latest revision when its text went. */
+  revision: number;
+  /** Its level in force then. */
+  level: Level;
+  /** How it ended: answered (or superseded), withdrawn, or held back and never answered. */
+  ended: "answered" | "withdrawn" | "held";
+  /** When its first revision arrived on the relay. */
+  filed: string;
+  /** When its last file arrived: the answer, the withdrawal, or, for a held card, its latest revision. */
+  settled: string;
+  /** When its text was removed. */
+  removed: string;
 }
 
 /** A preference file, by name (D147). */

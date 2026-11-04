@@ -1,4 +1,4 @@
-import { type ApiCard, type ApiState, type Status, WAITING_STALE_MS } from "../../src/api";
+import { type ApiCard, type ApiRemovedCard, type ApiState, type Status, WAITING_STALE_MS } from "../../src/api";
 import { BAESIAN } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
 
@@ -185,6 +185,24 @@ export const heldBack = (state: ApiState): ApiCard[] =>
   state.cards.filter((c) => c.status === "held" && !c.audit).sort((a, b) => b.meta.created.localeCompare(a.meta.created));
 
 /**
+ * Held-back cards nobody answered whose text the relay removed after 90 days (B-ec3kj, M9f): listed in the held-back
+ * list without it, and never answerable. Newest first.
+ */
+export const heldRemoved = (state: ApiState): ApiRemovedCard[] => (state.removed ?? []).filter((r) => r.ended === "held").sort((a, b) => b.settled.localeCompare(a.settled));
+
+/** A date as the client says one: "3 Aug 2026". */
+export const dayOf = (iso: string): string => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/** What the path calls a card whose text was removed (M9f): no title is left to name it by, and never its ID (D69). */
+const REMOVED_NAME: Record<ApiRemovedCard["ended"], string> = { answered: "An earlier decision", withdrawn: "A withdrawn card", held: "A card held back" };
+const REMOVED_WORDS: Record<ApiRemovedCard["ended"], string> = { answered: "settled", withdrawn: "withdrawn", held: "held back" };
+
+/** How the path describes a card whose text the relay removed: how it ended and when, and that its text is gone. */
+export function removedWords(r: ApiRemovedCard): { name: string; state: string } {
+  return { name: REMOVED_NAME[r.ended], state: `${REMOVED_WORDS[r.ended]} ${dayOf(r.settled)}; its text is no longer on the service` };
+}
+
+/**
  * A card answered blind first, then shown what its agent went ahead with (D151): an audit, or any held card opened
  * from the list. Until you choose, nothing on it may say which option the agent took.
  */
@@ -228,6 +246,7 @@ export const ruleName = (body: string): string => body.split("\n").map((l) => l.
 export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
   const cards = byId(state);
   const rules = new Map(state.rules.map((r) => [r.meta.id, r]));
+  const removed = new Map((state.removed ?? []).map((r) => [r.id, r]));
   const m = card.meta;
   const out = new Map<string, Relation>();
   const describe = (id: string): { name: string; state: string } | undefined => {
@@ -236,6 +255,9 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
     if (c) return { name: c.meta.title, state: c.before_linking ? "settled before linking" : STATE_WORDS[c.status] };
     const r = rules.get(id);
     if (r) return { name: ruleName(r.body), state: r.retired ? "retired rule" : "your rule" };
+    // Its text was removed from the relay (M9f): named by how it ended, never by its ID (D69).
+    const gone = removed.get(id);
+    if (gone) return removedWords(gone);
     return undefined;
   };
   const add = (id: string, rel: Omit<Relation, "id" | "name" | "state">) => {

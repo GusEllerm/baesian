@@ -4,9 +4,11 @@ import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import type { Settings } from "../../src/routing.js";
 import { type PasskeyKey, ProjectId, type Verdict } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
-import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal } from "./access.js";
+import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
+import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";
 import type { GlobusConfig } from "./globus.js";
@@ -166,7 +168,8 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       const after = Number(url.searchParams.get("after") ?? 0);
       const limit = Number(url.searchParams.get("limit") ?? MAX_ENTRIES);
       if (!Number.isInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1) return fail(400, "after is a sequence number from 0, and limit a count from 1");
-      return reply(await stub.log(project, after, limit));
+      // A machine's read is noted by its grant, for retention (B-9jqt4); the stand-in's machines, by name.
+      return reply(await stub.log(project, after, limit, who.kind === "machine" ? (who.grant ?? `dev:${who.machine}`) : undefined));
     }
     case "state":
       return reply(await stub.state(project));
@@ -268,7 +271,28 @@ async function accountsRequest(request: Request, url: URL, env: Env, services: S
   return (await signInRoute(s, request, url)) ?? fail(404, `no address ${request.method} ${url.pathname}`);
 }
 
+/**
+ * The service's daily job (M9f), on its cron trigger (`service/wrangler.jsonc#triggers`): accounts closed 14 days ago are
+ * deleted, their projects' relay data first (B-b46z3, `deleteClosed()`), and rows whose time is over are cleared
+ * (`Accounts.clearEnded`). Returns the accounts deleted.
+ */
+export async function housekeeping(env: Env, now: number = Date.now()): Promise<string[]> {
+  if (!env.ACCOUNTS) return [];
+  const accounts = new Accounts(env.ACCOUNTS);
+  const deleted = await deleteClosed(accounts, async (project) => env.PROJECTS.get(env.PROJECTS.idFromName(project)).erase(project), now);
+  await accounts.clearEnded();
+  return deleted;
+}
+
 export default {
+  async scheduled(_controller, env, ctx): Promise<void> {
+    ctx.waitUntil(
+      housekeeping(env).catch((e) => {
+        console.error(`the daily job failed: ${e instanceof Error ? e.message : String(e)}`);
+      }),
+    );
+  },
+
   async fetch(request, env, ctx): Promise<Response> {
     let r: Response;
     try {
@@ -282,6 +306,9 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+/** The meta key for when a project's object next looks at retention (M9f). */
+const SWEEP_AT = "retention_next";
+
 /** What a live update says (B-bv49e): the state changed, and its version now. The client reads the state again. */
 export const changedMessage = (version: number) => JSON.stringify({ type: "changed", version });
 
@@ -290,22 +317,23 @@ export const changedMessage = (version: number) => JSON.stringify({ type: "chang
  * project on first use, and answers for no other. Everything it does goes through `Relay`; this is the glue.
  */
 export class ProjectRelay extends DurableObject<Env> {
-  private readonly files: SqlFileStorage;
+  private files!: SqlFileStorage;
   private readonly signer: ServiceSigner | undefined;
   private readonly keyProblem: string | undefined;
   private readonly started = new Date().toISOString();
   /** The project's notification state (M9e step 2). */
-  private readonly ledger: PushLedger;
+  private ledger!: PushLedger;
   /** Web push's VAPID tokens, made when first needed and each reused for an hour (B-nk97q). */
   private vapid: Vapid | undefined;
   /** Usage counts (D141, B-7nq85), in the accounts database. */
   private readonly usage: Usage | undefined;
   /** The days and screens whose first visit this object has counted already. */
   private readonly visited = new Set<string>();
+  /** Retention's tables (M9f, B-9jqt4, B-ec3kj). */
+  private retention!: RetentionLedger;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.ledger = new PushLedger(ctx.storage.sql);
     this.usage = env.ACCOUNTS ? new Usage(env.ACCOUNTS) : undefined;
     let signer: ServiceSigner | undefined;
     try {
@@ -315,23 +343,62 @@ export class ProjectRelay extends DurableObject<Env> {
       this.keyProblem = e.message;
     }
     this.signer = signer;
-    this.files = new SqlFileStorage(ctx.storage, {
+    this.open();
+    // A ping is answered without waking the object (B-bv49e).
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  /** The object's tables, made if they aren't there: at start, and again after `ProjectRelay.erase` emptied it. */
+  private open(): void {
+    this.ledger = new PushLedger(this.ctx.storage.sql);
+    this.retention = new RetentionLedger(this.ctx.storage.sql);
+    this.files = new SqlFileStorage(this.ctx.storage, {
       sign: (path, bytes) => {
         if (!signedFile(path)) return undefined;
         if (!this.signer) throw new NoKey(this.keyProblem ?? "the relay has no signing key");
         return this.signer.sign(path, bytes);
       },
     });
-    // A ping is answered without waking the object (B-bv49e).
-    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  /**
+   * Erase the project (B-b46z3, M9f): its owner's account is deleted. Every socket is closed, the alarm deleted, and
+   * the object's whole database deleted (`storage.deleteAll`, atomic on SQLite), log and all, so nothing of the project
+   * is left; its tables are made again only if anything asks for it after.
+   */
+  async erase(project: string): Promise<void> {
+    if (this.erased) return;
+    const known = this.files.meta("project");
+    if (known !== undefined && known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(1000, "the project was deleted");
+      } catch {
+        // closing already
+      }
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.visited.clear();
+    this.erased = true;
+  }
+
+  /** Erased (`ProjectRelay.erase`): the tables are made again at the next use, not before. */
+  private erased = false;
+
+  private reopened(): void {
+    if (!this.erased) return;
+    this.erased = false;
+    this.open();
   }
 
   /** The project's relay, after checking this object is that project's. */
   private relay(project: string): Relay {
+    this.reopened();
     const known = this.files.meta("project");
     if (known === undefined) this.files.setMeta("project", project);
     else if (known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
-    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started);
+    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention);
   }
 
   /** Run one address's work, and tell every listener if it changed anything. */
@@ -354,8 +421,8 @@ export class ProjectRelay extends DurableObject<Env> {
     }
   }
 
-  async log(project: string, after: number, limit: number): Promise<Reply> {
-    return this.run(project, (r) => r.log(after, limit));
+  async log(project: string, after: number, limit: number, machine?: string): Promise<Reply> {
+    return this.run(project, (r) => r.log(after, limit, machine));
   }
 
   async state(project: string): Promise<Reply> {
@@ -379,6 +446,7 @@ export class ProjectRelay extends DurableObject<Env> {
       const fields = this.relay(project).filedUsage(m[1]!, Number(m[2]));
       if (fields) await this.usage?.record({ project }, "card_filed", fields);
     }
+    if (out.status < 300) await this.keepAlarm();
     return out;
   }
 
@@ -398,6 +466,7 @@ export class ProjectRelay extends DurableObject<Env> {
    * project's owner that turned them on, settle what it told, and set the alarm for the next time anything's due.
    */
   async alarm(): Promise<void> {
+    if (this.erased) return;
     const project = this.files.meta("project");
     if (project === undefined) return;
     const now = Date.now();
@@ -411,7 +480,41 @@ export class ProjectRelay extends DurableObject<Env> {
         console.error(`notifying project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (d.next !== undefined) await this.ctx.storage.setAlarm(Math.max(d.next, Date.now() + 1000));
+    // Retention (M9f): once a day, the text of cards whose time has come is removed.
+    let sweep = Number(this.files.meta(SWEEP_AT) ?? 0);
+    if (sweep <= now) {
+      try {
+        await this.sweep(project, now);
+      } catch (e) {
+        console.error(`retention in project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      sweep = now + RETENTION.everyMs;
+      this.files.setMeta(SWEEP_AT, String(sweep));
+    }
+    await this.ctx.storage.setAlarm(Math.max(Math.min(d.next ?? Number.POSITIVE_INFINITY, sweep), Date.now() + 1000));
+  }
+
+  /**
+   * Retention's daily look (M9f, B-9jqt4, B-ec3kj): the machines signed in to the project now, from the accounts database
+   * (and, locally and in tests, the stand-in's for it), then `Relay.sweep`. Listeners hear of what changed.
+   */
+  async sweep(project: string, now: number = Date.now()): Promise<string[]> {
+    const live = new Set<string>();
+    if (this.env.ACCOUNTS) for (const g of await new Accounts(this.env.ACCOUNTS).liveGrants(project)) live.add(g);
+    if (isLocal(this.env) && this.env.BAESIAN_DEV_ACCESS) for (const m of readGrants(this.env.BAESIAN_DEV_ACCESS).machines) if (m.project === project) live.add(`dev:${m.machine}`);
+    let removed: string[] = [];
+    this.run(project, (r) => {
+      removed = r.sweep(now, live);
+      return { status: 200 };
+    });
+    return removed;
+  }
+
+  /** After a write, an alarm is always set, so retention looks at the project at least once a day. */
+  private async keepAlarm(): Promise<void> {
+    if ((await this.ctx.storage.getAlarm()) !== null) return;
+    const sweep = Number(this.files.meta(SWEEP_AT) ?? 0);
+    await this.ctx.storage.setAlarm(Math.max(sweep || Date.now() + RETENTION.everyMs, Date.now() + 1000));
   }
 
   /**
@@ -448,6 +551,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = this.relay(project).settings();
     const out = this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
     if (out.status === 201) await this.countAnswer(project, who.account, kind === "verdicts" ? "verdict" : kind === "aliases" ? "alias" : "preferences", out, before);
+    if (out.status === 201) await this.keepAlarm();
     return out;
   }
 
@@ -474,6 +578,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = relay.settings();
     const out = this.run(project, (r) => r.prove(id, account, assertion, key));
     if (out.status === 201 && kind) await this.countAnswer(project, account, kind === "verdict" ? "verdict" : "preferences", out, before);
+    if (out.status === 201) await this.keepAlarm();
     return out;
   }
 
