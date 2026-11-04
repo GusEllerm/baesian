@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/trust.ts, src/sshsig.ts and src/passkey.ts (M9a): the keys a hosted repo trusts, pinned in CI or copied in the record (D142, D159); the service's OpenSSH signatures (D160); passkey proofs on hard-card answers and loosened preferences (D139, D163); and the relay's draw proof (D158). All checked offline with Node's crypto, no new dependency."
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 reviewed: 2026-11-03
 tags: [baesian, module, hosted]
 ---
@@ -24,7 +24,7 @@ OpenSSH's signature format (PROTOCOL.sshsig), read and written around Node's Ed2
 
 ## src/passkey.ts: passkey proofs (D139, D163)
 
-**`proofProblem()`** says why a WebAuthn assertion doesn't prove a file, or nothing if it does: it must be `webauthn.get`, from the service's origin and not in another site's frame, with the challenge the file's SHA-256 digest (`challengeOf()`); its authenticator data must carry the relying party's hash and the user-present and user-verified flags; and its signature, over the authenticator data and the client data's hash, must check under the passkey's public key, by its COSE algorithm. The sign counter isn't checked: synced passkeys keep it at zero, and offline there's nothing to compare it with.
+**`proofProblem()`** says why a WebAuthn assertion doesn't prove a file, or nothing if it does: it must be `webauthn.get`, from the service's origin and not in another site's frame, with the challenge the file's SHA-256 digest (`challengeOf()`); its authenticator data must carry the relying party's hash and the user-present and user-verified flags; and its signature, over the authenticator data and the client data's hash, must check under the passkey's public key, by its COSE algorithm. The sign counter isn't checked: synced passkeys keep it at zero, and offline there's nothing to compare it with. It runs in workerd too, where the relay checks each proof it writes with it (M9c, [[service]]): an ES256 signature is checked as DER, Node's default, since workerd takes no key object inside an options object. The relay's tests check that it agrees with SimpleWebAuthn on the same assertions (B-jp22m).
 
 ## src/trust.ts: the keys, and the checks made with them (D142, D159)
 

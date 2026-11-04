@@ -1,0 +1,469 @@
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
+import type { PasskeyKey } from "../../src/schema.js";
+import { type Account, type Accounts, type Flow, HANDLE, LIMITS, Taken, normalEmail } from "./accounts.js";
+import { SESSION_COOKIE, clearCookie, cookie, crossSite, sessionCookie } from "./access.js";
+import { type GlobusConfig, authorizationUrl, identityFrom, newRoundTrip, whyNot } from "./globus.js";
+import { addressOf, browserName, fail, readObject, respond } from "./http.js";
+import { type Mailer, mails } from "./mail.js";
+import { emailCode, hashOf, idWith, normalRecoveryCode, normalUserCode, recoveryCode, same, token } from "./secret.js";
+import type { Turnstile } from "./turnstile.js";
+import { type NewPasskey, type RelyingParty, type StoredPasskey, authenticationOptions, keyFile, passkeyName, pinLine, registrationOptions, verifyAssertion, verifyRegistration } from "./webauthn.js";
+
+// Accounts and sign-in for the website (M9c), as JSON for its pages (M9e) to call: sign up with an email and a passkey
+// (D153), sign in with a passkey, get back in with an emailed code and a saved recovery code (B-jzgy4), through Globus
+// (D153, D176), and, signed in, the account: passkeys, sign-ins, machines and signing out. Every address here is listed in
+// docs/vault/Modules/service.md.
+
+/** What the account addresses work with, made once per request by the Worker. */
+export interface SignIn {
+  accounts: Accounts;
+  rp: RelyingParty;
+  mail: Mailer;
+  turnstile: Turnstile;
+  /** Turnstile's site key, for the website's widget (`GET /v1/config`). */
+  turnstileSiteKey: string;
+  /** Limits per network address and per email address (B-mz6qc); true when the request may go on. */
+  limit: { address(key: string): Promise<boolean>; email(key: string): Promise<boolean> };
+  /** Sign-in through Globus, when it's set up. */
+  globus: GlobusConfig | undefined;
+  /** Put an account's passkeys' key files into one of its projects, signed (P16 section 7). */
+  putKeys(project: string, keys: PasskeyKey[]): Promise<void>;
+}
+
+const GLOBUS_COOKIE = "__Host-baesian-globus";
+
+/** A flow's secret and the browser's response, from a request's JSON. */
+const isText = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= 4096;
+const isCredential = (x: unknown): x is { id: string; response: object } => typeof x === "object" && x !== null && isText((x as { id?: unknown }).id) && typeof (x as { response?: unknown }).response === "object";
+
+/** The account's passkeys' key files, as each of its projects holds them, with the line CI pins (D159). */
+async function keysOf(s: SignIn, account: Account): Promise<PasskeyKey[]> {
+  return (await s.accounts.passkeys(account.id)).map((p) => keyFile(p, account.id, account.handle));
+}
+
+/** Put the account's key files into every project it owns. A failure is logged: an answer that needs a key puts it there again. */
+async function spreadKeys(s: SignIn, account: Account): Promise<void> {
+  const keys = await keysOf(s, account);
+  for (const p of await s.accounts.projectsOf(account.id)) {
+    try {
+      await s.putKeys(p.id, keys);
+    } catch (e) {
+      console.error(`putting ${account.id}'s passkey keys into project ${p.id} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+}
+
+/** What a new passkey's enrolment answers: its ID, its name and the line to pin in CI (D159). */
+const enrolled = (p: Pick<StoredPasskey, "credential" | "spki" | "alg" | "enrolled" | "name">, account: Account) => ({ credential: p.credential, name: p.name, pin: pinLine(keyFile(p, account.id, account.handle)) });
+
+/** A new sign-in, as a reply with its cookie. */
+async function signedIn(s: SignIn, request: Request, account: Account, status: number, body: Record<string, unknown>): Promise<Response> {
+  const { token: t } = await s.accounts.startSession(account.id, browserName(request.headers.get("user-agent")));
+  return respond({ status, body: { account: { id: account.id, handle: account.handle }, ...body } }, [["set-cookie", sessionCookie(t)]]);
+}
+
+/** Refused before anything else: a request from another site, or over the limit for its address. */
+async function guard(s: SignIn, request: Request): Promise<Response | undefined> {
+  const cross = crossSite(request, s.rp.origin);
+  if (cross) return fail(403, cross);
+  if (request.headers.has("authorization")) return fail(403, "sign-in is for a person in a browser: a request with an Authorization header is refused");
+  if (!(await s.limit.address(addressOf(request)))) return fail(429, "too many requests from this network: wait a minute");
+  return undefined;
+}
+
+/** The code-sending step shared by sign-up and recovery: the bot check, the limits per address, and the flow. */
+async function sendCode(s: SignIn, request: Request, kind: "signup" | "recover"): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const email = normalEmail(input.email);
+  if (!email) return fail(400, "give an email address");
+  const bot = await s.turnstile.check(input.turnstile, addressOf(request));
+  if (!bot.ok) return fail(403, bot.why);
+  if (!(await s.limit.email(email))) return fail(429, "too many codes to this address: wait a minute");
+  const sent = await s.accounts.codesSent(email);
+  if (sent.hour >= LIMITS.codesPerHour || sent.day >= LIMITS.codesPerDay) return fail(429, `too many codes to this address: at most ${LIMITS.codesPerHour} an hour and ${LIMITS.codesPerDay} a day`);
+  const account = await s.accounts.accountByEmail(email);
+  const code = emailCode();
+  // The reply is the same whether the address has an account or not, so nobody learns which addresses do.
+  const real = kind === "signup" ? !account : !!account;
+  const flow = await s.accounts.startFlow(kind, { email, account: kind === "recover" ? (account?.id ?? null) : null, code_hash: real ? hashOf(code) : hashOf(token()) }, LIMITS.codeMs);
+  if (kind === "signup") await s.mail.send(account ? mails.alreadySignedUp(email, s.rp.origin) : mails.signupCode(email, code, s.rp.origin));
+  else if (account) await s.mail.send(mails.recoveryCode(email, code, s.rp.origin));
+  return respond({ status: 202, body: { flow, expires_in: LIMITS.codeMs / 1000 } });
+}
+
+/** A code typed against a flow, counted; or the response refusing it. */
+async function checkCode(s: SignIn, f: Flow, ok: () => Promise<boolean> | boolean): Promise<Response | undefined> {
+  const r = await s.accounts.tryCode(f, ok);
+  if (r.ok) return undefined;
+  return r.left ? fail(400, kind(f) === "recover" ? "those codes don't match" : "that code isn't right", { attempts_left: r.left }) : fail(400, `this ${kind(f) === "recover" ? "recovery" : "sign-up"} has no tries left: ask for a new code`, { attempts_left: 0 });
+}
+const kind = (f: Flow) => f.kind;
+
+/** A registration the browser returned for a flow, checked, or the response refusing it. */
+async function registered(s: SignIn, f: Flow, response: unknown): Promise<NewPasskey | Response> {
+  if (!f.challenge) return fail(400, "this flow asked for no passkey yet");
+  if (!isCredential(response)) return fail(400, "send the passkey's registration as `response`, as the browser returned it");
+  try {
+    return await verifyRegistration(s.rp, response as RegistrationResponseJSON, f.challenge);
+  } catch (e) {
+    return fail(400, `the passkey couldn't be enrolled: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** An assertion the browser returned, checked against a challenge and one of the passkeys allowed, or the response refusing it. */
+async function asserted(s: SignIn, challenge: string | null, response: unknown, account?: string): Promise<{ passkey: StoredPasskey } | Response> {
+  if (!challenge) return fail(400, "this flow has no challenge");
+  if (!isCredential(response)) return fail(400, "send the passkey's assertion as `response`, as the browser returned it");
+  const passkey = await s.accounts.passkey(response.id);
+  if (!passkey || (account && passkey.account !== account)) return fail(400, "that passkey isn't enrolled here");
+  try {
+    await s.accounts.usePasskey(passkey.credential, await verifyAssertion(s.rp, response as AuthenticationResponseJSON, challenge, passkey));
+  } catch (e) {
+    return fail(400, `the passkey's signature doesn't check: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return { passkey };
+}
+
+/** The signed-in person, or the response refusing the request: a session cookie that's good, from the site's own pages. */
+async function session(s: SignIn, request: Request) {
+  const cross = crossSite(request, s.rp.origin);
+  if (cross) return fail(403, cross);
+  if (request.headers.has("authorization")) return fail(403, "the account is a person's, in a browser: a request with an Authorization header is refused");
+  const ses = await s.accounts.session(cookie(request, SESSION_COOKIE));
+  if (!ses) return fail(401, "not signed in");
+  const account = (await s.accounts.account(ses.account))!;
+  return { ses, account };
+}
+
+// ---------------------------------------------------------------- the addresses
+
+/** The account addresses: `/v1/signup/…`, `/v1/signin/…`, `/v1/recover/…`, `/v1/globus/…`, `/v1/account…` and `/v1/config`. */
+export async function signInRoute(s: SignIn, request: Request, url: URL): Promise<Response | undefined> {
+  const path = url.pathname;
+  const m = request.method;
+  if (path === "/v1/config" && m === "GET") return respond({ status: 200, body: { origin: s.rp.origin, rp_id: s.rp.rpID, turnstile_site_key: s.turnstileSiteKey, globus: !!s.globus } });
+  if (path.startsWith("/v1/globus/") && m === "GET") return globusRoute(s, request, url);
+  if (path.startsWith("/v1/account")) return accountRoute(s, request, path, m, url);
+  const flows: Record<string, (r: Request) => Promise<Response>> = {
+    "/v1/signup/email": (r) => sendCode(s, r, "signup"),
+    "/v1/signup/verify": (r) => signupVerify(s, r),
+    "/v1/signup/finish": (r) => signupFinish(s, r),
+    "/v1/signin/start": (r) => signinStart(s, r),
+    "/v1/signin/finish": (r) => signinFinish(s, r),
+    "/v1/recover/email": (r) => sendCode(s, r, "recover"),
+    "/v1/recover/verify": (r) => recoverVerify(s, r),
+    "/v1/recover/finish": (r) => recoverFinish(s, r),
+  };
+  const handler = flows[path];
+  if (!handler) return undefined;
+  if (m !== "POST") return fail(405, `${path} takes a POST`);
+  const refused = await guard(s, request);
+  return refused ?? handler(request);
+}
+
+/** Sign-up, step 2: the emailed code (unless Globus vouched for the address), and a handle; returns the passkey's options. */
+async function signupVerify(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.flow(input.flow, "signup");
+  if (!f) return fail(400, "no sign-up with that flow, or it expired: ask for a new code");
+  if (!f.verified) {
+    if (!isText(input.code)) return fail(400, "give the code from the email");
+    const no = await checkCode(s, f, () => !!f.code_hash && same(f.code_hash, hashOf(String(input.code).trim())));
+    if (no) return no;
+  }
+  if (typeof input.handle !== "string" || !HANDLE.test(input.handle)) return fail(400, "choose a handle: 2 to 32 letters, digits, dots, dashes and underscores", { verified: true });
+  if (await s.accounts.handleTaken(input.handle)) return fail(409, `the handle ${input.handle} is taken: choose another`, { verified: true });
+  const account = f.account ?? idWith("acct");
+  const options = await registrationOptions(s.rp, { account, handle: input.handle });
+  await s.accounts.updateFlow(f.id, { handle: input.handle, account, challenge: options.challenge, verified: 1 });
+  return respond({ status: 200, body: { options } });
+}
+
+/** Sign-up, step 3: the passkey, enrolled; the account made, with a recovery code to keep, and signed in. */
+async function signupFinish(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.flow(input.flow, "signup");
+  if (!f?.verified || !f.handle || !f.account) return fail(400, "no sign-up ready for a passkey with that flow: check the code and choose a handle first");
+  const p = await registered(s, f, input.response);
+  if (p instanceof Response) return p;
+  if (!(await s.accounts.takeFlow(input.flow, "signup"))) return fail(409, "this sign-up was finished already");
+  const recovery = recoveryCode();
+  try {
+    await s.accounts.createAccount({ id: f.account, handle: f.handle, email: f.email ? { address: f.email, verified: !f.globus_sub } : undefined, passkey: p, name: passkeyName(p.transports), recoveryHash: hashOf(recovery), globusSub: f.globus_sub ?? undefined });
+  } catch (e) {
+    if (e instanceof Taken) return fail(409, `${e.message}: start again`);
+    throw e;
+  }
+  const account = (await s.accounts.account(f.account))!;
+  const stored = (await s.accounts.passkey(p.credential))!;
+  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored, account) });
+}
+
+/** Sign-in, step 1: a challenge for any passkey of this site's (a discoverable credential). */
+async function signinStart(s: SignIn, _request: Request): Promise<Response> {
+  const options = await authenticationOptions(s.rp, []);
+  const flow = await s.accounts.startFlow("signin", { challenge: options.challenge }, LIMITS.ceremonyMs);
+  return respond({ status: 200, body: { flow, options } });
+}
+
+/** Sign-in, step 2: the passkey's assertion, checked; signed in. */
+async function signinFinish(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.takeFlow(input.flow, "signin");
+  if (!f) return fail(400, "no sign-in with that flow, or it expired: start again");
+  const a = await asserted(s, f.challenge, input.response);
+  if (a instanceof Response) return a;
+  return signedIn(s, request, (await s.accounts.account(a.passkey.account))!, 200, {});
+}
+
+/** Recovery, step 2: the emailed code and the saved recovery code, together (B-jzgy4); returns a new passkey's options. */
+async function recoverVerify(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.flow(input.flow, "recover");
+  if (!f) return fail(400, "no recovery with that flow, or it expired: ask for a new code");
+  if (!f.verified) {
+    if (!isText(input.code) || !isText(input.recovery_code)) return fail(400, "give the code from the email and the recovery code you saved, together");
+    const saved = f.account ? await s.accounts.recoveryHash(f.account) : undefined;
+    const no = await checkCode(s, f, () => {
+      // Both are checked whatever the first says, and only together do they count.
+      const email = !!f.code_hash && same(f.code_hash, hashOf(String(input.code).trim()));
+      const kept = !!saved && same(saved, hashOf(normalRecoveryCode(String(input.recovery_code))));
+      return !!f.account && email && kept;
+    });
+    if (no) return no;
+  }
+  const account = (await s.accounts.account(f.account!))!;
+  const options = await registrationOptions(s.rp, { account: account.id, handle: account.handle }, await s.accounts.passkeys(account.id));
+  await s.accounts.updateFlow(f.id, { challenge: options.challenge });
+  return respond({ status: 200, body: { options } });
+}
+
+/**
+ * Recovery, step 3: the new passkey, enrolled; a new recovery code issued, the old one spent; every other sign-in ended;
+ * a notice sent; signed in.
+ */
+async function recoverFinish(s: SignIn, request: Request): Promise<Response> {
+  const input = await readObject(request);
+  if (input instanceof Response) return input;
+  const f = await s.accounts.flow(input.flow, "recover");
+  if (!f?.verified || !f.account) return fail(400, "no recovery ready for a passkey with that flow: check the codes first");
+  const p = await registered(s, f, input.response);
+  if (p instanceof Response) return p;
+  if (!(await s.accounts.takeFlow(input.flow, "recover"))) return fail(409, "this recovery was finished already");
+  const account = (await s.accounts.account(f.account))!;
+  const recovery = recoveryCode();
+  let stored: StoredPasskey;
+  try {
+    stored = await s.accounts.addPasskey(account.id, p, passkeyName(p.transports));
+  } catch (e) {
+    if (e instanceof Taken) return fail(409, e.message);
+    throw e;
+  }
+  await s.accounts.db.batch([s.accounts.replaceRecovery(account.id, hashOf(recovery)), s.accounts.endSessions(account.id)]);
+  for (const e of await s.accounts.emails(account.id)) await s.mail.send(mails.recovered(e.address, account.handle, s.rp.origin));
+  await spreadKeys(s, account);
+  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored, account) });
+}
+
+// ---------------------------------------------------------------- signed in: the account
+
+async function accountRoute(s: SignIn, request: Request, path: string, m: string, url: URL): Promise<Response> {
+  const who = await session(s, request);
+  if (who instanceof Response) return who;
+  const { ses, account } = who;
+  const route = `${m} ${path.replace(/^\/v1\/account/, "") || "/"}`;
+  const tail = path.split("/").slice(4).map(decodeURIComponent);
+  const body = async (): Promise<Record<string, unknown> | Response> => (m === "GET" || m === "DELETE" ? {} : readObject(request));
+  if (route === "GET /") {
+    const passkeys = await s.accounts.passkeys(account.id);
+    const globus = await s.accounts.globusOf(account.id);
+    return respond({
+      status: 200,
+      body: {
+        id: account.id,
+        handle: account.handle,
+        created: account.created,
+        emails: await s.accounts.emails(account.id),
+        passkeys: passkeys.map((p) => ({ ...enrolled(p, account), enrolled: p.enrolled, last_used: p.last_used })),
+        globus: globus ? { linked: globus.linked } : null,
+        projects: await s.accounts.projectsOf(account.id),
+        fresh_until: new Date(Date.parse(ses.verified) + LIMITS.freshMs).toISOString(),
+      },
+    });
+  }
+  if (route === "POST /reauth/start") {
+    const options = await authenticationOptions(s.rp, await s.accounts.passkeys(account.id));
+    return respond({ status: 200, body: { flow: await s.accounts.startFlow("fresh", { account: account.id, challenge: options.challenge }, LIMITS.ceremonyMs), options } });
+  }
+  if (route === "POST /reauth/finish") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    const f = await s.accounts.takeFlow(input.flow, "fresh");
+    if (!f || f.account !== account.id) return fail(400, "no check with that flow, or it expired: start again");
+    const a = await asserted(s, f.challenge, input.response, account.id);
+    if (a instanceof Response) return a;
+    await s.accounts.markFresh(ses.hash);
+    return respond({ status: 200, body: { fresh_until: new Date(Date.now() + LIMITS.freshMs).toISOString() } });
+  }
+  if (route === "POST /passkeys/start") {
+    if (!s.accounts.fresh(ses)) return fail(403, "adding a passkey asks for one you have first: check it with /v1/account/reauth, then try again", { reauth: true });
+    const options = await registrationOptions(s.rp, { account: account.id, handle: account.handle }, await s.accounts.passkeys(account.id));
+    return respond({ status: 200, body: { flow: await s.accounts.startFlow("enrol", { account: account.id, challenge: options.challenge }, LIMITS.ceremonyMs), options } });
+  }
+  if (route === "POST /passkeys/finish") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    const f = await s.accounts.takeFlow(input.flow, "enrol");
+    if (!f || f.account !== account.id) return fail(400, "no enrolment with that flow, or it expired: start again");
+    const p = await registered(s, f, input.response);
+    if (p instanceof Response) return p;
+    const name = typeof input.name === "string" && input.name.trim() && input.name.length <= 64 ? input.name.trim() : passkeyName(p.transports);
+    let stored: StoredPasskey;
+    try {
+      stored = await s.accounts.addPasskey(account.id, p, name);
+    } catch (e) {
+      if (e instanceof Taken) return fail(409, e.message);
+      throw e;
+    }
+    for (const e of await s.accounts.emails(account.id)) await s.mail.send(mails.passkeyAdded(e.address, account.handle, s.rp.origin));
+    await spreadKeys(s, account);
+    return respond({ status: 201, body: { passkey: enrolled(stored, account) } });
+  }
+  if (route === "GET /sessions") {
+    const list = await s.accounts.sessions(account.id);
+    return respond({ status: 200, body: { sessions: list.map((x) => ({ id: x.id, name: x.name, created: x.created, last_used: x.last_used, current: x.hash === ses.hash })) } });
+  }
+  if (m === "DELETE" && path.startsWith("/v1/account/sessions/") && tail.length === 1) {
+    return (await s.accounts.endSession(account.id, tail[0]!)) ? respond({ status: 204 }, tail[0] === ses.id ? [["set-cookie", clearCookie(SESSION_COOKIE)]] : []) : fail(404, "no sign-in of yours with that ID");
+  }
+  if (route === "POST /signout") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    await (input.everywhere === true ? s.accounts.endSessions(account.id) : s.accounts.db.prepare("DELETE FROM sessions WHERE hash = ?").bind(ses.hash)).run();
+    return respond({ status: 204 }, [["set-cookie", clearCookie(SESSION_COOKIE)]]);
+  }
+  if (route === "GET /machines") {
+    const list = await s.accounts.grants(account.id);
+    return respond({ status: 200, body: { machines: list.map((g) => ({ id: g.id, machine: g.machine, project: g.project, created: g.created, last_used: g.last_used })) } });
+  }
+  if (m === "DELETE" && path.startsWith("/v1/account/machines/") && tail.length === 1) {
+    return (await s.accounts.revoke(tail[0]!, account.id)) ? respond({ status: 204 }) : fail(404, "no machine of yours with that ID");
+  }
+  if (route === "GET /machines/approve") {
+    const d = await s.accounts.deviceByUserCode(normalUserCode(url.searchParams.get("code") ?? ""));
+    if (!d) return fail(404, "no machine is waiting with that code, or it expired");
+    const p = await s.accounts.project(d.project);
+    return respond({ status: 200, body: { machine: d.machine, project: d.project, new_project: !p, yours: !p || p.owner === account.id, expires: d.expires, can: "file cards and hear answers in this project; never answer" } });
+  }
+  if (route === "POST /machines/approve") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    const d = await s.accounts.deviceByUserCode(normalUserCode(String(input.code ?? "")));
+    if (!d) return fail(404, "no machine is waiting with that code, or it expired");
+    if (input.approve !== true) {
+      await s.accounts.denyDevice(d);
+      return respond({ status: 200, body: { approved: false } });
+    }
+    if (!s.accounts.fresh(ses)) return fail(403, "approving a machine asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
+    const r = await s.accounts.approveDevice(d, account.id);
+    if ("problem" in r) return fail(409, r.problem);
+    if (r.created) {
+      try {
+        await s.putKeys(d.project, await keysOf(s, account));
+      } catch (e) {
+        console.error(`putting ${account.id}'s passkey keys into new project ${d.project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return respond({ status: 200, body: { approved: true, machine: d.machine, project: d.project, new_project: r.created } });
+  }
+  if (route === "DELETE /globus") {
+    return (await s.accounts.unlinkGlobus(account.id)) ? respond({ status: 204 }) : fail(404, "no Globus identity is linked to this account");
+  }
+  return fail(404, `no address ${m} ${path}`);
+}
+
+// ---------------------------------------------------------------- Globus (D153, D176, B-s76hg)
+
+/** Where the browser goes after a Globus round trip: the website's own page, with what happened in the fragment. */
+const back = (s: SignIn, page: string, fragment: Record<string, string>, cookies: string[] = []) => {
+  const headers = new Headers({ location: `${s.rp.origin}${page}#${new URLSearchParams(fragment)}`, "cache-control": "no-store", "referrer-policy": "no-referrer" });
+  for (const c of cookies) headers.append("set-cookie", c);
+  return new Response(null, { status: 302, headers });
+};
+
+/**
+ * `GET /v1/globus/start?purpose=signin|link`: off to Globus, with state, a nonce and PKCE, kept in a flow; the browser
+ * holds the flow's secret in a short-lived cookie that's sent back on Globus's redirect (SameSite=Lax) and nowhere else.
+ * Linking takes a session that checked its passkey recently. `GET /v1/globus/callback`: who Globus says it is, and then
+ * signed in, sent to sign up, or linked.
+ */
+async function globusRoute(s: SignIn, request: Request, url: URL): Promise<Response> {
+  if (!s.globus) return fail(404, "sign-in through Globus isn't set up on this service");
+  if (!(await s.limit.address(addressOf(request)))) return fail(429, "too many requests from this network: wait a minute");
+  if (url.pathname === "/v1/globus/start") {
+    const purpose = url.searchParams.get("purpose") ?? "signin";
+    if (purpose !== "signin" && purpose !== "link") return fail(400, "purpose is signin or link");
+    let account: string | null = null;
+    if (purpose === "link") {
+      const ses = await s.accounts.session(cookie(request, SESSION_COOKIE));
+      if (!ses) return fail(401, "sign in first: Globus is linked only to an account you're signed in to");
+      if (!s.accounts.fresh(ses)) return fail(403, "linking Globus asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
+      account = ses.account;
+    }
+    const trip = newRoundTrip();
+    const binding = token();
+    // The flow is found again by its state, which comes back on Globus's redirect.
+    await s.accounts.startFlow("globus", { account, data: JSON.stringify({ ...trip, purpose, binding: hashOf(binding) }) }, 10 * 60_000, `globus:${trip.state}`);
+    let location: string;
+    try {
+      location = await authorizationUrl(s.globus, trip);
+    } catch (e) {
+      return fail(502, `Globus can't be reached: ${whyNot(e)}`);
+    }
+    return new Response(null, { status: 302, headers: { location, "cache-control": "no-store", "referrer-policy": "no-referrer", "set-cookie": `${GLOBUS_COOKIE}=${binding}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600` } });
+  }
+  if (url.pathname !== "/v1/globus/callback") return fail(404, "Globus's addresses are /v1/globus/start and /v1/globus/callback");
+  const clear = `${GLOBUS_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const state = url.searchParams.get("state");
+  // The flow is spent only by the browser that started it: a request without its cookie leaves it be.
+  const f = state ? await s.accounts.flow(`globus:${state}`, "globus") : undefined;
+  const data = f?.data ? (JSON.parse(f.data) as { state: string; nonce: string; verifier: string; purpose: "signin" | "link"; binding: string }) : undefined;
+  const held = cookie(request, GLOBUS_COOKIE);
+  const ours = !!f && !!data && !!held && same(hashOf(held), data.binding);
+  if (!ours || !(await s.accounts.takeFlow(`globus:${state}`, "globus"))) return back(s, "/sign-in", { error: "globus-flow", message: "this sign-in through Globus didn't start in this browser, or it expired: start again" }, [clear]);
+  let who;
+  try {
+    who = await identityFrom(s.globus, url, data);
+  } catch (e) {
+    return back(s, "/sign-in", { error: "globus", message: whyNot(e) }, [clear]);
+  }
+  const linked = await s.accounts.globusAccount(who.sub);
+  if (data.purpose === "link") {
+    if (linked) return back(s, "/account", { error: "globus-linked", message: linked === f.account ? "this Globus identity is linked to your account already" : "this Globus identity is linked to another account" }, [clear]);
+    try {
+      await s.accounts.linkGlobus(f.account!, who.sub);
+    } catch (e) {
+      if (e instanceof Taken) return back(s, "/account", { error: "globus-linked", message: e.message }, [clear]);
+      throw e;
+    }
+    return back(s, "/account", { globus: "linked" }, [clear]);
+  }
+  if (linked) {
+    const account = (await s.accounts.account(linked))!;
+    const { token: t } = await s.accounts.startSession(account.id, browserName(request.headers.get("user-agent")));
+    return back(s, "/", { signed_in: account.handle }, [clear, sessionCookie(t)]);
+  }
+  // Nobody has this identity: a sign-up, which still enrols a passkey (D153). An address Globus gives that an account
+  // already has isn't taken over by matching it: that person signs in with their passkey and links Globus.
+  const email = normalEmail(who.email);
+  if (email && (await s.accounts.accountByEmail(email))) {
+    return back(s, "/sign-in", { error: "globus-email", message: "an account already has this email address: sign in with your passkey, then link Globus from your account" }, [clear]);
+  }
+  const signup = await s.accounts.startFlow("signup", { email: email ?? null, globus_sub: who.sub, verified: 1 }, LIMITS.flowMs);
+  return back(s, "/sign-up", { flow: signup, via: "globus" }, [clear]);
+}

@@ -19,11 +19,14 @@ export const BASE = "https://relay.test";
 
 export type As = "machine" | "person" | "nobody" | { headers: Record<string, string> };
 
-/** Headers for who's asking, in a project: the grant's token, or the session's cookie, for that project. */
+/**
+ * Headers for who's asking, in a project: the grant's token, or the session's cookie, for that project. A person's
+ * requests come from the website's own pages, so they name its origin, as a browser does (Hosted Service section 3).
+ */
 export function headersFor(as: As, project = "proj-a"): Record<string, string> {
   if (typeof as === "object") return as.headers;
   if (as === "machine") return { authorization: `Bearer ${grants.machines.find((g) => g.project === project)!.token}` };
-  if (as === "person") return { cookie: `${SESSION_COOKIE}=${grants.sessions.find((g) => g.project === project)!.cookie}` };
+  if (as === "person") return { cookie: `${SESSION_COOKIE}=${grants.sessions.find((g) => g.project === project)!.cookie}`, origin: ORIGIN };
   return {};
 }
 

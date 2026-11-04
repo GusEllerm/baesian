@@ -48,7 +48,8 @@ export function proofProblem(proof: PasskeyProof, file: Buffer, key: PasskeyKey,
     const pub = createPublicKey({ key: Buffer.from(key.public_key, "base64url"), format: "der", type: "spki" });
     const ok =
       key.alg === -7
-        ? pub.asymmetricKeyType === "ec" && pub.asymmetricKeyDetails?.namedCurve === "prime256v1" && verify("sha256", signed, { key: pub, dsaEncoding: "der" }, signature)
+        ? // WebAuthn's ECDSA signatures are DER, Node's default; workerd takes no key object inside an options object.
+          pub.asymmetricKeyType === "ec" && pub.asymmetricKeyDetails?.namedCurve === "prime256v1" && verify("sha256", signed, pub, signature)
         : key.alg === -8
           ? pub.asymmetricKeyType === "ed25519" && verify(null, signed, pub, signature)
           : pub.asymmetricKeyType === "rsa" && verify("sha256", signed, pub, signature);

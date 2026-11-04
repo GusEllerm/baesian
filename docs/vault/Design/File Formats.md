@@ -2,9 +2,9 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; the relay's entry (M9b); the accounts database's tables (M9c); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
-updated: 2026-11-03
+updated: 2026-11-04
 reviewed: 2026-10-23
 tags: [baesian, design, formats]
 ---
@@ -260,7 +260,29 @@ What's logged: every file written once, uploaded or written by the relay. What i
 
 **Live updates** (`GET …/live`, a WebSocket): the message `{"type":"changed","version":N}` on opening, and whenever the project's version moves; `ping` is answered `pong`. The version is the state's `version`.
 
-**Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key and the stand-in's grants for the project `proj-dev`, and prints a `curl` line for a machine and one for a person; then `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/v1/projects/proj-dev/…`. `npm run test:service` from the root runs the relay's tests in workerd. Deployed with no sign-in (M9c), the relay refuses every request.
+**Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key, the stand-in's grants for the project `proj-dev` and Turnstile's test secret, and prints a `curl` line for a machine and one for a person; `npm run migrate:local` once, to make the local accounts database; then `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/`. Emails are simulated: logged, and saved under `service/.wrangler/tmp/email/`. `npm run test:service` from the root runs the service's tests in workerd. Deployed, only real sign-ins count (M9c).
+
+**Answers proved by the passkey** (M9c, [[service#Answers that take the passkey (D139, D163, M9c)]]): the relay writes a verdict or preference file that needs a proof only with it, in the same transaction, each as its own entry: the file and its `sig`, then `<file>.passkey.json`. A passkey key file is `trust/passkey-<suffix>.json` with the suffix the first 12 hex digits of the SHA-256 of its credential ID (`keyFileName()`), so every project holds the same bytes at the same path; it's put in each project of its account, signed, before any proof made with it.
+
+## Accounts (M9c)
+
+Accounts live in one D1 database, `baesian-accounts`, bound as `ACCOUNTS` (B-ytdt2), apart from the projects' objects. Its tables are made by the migrations in `service/migrations/` (`wrangler d1 migrations apply`), and read and written by `Accounts` ([[service#Accounts (service/src/accounts.ts)]]). Every secret is kept only as its SHA-256, hex: session and machine tokens, emailed codes, recovery codes, and flow secrets. No IP address or location is stored anywhere (B-7bq05). Times are ISO 8601, UTC. Before v1 the tables change freely (D108); from then, a change is a new migration.
+
+| Table | One row per | Columns |
+|---|---|---|
+| `accounts` | account | `id`, Baesian's own (`acct-…`), never a Globus identity (D153); `handle`, unique regardless of case; `created` |
+| `emails` | email address | `address`, lowercased; `account`; `verified`, when a code to it was checked (null for an address Globus gave); `created` |
+| `passkeys` | passkey | `credential`, its ID, base64url; `account`; `cose`, its key as COSE, base64url, which assertions are checked with; `spki` and `alg`, the same key as its key file has it (`PasskeyKey`); `counter`; `transports`, JSON; `name`; `enrolled`; `last_used` |
+| `recovery_codes` | account | `hash` of the saved recovery code (B-jzgy4), replaced when it's used; `created` |
+| `globus_identities` | linked Globus identity | `sub`, the ID token's subject; `account`, one each way; `linked` |
+| `flows` | flow in progress | `id`, the hash of the secret its browser holds; `kind`: `signup`, `recover`, `signin`, `fresh`, `enrol` or `globus`; `email`, `account`, `handle` as it goes; `code_hash` of its emailed code and `attempts` on it; `verified`; `challenge`, a passkey ceremony's; `globus_sub`; `data`, a Globus round trip's state, nonce, PKCE verifier and binding; `created`, `expires`. Cleared a day after they expire |
+| `sessions` | sign-in in a browser | `hash` of its cookie; `id`, which the list shows; `account`; `name`, the browser's short name; `created`; `last_used`; `verified`, its last passkey check; `expires`, 90 days on (B-vtr1r) |
+| `projects` | project | `id`, as `.baesian/config.json` has it; `owner`, the one account that answers there in v1; `created` |
+| `grants` | machine grant (B-84e0d) | `id`; `account`; `project`; `machine`, its name; `access_hash` and `access_expires`; `refresh_hash`; `created`; `last_used`; `revoked` |
+| `spent_tokens` | refresh token used | `hash`; `grant_id`; `spent`: one presented again revokes its grant (RFC 9700) |
+| `device_codes` | machine asking to sign in (RFC 8628) | `hash` of its device code; `user_code`, the code a person types; `project`; `machine`; `created`, `expires`; `last_poll`; `approved_by`; `denied`; `issued` |
+
+**The session cookie** is `__Host-baesian-session`, its value a random token: `Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=7776000` (90 days); the service ends it sooner, after 30 days unused (B-vtr1r). A Globus round trip's binding cookie is `__Host-baesian-globus`, SameSite=Lax, for 10 minutes.
 
 ## Vault notes (M6)
 
