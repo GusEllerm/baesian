@@ -35,11 +35,22 @@ async function freePort(): Promise<number> {
   });
 }
 
+/** A push the Worker sent to the stand-in push service, as it arrived: still encrypted. */
+export interface SentPush {
+  endpoint: string;
+  headers: Record<string, string>;
+  body: Uint8Array;
+}
+
 export interface LocalSite {
   /** http://localhost:<port> */
   url: string;
   db: D1Like;
   globus: GlobusStandIn;
+  /** Every push the Worker sent, to the stand-in push service at https://push.test (M9e step 2). */
+  pushes: SentPush[];
+  /** What the stand-in push service answers for an endpoint from now on (201 unless told: 404 or 410 for one that's gone). */
+  pushAnswer: Map<string, number>;
   /** The newest email the service sent with this text in it, after `since` (ms), waiting for it to be saved. */
   email(contains: string, since: number): Promise<string>;
   dispose(): Promise<void>;
@@ -53,6 +64,8 @@ export async function startSite(): Promise<LocalSite> {
   const persist = mkdtempSync(join(tmpdir(), "baesian-site-"));
   const secret = randomBytes(24).toString("base64url");
   const globus = new GlobusStandIn("baesian-site-test", secret);
+  const pushes: SentPush[] = [];
+  const pushAnswer = new Map<string, number>();
   const plain = (value: string) => ({ type: "plain_text", value });
   const worker = await unstable_startWorker({
     config: join(SERVICE, "wrangler.jsonc"),
@@ -65,6 +78,8 @@ export async function startSite(): Promise<LocalSite> {
       GLOBUS_ISSUER: plain(ISSUER),
       GLOBUS_CLIENT_ID: plain(globus.clientId),
       GLOBUS_CLIENT_SECRET: { type: "secret_text", value: secret },
+      // Web push's VAPID key (B-nk97q), made for this run.
+      VAPID_KEY: { type: "secret_text", value: JSON.stringify(generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" })) },
       // Every test signs in from one address: the limits per address and per email are raised for them.
       LIMIT_ADDRESS: { type: "ratelimit", namespace_id: "1001", simple: { limit: 10_000, period: 60 } },
       LIMIT_EMAIL: { type: "ratelimit", namespace_id: "1002", simple: { limit: 10_000, period: 60 } },
@@ -75,9 +90,14 @@ export async function startSite(): Promise<LocalSite> {
       inspector: false,
       watch: false,
       logLevel: "none",
-      // The Worker's own requests go nowhere but the stand-in for Globus, which refuses anything else. The local runtime's
-      // request is its own kind, so it's read across into this one's.
+      // The Worker's own requests go nowhere but the stand-ins: a push service at https://push.test, which keeps what it's
+      // sent, and Globus, which refuses anything else. The local runtime's request is its own kind, so it's read across
+      // into this one's.
       outboundService: async (request: Request) => {
+        if (new URL(request.url).host === "push.test") {
+          pushes.push({ endpoint: request.url, headers: Object.fromEntries(request.headers), body: new Uint8Array(await request.arrayBuffer()) });
+          return new Response(null, { status: pushAnswer.get(request.url) ?? 201 });
+        }
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
         try {
           return await globus.fetch(request.url, { method: request.method, headers: Object.fromEntries(request.headers), ...(body !== undefined ? { body } : {}) });
@@ -102,6 +122,8 @@ export async function startSite(): Promise<LocalSite> {
     url,
     db,
     globus,
+    pushes,
+    pushAnswer,
     async email(contains, since) {
       for (let i = 0; i < 100; i++) {
         const found = emailsSince(since).find((e) => !read.has(e.path) && e.text.includes(contains) && e.text.includes(url));
@@ -271,4 +293,93 @@ export async function handOver(from: { cdp: CDPSession; id: string }, to: { cdp:
   const { credentials } = await from.cdp.send("WebAuthn.getCredentials", { authenticatorId: from.id });
   await to.cdp.send("WebAuthn.clearCredentials", { authenticatorId: to.id });
   for (const credential of credentials) await to.cdp.send("WebAuthn.addCredential", { authenticatorId: to.id, credential });
+}
+
+// ---------------------------------------------------------------- the website as an app (M9e step 2)
+
+/**
+ * The browser's push service, stood in for: Chromium under test can't reach Google's, so `pushManager.subscribe()` makes a
+ * subscription in the page with a key pair of its own, at an endpoint on the Worker's stand-in push service
+ * (https://push.test), and keeps it (with its private key, for the test to decrypt with) in the page's storage. Everything
+ * else, the permission included, is the browser's own.
+ */
+export async function standInPushService(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const KEY = "baesian-test:push";
+    const b64 = (buf: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const made = (s: { endpoint: string; p256dh: string; auth: string }) =>
+      ({
+        endpoint: s.endpoint,
+        expirationTime: null,
+        toJSON: () => ({ endpoint: s.endpoint, expirationTime: null, keys: { p256dh: s.p256dh, auth: s.auth } }),
+        unsubscribe: async () => {
+          localStorage.removeItem(KEY);
+          return true;
+        },
+      }) as unknown as PushSubscription;
+    PushManager.prototype.subscribe = async function (opts?: PushSubscriptionOptionsInit) {
+      (window as unknown as { __taps?: { what: string }[] }).__taps?.push({ what: "subscribe" });
+      if (Notification.permission !== "granted" && (await Notification.requestPermission()) !== "granted") throw new DOMException("Permission denied", "NotAllowedError");
+      const had = localStorage.getItem(KEY);
+      if (had) return made(JSON.parse(had));
+      const pair = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
+      const s = {
+        endpoint: `https://push.test/send/${crypto.randomUUID()}`,
+        p256dh: b64(await crypto.subtle.exportKey("raw", pair.publicKey)),
+        auth: b64(crypto.getRandomValues(new Uint8Array(16))),
+        jwk: await crypto.subtle.exportKey("jwk", pair.privateKey),
+        server: opts?.applicationServerKey ? b64(opts.applicationServerKey as ArrayBuffer) : null,
+      };
+      localStorage.setItem(KEY, JSON.stringify(s));
+      return made(s);
+    };
+    PushManager.prototype.getSubscription = async function () {
+      const had = localStorage.getItem(KEY);
+      return had ? made(JSON.parse(had)) : null;
+    };
+  });
+}
+
+/** The page's stood-in subscription, with its private key, for reading what the Worker pushed to it. */
+export async function pageSubscription(page: Page): Promise<{ endpoint: string; p256dh: string; auth: string; privateKey: CryptoKey; server: string | null }> {
+  const s = await page.evaluate(() => JSON.parse(localStorage.getItem("baesian-test:push") ?? "null"));
+  if (!s) throw new Error("the page has no push subscription");
+  return { ...s, privateKey: await crypto.subtle.importKey("jwk", s.jwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]) };
+}
+
+/**
+ * What a page does after each tap, in order: the tap, its requests to the service, and the passkey, push and permission
+ * calls it makes, so a test can see that a passkey starts from the tap itself (Safari's rule), and that the browser is
+ * asked about notifications only after a tap.
+ */
+export async function recordTaps(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const log: { what: string; url?: string }[] = [];
+    (window as unknown as { __taps: typeof log }).__taps = log;
+    addEventListener("click", () => log.push({ what: "tap" }), true);
+    const fetch0 = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      log.push({ what: "fetch", url: `${init?.method ?? "GET"} ${typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url}` });
+      return fetch0(input, init);
+    };
+    const creds = navigator.credentials;
+    const get0 = creds.get.bind(creds);
+    const create0 = creds.create.bind(creds);
+    creds.get = (o?: CredentialRequestOptions) => (log.push({ what: "credentials.get" }), get0(o));
+    creds.create = (o?: CredentialCreationOptions) => (log.push({ what: "credentials.create" }), create0(o));
+    const ask0 = Notification.requestPermission.bind(Notification);
+    Notification.requestPermission = ((cb?: NotificationPermissionCallback) => (log.push({ what: "requestPermission" }), ask0(cb))) as typeof Notification.requestPermission;
+  });
+}
+
+/** Everything the page did, as `recordTaps()` keeps it. */
+export async function taps(page: Page): Promise<string[]> {
+  const log = await page.evaluate(() => (window as unknown as { __taps: { what: string; url?: string }[] }).__taps);
+  return log.map((e) => (e.url ? `${e.what} ${e.url}` : e.what));
+}
+
+/** What the page did from its last tap on (the tap first). */
+export async function sinceLastTap(page: Page): Promise<string[]> {
+  const log = await taps(page);
+  return log.slice(log.lastIndexOf("tap"));
 }

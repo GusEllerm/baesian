@@ -1,15 +1,19 @@
 import { DurableObject } from "cloudflare:workers";
 import { Buffer } from "node:buffer";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
-import { type PasskeyKey, ProjectId } from "../../src/schema.js";
+import type { Settings } from "../../src/routing.js";
+import { type PasskeyKey, ProjectId, type Verdict } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal } from "./access.js";
 import { Accounts } from "./accounts.js";
+import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
+import { Usage, routeOf as usageRoute } from "./usage.js";
 import type { GlobusConfig } from "./globus.js";
 import { HEADERS, fail, readJson } from "./http.js";
 import { machinesRoute } from "./machines.js";
 import { type Mailer, bindingMailer } from "./mail.js";
-import { type Assertion, MAX_ENTRIES, MAX_FILE, type Pending, Relay, type Reply } from "./relay.js";
+import { type Assertion, MAX_ENTRIES, MAX_FILE, type Pending, REVISION, Relay, type Reply } from "./relay.js";
 import { type KeyEnv, NoKey, ServiceSigner } from "./signer.js";
 import { type SignIn, signInRoute } from "./signin.js";
 import { SqlFileStorage } from "./sql-storage.js";
@@ -36,6 +40,8 @@ export interface Env extends KeyEnv, AccessEnv {
   GLOBUS_ISSUER?: string;
   GLOBUS_CLIENT_ID?: string;
   GLOBUS_CLIENT_SECRET?: string;
+  /** Web push's VAPID key (B-nk97q), a P-256 private key as a JWK: a secret. */
+  VAPID_KEY?: string;
 }
 
 /**
@@ -73,14 +79,14 @@ export function servicesFor(env: Env, given: Partial<Services> = {}): Services {
 type Who = "read" | "upload" | "answer";
 
 interface Route {
-  name: "log" | "state" | "presets" | "live" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "proofs";
+  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "proofs";
   who: Who;
   path?: string;
 }
 
 /** What an address under a project is, by its method and the rest of its path; or why it's none. */
 function routeOf(method: string, rest: string): Route | Response {
-  const reads: Record<string, Route["name"]> = { log: "log", state: "state", presets: "presets", live: "live" };
+  const reads: Record<string, Route["name"]> = { log: "log", state: "state", presets: "presets", live: "live", pushes: "pushes" };
   const answers: Record<string, Route["name"]> = { verdicts: "verdicts", aliases: "aliases", preferences: "preferences", presence: "presence", proofs: "proofs" };
   if (rest.startsWith("files/")) {
     let path: string;
@@ -97,7 +103,7 @@ function routeOf(method: string, rest: string): Route | Response {
   if (read) return method === "GET" ? { name: read, who: "read" } : fail(405, `${rest} is read with GET`);
   const answer = answers[rest];
   if (answer) return method === "POST" ? { name: answer, who: "answer" } : fail(405, `${rest} takes a POST`);
-  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, verdicts, aliases, preferences, proofs and presence`);
+  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, proofs and presence`);
 }
 
 /** Why `who` may not use a route, or nothing (Hosted Service section 3). Each grant is for one project; a session, for its own. */
@@ -166,6 +172,8 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       return reply(await stub.state(project));
     case "presets":
       return reply(await stub.presets(project));
+    case "pushes":
+      return reply(await stub.pushes(project));
     case "live":
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return fail(426, "live updates are a WebSocket: send Upgrade: websocket");
       return stub.fetch(request);
@@ -253,17 +261,24 @@ async function accountsRequest(request: Request, url: URL, env: Env, services: S
       const r = (await env.PROJECTS.get(env.PROJECTS.idFromName(project)).putKeys(project, keys)) as Reply;
       if (r.status >= 300) throw new Error(JSON.stringify(r.body));
     },
+    vapidPublicKey: vapidPublicKey(env.VAPID_KEY),
+    testPush: isLocal(env),
+    usage: new Usage(services.accounts.db),
   };
   return (await signInRoute(s, request, url)) ?? fail(404, `no address ${request.method} ${url.pathname}`);
 }
 
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
+    let r: Response;
     try {
-      return await handleRequest(request, env);
+      r = await handleRequest(request, env);
     } catch (e) {
-      return fail(500, e instanceof Error ? e.message : String(e));
+      r = fail(500, e instanceof Error ? e.message : String(e));
     }
+    // A failure is counted by the address's name and its status alone, with no usage ID (B-7nq85).
+    if (r.status >= 500 && env.ACCOUNTS) ctx.waitUntil(new Usage(env.ACCOUNTS).record(null, "error", { route: usageRoute(new URL(request.url).pathname), status: r.status }));
+    return r;
   },
 } satisfies ExportedHandler<Env>;
 
@@ -279,9 +294,19 @@ export class ProjectRelay extends DurableObject<Env> {
   private readonly signer: ServiceSigner | undefined;
   private readonly keyProblem: string | undefined;
   private readonly started = new Date().toISOString();
+  /** The project's notification state (M9e step 2). */
+  private readonly ledger: PushLedger;
+  /** Web push's VAPID tokens, made when first needed and each reused for an hour (B-nk97q). */
+  private vapid: Vapid | undefined;
+  /** Usage counts (D141, B-7nq85), in the accounts database. */
+  private readonly usage: Usage | undefined;
+  /** The days and screens whose first visit this object has counted already. */
+  private readonly visited = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.ledger = new PushLedger(ctx.storage.sql);
+    this.usage = env.ACCOUNTS ? new Usage(env.ACCOUNTS) : undefined;
     let signer: ServiceSigner | undefined;
     try {
       signer = ServiceSigner.fromEnv(env);
@@ -342,7 +367,77 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   async upload(project: string, path: string, bytes: Uint8Array, machine: string): Promise<Reply> {
-    return this.run(project, (r) => r.upload(path, bytes, machine));
+    const out = this.run(project, (r) => r.upload(path, bytes, machine));
+    // A card revision that arrives may start a notification (M9e step 2): noted now, decided at the object's alarm, at
+    // most `WHEN.soonMs` from now, so a burst of filings is decided once.
+    const m = out.status === 201 ? REVISION.exec(path) : null;
+    if (m) {
+      const now = Date.now();
+      this.ledger.arrive(m[1]!, Number(m[2]), machine, now);
+      const at = await this.ctx.storage.getAlarm();
+      if (at === null || at > now + WHEN.soonMs) await this.ctx.storage.setAlarm(now + WHEN.soonMs);
+      const fields = this.relay(project).filedUsage(m[1]!, Number(m[2]));
+      if (fields) await this.usage?.record({ project }, "card_filed", fields);
+    }
+    return out;
+  }
+
+  /** The machines whose cards don't notify now (a burst, B-advkh), for the project's page to say so. */
+  async pushes(project: string): Promise<Reply> {
+    this.relay(project);
+    const now = Date.now();
+    const paused = this.ledger
+      .pauses(now)
+      .filter((p) => p.until > now)
+      .map((p) => ({ machine: p.machine, cards: p.cards, minutes: Math.round(WHEN.burstWindowMs / 60_000), until: new Date(p.until).toISOString() }));
+    return { status: 200, body: { paused } };
+  }
+
+  /**
+   * The object's alarm: decide whether a notification goes now (`decide()`, B-advkh), send it to every browser of the
+   * project's owner that turned them on, settle what it told, and set the alarm for the next time anything's due.
+   */
+  async alarm(): Promise<void> {
+    const project = this.files.meta("project");
+    if (project === undefined) return;
+    const now = Date.now();
+    const relay = this.relay(project);
+    const d = decide({ now, arrivals: this.ledger.arrivals(), waiting: relay.waiting(), present: relay.present(now), sent: this.ledger.sent(now), pauses: this.ledger.pauses(now) });
+    this.ledger.settle(d.settle, now);
+    if (d.send) {
+      try {
+        if (await this.send(project, d.send)) this.ledger.markSent(now);
+      } catch (e) {
+        console.error(`notifying project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    if (d.next !== undefined) await this.ctx.storage.setAlarm(Math.max(d.next, Date.now() + 1000));
+  }
+
+  /**
+   * One notification, to every browser of the project's owner that gets them (B-ytdt2), saying how many cards wait and
+   * their levels, with the project's name (B-mjf3g, B-zqkwk); a browser whose push service says it's gone (404 or 410)
+   * is deleted. Returns whether any was sent.
+   */
+  private async send(project: string, counts: { urgency: "high" | "normal"; reason: "at once" | "digest"; total: number; hard: number; blocking: number }): Promise<boolean> {
+    if (!this.env.ACCOUNTS || !this.env.VAPID_KEY || counts.total === 0) return false;
+    const accounts = new Accounts(this.env.ACCOUNTS);
+    const p = await accounts.project(project);
+    const subs = p ? await accounts.subscriptions(p.owner) : [];
+    if (!p || !subs.length) return false;
+    this.vapid ??= new Vapid(await vapidKey(this.env.VAPID_KEY), this.env.SERVICE_ORIGIN);
+    const { title, body } = pushText(counts, p.name);
+    const message = { title, body, url: `/projects/${encodeURIComponent(project)}`, tag: `baesian:${project}` };
+    const topic = await topicOf(project);
+    const results = await Promise.all(subs.map(async (s) => ({ s, r: await sendPush(s, message, { vapid: this.vapid!, urgency: counts.urgency, topic }) })));
+    for (const { s, r } of results) {
+      if (r.result === "gone") await accounts.dropSubscription(s.endpoint);
+      if (r.result === "failed") console.error(`a push to ${new URL(s.endpoint).hostname} failed: ${r.status} ${r.why}`);
+    }
+    await accounts.markSent(results.filter((x) => x.r.result === "delivered").map((x) => x.s.id));
+    const some = (r: string) => results.some((x) => x.r.result === r);
+    await this.usage?.record({ project }, "push_sent", { reason: counts.reason, urgency: counts.urgency, cards: counts.total, result: some("delivered") ? "delivered" : some("failed") ? "failed" : "gone" });
+    return true;
   }
 
   async stopWaiting(project: string, path: string): Promise<Reply> {
@@ -350,7 +445,22 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   async answer(project: string, kind: "verdicts" | "aliases" | "preferences", input: unknown, who: { account: string; handle: string }): Promise<Reply> {
-    return this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
+    const before = this.relay(project).settings();
+    const out = this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
+    if (out.status === 201) await this.countAnswer(project, who.account, kind === "verdicts" ? "verdict" : kind === "aliases" ? "alias" : "preferences", out, before);
+    return out;
+  }
+
+  /** An answer written, counted (B-7nq85): a card answered, a topic merge, or a change to the preferences. */
+  private async countAnswer(project: string, account: string, kind: "verdict" | "alias" | "preferences", out: Reply, before: Settings): Promise<void> {
+    if (!this.usage) return;
+    const who = { account, project };
+    const relay = this.relay(project);
+    if (kind === "alias") return this.usage.record(who, "topic_merged");
+    if (kind === "preferences") return this.usage.record(who, "preferences_changed", relay.preferencesUsage(before));
+    const v = (out.body as { verdict?: Verdict }).verdict;
+    const fields = v && relay.answeredUsage(v);
+    if (fields) await this.usage.record(who, "card_answered", fields);
   }
 
   /** A composed answer waiting for an account's passkey, for the Worker to check the assertion against. */
@@ -359,7 +469,12 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   async prove(project: string, id: string, account: string, assertion: Assertion, key: PasskeyKey): Promise<Reply> {
-    return this.run(project, (r) => r.prove(id, account, assertion, key));
+    const relay = this.relay(project);
+    const kind = relay.pending(id, account)?.answer.kind;
+    const before = relay.settings();
+    const out = this.run(project, (r) => r.prove(id, account, assertion, key));
+    if (out.status === 201 && kind) await this.countAnswer(project, account, kind === "verdict" ? "verdict" : "preferences", out, before);
+    return out;
   }
 
   async putKeys(project: string, keys: PasskeyKey[]): Promise<Reply> {
@@ -367,7 +482,17 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   async presence(project: string, input: unknown): Promise<Reply> {
-    return this.run(project, (r) => r.presence(input));
+    const out = this.run(project, (r) => r.presence(input));
+    // The day's first visit on each kind of screen is counted (B-7nq85); the heartbeats after it, never.
+    if (out.status === 204 && this.usage) {
+      const client = typeof input === "object" && input !== null && (input as { client?: unknown }).client === "hosted-phone" ? "phone" : "desktop";
+      const today = `${new Date().toISOString().slice(0, 10)}:${client}`;
+      if (!this.visited.has(today)) {
+        this.visited.add(today);
+        await this.usage.recordDaily({ project }, "visit", { client });
+      }
+    }
+    return out;
   }
 
   /** Live updates (B-bv49e): a hibernating WebSocket, told the version at once, and again whenever it changes. */

@@ -2,12 +2,15 @@ import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
 import { PREFERENCE_FIELDS, VERDICT_FIELDS } from "../../src/api.js";
 import { afterVerdict } from "../../src/proposals.js";
-import { loosening } from "../../src/routing.js";
+import { BAESIAN, type Settings, loosening } from "../../src/routing.js";
 import { CARD_ID, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, newestFormat, upgradeFile } from "../../src/schema.js";
 import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
 import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
 import { checkSigned, readTrustFile } from "../../src/trust.js";
+import { PRESENCE_STALE_MS } from "../../src/wait.js";
+import type { Waiting } from "./notify.js";
+import { harnessOf } from "./usage.js";
 import type { ServiceSigner } from "./signer.js";
 import { NoKey } from "./signer.js";
 import type { SqlFileStorage } from "./sql-storage.js";
@@ -88,7 +91,8 @@ const isObject = (x: unknown): x is Record<string, unknown> => typeof x === "obj
 const json = (x: object) => `${JSON.stringify(x, null, 2)}\n`;
 const sha256 = (b: Uint8Array) => createHash("sha256").update(b).digest();
 const sameBytes = (a: Uint8Array, b: Uint8Array) => a.byteLength === b.byteLength && Buffer.from(a).equals(Buffer.from(b));
-const REVISION = new RegExp(`^cards/(${CARD_ID.source.replace(/^\^|\$$/g, "")})/r(\\d+)\\.md$`);
+/** A card revision's path: its card and revision. */
+export const REVISION = new RegExp(`^cards/(${CARD_ID.source.replace(/^\^|\$$/g, "")})/r(\\d+)\\.md$`);
 
 /** A passkey key file's name in a project's `trust/`, the same in every project: from its credential (P16 section 7). */
 export const keyFileName = (credential: string) => `trust/passkey-${createHash("sha256").update(credential).digest("hex").slice(0, 12)}.json`;
@@ -153,6 +157,81 @@ export class Relay {
       status: 200,
       body: snapshot(this.store(), { version: this.files.version(), server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH } }),
     };
+  }
+
+  /**
+   * The cards waiting for the reviewer, as the desk's queue has them (open cards, and audits: held, drawn, unanswered), at
+   * their level in force: what a notification counts (M9e step 2, B-mjf3g).
+   */
+  waiting(): Waiting[] {
+    const store = this.store();
+    return store.view(() =>
+      store.cards().flatMap((c) => {
+        const id = c.meta.id;
+        const status = store.status(id);
+        const audit = status === "held" && !!store.gateRecord(id, c.meta.revision)?.drawn;
+        return status === "open" || audit ? [{ card: id, revision: c.meta.revision, level: store.levelOf(id) ?? c.meta.level }] : [];
+      }),
+    );
+  }
+
+  // ---------------------------------------------------------------- what's counted (D141, B-7nq85)
+
+  /** The preferences in force: what a change is counted against. */
+  settings(): Settings {
+    return this.store().inForce().settings;
+  }
+
+  /** A card revision that arrived, as counted: its level, the gate's outcome, its facts, its harness; never its text. */
+  filedUsage(id: string, revision: number): Record<string, unknown> | undefined {
+    const store = this.store();
+    const card = store.revisions(id).find((r) => r.meta.revision === revision);
+    if (!card) return undefined;
+    const g = store.gateRecord(id, revision);
+    return {
+      revision,
+      level: store.levelOf(id, revision) ?? card.meta.level,
+      gate: g?.outcome === "held" ? (g.mode === "enforce" ? "held" : "shadow") : "shown",
+      touches: [...new Set(card.meta.touches)],
+      reverse: card.meta.reverse,
+      harness: harnessOf(card.meta.source_agent),
+      by_baesian: card.meta.source_agent === BAESIAN,
+    };
+  }
+
+  /** An answer, as counted: its response, the screen, the card's level, how long it waited, and the blind choice. */
+  answeredUsage(v: Verdict): Record<string, unknown> | undefined {
+    const store = this.store();
+    const card = store.revisions(v.card).find((r) => r.meta.revision === v.revision);
+    if (!card) return undefined;
+    const g = store.gateRecord(v.card, v.revision);
+    const final = v.response === "accept" ? "proposal" : v.response === "alternative" ? "alternative" : undefined;
+    return {
+      response: v.response,
+      client: v.client === "hosted-phone" ? "phone" : "desktop",
+      level: store.levelOf(v.card, v.revision) ?? card.meta.level,
+      minutes_waiting: Math.max(0, Math.round((Date.parse(v.at) - Date.parse(card.meta.created)) / 60_000)),
+      blind_match: v.first_choice === "proposal",
+      switched: v.first_choice !== undefined && final !== undefined && v.first_choice !== final,
+      was_held: g?.mode === "enforce" && g.outcome === "held",
+      made_rule: v.make_rule === true,
+    };
+  }
+
+  /** A change to the preferences, as counted against those before it: the mode, whether it loosens, how many rows moved. */
+  preferencesUsage(before: Settings): Record<string, unknown> {
+    const after = this.settings();
+    return {
+      mode: after.mode === "enforce" ? "on" : "shadow",
+      loosening: loosening(before, after).length > 0,
+      rows_changed: Object.keys(after.rows).filter((r) => after.rows[r as keyof typeof after.rows] !== before.rows[r as keyof typeof before.rows]).length,
+    };
+  }
+
+  /** Whether the reviewer is present in a client: a heartbeat in the last 90 seconds (D41). */
+  present(now: number): boolean {
+    const p = this.store().presence();
+    return !!p && now - Date.parse(p.at) <= PRESENCE_STALE_MS;
   }
 
   /** The presets and the setup survey, as `/api/presets` gives them. */

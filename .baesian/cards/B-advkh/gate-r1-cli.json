@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-advkh",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261103T174650.891Z-xg8pf.json",
+  "touches": [
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "asked": "provisional",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-04T18:05:45.505Z"
+}

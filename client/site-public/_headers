@@ -1,6 +1,9 @@
 # The website's headers (M9e), which Workers static assets apply to every file it serves from dist/site/.
 # The policy is the local client's (src/server.ts), but for Turnstile (B-1a03b): its script and its frame come from
 # challenges.cloudflare.com, on the sign-up and recovery pages. The service's own /v1/ replies set their own headers.
+# Installing it as an app (M9e step 2) needs nothing more: the manifest (manifest-src) and the service worker (worker-src,
+# through script-src) fall back to 'self', the icons are images from 'self', and the worker's own fetches to /v1/ are
+# connect-src 'self', under this same policy, which the worker's script is served with.
 /*
   Content-Security-Policy: default-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
@@ -9,3 +12,6 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+# The service worker (M9e step 2) is checked for a new version on every visit, never kept stale.
+/sw.js
+  Cache-Control: no-cache

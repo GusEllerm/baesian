@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMe } from "./api";
 import { Account } from "./Account";
+import { Counts } from "./Counts";
 import { Device } from "./Device";
 import { signInHere, takeFragment, useWhere } from "./nav";
 import { Go, Problem, Sheet, Shell, To } from "./Page";
@@ -18,10 +19,11 @@ import { SignUp } from "./SignUp";
 //   /recover            get back in with an emailed code and your recovery code
 //   /account            passkeys, sign-ins, machines, Globus, signing out
 //   /device?code=       approve a machine `baesian login` is signing in
+//   /counts             what the service counts of its use, every field (D141, B-7nq85): anyone may open it
 //   /projects/{project} the project's desk
 
 /** The pages anyone may open; every other needs you signed in. */
-const OPEN = new Set(["/sign-up", "/sign-in", "/recover"]);
+const OPEN = new Set(["/sign-up", "/sign-in", "/recover", "/counts"]);
 
 export function Site() {
   const where = useWhere();
@@ -45,6 +47,7 @@ export function Site() {
   if (path === "/sign-up") return <SignUp onIn={me.reload} />;
   if (path === "/sign-in") return <SignIn onIn={me.reload} />;
   if (path === "/recover") return <Recover onIn={me.reload} />;
+  if (path === "/counts") return <Counts who={me.kind === "in" ? me.account.handle : undefined} />;
 
   if (me.kind === "loading") return <Shell>{null}</Shell>;
   if (me.kind === "error") {
@@ -62,7 +65,7 @@ export function Site() {
   const account = me.account;
   if (path === "/") return <Projects account={account} reload={me.reload} notice={welcome} />;
   if (path === "/account") return <Account account={account} reload={me.reload} />;
-  if (path === "/device") return <Device handle={account.handle} />;
+  if (path === "/device") return <Device handle={account.handle} freshUntil={account.fresh_until} />;
   const project = /^\/projects\/([^/]+)$/.exec(path)?.[1];
   if (project) return <Project key={project} id={decodeURIComponent(project)} account={account} />;
   return (

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { type RequestOptionsJSON, signWithPasskey } from "../webauthn";
-import { call, useConfig } from "./api";
+import { type Ceremony, call, useConfig, usePrepared } from "./api";
+
+/** A sign-in's options (`POST /v1/signin/start`): any of the site's passkeys. */
+const signinStart = () => call<Ceremony<RequestOptionsJSON>>("POST", "/v1/signin/start", {});
 import { go, nextPage, takeFragment } from "./nav";
 import { Go, Problem, Sheet, Shell, To } from "./Page";
 
@@ -11,12 +14,15 @@ export function SignIn({ onIn }: { onIn: () => Promise<void> }) {
   const config = useConfig();
   const [problem, setProblem] = useState<string | undefined>(() => takeFragment().get("message") ?? undefined);
   const [busy, setBusy] = useState(false);
+  // The passkey starts from the tap itself, with options fetched when the page opened (Safari's rule, M9e step 2).
+  const start = usePrepared(signinStart);
   const signIn = async () => {
     setBusy(true);
     setProblem(undefined);
     try {
-      const start = await call<{ flow: string; options: RequestOptionsJSON }>("POST", "/v1/signin/start", {});
-      await call("POST", "/v1/signin/finish", { flow: start.flow, response: await signWithPasskey(start.options) });
+      const c = start.take();
+      const response = await signWithPasskey(c.options);
+      await call("POST", "/v1/signin/finish", { flow: c.flow, response });
       await onIn();
       go(nextPage(), { replace: true });
     } catch (e) {
@@ -30,7 +36,7 @@ export function SignIn({ onIn }: { onIn: () => Promise<void> }) {
     <Shell>
       <Sheet title="Sign in" lead={next.startsWith("/device") ? "Sign in to approve the machine that's asking." : "Use the passkey you made when you signed up: on this device, your phone, or a security key."}>
         <Problem text={problem} />
-        <Go busy={busy} busyText="Waiting for your passkey…" onClick={() => void signIn()}>
+        <Go busy={busy} busyText="Waiting for your passkey…" disabled={!start.ready} onClick={() => void signIn()}>
           Sign in with your passkey
         </Go>
         {config?.globus && (
