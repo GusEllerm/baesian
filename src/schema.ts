@@ -901,6 +901,11 @@ export const RelayEntry = z.strictObject({
   sig: Base64.optional(),
   /** The signed-in machine that uploaded it, if a machine did (D162: only the relay knows). */
   machine: z.string().min(1).optional(),
+  /**
+   * A file a person wrote before the repo was linked, which a machine uploaded at first link (B-3zjjx): unsigned, kept
+   * apart, and counted by each machine only where it was in the record at the linking commit (B-45xz8).
+   */
+  before_linking: z.literal(true).optional(),
   /** When the relay accepted it, by the relay's clock. */
   at: Timestamp,
 });

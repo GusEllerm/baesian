@@ -28,9 +28,13 @@ describe("a machine signs in (RFC 8628)", () => {
     const shown = await p.browser.get(`/v1/account/machines/approve?code=${d.body.user_code.toLowerCase().replace("-", "")}`);
     expect(shown.body).toMatchObject({ machine: "spark-7", project: proj, new_project: true, yours: true });
     await env.ACCOUNTS.prepare("UPDATE sessions SET verified = ? WHERE hash = ?").bind(new Date(Date.now() - LIMITS.freshMs - 1000).toISOString(), hashOf(p.browser.session!)).run();
-    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true })).body.reauth).toBe(true);
+    // A new project is named by the person approving its first machine (B-zqkwk): with no name, nothing is approved.
+    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true })).body).toMatchObject({ needs_name: true, error: expect.stringMatching(/makes a new project: give it a name/) });
+    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true, name: " \u0007 " })).body.needs_name).toBe(true);
+    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true, name: "x".repeat(61) })).body.needs_name).toBe(true);
+    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true, name: "Bakery  shop" })).body.reauth).toBe(true);
     await reauth(p);
-    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true })).body).toMatchObject({ approved: true, new_project: true });
+    expect((await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true, name: "Bakery  shop" })).body).toMatchObject({ approved: true, new_project: true, name: "Bakery shop" });
 
     await env.ACCOUNTS.prepare("UPDATE device_codes SET last_poll = NULL WHERE user_code = ?").bind(d.body.user_code).run();
     const t = await poll();
@@ -43,8 +47,30 @@ describe("a machine signs in (RFC 8628)", () => {
     expect((await call("POST", "verdicts", { as: asMachine(t.body.access_token), project: proj, json: {} })).status).toBe(403);
     // The project is the person's now: their session reaches it, and the Machines page lists the machine.
     expect((await call("GET", "state", { as: { headers: { cookie: `__Host-baesian-session=${p.browser.session}`, origin: env.SERVICE_ORIGIN } }, project: proj })).status).toBe(200);
-    expect((await p.browser.get("/v1/account/machines")).body.machines).toEqual([{ id: t.body.grant, machine: "spark-7", project: proj, created: expect.any(String), last_used: expect.any(String) }]);
-    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, created: expect.any(String) }]);
+    expect((await p.browser.get("/v1/account/machines")).body.machines).toEqual([{ id: t.body.grant, machine: "spark-7", project: proj, project_name: "Bakery shop", created: expect.any(String), last_used: expect.any(String) }]);
+    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "Bakery shop", created: expect.any(String) }]);
+
+    // Another machine for the project asks no name, and the approval page gives the one it has.
+    const second = await oauth("/v1/machines/device", { client_id: "baesian-cli", project: proj, machine: "spark-8" });
+    expect((await p.browser.get(`/v1/account/machines/approve?code=${second.body.user_code}`)).body).toMatchObject({ new_project: false, yours: true, name: "Bakery shop" });
+    expect((await p.browser.post("/v1/account/machines/approve", { code: second.body.user_code, approve: true })).body).toMatchObject({ approved: true, new_project: false, name: "Bakery shop" });
+  });
+
+  it("names a project on the service, and only its owner renames it (B-zqkwk)", async () => {
+    const p = await signUp();
+    const q = await signUp();
+    const proj = project();
+    await machineLogin(p, proj);
+    const rename = (who: typeof p, name: unknown) => who.browser.request("PATCH", `/v1/account/projects/${proj}`, { json: { name } });
+    expect((await rename(p, "")).status).toBe(400);
+    const r = await rename(p, "  The  bakery ");
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ id: proj, name: "The bakery" });
+    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "The bakery", created: expect.any(String) }]);
+    // Someone else's project isn't renamed; nor is it renamed from another site.
+    expect((await rename(q, "Mine now")).status).toBe(404);
+    expect((await p.browser.request("PATCH", `/v1/account/projects/${proj}`, { json: { name: "Elsewhere" }, headers: { origin: "https://evil.example", "sec-fetch-site": "cross-site" } })).status).toBe(403);
+    expect((await p.browser.get("/v1/account")).body.projects[0].name).toBe("The bakery");
   });
 
   it("is refused by a person, or expires, and can't be approved into someone else's project", async () => {

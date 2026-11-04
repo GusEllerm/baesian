@@ -11,7 +11,7 @@ tags: [baesian, module]
 
 # src/server.ts
 
-The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127.0.0.1. Unless it's given a port, it starts on the one the last server used (`port.json`, `LastPort` in `src/schema.ts`), and if that's taken, on one the system picks (D103). It records the port it got, unless `reusePort` is false. It returns a `RunningServer`: its port, its token, the address to open (`serverUrl`), and `close`. `baesian serve` ([[src-cli]]) wraps it.
+The design is [[Local Server]]. `startServer` runs Node's own HTTP server on 127.0.0.1. Unless it's given a port, it starts on the one the last server used (`port.json`, `LastPort` in `src/schema.ts`), and if that's taken, on one the system picks (D103). It records the port it got, unless `reusePort` is false. It returns a `RunningServer`: its port, its token, the address to open (`serverUrl`), and `close`. `baesian serve` ([[src-cli]]) wraps it. **In a repo linked to the hosted service (D143, B-k216t, M9e)** `baesian serve` doesn't start it at all: it prints and opens the project's page on the website (`projectPage()`), where every answer is given and signed; the local client stays as it is for repos without the service (D8).
 
 ## Signing in (D62, D97)
 

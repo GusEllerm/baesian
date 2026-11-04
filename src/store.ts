@@ -376,6 +376,12 @@ export interface StorageOptions {
   config?: Config;
   /** The keys it pins. It never reads CI's settings: none are pinned unless given. */
   trust?: StoreTrust;
+  /**
+   * The answers a machine uploaded as from before linking (B-3zjjx), by path. A store with no repo can't find the record
+   * at the linking commit, so it counts these as B-45xz8 counts that record's on a machine. The relay takes them only
+   * before the project's first answer on the website, and keeps them unsigned.
+   */
+  beforeLinking?: ReadonlySet<string>;
 }
 
 /** On your machine: the repo, the live layer's folder, and the worktree's record. */
@@ -425,7 +431,7 @@ export class Store {
     /** The live layer (B-0ag7h): a folder on your machine, the relay's table, or memory. */
     readonly storage: Storage,
     private readonly local: Local | undefined,
-    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean; commit?: string },
+    private readonly options: { branch?: string; config?: Config; trust: StoreTrust; readOnly: boolean; commit?: string; beforeLinking?: ReadonlySet<string> },
   ) {
     this.readOnly = options.readOnly;
   }
@@ -450,7 +456,7 @@ export class Store {
    * answers and checks as any store does; what needs git or the record throws `NeedsRepo`, and nothing touches a disk.
    */
   static over(storage: Storage, options: StorageOptions): Store {
-    return new Store(storage, undefined, { branch: options.branch, config: options.config, trust: { pinned: options.trust?.pinned ?? null }, readOnly: false });
+    return new Store(storage, undefined, { branch: options.branch, config: options.config, trust: { pinned: options.trust?.pinned ?? null }, readOnly: false, ...(options.beforeLinking ? { beforeLinking: options.beforeLinking } : {}) });
   }
 
   // ---------------------------------------------------------------- layers
@@ -728,6 +734,8 @@ export class Store {
    */
   private fromBeforeLinking(rel: string): Judgement | undefined {
     if (this.storage.read(`${rel}.sig`) !== undefined) return undefined;
+    // The relay's store, with no repo: what a machine uploaded as from before linking, while it still could (B-3zjjx).
+    if (!this.local) return this.options.beforeLinking?.has(rel) ? COUNTS : undefined;
     const b = this.linking();
     if (!b) return undefined;
     if ("problem" in b) return doesnt(b.problem);
@@ -737,6 +745,35 @@ export class Store {
     if (!bytes) return undefined;
     const id = createHash(b.objectFormat === "sha256" ? "sha256" : "sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
     return id === blob ? COUNTS : undefined;
+  }
+
+  /**
+   * The files a person wrote that count here as from before linking (B-45xz8): unsigned, and in the record at the commit
+   * that linked the repo, with these bytes. At first link the CLI uploads them (B-3zjjx): rules, then their retirements,
+   * topic merges, answers and preference files, each folder in name order.
+   */
+  answersFromBeforeLinking(): string[] {
+    const rules = this.list("rules").filter((f) => RULE_FILE.test(f));
+    return [
+      ...rules.filter((f) => f.endsWith(".md")).map((f) => `rules/${f}`),
+      ...rules.filter((f) => f.endsWith("-retired.json")).map((f) => `rules/${f}`),
+      ...this.list("topics").filter((f) => f.startsWith("alias-") && f.endsWith(".json")).map((f) => `topics/${f}`),
+      ...this.list("verdicts").filter((f) => verdictFileCard(f)).map((f) => `verdicts/${f}`),
+      ...this.list("preferences").filter((f) => PREFERENCE_FILE.test(f)).map((f) => `preferences/${f}`),
+    ].filter((rel) => this.fromBeforeLinking(rel)?.ok === true);
+  }
+
+  /**
+   * Whether a resolved card was decided before the repo was linked (B-3zjjx): the answer its status rests on counts as one
+   * from before linking, not by the service's signature. The website says so beside it.
+   */
+  decidedBeforeLinking(id: string): boolean {
+    const card = this.card(id);
+    if (!card || this.status(id) !== "resolved") return false;
+    const last = this.latestVerdict(card);
+    if (!last) return false;
+    const prefix = `${compactAt(last.at)}-${id}-r${last.revision}-`;
+    return this.verdictFilesOf(id).some((f) => f.startsWith(prefix) && this.fromBeforeLinking(`verdicts/${f}`)?.ok === true);
   }
 
   /**

@@ -36,6 +36,7 @@ import {
   linkRepo,
   machineName,
   newProjectId,
+  projectPage,
   readGrant,
   removeGrant,
   revokeGrant,
@@ -412,12 +413,27 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
 
   program
     .command("serve")
-    .description("serve the client on 127.0.0.1 and open it; one server per repo")
+    .description("serve the client on 127.0.0.1 and open it; one server per repo. In a repo linked to the hosted service, open the project's page on the website instead (D143)")
     .option("--port <n>", "listen on this port (by default the last server's, if it's free, or one the system picks)", port)
     .option("--no-open", "don't open the browser")
     .option("--poll", "check the live layer every second instead of watching it, for shared storage")
     .action(async (opts: { port?: number; open: boolean; poll?: boolean }) => {
       const s = store();
+      // D143 (B-k216t): in a linked repo, every answer comes from the website, signed; the local client doesn't start.
+      const link = s.config();
+      if (link.service && link.project) {
+        const problem = linkProblem(s, link);
+        if (problem) {
+          io.err(`not serving: ${problem}`);
+          state.code = 1;
+          return;
+        }
+        const page = projectPage(link.service, link.project);
+        io.out(`this repo is linked to ${link.service}: its cards are answered on the website, signed in with your passkey, not here`);
+        io.out(`the project's page: ${page}`);
+        if (opts.open) openInBrowser(page);
+        return;
+      }
       const running = await findRunningServer(s);
       if (running) {
         io.out(`already serving this repo: ${serverUrl(running)}`);
@@ -554,7 +570,9 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         onCode: (code) => {
           io.out(`To sign this machine in${link && link.project !== c.project ? " and make this repo's project" : ""}, open this page and check it shows the code ${code.user_code}:`);
           io.out(`  ${code.verification_uri_complete ?? code.verification_uri}`);
-          io.out(`It asks for your passkey. The code lasts ${Math.round(code.expires_in / 60)} minutes; waiting for it to be approved…`);
+          // B-zqkwk: a new project is named on that page, by the person; this repo's own name is never sent.
+          const asks = link && link.project !== c.project ? "It asks you to name the project, then for your passkey." : "It asks for your passkey.";
+          io.out(`${asks} The code lasts ${Math.round(code.expires_in / 60)} minutes; waiting for it to be approved…`);
         },
       });
       writeGrant(grant);
@@ -569,6 +587,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const relay = await syncRelay(s, http());
       if (relay.state === "synced") io.out(`relay: received ${relay.pulled.length} file${relay.pulled.length === 1 ? "" : "s"}, sent ${relay.pushed.length}`);
       for (const n of relay.notes) io.err(n);
+      io.out(`answer its cards at ${projectPage(service, project)}`);
     });
 
   program

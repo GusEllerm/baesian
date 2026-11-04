@@ -56,6 +56,7 @@ export function snapshot(store: Store, ctx: StateContext): ApiState {
           attachments: store.attachments(id).length,
           ...(gate ? { gate } : {}),
           ...(status === "held" && gate?.drawn ? { audit: true as const } : {}),
+          ...(status === "resolved" && store.decidedBeforeLinking(id) ? { before_linking: true as const } : {}),
         });
       } catch (e) {
         problems.push({ path: `cards/${id}`, error: e instanceof Error ? e.message : String(e) });

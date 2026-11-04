@@ -139,7 +139,7 @@ export async function machineLogin(p: Person, project: string, machine = "laptop
   const d = await oauth("/v1/machines/device", { client_id: "baesian-cli", project, machine });
   expect(d.status, JSON.stringify(d.body)).toBe(200);
   await reauth(p);
-  const ok = await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true });
+  const ok = await p.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true, name: `Project ${project}` });
   expect(ok.status, JSON.stringify(ok.body)).toBe(200);
   const t = await oauth("/v1/machines/token", { client_id: "baesian-cli", grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: d.body.device_code });
   expect(t.status, JSON.stringify(t.body)).toBe(200);

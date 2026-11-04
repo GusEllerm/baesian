@@ -8,7 +8,7 @@ import type { ApiState } from "../src/api.js";
 import { type RunningServer, findRunningServer, startServer } from "../src/server.js";
 import { WAITING_STALE_MS } from "../src/store.js";
 import { WAITING_STALE_MS as API_WAITING_STALE_MS } from "../src/api.js";
-import { BODY, REVIEWER, cleanup, draft, draftFile, repo } from "./helpers.js";
+import { BODY, REVIEWER, cleanup, draft, draftFile, repo, sh } from "./helpers.js";
 
 // M4 step 4: the local server, against real repos, with real processes writing to the store while it runs.
 
@@ -340,5 +340,27 @@ describe("baesian serve", () => {
     first.kill("SIGINT");
     expect(await exited(first)).toBe(0);
     expect(existsSync(join(store.live, "server.json"))).toBe(false);
+  }, 30_000);
+
+  it("in a repo linked to the service, gives the project's page on the website and starts nothing (D143)", async () => {
+    const { dir, store } = repo();
+    const first = sh(dir, "rev-list", "--max-parents=0", "HEAD");
+    store.setLink({ service: "https://baesian.example", project: "p-0123456789abcdefghjk", first_commit: first });
+    const c = cli(dir, ["serve", "--no-open"]);
+    let out = "";
+    c.stdout!.on("data", (d) => (out += d));
+    expect(await exited(c)).toBe(0);
+    expect(out).toContain("its cards are answered on the website, signed in with your passkey, not here");
+    expect(out).toContain("the project's page: https://baesian.example/projects/p-0123456789abcdefghjk");
+    expect(existsSync(join(store.live, "server.json"))).toBe(false);
+
+    // A copy of another repo (B-5gnea) has no page of its own yet: nothing opens, and it says why.
+    store.setLink({ service: "https://baesian.example", project: "p-0123456789abcdefghjk", first_commit: "a".repeat(40) });
+    const copy = cli(dir, ["serve", "--no-open"]);
+    let err = "";
+    copy.stderr!.on("data", (d) => (err += d));
+    expect(await exited(copy)).toBe(1);
+    expect(err).toContain("not serving:");
+    expect(err).toContain("it's a copy of that repo");
   }, 30_000);
 });

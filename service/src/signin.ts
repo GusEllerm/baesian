@@ -1,6 +1,6 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import type { PasskeyKey } from "../../src/schema.js";
-import { type Account, type Accounts, type Flow, HANDLE, LIMITS, Taken, normalEmail } from "./accounts.js";
+import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, Taken, normalEmail, projectName } from "./accounts.js";
 import { SESSION_COOKIE, clearCookie, cookie, crossSite, sessionCookie } from "./access.js";
 import { type GlobusConfig, authorizationUrl, identityFrom, newRoundTrip, whyNot } from "./globus.js";
 import { addressOf, browserName, fail, readObject, respond } from "./http.js";
@@ -349,7 +349,15 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
   }
   if (route === "GET /machines") {
     const list = await s.accounts.grants(account.id);
-    return respond({ status: 200, body: { machines: list.map((g) => ({ id: g.id, machine: g.machine, project: g.project, created: g.created, last_used: g.last_used })) } });
+    const names = new Map((await s.accounts.projectsOf(account.id)).map((p) => [p.id, p.name]));
+    return respond({ status: 200, body: { machines: list.map((g) => ({ id: g.id, machine: g.machine, project: g.project, project_name: names.get(g.project) ?? null, created: g.created, last_used: g.last_used })) } });
+  }
+  if (m === "PATCH" && path.startsWith("/v1/account/projects/") && tail.length === 1) {
+    const input = await readObject(request);
+    if (input instanceof Response) return input;
+    const name = projectName(input.name);
+    if (!name) return fail(400, `give the project a name: 1 to ${PROJECT_NAME_MAX} characters`);
+    return (await s.accounts.renameProject(account.id, tail[0]!, name)) ? respond({ status: 200, body: { id: tail[0], name } }) : fail(404, "no project of yours with that ID");
   }
   if (m === "DELETE" && path.startsWith("/v1/account/machines/") && tail.length === 1) {
     return (await s.accounts.revoke(tail[0]!, account.id)) ? respond({ status: 204 }) : fail(404, "no machine of yours with that ID");
@@ -358,7 +366,8 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     const d = await s.accounts.deviceByUserCode(normalUserCode(url.searchParams.get("code") ?? ""));
     if (!d) return fail(404, "no machine is waiting with that code, or it expired");
     const p = await s.accounts.project(d.project);
-    return respond({ status: 200, body: { machine: d.machine, project: d.project, new_project: !p, yours: !p || p.owner === account.id, expires: d.expires, can: "file cards and hear answers in this project; never answer" } });
+    const yours = !p || p.owner === account.id;
+    return respond({ status: 200, body: { machine: d.machine, project: d.project, new_project: !p, yours, ...(p && yours ? { name: p.name } : {}), expires: d.expires, can: "file cards and hear answers in this project; never answer" } });
   }
   if (route === "POST /machines/approve") {
     const input = await body();
@@ -369,8 +378,12 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
       await s.accounts.denyDevice(d);
       return respond({ status: 200, body: { approved: false } });
     }
+    // A new project is named here, by the person approving its first machine (B-zqkwk): the CLI never sends a repo's name.
+    const known = await s.accounts.project(d.project);
+    const name = known ? undefined : projectName(input.name);
+    if (!known && !name) return fail(400, `approving this machine makes a new project: give it a name, 1 to ${PROJECT_NAME_MAX} characters`, { needs_name: true });
     if (!s.accounts.fresh(ses)) return fail(403, "approving a machine asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
-    const r = await s.accounts.approveDevice(d, account.id);
+    const r = await s.accounts.approveDevice(d, account.id, name);
     if ("problem" in r) return fail(409, r.problem);
     if (r.created) {
       try {
@@ -379,7 +392,7 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
         console.error(`putting ${account.id}'s passkey keys into new project ${d.project} failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    return respond({ status: 200, body: { approved: true, machine: d.machine, project: d.project, new_project: r.created } });
+    return respond({ status: 200, body: { approved: true, machine: d.machine, project: d.project, new_project: r.created, name: name ?? known?.name ?? null } });
   }
   if (route === "DELETE /globus") {
     return (await s.accounts.unlinkGlobus(account.id)) ? respond({ status: 204 }) : fail(404, "no Globus identity is linked to this account");

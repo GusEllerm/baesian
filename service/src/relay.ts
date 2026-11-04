@@ -11,7 +11,7 @@ import { checkSigned, readTrustFile } from "../../src/trust.js";
 import type { ServiceSigner } from "./signer.js";
 import { NoKey } from "./signer.js";
 import type { SqlFileStorage } from "./sql-storage.js";
-import { agentKind, notAgentWritten, uploadProblem } from "./uploads.js";
+import { agentKind, beforeLinkingKind, notAgentWritten, uploadProblem } from "./uploads.js";
 
 // One project's relay (M9b): Baesian's own store over the project's files in its Durable Object (B-0ag7h, B-17wn9), and
 // what each address does with it (B-7z97x). The Durable Object and the Worker around it are in index.ts; who may call
@@ -94,7 +94,7 @@ const REVISION = new RegExp(`^cards/(${CARD_ID.source.replace(/^\^|\$$/g, "")})/
 export const keyFileName = (credential: string) => `trust/passkey-${createHash("sha256").update(credential).digest("hex").slice(0, 12)}.json`;
 
 /** An entry as an upload's reply gives it: everything but the bytes, which the machine has. */
-const receipt = (e: RelayEntry | undefined) => e && { seq: e.seq, path: e.path, format: e.format, size: e.size, digest: e.digest, ...(e.machine ? { machine: e.machine } : {}), at: e.at };
+const receipt = (e: RelayEntry | undefined) => e && { seq: e.seq, path: e.path, format: e.format, size: e.size, digest: e.digest, ...(e.machine ? { machine: e.machine } : {}), ...(e.before_linking ? { before_linking: true } : {}), at: e.at };
 
 export class Relay {
   constructor(
@@ -111,11 +111,12 @@ export class Relay {
   /**
    * The project's store (B-0ag7h): over its files, hosted by the service's own key, pinned (D142), with the passkey keys
    * the relay itself put in the project's `trust/` and signed, as CI pins them by hand (D159), so what it shows counts
-   * what a machine with the pin counts.
+   * what a machine with the pin counts; and the answers from before linking it took from a machine (B-3zjjx), which it
+   * counts as B-45xz8 counts the record at the linking commit on a machine.
    */
   store(): Store {
     const pinned = this.signer ? { ...this.signer.trust(), passkeys: this.passkeys() } : null;
-    return Store.over(this.files, { branch: RELAY_BRANCH, config: { service: this.origin, project: this.project }, trust: { pinned } });
+    return Store.over(this.files, { branch: RELAY_BRANCH, config: { service: this.origin, project: this.project }, trust: { pinned }, beforeLinking: this.files.beforeLinking() });
   }
 
   /** The passkey key files in the project's `trust/`, each signed by the service's key. */
@@ -175,7 +176,10 @@ export class Relay {
     }
     if (bytes.byteLength > MAX_FILE) return fail(413, `${path} is ${bytes.byteLength} bytes; the relay takes files up to ${MAX_FILE}`);
     const found = agentKind(path);
-    if (!found) return fail(403, notAgentWritten(path));
+    if (!found) {
+      const early = beforeLinkingKind(path);
+      return early ? this.uploadBeforeLinking(early, path, bytes, machine) : fail(403, notAgentWritten(path));
+    }
     if (!found.kind.mutable) {
       const there = this.files.read(path);
       if (there) {
@@ -192,6 +196,34 @@ export class Relay {
     }
     try {
       this.write(() => this.files.asMachine(machine, () => this.files.create(path, bytes)));
+    } catch (e) {
+      if (e instanceof NoKey) return fail(503, e.message);
+      throw e;
+    }
+    return { status: 201, body: { entry: receipt(this.files.entryOf(path)) } };
+  }
+
+  /**
+   * An answer, rule, topic merge or preference file from before the repo was linked (B-3zjjx), which a machine uploads at
+   * first link: taken only while nobody has answered on the website (`SqlFileStorage.answered`), checked as an upload is,
+   * and kept unsigned and apart (`SqlFileStorage.asBeforeLinking`). The relay's store counts it as B-45xz8 counts the
+   * record at the linking commit, so its card shows as decided; every other machine counts it only where its own record
+   * at the linking commit holds it.
+   */
+  private uploadBeforeLinking(found: { kind: Parameters<typeof uploadProblem>[0]; parts: string[] }, path: string, bytes: Uint8Array, machine: string): Reply {
+    const there = this.files.read(path);
+    if (there) {
+      return sameBytes(there, bytes)
+        ? { status: 200, body: { entry: receipt(this.files.entryOf(path)), unchanged: true } }
+        : fail(409, `${path} is already here, with other bytes: a file is written once, so it can't change`);
+    }
+    if (this.files.answered()) {
+      return { status: 403, body: { error: `${path} is from before linking, and someone has answered on the website since: the answers from before linking go up only before the first answer there (B-3zjjx). It stays in git, where it counts (B-45xz8).`, before_linking: "closed" } };
+    }
+    const problem = uploadProblem(found.kind, found.parts, path, bytes, this.store());
+    if (problem) return fail(problem.status, problem.error);
+    try {
+      this.write(() => this.files.asMachine(machine, () => this.files.asBeforeLinking(() => this.files.create(path, bytes))));
     } catch (e) {
       if (e instanceof NoKey) return fail(503, e.message);
       throw e;

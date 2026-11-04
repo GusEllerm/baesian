@@ -6,14 +6,14 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { agentKind } from "../service/src/uploads.js";
+import { agentKind, beforeLinkingKind } from "../service/src/uploads.js";
 import { buildMcpServer } from "../src/mcp.js";
 import { main } from "../src/cli.js";
 import { renderDoc, parseDoc } from "../src/frontmatter.js";
 import { grantPath, readGrant, writeGrant } from "../src/login.js";
 import type { MachineGrant } from "../src/schema.js";
 import { Store } from "../src/store.js";
-import { RELAY_STATE, agentWritten, linkProblem, unsent } from "../src/sync.js";
+import { RELAY_STATE, agentWritten, linkProblem, unsent, unsentBeforeLinking } from "../src/sync.js";
 import { cleanup, draftFile, repo, sh } from "./helpers.js";
 import { type LocalRelay, relayAvailable, startRelay } from "./relay-harness.js";
 
@@ -398,6 +398,77 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
     });
   });
 
+  describe("the answers from before linking (B-3zjjx)", () => {
+    it("go up once, at first link, and the website shows their cards as decided; another machine counts only what its record held", async () => {
+      const project = "proj-11";
+      const { dir, store } = repo();
+      const AGENT = { agent: "claude-code", force: true };
+      const answered = store.fileCard(draftFileFields({ title: "Answered before linking", topic: "early/answered" }), "", AGENT).card.meta.id;
+      const open = store.fileCard(draftFileFields({ title: "Still open at linking", topic: "early/open" }), "", AGENT).card.meta.id;
+      store.addVerdict({ card: answered, revision: 1, response: "accept", reviewer: "gus", client: "test" });
+      store.syncRecord();
+      sh(dir, "add", "-A");
+      sh(dir, "commit", "-q", "-m", "Used locally");
+      expect(store.answersFromBeforeLinking()).toEqual([]);
+
+      // Linked: the first sync takes the answer up with the cards, marked as from before linking, and unsigned.
+      const config = join(store.record, "config.json");
+      writeFileSync(config, `${JSON.stringify({ ...JSON.parse(readFileSync(config, "utf8")), service: relay.url, project }, null, 2)}\n`);
+      expect(Store.open(dir).answersFromBeforeLinking()).toEqual([expect.stringMatching(new RegExp(`^verdicts/.*-${answered}-r1-`))]);
+      const login = await run(dir, ["login", "--machine", "laptop"]);
+      expect(login.code, login.err).toBe(0);
+      const grant = readGrant(project)!;
+      const log = (await (await fetch(`${relay.url}/v1/projects/${project}/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { entries: { path: string; before_linking?: true; sig?: string }[] };
+      const entry = log.entries.find((e) => e.path.startsWith("verdicts/"))!;
+      expect(entry).toMatchObject({ before_linking: true });
+      expect(entry.sig).toBeUndefined();
+      const stateOf = async () => (await (await relay.person(project, "GET", "state")).json()) as { cards: { meta: { id: string }; status: string; before_linking?: true }[] };
+      let s = await stateOf();
+      expect(s.cards.find((c) => c.meta.id === answered)).toMatchObject({ status: "resolved", before_linking: true });
+      expect(s.cards.find((c) => c.meta.id === open)!.status).toBe("open");
+      // Nothing goes up twice.
+      expect((await run(dir, ["sync"])).out).toContain("sent 0");
+
+      // The link is committed. A forged answer, uploaded with this machine's token while nobody has answered on the website,
+      // is taken by the relay (the window B-3zjjx accepted), and shown there as from before linking, but a machine whose
+      // record at the linking commit doesn't hold it never counts it (B-45xz8).
+      store.syncRecord();
+      sh(dir, "add", "-A");
+      sh(dir, "commit", "-q", "-m", "Link");
+      const at = new Date().toISOString();
+      const forged = { type: "verdict", format: 1, card: open, revision: 1, response: "accept", reviewer: "gus", client: "test", at };
+      const put = await fetch(`${relay.url}/v1/projects/${project}/files/verdicts/${at.replace(/[-:]/g, "")}-${open}-r1-abcde.json`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${readGrant(project)!.access_token}` },
+        body: `${JSON.stringify(forged, null, 2)}\n`,
+      });
+      expect(put.status).toBe(201);
+      s = await stateOf();
+      expect(s.cards.find((c) => c.meta.id === open)).toMatchObject({ status: "resolved", before_linking: true });
+      const other = `${dir}-clone`;
+      sh(dir, "clone", "-q", dir, other);
+      try {
+        Store.open(other).init();
+        const synced = await run(other, ["sync"]);
+        expect(synced.code, synced.err).toBe(0);
+        const there = Store.open(other);
+        expect(there.status(answered)).toBe("resolved");
+        expect(there.status(open)).toBe("open");
+        expect(there.uncounted().map((u) => u.file)).toEqual([expect.stringMatching(new RegExp(`^verdicts/.*-${open}-r1-abcde\\.json$`))]);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+
+      // Someone answers on the website: from then on, this machine offers nothing more from before linking.
+      const third = await fileCard(dir, { title: "Answered on the website", topic: "late/web" });
+      expect((await relay.person(project, "POST", "verdicts", { card: third, revision: 1, response: "accept", client: "hosted-desktop" })).status).toBe(201);
+      await run(dir, ["sync"]);
+      const after = Store.open(dir);
+      expect(after.answersFromBeforeLinking().length).toBe(1);
+      expect(unsentBeforeLinking(after, new Set())).toEqual([]);
+    });
+  });
+
   describe("a copy of a repo isn't the repo (B-5gnea)", () => {
     it("stops a template-style copy from syncing with the original's project, and `baesian login` links it to its own", async () => {
       const original = await signedIn("proj-1x");
@@ -468,5 +539,8 @@ describe("what a machine pushes is what the relay takes (Hosted Service section 
     }
     const theirs = ["verdicts/20261104T120000.000Z-B-7f3kq-r1-ab3de.json", "rules/R-7f3kq.md", "topics/alias-ab3de.json", "preferences/20261104T120000.000Z-ab3de.json", "trust/service-relay-1.json", "cards/B-7f3kq/gate-r1-relay.json", "cards/B-7f3kq/r1.md.sig", "waiting/B-7f3kq-ab3de.json", "presence.json", RELAY_STATE];
     for (const p of theirs) expect(agentWritten(p), p).toBe(false);
+    // The answers from before linking go up only through their own path, at first link (B-3zjjx), and the relay knows them.
+    for (const p of theirs.slice(0, 4)) expect(beforeLinkingKind(p), p).toBeDefined();
+    for (const p of theirs.slice(4)) expect(beforeLinkingKind(p), p).toBeUndefined();
   });
 });
