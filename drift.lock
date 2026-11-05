@@ -58,12 +58,17 @@ sig = "c6905b99e0842ec1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "8379c209dfe89746"
+sig = "de30fcf4547a18e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -73,7 +78,7 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "d965cd752f49c8f2"
+sig = "cf8f6d758f66ac57"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -188,7 +193,7 @@ sig = "a4a7da08c9b89ef7"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/media.ts"
-sig = "f42786b6abf8d851"
+sig = "51bdddcf71e32596"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -319,6 +324,11 @@ sig = "cc49354e8d220f33"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts"
 sig = "a1e0dfd141d8a185"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/outbox.ts#Outbox"
+sig = "08edb50adba5b658"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -738,7 +748,7 @@ sig = "a17cdb3efd63752c"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/Card.tsx"
-sig = "8379c209dfe89746"
+sig = "de30fcf4547a18e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -928,12 +938,12 @@ sig = "b346b2b146c7c63e"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Card.tsx"
-sig = "8379c209dfe89746"
+sig = "de30fcf4547a18e7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1843,7 +1853,12 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
+
+[[bindings]]
+doc = "docs/vault/Design/Formats for v1.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2213,7 +2228,12 @@ sig = "a5338d35cdc4a5d6"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
+
+[[bindings]]
+doc = "docs/vault/Design/Hosted Service.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2743,7 +2763,12 @@ sig = "b882e1e10ecb2ca2"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
+
+[[bindings]]
+doc = "docs/vault/Design/Local Server.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -3308,12 +3333,12 @@ sig = "c507b690f701b5f2"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Panels.tsx"
-sig = "d965cd752f49c8f2"
+sig = "cf8f6d758f66ac57"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -3483,7 +3508,7 @@ sig = "0a89772213b8f642"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5488,7 +5513,12 @@ sig = "c6d222583ded5802"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "b99bc95584cd500c"
+sig = "a1567adbaa10095b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -6233,7 +6263,7 @@ sig = "b882e1e10ecb2ca2"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "client/src/Card.tsx"
-sig = "8379c209dfe89746"
+sig = "de30fcf4547a18e7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"

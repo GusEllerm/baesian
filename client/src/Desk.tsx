@@ -1,4 +1,4 @@
-import { AnimatePresence, type MotionStyle, animate, motion, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { AnimatePresence, type MotionStyle, type MotionValue, animate, motion, useDragControls, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApiAliasInput, ApiCard, ApiState } from "../../src/api";
 import { isOwnCard, suggestPreset } from "../../src/routing";
@@ -14,6 +14,7 @@ import { useNotifications } from "./notify";
 import { Outbox, postVerdictTo } from "./outbox";
 import { postAnswer, useEndpoints } from "./endpoints";
 import { ProofPrompt } from "./proof";
+import { LIFT_TILT, type LiftLabel, LiftSignals, type LiftLabels, answerLabel, choiceLabel, useLift } from "./Lift";
 import { PHONE, TOUCH, useMedia } from "./media";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path, type PathProps, flyToBar } from "./Path";
@@ -30,7 +31,8 @@ import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Surv
 // Preferences.tsx). While it's open, it says you're there
 // (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
 // design/explorations/round5/app.js. On a phone (D130), the card fills the screen and the path folds into a sheet you
-// pull up (Sheet.tsx); a card longer than the screen scrolls, so a vertical swipe on it scrolls rather than answers.
+// pull up (Sheet.tsx). On a touch screen (B-yfehp), a drag on a card scrolls, and a card is answered by holding it until
+// it lifts, then dragging it toward an answer (Lift.tsx); a mouse, and the desktop, drag it as before.
 
 /** How far a drag must go to choose: sideways, and up or down. */
 const THRESH_X = 150, THRESH_Y = 110;
@@ -49,11 +51,11 @@ const NUMBER = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
 /** The flight of your choice into the path, and the pause before the next card arrives. */
 const MOVE_MS = 700;
 type Dir = Side | "up" | "down";
-/**
- * Which ways the card can be dragged: all four, or, on a phone whose desk scrolls, only sideways, so a vertical swipe
- * scrolls the card as the two-finger swipe already does on a desktop (5f).
- */
-type Axis = true | "x";
+/** The answers a lifted card has (B-yfehp): the live card's four; the survey's two and "not sure"; the briefing's way on. */
+const ALL_WAYS: readonly Dir[] = ["left", "right", "up", "down"];
+const SURVEY_WAYS: readonly Dir[] = ["left", "right", "down"];
+const SIDEWAYS: readonly Dir[] = ["left", "right"];
+const NO_WAYS: readonly Dir[] = [];
 /** How the card on the desk leaves: toward the answer you gave, or, moving between cards or undoing, just fading. */
 type Leave = Dir | "fade";
 
@@ -598,20 +600,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const leaning = lean ?? handLean ?? hover;
   const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
 
-  // On a phone (D130). Whether the desk has somewhere to scroll: then a vertical swipe on the card scrolls it.
-  const [deskScrolls, setDeskScrolls] = useState(false);
-  useLayoutEffect(() => {
-    const desk = deskRef.current;
-    if (!phone || !desk) return setDeskScrolls(false);
-    const check = () => setDeskScrolls(desk.scrollHeight > desk.clientHeight + 1);
-    const ro = new ResizeObserver(check);
-    ro.observe(desk);
-    for (const child of desk.children) ro.observe(child);
-    check();
-    return () => ro.disconnect();
-  }, [phone]);
-  const axis: Axis = phone && deskScrolls ? "x" : true;
-  // Each new card, survey step or briefing starts at its top.
+  // On a phone (D130). Each new card, survey step or briefing starts at its top.
   const faceKey = setup ? `setup:${setup.step}:${setup.step === "ask" ? setup.i : ""}` : briefing ? `brief:${briefing.meta.id}` : current ? key : "empty";
   useLayoutEffect(() => {
     if (phone) deskRef.current?.scrollTo({ top: 0 });
@@ -792,14 +781,19 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                   key={setup.step === "ask" ? `setup:ask:${setup.i}` : `setup:${setup.step}`}
                   label={setup.step === "offer" ? "Setting up your preferences" : setup.step === "ask" && survey ? survey.items[setup.i]!.question : "The preset your answers suggest"}
                   exit={exitDir.current}
-                  axis={axis}
-                  {...(setup.step === "ask" ? { onSwipe: (dir: Side | "down") => setupAnswer(dir) } : {})}
+                  touch={touch}
+                  {...(setup.step === "ask" && survey
+                    ? {
+                        onSwipe: (dir: Side | "down") => setupAnswer(dir),
+                        labels: { left: choiceLabel(survey.see, "left"), right: choiceLabel(survey.fine, "right"), down: answerLabel("Not sure") },
+                      }
+                    : {})}
                 >
                   {(armed) =>
                     setup.step === "offer" ? (
                       <OfferFace count={survey?.items.length} onStart={setupStart} onAway={setupAway} />
                     ) : setup.step === "ask" && survey ? (
-                      <AskFace survey={survey} i={setup.i} armed={armed} onAnswer={setupAnswer} onSkip={() => setupAnswer("down")} onBack={setupBack} onAway={setupAway} />
+                      <AskFace survey={survey} i={setup.i} armed={armed} touch={touch} onAnswer={setupAnswer} onSkip={() => setupAnswer("down")} onBack={setupBack} onAway={setupAway} />
                     ) : setup.step === "result" && presets ? (
                       <ResultFace
                         presets={presets}
@@ -823,6 +817,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                   key={`brief:${briefing.meta.id}`}
                   deck={briefing}
                   waiting={ordered.filter((c) => c.meta.deck === briefing.meta.id).length}
+                  touch={touch}
                   titleOf={(id) => cards.get(id)?.meta.title}
                   onOpen={(id) => {
                     dismissBriefing();
@@ -834,7 +829,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                 <LiveCard
                   key={key}
                   exit={exitDir.current}
-                  axis={axis}
+                  touch={touch}
                   arriveAfter={fly && fly.key !== key ? MOVE_MS * 0.65 : 0}
                   lean={lean}
                   onMotion={showMotion}
@@ -915,7 +910,19 @@ function gesture(dx: number, dy: number): { dir: Dir; progress: number } {
 /** A two-finger swipe ends once the wheel events stop for this long; the next can't start for the cooldown. */
 const SWIPE_IDLE_MS = 110, SWIPE_COOLDOWN_MS = 650;
 
-/** One card on the desk, with its own motion: the lean, the drag, the swipe, and leaving toward the side you chose. */
+/**
+ * How strongly each option is picked out as the card moves: fully once it has moved as far as a drag's threshold takes
+ * it. A lifted card dragged up or down picks out neither (B-yfehp).
+ */
+function useSideLight(x: MotionValue<number>, y: MotionValue<number>, lifted: MotionValue<number>) {
+  const light = (sign: number) => ([vx = 0, vy = 0, l = 0]: number[]) => (l && Math.abs(vy) > Math.abs(vx) ? 0 : Math.max(0, Math.min(1, (sign * vx) / LEAN_X)));
+  return { pl: useTransform([x, y, lifted], light(-1)), pr: useTransform([x, y, lifted], light(1)) };
+}
+
+/**
+ * One card on the desk, with its own motion: the lean, the drag, the swipe, and leaving toward the side you chose. On a
+ * touch screen, held until it lifts, then dragged (B-yfehp, Lift.tsx).
+ */
 function LiveCard(p: {
   card: CardProps;
   lean: Side | undefined;
@@ -924,7 +931,7 @@ function LiveCard(p: {
   nudged: number;
   locked: boolean;
   exit: Leave;
-  axis: Axis;
+  touch: boolean;
   rarity: string;
   arriveAfter: number;
 }) {
@@ -933,12 +940,15 @@ function LiveCard(p: {
   const present = useIsPresent();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  // How strongly each option is picked out: fully once the card has moved as far as a drag's threshold takes it.
-  const pl = useTransform(x, [-LEAN_X, 0], [1, 0], { clamp: true });
-  const pr = useTransform(x, [0, LEAN_X], [0, 1], { clamp: true });
-  // The card tilts as it moves (round 5): about a degree at a full lean, and more as it leaves.
-  const rotate = useTransform(x, (v) => v * 0.06);
+  const scale = useMotionValue(1);
   const live = p.card.mode.kind === "live" && present;
+  const el = useRef<HTMLElement>(null);
+  // On a touch screen, a finger holds the card until it lifts; a mouse there drags it as on a desktop.
+  const controls = useDragControls();
+  const lift = useLift({ el, x, y, scale, touch: p.touch, dirs: live ? ALL_WAYS : NO_WAYS, onReach: p.card.onReach, reduced: !!reduced, onMouse: (e) => live && controls.start(e) });
+  const { pl, pr } = useSideLight(x, y, lift.lifted);
+  // The card tilts as it moves (round 5): about a degree at a full lean, and more as it leaves; lifted, less.
+  const rotate = useTransform([x, lift.lifted], ([v = 0, l = 0]: number[]) => v * (l ? LIFT_TILT : 0.06));
   // Read once, when the card arrives: clearing the flight must not restart its entrance without the pause.
   const [arriveAfter] = useState(p.arriveAfter);
 
@@ -950,22 +960,35 @@ function LiveCard(p: {
     onMotion(motionOf);
     return () => onMotion(undefined, motionOf);
   }, [present, motionOf, onMotion]);
-  // A drag or a swipe that leans the card lights the path as a held arrow does, from the card's own motion.
+  // A drag or a swipe that leans the card lights the path as a held arrow does, from the card's own motion. A lifted
+  // card lights it by the answer it's dragged toward, so a drag up or down lights neither side.
   const presentNow = useRef(present);
   presentNow.current = present;
-  useEffect(() => {
-    let side: Side | undefined;
-    const off = x.on("change", (v) => {
-      const next: Side | undefined = !presentNow.current ? undefined : v <= -LEAN_LIGHT ? "left" : v >= LEAN_LIGHT ? "right" : undefined;
-      if (next === side) return;
-      side = next;
+  const liftedNow = useRef(false);
+  liftedNow.current = !!lift.lift;
+  const leanSent = useRef<Side>(undefined);
+  const report = useCallback(
+    (next: Side | undefined) => {
+      if (leanSent.current === next) return;
+      leanSent.current = next;
       onHandLean(next);
+    },
+    [onHandLean],
+  );
+  useEffect(() => {
+    const off = x.on("change", (v) => {
+      if (!liftedNow.current) report(!presentNow.current ? undefined : v <= -LEAN_LIGHT ? "left" : v >= LEAN_LIGHT ? "right" : undefined);
     });
     return () => {
       off();
-      if (side) onHandLean(undefined);
+      report(undefined);
     };
-  }, [x, onHandLean]);
+  }, [x, report]);
+  const isLifted = !!lift.lift;
+  const liftedDir = lift.lift?.dir;
+  useEffect(() => {
+    if (isLifted) report(liftedDir === "left" || liftedDir === "right" ? liftedDir : undefined);
+  }, [isLifted, liftedDir, report]);
 
   useEffect(() => {
     // While you still have to read (D91), the card resists: it leans a third as far, as round 5's did.
@@ -976,7 +999,6 @@ function LiveCard(p: {
 
   // A two-finger swipe moves the card as a drag would, and chooses when it stops (round 5). Not React's onWheel,
   // which can't prevent scrolling. A vertical swipe scrolls the desk instead, if the desk has somewhere to scroll.
-  const el = useRef<HTMLElement>(null);
   // Where a drag or swipe that has gone far enough points: the card fills that answer in.
   const [armed, setArmed] = useState<Dir>();
   const arm = (dx: number, dy: number) => {
@@ -1037,6 +1059,13 @@ function LiveCard(p: {
     transition: { duration: reduced ? 0 : 0.22, ease: "easeIn" as const },
   });
 
+  // Lifted, the answer the card has reached is filled in on it too, as a drag's is.
+  const filled = lift.lift ? (lift.lift.armed ? lift.lift.dir : undefined) : armed;
+  const m = p.card.card.meta;
+  // While you still have to read (D91), letting go on an option only shakes the card, as a swipe did: its label says why.
+  const side = (s: Side): LiftLabel => (p.locked ? { ...choiceLabel(m[p.card.sides[s]], s), hint: "Read it first", letGo: "Read it first" } : choiceLabel(m[p.card.sides[s]], s));
+  const labels: LiftLabels = { left: side("left"), right: side("right"), up: answerLabel("Other answer"), down: answerLabel("Can't judge") };
+
   return (
     <motion.article
       ref={el}
@@ -1045,41 +1074,55 @@ function LiveCard(p: {
       data-mode={p.card.mode.kind}
       data-locked={p.locked || undefined}
       data-leaving={present ? undefined : true}
+      data-lift={lift.attr}
       inert={!present}
       aria-label={p.card.card.meta.question}
-      style={{ x, y, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      style={{ x, y, scale, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24, delay: reduced ? 0 : arriveAfter / 1000 } }}
       exit={out(p.exit)}
-      drag={live ? p.axis : false}
+      drag={live}
+      // On a touch screen, the drag starts only from a mouse (useLift's onMouse): a finger scrolls, or holds.
+      dragListener={!p.touch}
+      dragControls={controls}
       dragSnapToOrigin
       dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      // Sideways only, a vertical drag is the desk's to scroll: it never answers.
-      onDrag={(_e, info) => arm(info.offset.x, p.axis === "x" ? 0 : info.offset.y)}
+      onDrag={(_e, info) => arm(info.offset.x, info.offset.y)}
       onDragEnd={(_e, info) => {
         arm(0, 0);
-        const { dir, progress } = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
+        const { dir, progress } = gesture(info.offset.x, info.offset.y);
         const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
         if (progress >= 1 || (speed > 900 && progress > 0.3)) p.card.onReach(dir);
       }}
+      {...lift.handlers}
     >
       <div className="frame" aria-hidden="true" />
-      <Card {...p.card} {...(armed && live ? { armed } : {})} />
+      <Card {...p.card} {...(filled && live ? { armed: filled } : {})} />
+      {lift.lift && <LiftSignals labels={labels} lift={lift.lift} progress={lift.progress} />}
     </motion.article>
   );
 }
 
+/** The briefing card's way on, named at both sides of the screen while it's lifted (B-yfehp). */
+const ON_TO_CARDS = { name: "Go to its cards", tone: "ink", hint: "Go on", letGo: "Let go to go on" } as const;
+const BRIEFING_LABELS: LiftLabels = { left: ON_TO_CARDS, right: ON_TO_CARDS };
+
 /**
  * A deck's briefing, before the first of its cards you reach (B-j6b75): its briefing and context notes, then on to
- * the card with any arrow, Enter, a drag or a two-finger swipe. A vertical swipe scrolls a long briefing.
+ * the card with any arrow, Enter, a drag sideways or a two-finger swipe. A vertical swipe scrolls a long briefing. On a
+ * touch screen, a drag scrolls it, and holding it until it lifts, then dragging it sideways, goes on (B-yfehp).
  */
-function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; titleOf: (id: string) => string | undefined; onOpen: (id: string) => void; onDone: () => void }) {
+function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; touch: boolean; titleOf: (id: string) => string | undefined; onOpen: (id: string) => void; onDone: () => void }) {
   const reduced = useReducedMotion();
   const present = useIsPresent();
   const x = useMotionValue(0);
-  const rotate = useTransform(x, (v) => v * 0.06);
+  const y = useMotionValue(0);
+  const scale = useMotionValue(1);
   const el = useRef<HTMLElement>(null);
+  const controls = useDragControls();
+  const lift = useLift({ el, x, y, scale, touch: p.touch, dirs: present ? SIDEWAYS : NO_WAYS, onReach: () => p.onDone(), reduced: !!reduced, onMouse: (e) => present && controls.start(e) });
+  const rotate = useTransform([x, lift.lifted], ([v = 0, l = 0]: number[]) => v * (l ? LIFT_TILT : 0.06));
   const done = useRef(p.onDone);
   done.current = p.onDone;
   useEffect(() => {
@@ -1113,13 +1156,16 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; tit
       tabIndex={-1}
       className="card briefing-card"
       data-leaving={present ? undefined : true}
+      data-lift={lift.attr}
       inert={!present}
       aria-label={`The briefing for ${p.deck.meta.title}`}
-      style={{ x, rotate, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      style={{ x, y, scale, rotate, pointerEvents: present ? undefined : "none" } as MotionStyle}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
       exit={{ opacity: 0, y: -16, transition: { duration: reduced ? 0 : 0.2, ease: "easeIn" } }}
       drag={present ? "x" : false}
+      dragListener={!p.touch}
+      dragControls={controls}
       dragSnapToOrigin
       dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0 }}
@@ -1127,6 +1173,7 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; tit
         const far = Math.abs(info.offset.x) >= THRESH_X;
         if (far || (Math.abs(info.velocity.x) > 900 && Math.abs(info.offset.x) > THRESH_X * 0.3)) p.onDone();
       }}
+      {...lift.handlers}
     >
       <div className="frame" aria-hidden="true" />
       <div className="face">
@@ -1142,28 +1189,33 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; tit
           <p className="small">Shown once. The deck's name above each card opens it again.</p>
         </div>
       </div>
+      {lift.lift && <LiftSignals labels={BRIEFING_LABELS} lift={lift.lift} progress={lift.progress} />}
     </motion.article>
   );
 }
 
 /**
  * A card of the setup survey (B-5na1k), with the card's own gestures: an example decision is answered by dragging or a
- * two-finger swipe, sideways for its two answers or down for "not sure", as well as by the arrows and by clicking. The
- * offer and the suggestion are read and clicked.
+ * two-finger swipe, sideways for its two answers or down for "not sure", as well as by the arrows and by clicking; on a
+ * touch screen, by holding it until it lifts, then dragging it (B-yfehp). The offer and the suggestion are read and
+ * clicked.
  */
-function SetupCard(p: { label: string; exit: Leave; axis: Axis; onSwipe?: (dir: Side | "down") => void; children: (armed: Dir | undefined) => ReactNode }) {
+function SetupCard(p: { label: string; exit: Leave; touch: boolean; labels?: LiftLabels; onSwipe?: (dir: Side | "down") => void; children: (armed: Dir | undefined) => ReactNode }) {
   const reduced = useReducedMotion();
   const present = useIsPresent();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const rotate = useTransform(x, (v) => v * 0.06);
-  const pl = useTransform(x, [-LEAN_X, 0], [1, 0], { clamp: true });
-  const pr = useTransform(x, [0, LEAN_X], [0, 1], { clamp: true });
+  const scale = useMotionValue(1);
   const [armed, setArmed] = useState<Dir>();
   const el = useRef<HTMLElement>(null);
   const swipe = useRef(p.onSwipe);
   swipe.current = present ? p.onSwipe : undefined;
   const answer = (dir: Dir) => dir !== "up" && swipe.current?.(dir);
+  const draggable = present && !!p.onSwipe;
+  const controls = useDragControls();
+  const lift = useLift({ el, x, y, scale, touch: p.touch, dirs: draggable ? SURVEY_WAYS : NO_WAYS, onReach: answer, reduced: !!reduced, onMouse: (e) => draggable && controls.start(e) });
+  const { pl, pr } = useSideLight(x, y, lift.lifted);
+  const rotate = useTransform([x, lift.lifted], ([v = 0, l = 0]: number[]) => v * (l ? LIFT_TILT : 0.06));
   useEffect(() => {
     const node = el.current;
     if (!node) return;
@@ -1197,36 +1249,41 @@ function SetupCard(p: { label: string; exit: Leave; axis: Axis; onSwipe?: (dir: 
     opacity: 0,
     transition: { duration: reduced ? 0 : 0.22, ease: "easeIn" as const },
   });
-  const draggable = present && !!p.onSwipe;
+  const filled = lift.lift ? (lift.lift.armed ? lift.lift.dir : undefined) : armed;
   return (
     <motion.article
       ref={el}
       tabIndex={-1}
       className="card setup-card"
       data-leaving={present ? undefined : true}
+      data-lift={lift.attr}
       inert={!present}
       aria-label={p.label}
-      style={{ x, y, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
+      style={{ x, y, scale, rotate, "--pl": pl, "--pr": pr, pointerEvents: present ? undefined : "none" } as MotionStyle}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
       exit={out(p.exit)}
-      drag={draggable ? p.axis : false}
+      drag={draggable}
+      dragListener={!p.touch}
+      dragControls={controls}
       dragSnapToOrigin
       dragElastic={DRAG_ELASTIC}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       onDrag={(_e, info) => {
-        const g = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
+        const g = gesture(info.offset.x, info.offset.y);
         setArmed(g.progress >= 1 && g.dir !== "up" ? g.dir : undefined);
       }}
       onDragEnd={(_e, info) => {
         setArmed(undefined);
-        const { dir, progress } = gesture(info.offset.x, p.axis === "x" ? 0 : info.offset.y);
+        const { dir, progress } = gesture(info.offset.x, info.offset.y);
         const speed = dir === "left" || dir === "right" ? Math.abs(info.velocity.x) : Math.abs(info.velocity.y);
         if (progress >= 1 || (speed > 900 && progress > 0.3)) answer(dir);
       }}
+      {...lift.handlers}
     >
       <div className="frame" aria-hidden="true" />
-      {p.children(armed)}
+      {p.children(filled)}
+      {lift.lift && p.labels && <LiftSignals labels={p.labels} lift={lift.lift} progress={lift.progress} />}
     </motion.article>
   );
 }

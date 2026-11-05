@@ -3,6 +3,7 @@ import type { ApiCard, ApiState } from "../../src/api";
 import { isOwnCard } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
+import { LIFT_HINT } from "./Lift";
 import { Mark } from "./Mark";
 import { Prose, inline } from "./Prose";
 import { RARITY, type Rarity, type WaitState, agentOf, isHeld, quoted, replyOf, ruleName } from "./model";
@@ -59,7 +60,10 @@ export interface CardProps {
   onHover: (side: Side | undefined) => void;
   onHoldStart: () => void;
   onHoldEnd: () => void;
-  /** A screen you touch (D130): "press and hold", and a button back from the reveal, where there's no Esc. */
+  /**
+   * A screen you touch (D130): "press and hold", a button back from the reveal, where there's no Esc, and a line on how
+   * to hold the card and drag it (B-yfehp).
+   */
   touch?: boolean;
 }
 
@@ -278,11 +282,14 @@ function AskedToggle({ card, on, onChange }: { card: ApiCard; on: boolean | unde
 
 function Foot(p: CardProps) {
   const agent = agentOf(p.card);
+  // On a touch screen there are no arrows (B-yfehp): the line says how the card is answered by touch.
   const rule =
     p.readLeftMs > 0 ? (
       <>
         <b>Read it first:</b> {(p.readLeftMs / 1000).toFixed(1)}&nbsp;s
       </>
+    ) : p.touch ? (
+      `${LIFT_HINT} ${p.rarity === "mythic" ? "Then press and hold to confirm." : "You choose first."} ${agent}'s pick shows after.`
     ) : (
       `${p.rarity === "mythic" ? "Choose, then hold." : "You choose first."} ${agent}'s pick shows after.`
     );
@@ -291,7 +298,7 @@ function Foot(p: CardProps) {
       <span className="rule" data-testid="rule">
         {rule}
       </span>
-      {/* The arrows stay on a touch screen: they're the way to swipe, as well as the keys. */}
+      {/* The arrows are the keys, and say which way to drag: a touch screen has neither (style.css). */}
       <button type="button" className={p.armed === "up" ? "armed" : undefined} onClick={() => p.onReach("up")}>
         <kbd className="dir">↑</kbd> Other answer
       </button>

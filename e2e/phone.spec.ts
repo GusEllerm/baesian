@@ -11,8 +11,9 @@ import { Finger, PHONES, phone, shot } from "./touch.js";
 
 // The phone layout (D130): every screen at 390×844 and 360×740, portrait, with touch. The layout check (e2e/layout.ts)
 // and the 44 px touch targets on every screen; the card full width, the path folded into a sheet you pull up; answering
-// by tap, swipe and press-and-hold; writing with the keyboard open; nothing sideways; the notch's safe areas; reduced
-// motion. With BAESIAN_SHOTS set to a folder, each screen at 390×844 is saved there as a screenshot.
+// by tap, by holding a card until it lifts and dragging it (B-yfehp), and by press-and-hold; a drag that scrolls and
+// answers nothing; writing with the keyboard open; nothing sideways; the notch's safe areas; reduced motion. With
+// BAESIAN_SHOTS set to a folder, each screen at 390×844 is saved there as a screenshot, and a lifted card at both sizes.
 
 let server: RunningServer | undefined;
 test.afterEach(async () => {
@@ -216,8 +217,16 @@ for (const size of PHONES) {
       await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which library should parse dates in the import step?");
       await check(page, problems, "an example decision");
       await shot(page, "17-setup-example");
-      // Answered by swiping the card, as a decision is, and by tapping.
-      await finger.swipe(await finger.at(page.locator(`${CARD} h1`)), 220, 0);
+      // Answered as a decision is, by holding the card until it lifts, then dragging it (B-yfehp), and by tapping.
+      // Lifted, its two answers and "not sure" are named at their edges; up is no answer here.
+      await finger.hold(await finger.at(page.locator(`${CARD} h1`)));
+      await expect(page.locator(".lift-signals .sig.down b")).toHaveText("Not sure");
+      await expect(page.locator(".lift-signals .sig.up")).toHaveCount(0);
+      await check(page, problems, "an example decision, lifted");
+      await shot(page, "17b-setup-example-lifted", true);
+      await finger.move(130, 0);
+      await expect(page.locator(".lift-signals .sig.right")).toHaveClass(/armed/);
+      await finger.lift();
       await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Should the CI workflow cache installed packages between runs?");
       for (let i = 0; i < 5; i++) await page.locator(`${CARD} .opt[data-side="right"]`).tap();
       const result = page.getByRole("article", { name: "The preset your answers suggest" });
@@ -310,11 +319,18 @@ for (const size of PHONES) {
         answer(s, aside, { response: "defer", comment: "Later." });
       });
       const problems: string[] = [];
+      const finger = await Finger.on(page);
       const briefing = page.getByRole("article", { name: "The briefing for The storage layer" });
       await expect(briefing).toBeVisible();
       await check(page, problems, "a deck's briefing card");
       await shot(page, "27-briefing-card");
-      await briefing.getByRole("button", { name: /Go to its cards/ }).tap();
+      // Held until it lifts, then dragged aside, it goes on to its cards, as its button does (B-yfehp).
+      await finger.hold(await finger.at(briefing.locator("h1")));
+      await expect(page.locator(".lift-signals .sig b")).toHaveText(["Go to its cards", "Go to its cards"]);
+      await check(page, problems, "a deck's briefing card, lifted");
+      await shot(page, "27b-briefing-lifted", true);
+      await finger.move(-130, 0);
+      await finger.lift();
       await expect(page.getByRole("heading", { name: "Which store should hold run metadata?" })).toBeVisible();
       await page.locator(".crumbs").getByRole("button", { name: "The storage layer" }).tap();
       const deck = page.getByRole("complementary", { name: "The storage layer" });
@@ -332,6 +348,29 @@ for (const size of PHONES) {
       await expect(page.locator(".empty .parked")).toContainText("Put asideThe empty page");
       await check(page, problems, "the empty desk, with what's put aside");
       await shot(page, "29-empty-desk-put-aside");
+      expect(problems).toEqual([]);
+    });
+
+    test("a card held until it lifts fits the phone: the desk dimmed, each answer named at its edge, nothing clipped or too small (B-yfehp)", async ({ page }) => {
+      await open(page, (s) => {
+        file(s, { ...LONG, topic: "a/q" });
+        file(s);
+      });
+      const finger = await Finger.on(page);
+      const card = page.locator(CARD);
+      const problems: string[] = [];
+      await page.clock.fastForward(3100);
+      await finger.hold(await finger.at(card.locator(".crux")));
+      await expect(card).toHaveAttribute("data-lift", "lifted");
+      await expect(page.locator(".lift-signals .sig")).toHaveCount(4);
+      await check(page, problems, "a lifted card");
+      await shot(page, "32-lifted", true);
+      // Dragged toward an option, past its reach: lit, it says to let go.
+      await finger.move(-130, 0);
+      await expect(page.locator(".lift-signals .sig.left small")).toHaveText("Let go to choose");
+      await shot(page, "33-lifted-reached", true);
+      await finger.lift();
+      await expect(card).toHaveAttribute("data-mode", "reveal");
       expect(problems).toEqual([]);
     });
   });
@@ -356,42 +395,131 @@ const LONG = {
 test.describe("touch, 390×844", () => {
   test.use(phone({ width: 390, height: 844 }));
 
-  test("a swipe chooses sideways on any card; up and down answer a card that fits, and scroll one that doesn't", async ({ page }) => {
-    await open(page, (s) => {
-      file(s, { topic: "a1/q", question: "The short one?" });
-      file(s, { topic: "a2/q", ...LONG });
+  test("a drag scrolls and answers nothing, on a long card's text and on a short card; a hold that moves before the card lifts scrolls too (B-yfehp)", async ({ page }) => {
+    let short = "", long = "";
+    const { store } = await open(page, (s) => {
+      short = file(s, { topic: "a1/q", question: "The short one?" });
+      long = file(s, { topic: "a2/q", ...LONG });
     });
     const finger = await Finger.on(page);
     const card = page.locator(CARD);
     const desk = page.locator(".desk");
     const scrolls = () => desk.evaluate((d) => d.scrollHeight > d.clientHeight + 1);
+    const top = () => desk.evaluate((d) => d.scrollTop);
+    /** Until a fling has run out. */
+    const still = async () => {
+      let last = -1;
+      await expect.poll(async () => last === (last = await top()), { intervals: [150] }).toBe(true);
+    };
     await expect(card).toHaveAttribute("aria-label", "The short one?");
     expect(await scrolls()).toBe(false);
-    // Past the threshold, the option letting go would choose is filled in, and letting go chooses it.
-    await finger.swipe(await finger.at(card.locator(".crux")), 200, 0, { hold: true });
-    await expect(card.locator('.opt[data-side="right"]')).toHaveClass(/armed/);
-    await finger.lift();
-    await expect(card).toHaveAttribute("data-mode", "reveal");
-    await expect(card.locator('.opt[data-side="right"]')).toHaveClass(/chosen/);
-    await card.getByRole("button", { name: "Back to the choice" }).tap();
-    await finger.swipe(await finger.at(card.locator(".crux")), 0, -160);
-    await expect(card).toHaveAttribute("data-mode", "write");
-    await card.getByRole("button", { name: "Cancel" }).tap();
-    await finger.swipe(await finger.at(card.locator(".crux")), 0, 160);
-    await expect(card).toHaveAttribute("data-mode", "pass");
-    await card.getByRole("button", { name: "Cancel" }).tap();
-    // A short swipe answers nothing.
-    await finger.swipe(await finger.at(card.locator(".crux")), 60, 0);
-    await expect(card).toHaveAttribute("data-mode", "live");
+    // A card that fits: a drag any way answers nothing, though each was a swipe that answered before.
+    for (const [dx, dy] of [[200, 0], [-200, 0], [0, -160], [0, 160]] as const) {
+      await finger.swipe(await finger.at(card.locator(".crux")), dx, dy);
+      await expect(card).toHaveAttribute("data-mode", "live");
+    }
+    await expect(card).toHaveAttribute("data-lift", "ready");
 
+    // A long card: a drag on its text scrolls it, and sideways, on an option, does nothing.
     await reach(page, LONG.question, "The long one");
     await expect.poll(scrolls).toBe(true);
     await finger.swipe(await finger.at(card.locator("h1")), 0, -300, { clock: false });
-    await expect.poll(() => desk.evaluate((d) => d.scrollTop)).toBeGreaterThan(100);
+    await expect.poll(top).toBeGreaterThan(100);
     await expect(card).toHaveAttribute("data-mode", "live");
-    await finger.swipe(await finger.at(card.locator(".options")), -200, 0);
-    await expect(card).toHaveAttribute("data-mode", "reveal");
-    await expect(card.locator('.opt[data-side="left"]')).toHaveClass(/chosen/);
+    await finger.swipe(await finger.at(card.locator('.opt[data-side="left"] h2')), -200, 0);
+    await expect(card).toHaveAttribute("data-mode", "live");
+    // A hold that moves before the card lifts is a scroll: the finger rests 200 ms, then drags.
+    await still();
+    await desk.evaluate((d) => d.scrollTo(0, 0));
+    await finger.hold(await finger.at(card.locator("h1")), 200);
+    await finger.move(0, -300, { clock: false });
+    await finger.lift(false);
+    await expect.poll(top).toBeGreaterThan(100);
+    await expect(card).toHaveAttribute("data-mode", "live");
+    await expect(card).toHaveAttribute("data-lift", "ready");
+    await page.clock.fastForward(6000);
+    expect(store.verdicts(short)).toEqual([]);
+    expect(store.verdicts(long)).toEqual([]);
+  });
+
+  test("a card held until it lifts: each answer named at its edge; dragged to one, it answers as that swipe did; let go short of it, nothing; taps still answer; no arrows (B-yfehp)", async ({ page }) => {
+    let id = "";
+    const { store } = await open(page, (s) => {
+      id = file(s, { ...LONG });
+    });
+    const finger = await Finger.on(page);
+    const card = page.locator(CARD);
+    const desk = page.locator(".desk");
+    const sig = (d: string) => page.locator(`.lift-signals .sig.${d}`);
+    const at = async () => {
+      await desk.evaluate((d) => d.scrollTo(0, 0));
+      return finger.at(card.locator(".crux"));
+    };
+    await page.clock.fastForward(3100);
+    // No arrows on a touch screen, on the options or beside Other answer and Can't judge: the card says to hold it.
+    await expect(page.locator("kbd:visible")).toHaveCount(0);
+    await expect(card.getByTestId("rule")).toHaveText("Hold the card until it lifts, then drag it to an answer. You choose first. claude-code's pick shows after.");
+
+    // Held still, it rises, then lifts: the desk dims, and each answer is named at its edge of the screen.
+    await finger.hold(await at(), 200);
+    await expect(card).toHaveAttribute("data-lift", "pressing");
+    await page.clock.runFor(200);
+    await expect(card).toHaveAttribute("data-lift", "lifted");
+    await expect(page.locator(".lift-dim")).toBeVisible();
+    await expect(sig("left").locator("b")).toHaveText((await card.locator('.opt[data-side="left"] h2').textContent())!);
+    await expect(sig("right").locator("b")).toHaveText((await card.locator('.opt[data-side="right"] h2').textContent())!);
+    await expect(sig("up").locator("b")).toHaveText("Other answer");
+    await expect(sig("down").locator("b")).toHaveText("Can't judge");
+    await expect(sig("left").locator("small")).toHaveText("Choose");
+    // Let go where it lifted: put down, nothing chosen.
+    await finger.lift();
+    await expect(card).toHaveAttribute("data-lift", "ready");
+    await expect(page.locator(".lift-signals")).toHaveCount(0);
+    await expect(card).toHaveAttribute("data-mode", "live");
+    // Held on an option and let go there: the tap that ends it isn't a click on the option.
+    await finger.hold(await finger.at(card.locator('.opt[data-side="left"] h2')));
+    await finger.lift();
+    await expect(card).toHaveAttribute("data-mode", "live");
+    // Dragged short of an answer: lit, not reached, then put down.
+    await finger.hold(await at());
+    await finger.move(-50, 0);
+    await expect(sig("left")).toHaveClass(/\bon\b/);
+    await expect(sig("left")).not.toHaveClass(/armed/);
+    await finger.lift();
+    await expect(card).toHaveAttribute("data-mode", "live");
+
+    // Each way, past its reach: it says to let go, the page doesn't scroll, and letting go answers as that swipe did.
+    for (const [dir, dx, dy, mode] of [
+      ["left", -130, 0, "reveal"],
+      ["right", 130, 0, "reveal"],
+      ["up", 0, -130, "write"],
+      ["down", 0, 130, "pass"],
+    ] as const) {
+      await finger.hold(await at());
+      const scrolled = await desk.evaluate((d) => d.scrollTop);
+      await finger.move(dx, dy);
+      await expect(sig(dir)).toHaveClass(/armed/);
+      await expect(sig(dir).locator("small")).toHaveText(mode === "reveal" ? "Let go to choose" : "Let go to answer");
+      expect(await desk.evaluate((d) => d.scrollTop)).toBe(scrolled);
+      await finger.lift();
+      await expect(card).toHaveAttribute("data-mode", mode);
+      if (mode === "reveal") await expect(card.locator(`.opt[data-side="${dir}"]`)).toHaveClass(/chosen/);
+      await card.getByRole("button", { name: mode === "reveal" ? "Back to the choice" : "Cancel" }).tap();
+    }
+
+    // Taps still answer: Other answer and Can't judge, and an option, whose reveal confirms it.
+    await card.getByRole("button", { name: "Other answer" }).tap();
+    await expect(card).toHaveAttribute("data-mode", "write");
+    await card.getByRole("button", { name: "Cancel" }).tap();
+    await card.getByRole("button", { name: "Can't judge" }).tap();
+    await expect(card).toHaveAttribute("data-mode", "pass");
+    await card.getByRole("button", { name: "Cancel" }).tap();
+    expect(store.verdicts(id)).toEqual([]);
+    await card.locator('.opt[data-side="right"]').tap();
+    await expect(page.locator("kbd:visible")).toHaveCount(0);
+    await card.getByRole("button", { name: /Confirm/ }).tap();
+    await page.clock.fastForward(5100);
+    await expect.poll(() => store.verdicts(id).length).toBe(1);
   });
 
   test("a mythic card is pressed and held to confirm, letting go early doesn't answer, and undo is a tap (D67, D82)", async ({ page }) => {
@@ -400,6 +528,13 @@ test.describe("touch, 390×844", () => {
       id = file(s, { touches: ["security"], reverse: "one-way", wrong_if: "a page script reads it", check: "the client's scripts" });
     });
     const finger = await Finger.on(page);
+    // While its reading time runs (D91), a lifted card's options say so, and letting go on one chooses nothing.
+    await finger.hold(await finger.at(page.locator(`${CARD} .crux`)));
+    await expect(page.locator(".lift-signals .sig.left small")).toHaveText("Read it first");
+    await finger.move(-130, 0);
+    await expect(page.locator(".lift-signals .sig.left small")).toHaveText("Read it first");
+    await finger.lift();
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
     await page.clock.fastForward(3100);
     await page.locator(`${CARD} .opt[data-kind="proposal"]`).tap();
     const hold = page.locator(CARD).getByRole("button", { name: "Press and hold to confirm" });
@@ -428,16 +563,20 @@ test.describe("touch, 390×844", () => {
     const sheet = page.getByRole("dialog", { name: "Your path" });
     await expect(bar).toHaveText(/Your path\s*2 connected · 4 next/);
 
-    // Leaning toward the agent's pick names the rule it may break; the other option keeps to it.
+    // Leaning toward the agent's pick names the rule it may break; the other option keeps to it. A card held until it
+    // lifts leans as it's dragged (B-yfehp); short of its reach, letting go chooses nothing.
     await page.clock.fastForward(3100);
     const pick = (await page.locator(`${CARD} .opt[data-kind="proposal"]`).getAttribute("data-side")) === "left" ? -1 : 1;
-    await finger.swipe(await finger.at(page.locator(`${CARD} .crux`)), pick * 70, 0, { hold: true });
+    await finger.hold(await finger.at(page.locator(`${CARD} .crux`)));
+    await finger.move(pick * 70, 0);
     await expect(bar).toHaveText("✗ May break it: Never put secrets in URLs");
     await finger.lift();
     await expect(bar).toContainText("Your path");
-    await finger.swipe(await finger.at(page.locator(`${CARD} .crux`)), -pick * 70, 0, { hold: true });
+    await finger.hold(await finger.at(page.locator(`${CARD} .crux`)));
+    await finger.move(-pick * 70, 0);
     await expect(bar).toHaveText("✓ Keeps to it: Never put secrets in URLs");
     await finger.lift();
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
 
     await finger.swipe(await finger.at(bar), 0, -80);
     await expect(sheet).toBeVisible();
@@ -539,6 +678,37 @@ test.describe("touch, 390×844", () => {
     await expect(page.locator(".fly")).toHaveCount(0);
     await page.locator(".sheet-peek").tap();
     await expect(page.locator(".sheet")).toHaveCSS("animation-name", "none");
+  });
+});
+
+test.describe("touch, 390×844, with motion", () => {
+  test.use(phone({ width: 390, height: 844 }));
+
+  test("with motion, a held card rises as it lifts and the desk fades to dim; with reduced motion, it lifts at once (B-yfehp)", async ({ page }) => {
+    await open(page, (s) => void file(s), { clock: false, reduced: false });
+    const finger = await Finger.on(page);
+    const card = page.locator(CARD);
+    const scale = () => card.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+    await finger.hold(await finger.at(card.locator(".crux")), 120, false);
+    await expect.poll(scale).toBeGreaterThan(1);
+    await expect(card).toHaveAttribute("data-lift", "lifted");
+    await expect(page.locator(".lift-dim")).toHaveCSS("animation-name", "lift-in");
+    await expect.poll(scale).toBeCloseTo(1.035, 2);
+    await finger.lift(false);
+    await expect.poll(scale).toBeCloseTo(1, 2);
+    // Back where it rests, it turns and grows about its middle again, as when it leaves.
+    await expect.poll(() => card.evaluate((el) => (el as HTMLElement).style.transformOrigin)).toBe("");
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+    await expect(card).toBeVisible();
+    await finger.hold(await finger.at(card.locator(".crux")), 0, false);
+    expect(await scale()).toBe(1);
+    await expect(card).toHaveAttribute("data-lift", "lifted");
+    await expect(page.locator(".lift-dim")).toHaveCSS("animation-name", "none");
+    expect(await scale()).toBeCloseTo(1.035, 3);
+    await finger.lift(false);
+    expect(await scale()).toBe(1);
   });
 });
 

@@ -6,7 +6,10 @@ import { useCallback, useSyncExternalStore } from "react";
 
 /** Below this width, the card fills the screen and the path folds into a sheet you pull up. */
 export const PHONE = "(max-width: 760px)";
-/** A screen you touch, with no mouse or trackpad: no key hints, and "tap" and "press" rather than "click". */
+/**
+ * A screen you touch, with no mouse or trackpad: no key hints, "tap" and "press" rather than "click", and a card held
+ * until it lifts, then dragged, while a drag on it scrolls (B-yfehp, Lift.tsx).
+ */
 export const TOUCH = "(hover: none) and (pointer: coarse)";
 
 /** Whether a media query matches now, kept up to date. */
