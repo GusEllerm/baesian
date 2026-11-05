@@ -5232,13 +5232,13 @@ sig = "978db6f05d34272b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/facts.ts#detectFacts"
-sig = "30cf42d874b6d4e5"
+target = "src/facts.ts#configFact"
+sig = "8debf0611af25ee5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/facts.ts#linkFact"
-sig = "0bc02b8260ce1e60"
+target = "src/facts.ts#detectFacts"
+sig = "d16e0e68299033d1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -7723,7 +7723,7 @@ sig = "15c2f3e7784b36fb"
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
 target = "src/facts.ts"
-sig = "2dec46d61718ded5"
+sig = "f8808fada8080e84"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
@@ -7732,8 +7732,8 @@ sig = "f06728516d47c8f2"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
-target = "src/facts.ts#linkFact"
-sig = "0bc02b8260ce1e60"
+target = "src/facts.ts#configFact"
+sig = "8debf0611af25ee5"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"

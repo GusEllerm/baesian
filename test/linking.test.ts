@@ -47,7 +47,7 @@ describe("changing where a repo's cards go is a gate fact (B-w4g6c)", () => {
     expect(fact({ format: 1, ...LINK }, { format: 1 })).toEqual([`infra:${CONFIG_PATH}`]);
     expect(fact(undefined, { format: 1, ...LINK })).toEqual([`infra:${CONFIG_PATH}`]);
     expect(fact({ format: 1 }, { format: 1, vault: "docs" })).toEqual([]);
-    expect(fact({ format: 1, ...LINK }, { format: 1, ...LINK, gate_infra: ["deploy/**"] })).toEqual([]);
+    expect(fact({ format: 1, ...LINK }, { format: 1, ...LINK, vault: "docs" })).toEqual([]);
     expect(detectFacts(snapshot({}, {}, ".baesian/cards/B-7f3kq/r1.md")).facts).toEqual([]);
     // A repo's own gate_ignore can't hide it.
     expect(detectFacts(snapshot({ format: 1 }, { format: 1, ...LINK }), { ignore: [".baesian/config.json", "**"] }).facts.map((f) => f.id)).toEqual([`infra:${CONFIG_PATH}`]);

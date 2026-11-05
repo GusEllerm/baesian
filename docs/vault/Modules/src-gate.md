@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/facts.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, reads the trailers, decides coverage, and installs and runs the git hooks."
 created: 2026-10-23
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -32,7 +32,7 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 
 What counts as a signature is livedocs' rule: parameters, defaults, return types and class heritage. For constants, only a declared type annotation counts. Zod schema constants therefore aren't API facts: in this repo, format changes are caught by listing `src/schema.ts` in `gate_schema`.
 
-**The repo's link to the service (B-w4g6c, M9d).** A commit that changes the service, project or first commit in `.baesian/config.json` (`CONFIG_PATH`) is a fact, `infra:.baesian/config.json`, linking a repo first included, and unlinking it: changing where a repo's cards are sent takes the same sign-off as changing its CI. `linkFact()` (private) compares those three fields between the two versions, and runs before anything is ignored, so neither `DEFAULT_IGNORE`'s `.baesian/**` nor a repo's own `gate_ignore` hides it; the rest of the config and of `.baesian/` stays out of sight. The first commit is among them because it's what ties a checkout to its project (B-5gnea): changing it alone would let a copy sync with the original's. `baesian login` prints the ack that covers the fact when it links a repo (`linkAck()`, [[src-sync]]). CI's `baesian verify` reports it the same way, since it detects with `detectFacts()` too.
+**The repo's link to the service (B-w4g6c, M9d), and the gate's own settings (B-qkek1).** A commit that changes the service, project or first commit in `.baesian/config.json` (`CONFIG_PATH`) is a fact, `infra:.baesian/config.json`, linking a repo first included, and unlinking it: changing where a repo's cards are sent takes the same sign-off as changing its CI. So is a commit that adds, changes or removes any of the gate's own settings there (`gate_schema`, `gate_infra`, `gate_ignore`, `gate_api`): the stopgap B-qkek1 asked for, since on 2026-11-05 a commit that set `gate_ignore` to `["**"]` and added a dependency passed `baesian verify` with no card or ack. `configFact()` (private) compares those fields between the two versions, and runs before anything is ignored, so neither `DEFAULT_IGNORE`'s `.baesian/**` nor a repo's own `gate_ignore` hides it; the rest of the config and of `.baesian/` stays out of sight. Its detail says which: the link, the gate's settings, or both. The first commit is among the link's fields because it's what ties a checkout to its project (B-5gnea): changing it alone would let a copy sync with the original's. `baesian login` prints the ack that covers the fact when it links a repo (`linkAck()`, [[src-sync]]). CI's `baesian verify` reports it the same way, since it detects with `detectFacts()` too.
 
 `DEFAULT_IGNORE` (`node_modules`, `.baesian/`, vendor, fixtures) is never looked at. A rename counts when either the old or the new path is in scope. A manifest that doesn't parse produces a warning, not a guess. Globs come from `globToRegExp`.
 

@@ -44,7 +44,7 @@ Provenance: on 2026-11-05 the user asked how the preference gate would apply in 
 
 ## Two holes in the built gate
 
-1. **The gate's own settings are unguarded** (adversarial critic, confirmed by test on 2026-11-05): `gate_ignore`, `gate_schema`, `gate_infra` and `gate_api` sit in the committed `.baesian/config.json`, which `DEFAULT_IGNORE` keeps out of the gate's sight except for the link's fields (`linkFact()`). A commit setting `gate_ignore` to everything and adding a dependency, with no card or ack, passed `baesian verify` with this repo's real pinned keys; the control failed. Card B-qkek1. A profile file would be the same route, larger: anything that defines detectors, floors or rows must be out of an agent's reach, or pinned.
+1. **The gate's own settings are unguarded** (adversarial critic, confirmed by test on 2026-11-05): `gate_ignore`, `gate_schema`, `gate_infra` and `gate_api` sit in the committed `.baesian/config.json`, which `DEFAULT_IGNORE` keeps out of the gate's sight except for the link's fields. A commit setting `gate_ignore` to everything and adding a dependency, with no card or ack, passed `baesian verify` with this repo's real pinned keys; the control failed. Card B-qkek1, which the user accepted; its stopgap makes any change to a `gate_*` key a gate fact (`configFact()`, [[src-gate]]). A profile file would be the same route, larger: anything that defines detectors, floors or rows must be out of an agent's reach, or pinned.
 2. **Withdrawing a drawn card escapes its audit locally** (adversarial critic, not tested): the local draw is a public hash and the agent can see it. A drawn card withdrawn before it's answered should count against the source.
 
 ## What survives, by all four
