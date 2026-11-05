@@ -62,7 +62,10 @@ export async function reminder(input, run = baesian, reminded = remindedIn()) {
     return undefined;
   }
   if (!Array.isArray(cards)) return undefined;
-  const open = cards.filter((c) => c?.status === "open" || c?.status === "rerouted");
+  // In the order they were filed, which the agent knows them by; the ID only breaks a tie.
+  const open = cards
+    .filter((c) => c?.status === "open" || c?.status === "rerouted")
+    .sort((x, y) => String(x.created).localeCompare(String(y.created)) || String(x.id).localeCompare(String(y.id)));
   const seen = reminded.read(input.session_id);
   const key = (c) => `${c.id} r${c.revision}`;
   const fresh = open.filter((c) => !seen.has(key(c)));

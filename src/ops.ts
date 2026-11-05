@@ -218,7 +218,11 @@ export function deckWaitIds(s: Store, deck: string, agent: string): string[] {
   return s.view(() => {
     const attached = new Set(s.attachments().filter((a) => a.agent === agent).map((a) => a.card));
     const mine = s.branchCards().filter((c) => c.meta.deck === deck && (c.meta.source_agent === agent || attached.has(c.meta.id)));
-    const ids = mine.filter((c) => ["open", "rerouted"].includes(s.status(c.meta.id))).map((c) => c.meta.id);
+    // In the order they were filed, which the agent knows them by; the ID only breaks a tie.
+    const ids = mine
+      .filter((c) => ["open", "rerouted"].includes(s.status(c.meta.id)))
+      .sort((x, y) => x.meta.created.localeCompare(y.meta.created) || x.meta.id.localeCompare(y.meta.id))
+      .map((c) => c.meta.id);
     if (!ids.length) {
       throw new NotAllowed(`deck "${deck}" has no cards of yours still with the reviewer (filed or attached to by ${agent}, on this branch): nothing to wait on. \`baesian inbox\` has any answers you haven't seen.`);
     }

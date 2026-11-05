@@ -13,7 +13,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "plugins/baesian/hooks/turn-ended.mjs"
-sig = "d52db638aecff70b"
+sig = "5d3d19dadfa7aa88"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -2693,7 +2693,7 @@ sig = "780f3927f3747da4"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/ops.ts"
-sig = "df625c2364d17b2b"
+sig = "57468c9466e6645c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4633,7 +4633,7 @@ sig = "0285f459eecaca01"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts"
-sig = "df625c2364d17b2b"
+sig = "57468c9466e6645c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4668,7 +4668,7 @@ sig = "5a3ee01d0fd81ab3"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#deckWaitIds"
-sig = "8f876064a4065d6d"
+sig = "dee77a7741b72f60"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5268,7 +5268,7 @@ sig = "14ae8a7c312598a2"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts"
-sig = "df625c2364d17b2b"
+sig = "57468c9466e6645c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5288,7 +5288,7 @@ sig = "490d885df4320ce5"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#deckWaitIds"
-sig = "8f876064a4065d6d"
+sig = "dee77a7741b72f60"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5443,7 +5443,7 @@ sig = "004119e47a6f624a"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/ops.ts"
-sig = "df625c2364d17b2b"
+sig = "57468c9466e6645c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
