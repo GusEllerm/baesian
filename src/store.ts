@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { FolderStorage } from "./folder-storage.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { PATH_KEYS, PATH_KINDS, type PathKind, pathSetting } from "./gate-paths.js";
-import { type Repo, git, openRepo, slug } from "./git.js";
+import { type Repo, defaultBranch, git, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
 import {
   type AnyRow,
@@ -36,6 +36,7 @@ import {
   Cursor,
   FACT_PATTERN,
   DeckMeta,
+  DefaultBranch,
   Fallback,
   GateRecord,
   HARD_BY_DEFAULT,
@@ -84,6 +85,8 @@ export const RECORD_DIR = ".baesian";
 export const PERSONAL_CONFIG = "config.json";
 /** Personal mode: what the clone held of what a person writes when it was linked (`BeforeLinkingSnapshot`), in the live layer. */
 export const BEFORE_LINKING = "before-linking.json";
+/** The repo's default branch as a machine sent it (B-jr8mk, `DefaultBranch`): only on the relay, whose store has no git. */
+export const DEFAULT_BRANCH = "default-branch.json";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting", "merges"] as const;
 
@@ -1638,12 +1641,14 @@ export class Store {
   /**
    * Record that a branch merged into another (D181), as the hooks found it: `merges/<commit>-<key>.json`, named by the
    * commit and the merged branch (`mergeFile()`), so the same merge found twice, here or on another machine, is one file.
-   * Returns it, or undefined when that merge is recorded already. Live only: it goes to the relay, never the record.
+   * Returns it, or undefined when that merge is recorded already. Live only: it goes to the relay, never the record. A
+   * later fast-forward of the same branch lands at another commit, so it's a file of its own (B-w41p7): nothing is ever
+   * rewritten, and the relay takes it as it takes any new file.
    */
-  writeMerge(m: Omit<MergeEvent, "type" | "format">): MergeEvent | undefined {
+  writeMerge(m: Omit<z.input<typeof MergeEvent>, "type" | "format">): MergeEvent | undefined {
     this.requireInit();
     if (m.branch === m.into) throw new ValidationError(`a merge is of one branch into another, not ${m.branch} into itself`);
-    const event = parse(MergeEvent, { type: "merge", format: newestFormat("merge"), ...m, cards: [...new Set(m.cards)].sort() }, "the merge");
+    const event = parse(MergeEvent, { type: "merge", format: newestFormat("merge"), ...m, cards: [...new Set(m.cards ?? [])].sort(), commits: [...new Set(m.commits ?? [])] }, "the merge");
     const rel = mergeFile(event.commit, event.branch);
     if (this.storage.read(rel) !== undefined) return undefined;
     try {
@@ -1661,6 +1666,19 @@ export class Store {
       .filter((f) => f.endsWith(".json"))
       .flatMap((f) => this.read(`merges/${f}`, (t) => readAs("merge", MergeEvent, JSON.parse(t), `merges/${f}`)) ?? [])
       .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  // ---------------------------------------------------------------- the default branch (B-jr8mk)
+
+  /**
+   * The repo's default branch, the trunk the branches panel draws on top: on your machine, read from git each time
+   * (`defaultBranch()` in src/git.ts: the remote's HEAD, else `init.defaultBranch` where that branch exists, else the
+   * branch the first commit was made on); on the relay, whose store has no git, what a machine last sent
+   * (`DEFAULT_BRANCH`). Undefined when neither says.
+   */
+  defaultBranch(): string | undefined {
+    if (this.local) return defaultBranch(this.local.repo.toplevel)?.branch;
+    return this.read(DEFAULT_BRANCH, (t) => readAs("default-branch", DefaultBranch, JSON.parse(t), DEFAULT_BRANCH))?.branch;
   }
 
   /** Every rule, retired or not: a retired one carries its retirement (D119). In a hosted repo, only those signed (D138). */

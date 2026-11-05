@@ -15,7 +15,7 @@ tags: [baesian, design, hosted, privacy]
 
 ## The policy, as the page says it
 
-*Last changed 5 November 2026* (`POLICY_CHANGED`). Corrected on 2026-11-05 (B-nkbqs): it had said branch names never reach the service, but every card carries `source_branch`, written by the CLI; what's kept didn't change, only what the page says about it. Changed the same day for D181: the commits that cite cards and the merges the CLI finds go up to the service (their IDs, times, branches and cards, never a commit's subject or message), with how long each is kept; and a second correction, that a branch's deck, which names the branch, is kept while the project is, as decks always were.
+*Last changed 5 November 2026* (`POLICY_CHANGED`). Corrected on 2026-11-05 (B-nkbqs): it had said branch names never reach the service, but every card carries `source_branch`, written by the CLI; what's kept didn't change, only what the page says about it. Changed the same day for D181: the commits that cite cards and the merges the CLI finds go up to the service (their IDs, times, branches and cards, never a commit's subject or message), with how long each is kept; and a second correction, that a branch's deck, which names the branch, is kept while the project is, as decks always were. Changed again the same day for B-w41p7 and B-jr8mk: a merge also keeps the ID of the branch's commit that landed and the IDs of the commits citing cards it brought, and is kept until the text of every card those commits cite is removed too; and the name of the repository's default branch is kept, while the project exists. Both only add what the page lists; nothing new reaches the service but commit IDs it already had and one branch name.
 
 Baesian's hosted service, at baesian.dev, passes your coding agents' design decisions to you as cards, and your answers back to them. This page says what it keeps about you and your projects, why, for how long, who else handles it, and how to have it corrected or deleted.
 
@@ -44,7 +44,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 - Each project's name, as you typed it, and its random ID.
 - Each machine you approve with `baesian login`: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
 - What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.
-- What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; and for each merge of a branch with cards into another, the two branches, when, the ID of the merge's commit, and the cards it brought. A commit's subject and message, and what it changed, never reach the service.
+- What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; for each merge of a branch with cards, or with commits citing them, into another, the two branches, when, the ID of the merge's commit and of the branch's commit that landed, the cards it brought, and the IDs of the commits citing cards it brought; and the name of your repository's default branch, to show it as the trunk. A commit's subject and message, and what it changed, never reach the service.
 - What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.
 - While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.
 
@@ -55,7 +55,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 **What it doesn't keep:**
 - Your network address, which is used in passing to limit how often sign-in can be tried and to check for bots, then forgotten.
 - Passwords: there are none.
-- Your repository: its code, file paths and name never reach the service, nor any commit's subject or message. Only what an agent writes in a card does, with the name of the branch it was filed on, and, for the commits that cite cards and the merges that bring them, their IDs, times and branches.
+- Your repository: its code, file paths and name never reach the service, nor any commit's subject or message. Only what an agent writes in a card does, with the name of the branch it was filed on; for the commits that cite cards and the merges that bring them, their IDs, times and branches; and the name of its default branch.
 
 **In your browser:**
 - The sign-in cookie while you're signed in, and a second cookie for ten minutes during a Globus sign-in. No other cookies.
@@ -74,7 +74,8 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 | A card's text, held back by your settings and never answered | 90 days after it arrived. Then only its ID, times, sizes and level stay. |
 | A card's text, waiting for you | Until it's answered or withdrawn. |
 | A commit's ID, time and branch, for the card it cites | As long as that card's text: removed with it. |
-| A merge: its two branches, its time, its commit's ID and the cards it brought | Until the text of every card it brought is removed. One that brought only a branch's deck: while the project exists. |
+| A merge: its two branches, its time, the IDs of its commit, of the branch's commit that landed and of the commits citing cards it brought, and the cards it brought | Until the text of every card it brought is removed. One that brought commits citing cards: until the text of every card they cite is removed too. One that brought only a branch's deck: while the project exists. |
+| Your repository's default branch: its name | While the project exists. |
 | Your decks, each a branch's or a piece of work's, with its name | While the project exists. |
 | Your rules, topic merges and gate settings | While the project exists. |
 | Usage events | 90 days, then only daily totals, with no ID. |
@@ -126,7 +127,8 @@ When this policy changes, the date at the top changes. If a change affects what'
 - **Sign-ins:** a browser's name from `browserName()`, the lifetimes in `LIMITS` (`sessionIdleMs`, `sessionMaxMs`, `grantIdleMs`, `codeMs`). The cookies: `SESSION_COOKIE`, and the Globus round trip's ten-minute cookie (`service/src/globus.ts`).
 - **Nothing about where a sign-in came from** (B-7bq05): the address is passed to the rate limiter and Turnstile's siteverify (`turnstile()`) and never written.
 - **What the relay keeps:** `SqlFileStorage` and its log (`RelayEntry`); the machine's name on an entry (D162); an answer's handle, account, project and client (`Relay.verdict`); presence and waiting markers, stale after 90 seconds (`PRESENCE_STALE_MS`).
-- **The commits and merges (D181):** what a machine may send is `AGENT_KINDS` in `service/src/uploads.ts`: a ledger entry (`LedgerMeta`) only with a body that names nothing but the commit's short ID and the card (`isLedgerBody()`), so no subject or message, and the CLI offers only those (`plainLedger()`, [[src-sync]]); a merge (`MergeEvent`). How long: a ledger entry is its card's path (`cardOfPath()`), removed with its text without putting it off (`SqlFileStorage.cardsInLog`); a merge goes when every card it brought has (`Relay.sweep`). Decks are never removed by retention.
+- **The commits and merges (D181):** what a machine may send is `AGENT_KINDS` in `service/src/uploads.ts`: a ledger entry (`LedgerMeta`) only with a body that names nothing but the commit's short ID and the card (`isLedgerBody()`), so no subject or message, and the CLI offers only those (`plainLedger()`, [[src-sync]]); a merge (`MergeEvent`), whose `tip` and `commits` are commit IDs (B-w41p7). How long: a ledger entry is its card's path (`cardOfPath()`), removed with its text without putting it off (`SqlFileStorage.cardsInLog`); a merge goes when every card it brought has, and none of its commits has a ledger entry left (`Relay.sweep`). Decks are never removed by retention.
+- **The default branch (B-jr8mk):** `default-branch.json` in `AGENT_KINDS`, read through `DefaultBranch`, whose only field is `branch`, a name as git allows one (`BranchName`): no spaces or other text can ride in it. Mutable state on the relay, replaced by the next one sent, never logged, and gone with the project (`ProjectRelay`'s storage deleted whole).
 - **Retention:** `RETENTION` in `service/src/retention.ts` (B-9jqt4, B-ec3kj, B-dsqyd); usage events, `USAGE_RAW_DAYS`.
 - **Deleting an account:** B-b46z3, [[service#Deleting an account (service/src/deletion.ts)]].
 - **Notifications:** `pushText()` (counts and levels only, B-mjf3g), `encrypt()` (RFC 8291), `pushServiceAllowed()` (the four push services).

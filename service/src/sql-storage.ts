@@ -146,7 +146,8 @@ export class SqlFileStorage implements Storage {
   }
 
   // `replace` and `remove` do what they say to any path, as a folder and memory do: the store uses them only for its
-  // mutable files (presence, waiting markers, cursors), and a machine's uploads reach them only for waiting markers.
+  // mutable files (presence, waiting markers, cursors), and a machine's uploads reach them only for waiting markers and,
+  // replacing only, the repo's default branch (B-jr8mk).
 
   replace(path: string, bytes: Uint8Array): void {
     checkPath(path);

@@ -643,7 +643,8 @@ export const PRE_COMMIT_PULL_MS = 3000;
  * Find the merges a hook's movement of the branch made, and record each (D181): `post-merge` and `post-rewrite` from
  * where the branch was (`ORIG_HEAD`), `post-commit` from the commit's first parent, for a squash commit or a merge
  * whose conflicts were committed. Where the record isn't committed (personal mode), a plain commit can't merge anything,
- * so it isn't looked at. Never fails the hook. Returns how many it recorded.
+ * so it isn't looked at. A later fast-forward of a branch merged before is found as any movement is, and recorded at its
+ * own commit (B-w41p7). Never fails the hook. Returns how many it recorded.
  */
 function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-rewrite", io: HookIo): number {
   const top = store.repo.toplevel;
@@ -671,7 +672,8 @@ function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-r
     for (const f of findMerges(store, { into, from, to, ...(squashed ? { squashed } : {}), deep: hook !== "post-commit" })) {
       if (!store.writeMerge(f)) continue;
       n += 1;
-      say(io, text(`recorded ${f.branch} merged into ${f.into}${f.cards.length ? `, with ${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : ""} (${f.commit.slice(0, 7)})`));
+      const what = [f.cards.length ? `${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : "", f.commits.length ? `${f.commits.length} commit${f.commits.length === 1 ? "" : "s"} citing cards` : ""].filter(Boolean).join(" and ");
+      say(io, text(`recorded ${f.branch} merged into ${f.into}${what ? `, with ${what}` : ""} (${f.commit.slice(0, 7)})`));
     }
     return n;
   } catch (e) {

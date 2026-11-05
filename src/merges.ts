@@ -11,11 +11,17 @@ import type { Store } from "./store.js";
 //
 // - **The committed record** (shared mode, today's): a commit on A that brings into A's record cards whose
 //   `source_branch` is B, or B's deck, is the merge of B into A. It sees merge commits, squashes, fast-forwards and
-//   rebases alike, since the record moves with the code.
+//   rebases alike, since the record moves with the code. Since B-w41p7 it reads the ledger too: a commit made on B that
+//   cites a card, becoming reachable from A, is a merge of B even when it brings no card, as a later fast-forward of the
+//   same branch does.
 // - **The ledger** (personal mode, B-4rwyz, where the record isn't committed): a commit the ledger records as citing a
 //   card, made on B, becoming reachable from A means B merged into A. A squash or a rebase on another machine (GitHub's)
 //   makes new commits the ledger never saw: those are matched by patch ID, a commit's against each of B's, and against B's
 //   whole diff, for a squash.
+//
+// Each merge found names the tip that landed, and is checked against git's ancestry before it's written (B-w41p7): the
+// commits it brought are those reachable from that tip and not from where A was, and those of B's that cite cards are
+// listed in it, so the branches panel draws what's recorded, with no guess.
 //
 // It reads git and the live layer, and writes nothing but the squash marker; the hooks (src/hooks.ts) write what it finds.
 
@@ -31,26 +37,46 @@ export interface Moved {
   to: string;
   /** For a squash commit: the squashed commits, from the marker `post-merge` left (`squashMarker()`). */
   squashed?: { tip: string; commits: string[] };
-  /** Match by patch ID too, where the record isn't committed: only for a merge, a pull or a rebase, never a plain commit. */
+  /** Match by patch ID too: only for a merge, a pull or a rebase, never a plain commit. */
   deep?: boolean;
   /** When this is happening: a fast-forward's time, which git doesn't record. Default now. */
   now?: Date;
 }
 
-/** What the commits on A's first-parent line brought, oldest first: each one's cards, by the branch they came from. */
+/** What one branch brought at one commit on A's line. */
+interface Got {
+  /** Its cards that arrived: in shared mode those filed on it; where the record isn't committed, those its commits cite. */
+  cards: Set<string>;
+  /** Its commits that cite cards, as the ledger has them, that arrived. */
+  cited: Set<string>;
+  /** Its commit that landed, where that's known by content rather than by ancestry: a squash's tip, a patch-ID match. */
+  tip?: string;
+}
+
+/** What the commits on A's first-parent line brought, oldest first: what each brought, by the branch it came from. */
 interface Arrival {
   commit: string;
   parents: string[];
   /** When it was committed, as git says. */
   at: string;
-  /** Branch → the cards it brought. An empty set: only the branch's deck. */
-  by: Map<string, Set<string>>;
+  /** Branch → what it brought. Nothing but an empty `Got`: only the branch's deck. */
+  by: Map<string, Got>;
 }
+
+/** A commit's ledger entry, as merges read it: the card it cites, the branch it was made on, and when it was written. */
+interface Cite {
+  card: string;
+  branch: string;
+  at: string;
+}
+
+/** The ledger's entries by commit, read once a movement needs them. */
+type Ledger = () => Map<string, Cite[]>;
 
 /** The two ways to find merges (D181): from the committed record, or from the ledger. Each says what a movement brought. */
 export interface MergeDetector {
   readonly name: "record" | "ledger";
-  arrivals(store: Store, top: string, chain: Chain[], m: Moved): Arrival[];
+  arrivals(store: Store, top: string, chain: Chain[], m: Moved, ledger: Ledger): Arrival[];
 }
 
 /** A commit on the first-parent line: its ID, parents and committed time. */
@@ -133,65 +159,128 @@ function blobs(top: string, specs: string[]): (string | undefined)[] {
   return texts;
 }
 
-const field = (text: string | undefined, key: string): string | undefined => {
+const metaOf = (text: string | undefined): Record<string, unknown> | undefined => {
   if (!text) return undefined;
   try {
-    const v = (parseDoc(text).meta as Record<string, unknown>)[key];
-    return typeof v === "string" ? v : undefined;
+    return parseDoc(text).meta as Record<string, unknown>;
   } catch {
     return undefined;
   }
 };
 
-const add = (a: Arrival, branch: string, card?: string) => {
-  const s = a.by.get(branch) ?? new Set<string>();
-  if (card) s.add(card);
-  a.by.set(branch, s);
+const field = (text: string | undefined, key: string): string | undefined => {
+  const v = metaOf(text)?.[key];
+  return typeof v === "string" ? v : undefined;
 };
 
+const emptyGot = (): Got => ({ cards: new Set(), cited: new Set() });
+
+/** Note what a branch brought at an arrival: a card, a commit citing one, the tip that landed; nothing, for a deck. */
+const add = (a: Arrival, branch: string, what: { card?: string; cited?: string; tip?: string } = {}) => {
+  const got = a.by.get(branch) ?? emptyGot();
+  if (what.card) got.cards.add(what.card);
+  if (what.cited) got.cited.add(what.cited);
+  if (what.tip) got.tip = what.tip;
+  a.by.set(branch, got);
+};
+
+/** Fold one `Got` into another: a later tip replaces an earlier one. */
+const fold = (into: Got, got: Got) => {
+  for (const c of got.cards) into.cards.add(c);
+  for (const c of got.cited) into.cited.add(c);
+  if (got.tip) into.tip = got.tip;
+};
+
+/** Several detectors' arrivals as one list, in the line's order: what each found at the same commit, together. */
+function combine(chain: Chain[], ...lists: Arrival[][]): Arrival[] {
+  const at = new Map<string, Arrival>();
+  for (const list of lists) {
+    for (const a of list) {
+      let into = at.get(a.commit);
+      if (!into) at.set(a.commit, (into = { commit: a.commit, parents: a.parents, at: a.at, by: new Map() }));
+      for (const [branch, got] of a.by) {
+        const there = into.by.get(branch) ?? emptyGot();
+        fold(there, got);
+        into.by.set(branch, there);
+      }
+    }
+  }
+  return chain.flatMap((c) => at.get(c.commit) ?? []);
+}
+
+/** The ledger's arrivals with their cards taken out: where the record is committed, a merge's cards are the record's. */
+const commitsOnly = (arrivals: Arrival[]): Arrival[] =>
+  arrivals.map((a) => ({ ...a, by: new Map([...a.by].map(([b, g]) => [b, { ...g, cards: new Set<string>() }])) }));
+
+/** The record's folder, relative to the repo's top, with forward slashes. */
+const recordDir = (store: Store, top: string) => relative(top, store.record).split("\\").join("/");
+
 /**
- * The committed record (shared mode): the cards (each's first revision) and decks each commit on A's line added to the
- * record, compared with its first parent, by the branch each was filed on. A card attached to on A came in by
+ * The committed record's cards (shared mode): the cards (each's first revision) and decks each commit on A's line added
+ * to the record, compared with its first parent, by the branch each was filed on. A card attached to on A came in by
  * `baesian attach`, not a merge, so it's left out.
+ */
+function filedArrivals(store: Store, top: string, chain: Chain[], m: Moved): Arrival[] {
+  const rec = recordDir(store, top);
+  // Each commit's files added, against its first parent: one git call for the whole line.
+  const out = run(top, ["log", "--stdin", "--no-walk=unsorted", "--diff-merges=first-parent", "--name-only", "--diff-filter=A", `--relative=${rec}/`, "--format=%x1e%H"], `${chain.map((c) => c.commit).join("\n")}\n`) ?? "";
+  const added = new Map<string, { cards: string[]; decks: string[] }>();
+  for (const block of out.split("\x1e").slice(1)) {
+    const [commit = "", ...names] = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    const cards = names.flatMap((n) => /^cards\/(B-[^/]+)\/r1\.md$/.exec(n)?.[1] ?? []).filter((id) => CARD_ID.test(id));
+    const decks = names.filter((n) => /^decks\/[a-z0-9][a-z0-9-]*\.md$/.test(n));
+    if (cards.length || decks.length) added.set(commit, { cards, decks });
+  }
+  if (!added.size) return [];
+  // Who filed each: from the commit's own blobs, so a card this machine never had still counts.
+  const specs = [...added].flatMap(([commit, a]) => [...a.cards.map((id) => `cards/${id}/r1.md`), ...a.decks].map((p) => `${commit}:${rec}/${p}`));
+  const texts = new Map(blobs(top, specs).map((t, i) => [specs[i]!, t]));
+  const attached = (id: string) => store.attachments(id).some((x) => x.branch === m.into);
+  const arrivals: Arrival[] = [];
+  for (const c of chain) {
+    const a = added.get(c.commit);
+    if (!a) continue;
+    const arrival: Arrival = { ...c, by: new Map() };
+    // `baesian attach` copies the card, and its deck, into the record.
+    const byAttach = new Set<string>();
+    for (const id of a.cards) {
+      const branch = field(texts.get(`${c.commit}:${rec}/cards/${id}/r1.md`), "source_branch");
+      if (!branch || branch === m.into || notABranch(branch)) continue;
+      if (attached(id)) byAttach.add(branch);
+      else add(arrival, branch, { card: id });
+    }
+    for (const deck of a.decks) {
+      const branch = field(texts.get(`${c.commit}:${rec}/${deck}`), "branch");
+      if (branch && branch !== m.into && !notABranch(branch) && !byAttach.has(branch)) add(arrival, branch);
+    }
+    if (arrival.by.size) arrivals.push(arrival);
+  }
+  return arrivals;
+}
+
+/**
+ * The committed record (shared mode): the cards each commit on A's line brought into the record (`filedArrivals()`), and,
+ * since B-w41p7, the commits citing cards it made reachable, from the ledger, which are a merge even when they bring no
+ * card: a later fast-forward of the same branch is one. Cards that came at a commit no commit of their branch came with
+ * (a squash or a rebase made elsewhere) have their branch's commits matched by patch ID there, for the tip that landed.
  */
 export const RECORD: MergeDetector = {
   name: "record",
-  arrivals(store, top, chain, m) {
-    const rec = relative(top, store.record).split("\\").join("/");
-    // Each commit's files added, against its first parent: one git call for the whole line.
-    const out = run(top, ["log", "--stdin", "--no-walk=unsorted", "--diff-merges=first-parent", "--name-only", "--diff-filter=A", `--relative=${rec}/`, "--format=%x1e%H"], `${chain.map((c) => c.commit).join("\n")}\n`) ?? "";
-    const added = new Map<string, { cards: string[]; decks: string[] }>();
-    for (const block of out.split("\x1e").slice(1)) {
-      const [commit = "", ...names] = block.split("\n").map((l) => l.trim()).filter(Boolean);
-      const cards = names.flatMap((n) => /^cards\/(B-[^/]+)\/r1\.md$/.exec(n)?.[1] ?? []).filter((id) => CARD_ID.test(id));
-      const decks = names.filter((n) => /^decks\/[a-z0-9][a-z0-9-]*\.md$/.test(n));
-      if (cards.length || decks.length) added.set(commit, { cards, decks });
-    }
-    if (!added.size) return [];
-    // Who filed each: from the commit's own blobs, so a card this machine never had still counts.
-    const specs = [...added].flatMap(([commit, a]) => [...a.cards.map((id) => `cards/${id}/r1.md`), ...a.decks].map((p) => `${commit}:${rec}/${p}`));
-    const texts = new Map(blobs(top, specs).map((t, i) => [specs[i]!, t]));
-    const attached = (id: string) => store.attachments(id).some((x) => x.branch === m.into);
-    const arrivals: Arrival[] = [];
-    for (const c of chain) {
-      const a = added.get(c.commit);
-      if (!a) continue;
-      const arrival: Arrival = { ...c, by: new Map() };
-      // `baesian attach` copies the card, and its deck, into the record.
-      const byAttach = new Set<string>();
-      for (const id of a.cards) {
-        const branch = field(texts.get(`${c.commit}:${rec}/cards/${id}/r1.md`), "source_branch");
-        if (!branch || branch === m.into || notABranch(branch)) continue;
-        if (attached(id)) byAttach.add(branch);
-        else add(arrival, branch, id);
-      }
-      for (const deck of a.decks) {
-        const branch = field(texts.get(`${c.commit}:${rec}/${deck}`), "branch");
-        if (branch && branch !== m.into && !notABranch(branch) && !byAttach.has(branch)) add(arrival, branch);
-      }
-      if (arrival.by.size) arrivals.push(arrival);
-    }
-    return arrivals;
+  arrivals(store, top, chain, m, ledger) {
+    const filed = filedArrivals(store, top, chain, m);
+    // A plain commit brings no other branch's commits: the ledger is read for a merge, a squash or a movement only.
+    if (!m.deep && !m.squashed && chain.every((c) => c.parents.length < 2)) return filed;
+    const byCommit = ledger();
+    const direct = citedArrivals(top, chain, m, byCommit);
+    const came = new Set(direct.arrivals.flatMap((a) => [...a.by.keys()]));
+    const focus = new Map(
+      filed.flatMap((a) => {
+        const branches = [...a.by.keys()].filter((b) => !came.has(b));
+        return a.parents.length === 1 && branches.length ? [[a.commit, new Set(branches)] as const] : [];
+      }),
+    );
+    const matched = m.deep && focus.size ? patchArrivals(top, chain.filter((c) => focus.has(c.commit)), m, byCommit, (c) => focus.get(c)) : [];
+    return combine(chain, filed, commitsOnly(direct.arrivals), commitsOnly(matched));
   },
 };
 
@@ -201,17 +290,58 @@ function broughtBy(top: string, c: Chain): string[] {
   return (run(top, ["rev-list", `${c.parents[0]}..${c.commit}`]) ?? "").split("\n").filter(Boolean);
 }
 
-/** The ledger's entries by commit: the card each cites, and the branch it was made on (the card's, for a detached HEAD). */
-function ledgerByCommit(store: Store): Map<string, { card: string; branch: string }[]> {
-  const out = new Map<string, { card: string; branch: string }[]>();
-  for (const e of store.ledgerEntries()) {
-    const commit = e.meta.commit;
-    if (!commit) continue;
-    let branch = e.meta.branch;
-    if (branch.startsWith("detached-")) branch = store.revisions(e.meta.card)[0]?.meta.source_branch ?? branch;
-    out.set(commit, [...(out.get(commit) ?? []), { card: e.meta.card, branch }]);
+/**
+ * The ledger's entries by commit: the card each cites, the branch it was made on (the card's, for a detached HEAD), and
+ * when it was written. From the live layer; and where the record is committed, from the record at `recordAt` too
+ * (B-w41p7), for the entries another machine committed that this one hasn't pulled.
+ */
+function ledgerByCommit(store: Store, top: string, recordAt?: string): Map<string, Cite[]> {
+  const out = new Map<string, Cite[]>();
+  const seen = new Set<string>();
+  const put = (commit: unknown, card: unknown, branch: unknown, at: unknown) => {
+    if (typeof commit !== "string" || typeof card !== "string" || typeof branch !== "string" || typeof at !== "string") return;
+    let b = branch;
+    if (b.startsWith("detached-")) b = store.revisions(card)[0]?.meta.source_branch ?? b;
+    const key = `${commit} ${card} ${b}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.set(commit, [...(out.get(commit) ?? []), { card, branch: b, at }]);
+  };
+  for (const e of store.ledgerEntries()) put(e.meta.commit, e.meta.card, e.meta.branch, e.meta.at);
+  if (recordAt) {
+    const rec = recordDir(store, top);
+    const here = new Set(store.storage.list("ledger"));
+    const names = (run(top, ["ls-tree", "--name-only", `${recordAt}:${rec}/ledger`]) ?? "").split("\n").filter((n) => /^B-[^/]+\.md$/.test(n) && !here.has(n));
+    const texts = blobs(top, names.map((n) => `${recordAt}:${rec}/ledger/${n}`));
+    for (const text of texts) {
+      const meta = metaOf(text);
+      if (meta?.type === "ledger") put(meta.commit, meta.card, meta.branch, meta.at instanceof Date ? meta.at.toISOString() : meta.at);
+    }
   }
   return out;
+}
+
+/**
+ * The commits the ledger says cite cards, made on another branch, that each commit on A's line made reachable; a squash's
+ * commit brings the commits its marker names. And the commits that brought none and aren't the ledger's (`unmatched`),
+ * for matching by patch ID.
+ */
+function citedArrivals(top: string, chain: Chain[], m: Moved, byCommit: Map<string, Cite[]>): { arrivals: Arrival[]; unmatched: Chain[] } {
+  const arrivals: Arrival[] = [];
+  const unmatched: Chain[] = [];
+  for (const c of chain) {
+    const squash = m.squashed && c.commit === m.to ? m.squashed : undefined;
+    const brought = squash ? squash.commits : broughtBy(top, c);
+    const arrival: Arrival = { ...c, ...(squash ? { parents: [...c.parents, squash.tip] } : {}), by: new Map() };
+    for (const commit of brought) {
+      for (const e of byCommit.get(commit) ?? []) {
+        if (e.branch !== m.into && !notABranch(e.branch)) add(arrival, e.branch, { card: e.card, cited: commit, ...(squash ? { tip: squash.tip } : {}) });
+      }
+    }
+    if (arrival.by.size) arrivals.push(arrival);
+    else if (c.parents.length === 1 && !byCommit.has(c.commit)) unmatched.push(c);
+  }
+  return { arrivals, unmatched };
 }
 
 /** Patch IDs (`git patch-id --stable`) of commits, by commit; merges have none. */
@@ -238,65 +368,78 @@ function rangePatchId(top: string, base: string, tip: string): string | undefine
 const PATCH_LIMIT = { commits: 50, branches: 10, entries: 200 };
 
 /**
+ * Squashes and rebases made elsewhere, which make commits the ledger never saw: each of `commits` that matches, by patch
+ * ID, a ledger commit of another branch's not reachable from where A was (a rebase or cherry-pick of it, GitHub's "rebase
+ * and merge", a one-commit squash) brings that commit, which is the tip that landed; one that matches that branch's
+ * whole diff, from its merge base to its newest such commit (a squash), brings all of them, and that newest is the tip.
+ * `only` limits each commit to the branches it names.
+ */
+function patchArrivals(top: string, commits: Chain[], m: Moved, byCommit: Map<string, Cite[]>, only?: (commit: string) => Set<string> | undefined): Arrival[] {
+  const allowed = only ? new Set(commits.flatMap((c) => [...(only(c.commit) ?? [])])) : undefined;
+  const ours = (e: Cite) => e.branch !== m.into && !notABranch(e.branch) && (!allowed || allowed.has(e.branch));
+  const candidates = [...byCommit.entries()].filter(([, es]) => es.some(ours));
+  if (!candidates.length) return [];
+  const known = new Set((run(top, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], `${candidates.map(([c]) => c).join("\n")}\n`) ?? "").split("\n").flatMap((l) => (l.endsWith(" commit") ? [l.split(" ")[0]!] : [])));
+  const theirs = candidates.filter(([commit]) => known.has(commit)).slice(-PATCH_LIMIT.entries);
+  if (!theirs.length) return [];
+  const reached = new Set((run(top, ["rev-list", ...theirs.map(([c]) => c), "--not", m.from]) ?? "").split("\n").filter(Boolean));
+  const open = theirs.filter(([c]) => reached.has(c));
+  if (!open.length) return [];
+  const mine = commits.slice(-PATCH_LIMIT.commits);
+  const pids = patchIds(top, [...mine.map((c) => c.commit), ...open.map(([c]) => c)]);
+  const pidToLedger = new Map(open.flatMap(([c, es]) => (pids.get(c) ? [[pids.get(c)!, { commit: c, es }] as const] : [])));
+  // Each branch's newest open ledger commit, for its whole diff, with all of its open ones.
+  const tips = new Map<string, { commit: string; cards: Set<string>; cited: Set<string> }>();
+  for (const [c, es] of open) {
+    for (const e of es) {
+      if (!ours(e)) continue;
+      const t = tips.get(e.branch) ?? { commit: c, cards: new Set<string>(), cited: new Set<string>() };
+      t.commit = c;
+      t.cards.add(e.card);
+      t.cited.add(c);
+      tips.set(e.branch, t);
+    }
+  }
+  const branches = [...tips.entries()].slice(-PATCH_LIMIT.branches);
+  const out: Arrival[] = [];
+  for (const c of mine) {
+    const here = only?.(c.commit);
+    const may = (branch: string) => !here || here.has(branch);
+    const arrival: Arrival = { ...c, by: new Map() };
+    const pid = pids.get(c.commit);
+    const match = pid ? pidToLedger.get(pid) : undefined;
+    for (const e of match?.es ?? []) if (ours(e) && may(e.branch)) add(arrival, e.branch, { card: e.card, cited: match!.commit, tip: match!.commit });
+    if (!arrival.by.size && pid) {
+      for (const [branch, t] of branches) {
+        if (!may(branch)) continue;
+        const base = run(top, ["merge-base", c.parents[0]!, t.commit])?.trim();
+        if (base && rangePatchId(top, base, t.commit) === pid) {
+          for (const card of t.cards) add(arrival, branch, { card });
+          for (const cited of t.cited) add(arrival, branch, { cited });
+          add(arrival, branch, { tip: t.commit });
+          break;
+        }
+      }
+    }
+    if (arrival.by.size) out.push(arrival);
+  }
+  return out;
+}
+
+/**
  * The ledger (personal mode, B-4rwyz): the commits the ledger says cite cards, made on another branch, that each commit
  * on A's line made reachable. A squash commit with the marker brings the commits it squashed. With `deep` (a merge, a
- * pull or a rebase), a new commit that matches, by patch ID, a ledger commit of another branch's not reachable before
- * (a rebase or cherry-pick of it, GitHub's "rebase and merge", a one-commit squash), or that branch's whole diff (a
- * squash), brings that branch's cited cards too.
+ * pull or a rebase), a new commit that matches by patch ID one of another branch's ledger commits, or that branch's whole
+ * diff, brings that branch's cited cards too (`patchArrivals()`).
  */
 export const LEDGER: MergeDetector = {
   name: "ledger",
-  arrivals(store, top, chain, m) {
-    const byCommit = ledgerByCommit(store);
+  arrivals(_store, top, chain, m, ledger) {
+    const byCommit = ledger();
     if (!byCommit.size) return [];
-    const out: Arrival[] = [];
-    const unmatched: Chain[] = [];
-    for (const c of chain) {
-      const brought = m.squashed && c.commit === m.to ? m.squashed.commits : broughtBy(top, c);
-      const arrival: Arrival = { ...c, ...(m.squashed && c.commit === m.to ? { parents: [...c.parents, m.squashed.tip] } : {}), by: new Map() };
-      for (const commit of brought) for (const e of byCommit.get(commit) ?? []) if (e.branch !== m.into && !notABranch(e.branch)) add(arrival, e.branch, e.card);
-      if (arrival.by.size) out.push(arrival);
-      else if (c.parents.length === 1 && !byCommit.has(c.commit)) unmatched.push(c);
-    }
-    if (!m.deep || !unmatched.length) return out;
-    // Squashes and rebases made elsewhere: other branches' ledger commits not reachable from where A was.
-    const known = new Set((run(top, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], `${[...byCommit.keys()].join("\n")}\n`) ?? "").split("\n").flatMap((l) => (l.endsWith(" commit") ? [l.split(" ")[0]!] : [])));
-    const theirs = [...byCommit.entries()].filter(([commit, es]) => known.has(commit) && es.some((e) => e.branch !== m.into && !notABranch(e.branch))).slice(-PATCH_LIMIT.entries);
-    if (!theirs.length) return out;
-    const reached = new Set((run(top, ["rev-list", ...theirs.map(([c]) => c), "--not", m.from]) ?? "").split("\n").filter(Boolean));
-    const open = theirs.filter(([c]) => reached.has(c));
-    if (!open.length) return out;
-    const commits = unmatched.slice(-PATCH_LIMIT.commits);
-    const pids = patchIds(top, [...commits.map((c) => c.commit), ...open.map(([c]) => c)]);
-    const pidToLedger = new Map(open.flatMap(([c, es]) => (pids.get(c) ? [[pids.get(c)!, es] as const] : [])));
-    // Each branch's newest open ledger commit, for its whole diff.
-    const tips = new Map<string, { commit: string; cards: Set<string> }>();
-    for (const [c, es] of open) {
-      for (const e of es) {
-        if (e.branch === m.into || notABranch(e.branch)) continue;
-        const t = tips.get(e.branch) ?? { commit: c, cards: new Set<string>() };
-        t.commit = c;
-        t.cards.add(e.card);
-        tips.set(e.branch, t);
-      }
-    }
-    const branches = [...tips.entries()].slice(-PATCH_LIMIT.branches);
-    for (const c of commits) {
-      const arrival: Arrival = { ...c, by: new Map() };
-      const pid = pids.get(c.commit);
-      for (const e of (pid && pidToLedger.get(pid)) || []) if (e.branch !== m.into && !notABranch(e.branch)) add(arrival, e.branch, e.card);
-      if (!arrival.by.size && pid) {
-        for (const [branch, t] of branches) {
-          const base = run(top, ["merge-base", c.parents[0]!, t.commit])?.trim();
-          if (base && rangePatchId(top, base, t.commit) === pid) {
-            for (const card of t.cards) add(arrival, branch, card);
-            break;
-          }
-        }
-      }
-      if (arrival.by.size) out.push(arrival);
-    }
-    return out.sort((a, b) => chain.findIndex((c) => c.commit === a.commit) - chain.findIndex((c) => c.commit === b.commit));
+    const direct = citedArrivals(top, chain, m, byCommit);
+    if (!m.deep || !direct.unmatched.length) return direct.arrivals;
+    return combine(chain, direct.arrivals, patchArrivals(top, direct.unmatched, m, byCommit));
   },
 };
 
@@ -348,79 +491,123 @@ function whereReached(top: string, chain: Chain[], tip: string, squash?: string)
   return chain.find((c) => c.parents.length > 1 && run(top, ["merge-base", "--is-ancestor", tip, c.commit]) !== undefined && run(top, ["merge-base", "--is-ancestor", tip, c.parents[0]!]) === undefined);
 }
 
+/** A merge as found, before git's ancestry is checked (`landed()`). */
+interface Draft {
+  branch: string;
+  /** Where it landed on A's line, and when. */
+  commit: string;
+  at: string;
+  /** How `at` was told: a merge or squash commit's time, the moment it was found, or the time of the last commit it brought. */
+  dated: "git" | "now" | "commit";
+  got: Got;
+  /** The commit that landed from the branch's side. */
+  tip: string;
+  /** Where A was before it. */
+  base: string;
+}
+
+/**
+ * Check a merge against git's ancestry as it's written (B-w41p7): a commit is part of it if it's reachable from the tip
+ * that landed and wasn't reachable from A before. Those made on the merged branch that cite cards are its `commits`, oldest
+ * first; where the record isn't committed, the cards they cite are among its `cards`. One dated by the last commit it
+ * brought (found in a pull, after the fact) is dated no earlier than the ledger's entries for its commits, which are
+ * written as each commit is made, before anything can merge it.
+ */
+function landed(top: string, into: string, d: Draft, byCommit: Map<string, Cite[]>, citedCards: boolean): Found {
+  const range = run(top, ["rev-list", "--reverse", "--topo-order", d.tip, "--not", d.base]);
+  const reachable = range === undefined ? [...d.got.cited] : range.split("\n").filter(Boolean);
+  const mine = (c: string) => (byCommit.get(c) ?? []).filter((e) => e.branch === d.branch);
+  const commits = reachable.filter((c) => mine(c).length);
+  const cards = new Set(d.got.cards);
+  if (citedCards) for (const c of commits) for (const e of mine(c)) cards.add(e.card);
+  let at = d.at;
+  if (d.dated === "commit") {
+    for (const c of commits) for (const e of mine(c)) if (Date.parse(e.at) > Date.parse(at)) at = iso(e.at);
+  }
+  return { branch: d.branch, into, commit: d.commit, tip: d.tip, at, cards: [...cards].sort(), commits };
+}
+
 /**
  * The merges a movement of A made (D181), found the way the commit's tree says (`detectorFor()`):
  * - **when a branch came in by name** (`git merge feat`, a fast-forward to it, a rebase onto it, a squash of it): one
  *   merge of each such branch, at the commit that brought it (the merge or squash commit, or the tip a fast-forward or
- *   rebase moved to), with every card of its that arrived. Cards of other branches that came with it were merged into it
- *   first, not into A, so they're left out;
+ *   rebase moved to), with every card of its that arrived, and its tip, the ref's. Cards of other branches that came with
+ *   it were merged into it first, not into A, so they're left out;
  * - **otherwise** (a pull of A's own upstream, or nothing named): each merge commit on A's line is a merge into A of every
- *   branch whose cards it brought; and a run of other commits bringing one branch's cards (a fast-forward or a squash
- *   done elsewhere) is one merge, at the run's last commit.
- * Returns nothing for a detached HEAD, or when A didn't move forward.
+ *   branch whose cards or citing commits it brought, its other parent the tip; and a run of other commits bringing one
+ *   branch's (a fast-forward or a squash done elsewhere) is one merge, at the run's last commit, which is the tip.
+ * Each is checked against git's ancestry before it's returned (`landed()`, B-w41p7). A later fast-forward of a branch
+ * merged before brings its commits that cite cards, so it's a merge of its own, at its own commit; one that brings none
+ * of those, nor a card, isn't recorded. Returns nothing for a detached HEAD, or when A didn't move forward.
  */
 export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Found[] {
   if (!store.hasRepo || notABranch(m.into)) return [];
   const top = store.repo.toplevel;
   const chain = withUpstream(top, chainOf(top, m.from, m.to), m.into);
   if (!chain.length) return [];
-  // A card arrives once: where a pull merged A's own upstream, its line came first, and the pull's merge brings it again.
-  const seen = new Set<string>();
-  const arrivals = (detector ?? detectorFor(store, m.to)).arrivals(store, top, chain, m).flatMap((a) => {
-    for (const [branch, cards] of a.by) {
-      const fresh = [...cards].filter((c) => !seen.has(c));
-      for (const c of fresh) seen.add(c);
-      if (fresh.length) a.by.set(branch, new Set(fresh));
-      else if (cards.size) a.by.delete(branch);
+  const det = detector ?? detectorFor(store, m.to);
+  let read: Map<string, Cite[]> | undefined;
+  const ledger: Ledger = () => (read ??= ledgerByCommit(store, top, det === RECORD ? m.to : undefined));
+  // A card, or a commit citing one, arrives once: where a pull merged A's own upstream, its line came first, and the
+  // pull's merge brings it again.
+  const seenCards = new Set<string>();
+  const seenCited = new Set<string>();
+  const arrivals = det.arrivals(store, top, chain, m, ledger).flatMap((a) => {
+    for (const [branch, got] of a.by) {
+      const cards = [...got.cards].filter((c) => !seenCards.has(c));
+      const cited = [...got.cited].filter((c) => !seenCited.has(c));
+      for (const c of cards) seenCards.add(c);
+      for (const c of cited) seenCited.add(c);
+      if (got.cards.size + got.cited.size && !cards.length && !cited.length) a.by.delete(branch);
+      else a.by.set(branch, { ...got, cards: new Set(cards), cited: new Set(cited) });
     }
     return a.by.size ? [a] : [];
   });
   if (!arrivals.length) return [];
   const now = (m.now ?? new Date()).toISOString();
   const named = cameIn(top, m);
-  const found: Found[] = [];
+  const drafts: Draft[] = [];
   if (named) {
     for (const branch of named.names) {
-      const cards = new Set<string>();
-      let seen = false;
+      let got: Got | undefined;
       for (const a of arrivals) {
-        const got = a.by.get(branch);
-        if (!got) continue;
-        seen = true;
-        for (const c of got) cards.add(c);
+        const g = a.by.get(branch);
+        if (!g) continue;
+        got ??= emptyGot();
+        fold(got, g);
       }
-      if (!seen) continue;
+      if (!got) continue;
       const at = whereReached(top, chain, named.tips.get(branch)!, m.squashed ? m.to : undefined) ?? chain.at(-1)!;
       // A merge or squash commit says when; a fast-forward or a rebase onto the branch happened now.
-      const when = at.parents.length > 1 || m.squashed ? at.at : now;
-      found.push({ branch, into: m.into, commit: at.commit, at: when, cards: [...cards].sort() });
+      const byGit = at.parents.length > 1 || !!m.squashed;
+      drafts.push({ branch, commit: at.commit, at: byGit ? at.at : now, dated: byGit ? "git" : "now", got, tip: m.squashed?.tip ?? named.tips.get(branch)!, base: m.from });
     }
-    return found;
-  }
-  let run: { branch: string; last: Arrival; cards: Set<string> } | undefined;
-  const flush = () => {
-    if (run) found.push({ branch: run.branch, into: m.into, commit: run.last.commit, at: run.last.at, cards: [...run.cards].sort() });
-    run = undefined;
-  };
-  for (const a of arrivals) {
-    if (a.parents.length > 1) {
-      flush();
-      for (const [branch, cards] of a.by) found.push({ branch, into: m.into, commit: a.commit, at: a.at, cards: [...cards].sort() });
-      continue;
-    }
-    if (a.by.size !== 1 || (run && !a.by.has(run.branch))) flush();
-    for (const [branch, cards] of a.by) {
-      if (a.by.size > 1) {
-        found.push({ branch, into: m.into, commit: a.commit, at: a.at, cards: [...cards].sort() });
+  } else {
+    let span: { branch: string; first: Arrival; last: Arrival; got: Got } | undefined;
+    const flush = () => {
+      if (span) drafts.push({ branch: span.branch, commit: span.last.commit, at: span.last.at, dated: "commit", got: span.got, tip: span.got.tip ?? span.last.commit, base: span.first.parents[0] ?? m.from });
+      span = undefined;
+    };
+    for (const a of arrivals) {
+      if (a.parents.length > 1) {
+        flush();
+        for (const [branch, got] of a.by) drafts.push({ branch, commit: a.commit, at: a.at, dated: "git", got, tip: got.tip ?? a.parents[1]!, base: a.parents[0]! });
         continue;
       }
-      run ??= { branch, last: a, cards: new Set() };
-      run.last = a;
-      for (const c of cards) run.cards.add(c);
+      if (a.by.size !== 1 || (span && !a.by.has(span.branch))) flush();
+      for (const [branch, got] of a.by) {
+        if (a.by.size > 1) {
+          drafts.push({ branch, commit: a.commit, at: a.at, dated: "commit", got, tip: got.tip ?? a.commit, base: a.parents[0] ?? m.from });
+          continue;
+        }
+        span ??= { branch, first: a, last: a, got: emptyGot() };
+        span.last = a;
+        fold(span.got, got);
+      }
     }
+    flush();
   }
-  flush();
-  return found;
+  return drafts.map((d) => landed(top, m.into, d, ledger(), det === LEDGER));
 }
 
 // ---------------------------------------------------------------- the squash marker

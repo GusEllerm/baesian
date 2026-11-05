@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runHook } from "../src/hooks.js";
 import { LEDGER, RECORD, detectorFor } from "../src/merges.js";
 import type { MergeEvent } from "../src/schema.js";
+import { snapshot } from "../src/state.js";
 import { Store, mergeFile } from "../src/store.js";
 import { BODY, cleanup, draft, repo, sh } from "./helpers.js";
 
@@ -217,6 +219,8 @@ describe("finding merges from the ledger (D181, where the record isn't committed
     sh(dir, "pull", "-q", "--ff-only");
     await hook(dir, "post-merge", "0");
     expect(only(dir)).toMatchObject({ branch: "feat", into: "main", commit: head(dir), cards });
+    // B-w41p7: the tip that landed is feat's newest commit citing a card, and its commits are feat's, by its ancestry.
+    expect(only(dir)).toMatchObject({ tip: sh(dir, "rev-parse", "feat"), commits: [sh(dir, "rev-parse", "feat~2"), sh(dir, "rev-parse", "feat")] });
   });
 
   it("a rebase made elsewhere (GitHub's rebase and merge): each new commit matched by patch ID", async () => {
@@ -236,6 +240,8 @@ describe("finding merges from the ledger (D181, where the record isn't committed
     await hook(dir, "post-merge", "0");
     expect(only(dir)).toMatchObject({ branch: "feat", into: "main", cards });
     expect(sh(dir, "merge-base", "--is-ancestor", only(dir).commit, "HEAD")).toBe("");
+    // B-w41p7: the commits the rebased ones were made from, the newest of them the tip that landed.
+    expect(only(dir)).toMatchObject({ tip: sh(dir, "rev-parse", "feat"), commits: [sh(dir, "rev-parse", "feat~2"), sh(dir, "rev-parse", "feat")] });
   });
 
   it("a plain commit isn't looked at, where the record isn't committed", async () => {
@@ -243,5 +249,189 @@ describe("finding merges from the ledger (D181, where the record isn't committed
     work(dir, "plain.txt");
     await hook(dir, "post-commit");
     expect(merges(dir)).toEqual([]);
+  });
+});
+
+// B-w41p7: a merge names the tip that landed, and the commits citing cards it brought, checked against git's ancestry as
+// it's written (reachable from the tip, not from the target before); a later fast-forward of the same branch is a merge of
+// its own. With real git, the hooks run as git runs them.
+
+/** A commit on the branch checked out that cites a card, with `post-commit` run as git would: the ledger records it. */
+function citing(dir: string, card: string, name: string, date?: string): string {
+  writeFileSync(join(dir, name), `${name}\n`);
+  sh(dir, "add", name);
+  execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", `${name}\n\nBaesian-Card: ${card}`], { cwd: dir, env: { ...process.env, ...(date ? { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date } : {}) } });
+  void runHook(Store.open(dir), "post-commit", [], quiet);
+  return head(dir);
+}
+/** When the ledger says a commit was recorded. */
+const ledgerAt = (dir: string, commit: string) => Store.open(dir).ledgerEntries().find((e) => e.meta.commit === commit)!.meta.at;
+/** The state the branches panel reads (`snapshot()`), as `baesian serve` and the relay give it. */
+const panel = (dir: string) => snapshot(Store.open(dir), { version: 0, server: { started: new Date().toISOString(), watch: "poll" }, project: { name: "repo", branch: "main" } });
+
+/** A repo with the record committed, and on `feat` a card filed by a commit that cites it, committed at `date` if given. */
+function filedOnFeat(date?: string) {
+  const { dir } = repo();
+  sh(dir, "add", ".baesian");
+  sh(dir, "commit", "-q", "-m", "Set up Baesian");
+  const before = head(dir);
+  sh(dir, "checkout", "-q", "-b", "feat");
+  if (date) Object.assign(process.env, { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date });
+  try {
+    const id = fileAndCommit(dir, { cite: true });
+    return { dir, id, before, filed: head(dir) };
+  } finally {
+    delete process.env.GIT_COMMITTER_DATE;
+    delete process.env.GIT_AUTHOR_DATE;
+  }
+}
+
+describe("what a merge brought (B-w41p7)", () => {
+  it("a fast-forward, then seconds later another of more commits from the same branch: a merge of its own, at its own commit", async () => {
+    const { dir, id, filed } = filedOnFeat();
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    const first = only(dir);
+    expect(first).toMatchObject({ format: 1, branch: "feat", into: "main", commit: filed, tip: filed, cards: [id], commits: [filed] });
+    // The agent logs the card as answered, citing it, and notes something citing nothing; the branch is fast-forwarded again.
+    sh(dir, "checkout", "-q", "feat");
+    const log = citing(dir, id, "log.md");
+    work(dir, "notes.txt");
+    const tip = head(dir);
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    expect(said.at(-1)).toMatch(/recorded feat merged into main, with 1 commit citing cards/);
+    const all = merges(dir);
+    expect(all).toHaveLength(2);
+    // Its own file, at the commit it landed on: the first is as it was, since nothing is ever rewritten.
+    expect(all.find((m) => m.commit === tip)).toMatchObject({ branch: "feat", into: "main", tip, cards: [], commits: [log] });
+    expect(all.find((m) => m.commit === filed)).toEqual(first);
+    expect(Store.open(dir).storage.read(mergeFile(tip, "feat"))).toBeDefined();
+    // The state the panel reads says which merge each commit citing a card came in by: none is left unmerged.
+    const state = panel(dir);
+    const cited = state.commits!.filter((c) => c.branch === "feat").map((c) => c.commit);
+    expect(cited.sort()).toEqual([filed, log].sort());
+    for (const c of cited) expect(state.merges!.some((m) => m.commits?.includes(c))).toBe(true);
+    // A third fast-forward that brings no card and no commit citing one records nothing.
+    sh(dir, "checkout", "-q", "feat");
+    work(dir, "more.txt");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    expect(merges(dir)).toHaveLength(2);
+  });
+
+  it("a merge commit, then the branch takes it, carries on, and is fast-forwarded in: the follow-up brings only what's new", async () => {
+    const { dir, id, filed } = filedOnFeat();
+    sh(dir, "checkout", "-q", "main");
+    work(dir, "main-only.txt");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat");
+    const merged = head(dir);
+    await hook(dir, "post-merge", "0");
+    expect(only(dir)).toMatchObject({ commit: merged, tip: filed, cards: [id], commits: [filed] });
+    sh(dir, "checkout", "-q", "feat");
+    sh(dir, "merge", "-q", "--ff-only", "main");
+    await hook(dir, "post-merge", "0");
+    // main brought no card of its own and no commit citing one into feat: nothing to record.
+    expect(merges(dir)).toHaveLength(1);
+    const log = citing(dir, id, "log.md");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    expect(merges(dir).find((m) => m.commit === log)).toMatchObject({ branch: "feat", into: "main", tip: log, cards: [], commits: [log] });
+  });
+
+  it("the case the design loop found: a card's commit and one 25 s later, fast-forwarded together and found at a pull, are one merge with both", async () => {
+    // An hour ago, the card's commit; 25 s later, the log entry citing it, as 91e3781 came after f823982. The ledger
+    // records each as it's made: here, now.
+    const t0 = Date.now() - 3_600_000;
+    const { dir, id, before, filed } = filedOnFeat(new Date(t0).toISOString());
+    const log = citing(dir, id, "log.md", new Date(t0 + 25_000).toISOString());
+    const remote = realpathSync(mkdtempSync(join(tmpdir(), "baesian-remote-")));
+    const other = realpathSync(mkdtempSync(join(tmpdir(), "baesian-other-")));
+    dirs.push(remote, other);
+    sh(remote, "init", "-q", "--bare", "-b", "main");
+    sh(dir, "remote", "add", "origin", remote);
+    sh(dir, "push", "-q", "origin", "main", "feat");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "branch", "-q", "--set-upstream-to=origin/main", "main");
+    // The lead fast-forwards feat into main elsewhere, and the branch is deleted, here and there.
+    sh(other, "clone", "-q", remote, ".");
+    sh(other, "merge", "-q", "--ff-only", "origin/feat");
+    sh(other, "push", "-q", "origin", "main", ":feat");
+    sh(dir, "branch", "-q", "-D", "feat");
+    sh(dir, "update-ref", "-d", "refs/remotes/origin/feat");
+    sh(dir, "pull", "-q", "--ff-only");
+    expect(head(dir)).toBe(log);
+    await hook(dir, "post-merge", "0");
+    // Before B-w41p7 this merge was at the card's commit, dated by it, and the log entry was drawn after it, unmerged.
+    const m = only(dir);
+    expect(m).toMatchObject({ branch: "feat", into: "main", commit: log, tip: log, cards: [id], commits: [filed, log] });
+    expect(sh(dir, "rev-list", "--count", `${before}..${m.tip}`)).toBe("2");
+    // git doesn't date a fast-forward: it's no earlier than its last commit, nor than the ledger's entry for it.
+    expect(Date.parse(sh(dir, "log", "-1", "--format=%cI", log))).toBe(t0 + 25_000 - ((t0 + 25_000) % 1000));
+    expect(m.at).toBe(ledgerAt(dir, log));
+    const state = panel(dir);
+    for (const c of state.commits!) expect(state.merges![0]!.commits).toContain(c.commit);
+  });
+
+  it("a squash: the tip is the branch's that was squashed, and its commits are the squashed branch's that cite cards", async () => {
+    const { dir, cards } = shared({ cite: true });
+    sh(dir, "merge", "-q", "--squash", "feat");
+    await hook(dir, "post-merge", "1");
+    sh(dir, "commit", "-q", "-m", "Squashed feat");
+    await hook(dir, "post-commit");
+    expect(only(dir)).toMatchObject({ branch: "feat", into: "main", commit: head(dir), tip: sh(dir, "rev-parse", "feat"), cards, commits: [sh(dir, "rev-parse", "feat~2"), sh(dir, "rev-parse", "feat")] });
+  });
+
+  it("a squash made elsewhere, in shared mode: the record finds the cards, and feat's commits are matched by patch ID for the tip", async () => {
+    const { dir, cards } = shared({ cite: true });
+    const remote = realpathSync(mkdtempSync(join(tmpdir(), "baesian-remote-")));
+    const other = realpathSync(mkdtempSync(join(tmpdir(), "baesian-other-")));
+    dirs.push(remote, other);
+    sh(remote, "init", "-q", "--bare", "-b", "main");
+    sh(dir, "remote", "add", "origin", remote);
+    sh(dir, "push", "-q", "origin", "main", "feat");
+    sh(dir, "branch", "-q", "--set-upstream-to=origin/main", "main");
+    sh(other, "clone", "-q", remote, ".");
+    sh(other, "merge", "-q", "--squash", "origin/feat");
+    sh(other, "commit", "-q", "-m", "Squash and merge");
+    sh(other, "push", "-q", "origin", "main");
+    sh(dir, "pull", "-q", "--ff-only");
+    await hook(dir, "post-merge", "0");
+    expect(only(dir)).toMatchObject({ branch: "feat", into: "main", commit: head(dir), tip: sh(dir, "rev-parse", "feat"), cards, commits: [sh(dir, "rev-parse", "feat~2"), sh(dir, "rev-parse", "feat")] });
+  });
+
+  it("a rebase onto feat: its commits come in as they are, so they're found by ancestry, the tip feat's", async () => {
+    const { dir, cards } = shared({ cite: true });
+    work(dir, "main-only.txt");
+    sh(dir, "rebase", "-q", "feat");
+    await hook(dir, "post-rewrite", "rebase");
+    expect(only(dir)).toMatchObject({ branch: "feat", into: "main", commit: sh(dir, "rev-parse", "feat"), tip: sh(dir, "rev-parse", "feat"), cards, commits: [sh(dir, "rev-parse", "feat~2"), sh(dir, "rev-parse", "feat")] });
+  });
+
+  it("checks what it records against git's ancestry: a commit citing a card that the tip doesn't reach isn't listed", async () => {
+    const { dir, id, filed } = filedOnFeat();
+    // A second branch off feat, whose commit cites the card too, isn't merged.
+    sh(dir, "checkout", "-q", "-b", "feat-later");
+    const elsewhere = citing(dir, id, "elsewhere.md");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat");
+    await hook(dir, "post-merge", "0");
+    const m = only(dir);
+    expect(m.commits).toEqual([filed]);
+    expect(m.commits).not.toContain(elsewhere);
+    expect(sh(dir, "merge-base", "--is-ancestor", m.tip!, head(dir))).toBe("");
+  });
+
+  it("reads a merge recorded before B-w41p7, with no tip and no commits", () => {
+    const { dir } = repo();
+    const store = Store.open(dir);
+    const commit = "a".repeat(40);
+    store.storage.create(mergeFile(commit, "feat"), new TextEncoder().encode(`${JSON.stringify({ type: "merge", format: 1, branch: "feat", into: "main", commit, at: new Date().toISOString(), cards: [] })}\n`));
+    expect(store.merges()[0]).toMatchObject({ commit, commits: [] });
+    expect(store.merges()[0]).not.toHaveProperty("tip");
   });
 });

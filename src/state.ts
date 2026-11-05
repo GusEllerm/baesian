@@ -63,10 +63,12 @@ export function snapshot(store: Store, ctx: StateContext): ApiState {
       }
     }
     const presence = store.presence();
+    const defaultBranch = readDefaultBranch(store, problems);
     return {
       version: ctx.version,
       server: { ...(ctx.server.pid !== undefined ? { pid: ctx.server.pid } : {}), started: ctx.server.started, now: new Date(nowMs).toISOString(), watch: ctx.server.watch },
       project: ctx.project,
+      ...(defaultBranch ? { defaultBranch } : {}),
       ...(presence ? { presence } : {}),
       decks: store.decks().map((d) => ({ ...d, notes: notes(d.meta.context_notes) })),
       rules: store.rules(),
@@ -79,8 +81,22 @@ export function snapshot(store: Store, ctx: StateContext): ApiState {
 }
 
 /**
- * What the branches panel draws besides the cards (D181): the merges the hooks found, and the commits the ledger says cite
- * cards, each once: its ID, time, branch and card, never its subject.
+ * The repo's default branch (B-jr8mk), the trunk the branches panel draws on top: read from git on your machine, from
+ * what a machine sent on the relay (`Store.defaultBranch`). One that can't be read is left out, as the panel then guesses.
+ */
+function readDefaultBranch(store: Store, problems: ApiState["problems"]): string | undefined {
+  try {
+    return store.defaultBranch();
+  } catch (e) {
+    problems.push({ path: "default-branch.json", error: e instanceof Error ? e.message : String(e) });
+    return undefined;
+  }
+}
+
+/**
+ * What the branches panel draws besides the cards (D181): the merges the hooks found, each with the tip that landed and
+ * the commits citing cards it brought (B-w41p7), and the commits the ledger says cite cards, each once: its ID, time,
+ * branch and card, never its subject.
  */
 function branchesState(store: Store): Pick<ApiState, "merges" | "commits"> {
   const merges = store.merges().map(({ type: _t, format: _f, ...m }) => m);

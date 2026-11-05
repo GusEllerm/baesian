@@ -6,7 +6,7 @@ import { FolderStorage } from "../src/folder-storage.js";
 import { afterVerdict, proposeSliderMoves } from "../src/proposals.js";
 import { presets, snapshot } from "../src/state.js";
 import { MemoryStorage, type Storage, alreadyExists } from "../src/storage.js";
-import { NeedsRepo, NotAllowed, StalePreferences, Store } from "../src/store.js";
+import { DEFAULT_BRANCH, NeedsRepo, NotAllowed, StalePreferences, Store } from "../src/store.js";
 import { BODY, REVIEWER, cleanup, draft, memory, repo } from "./helpers.js";
 import { ORIGIN, TestPasskey, TestService } from "./service.js";
 
@@ -384,9 +384,12 @@ describe("the state the client reads (B-17wn9)", () => {
 
     const storage = new MemoryStorage();
     for (const rel of walk(store.live)) storage.create(rel, readFileSync(join(store.live, rel)));
+    // The default branch, which the folder's store reads from git, the relay's has as a machine sent it (B-jr8mk).
+    storage.replace(DEFAULT_BRANCH, new TextEncoder().encode(`${JSON.stringify({ type: "default-branch", format: 1, branch: store.defaultBranch() })}\n`));
     const relay = Store.over(storage, { branch: "main" });
 
     const local = snapshot(store, CONTEXT);
+    expect(local.defaultBranch).toBe("main");
     expect(local.cards.find((c) => c.meta.id === held)?.status).toBe("held");
     expect(local.cards.find((c) => c.meta.id === child)?.waiting).toHaveLength(1);
     expect(local.decks.find((d) => d.meta.id === "storage-layer")?.notes).toEqual([
