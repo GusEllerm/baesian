@@ -7,7 +7,7 @@ import { GATE_VERSION, type GateSource, TODAY, route } from "../src/routing.js";
 import type { GateRecord, PasskeyKey, PasskeyProof, Preferences, ServiceKey, Verdict } from "../src/schema.js";
 import { DRAW_NAMESPACE, NAMESPACE, opensshPublicKey, parseSignature, signMessage } from "../src/sshsig.js";
 import { type Store, proofPath, settingsOf } from "../src/store.js";
-import { type TrustRoot, drawMessage, parseTrust } from "../src/trust.js";
+import { type TrustRoot, drawMessage, parseTrust, projectLine } from "../src/trust.js";
 
 // A stand-in for the hosted service (M9a): it signs what a person writes with a test Ed25519 key, as the relay will
 // (D138, D160), and a test passkey makes WebAuthn assertions as a browser would (D139). Each file is written into the
@@ -104,9 +104,12 @@ export class TestService {
     };
   }
 
-  /** CI's pinned keys, as its protected settings hold them (`BAESIAN_TRUST`): one trust file's JSON per line. */
+  /**
+   * CI's pin, as its protected settings hold it (`BAESIAN_TRUST`): the project's line (B-mar8x), then one trust file's JSON
+   * per line.
+   */
   pin(...passkeys: TestPasskey[]): string {
-    return [this.serviceKey(), ...passkeys.map((p) => p.keyFile())].map((x) => JSON.stringify(x)).join("\n");
+    return [projectLine(this.project), ...[this.serviceKey(), ...passkeys.map((p) => p.keyFile())].map((x) => JSON.stringify(x))].join("\n");
   }
 
   pinned(...passkeys: TestPasskey[]): TrustRoot {

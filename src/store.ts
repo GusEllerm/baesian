@@ -186,7 +186,7 @@ export function signedFile(rel: string): boolean {
 export interface Hosted {
   root: TrustRoot;
   pinned: boolean;
-  /** The project the repo is linked to, from its config: a signed file counts only in its own (B-tf9fc). */
+  /** The project the repo is linked to, as CI pins it (B-mar8x), or else from its config: a signed file counts only in its own (B-tf9fc). */
   project: string | undefined;
 }
 
@@ -306,6 +306,12 @@ export class NeedsRepo extends Error {
  */
 export interface StoreTrust {
   pinned?: TrustRoot | null;
+  /**
+   * The record at the commit that linked the repo to the pinned project, found once from the tip CI checks and given to
+   * every commit's record (B-mar8x), or `null` when that history has none, so nothing unsigned counts as from before
+   * linking. Undefined: the store finds it in its own commit's history.
+   */
+  linking?: BeforeLinking | null;
 }
 
 /**
@@ -317,16 +323,29 @@ export const SHALLOW_HISTORY =
 
 /**
  * What was in the record at the commit that linked the repo (B-45xz8): its files' blob IDs by their path in the layer, or
- * why that can't be told. Before the link is committed, the record at the commit being checked stands in for it.
+ * why that can't be told. Before the link is committed, the record at the commit being checked stands in for it, on your
+ * machine.
  */
-type BeforeLinking = { commit: string; blobs: Map<string, string>; objectFormat: string } | { problem: string };
+export type BeforeLinking = { commit: string; blobs: Map<string, string>; objectFormat: string } | { problem: string };
 
-/** The record at the first commit in `rev`'s history whose config names `project` (B-45xz8), or at `rev` before there is one. */
-function recordAtLinking(top: string, rev: string, project: string): BeforeLinking | undefined {
+/** Why the commit that linked the repo can't be told (B-mar8x): two or more commits link it, none descending from another. */
+export function unclearLink(project: string, commits: string[]): string {
+  return `${commits.length} commits in this history link the repo to project ${project}, none descending from another (${commits.map((c) => c.slice(0, 12)).join(", ")}), so which one linked it can't be told, and nothing unsigned counts as from before linking (B-mar8x). One was made on a branch from before the link, or the link was committed again, by a cherry-pick or a rebase.`;
+}
+
+/**
+ * The record at the commit that linked the repo to `project` (B-45xz8): in `rev`'s history, the commit whose config names
+ * `project` and no ancestor of which names it. It's found by ancestry, never by commit dates, which anyone can set
+ * (B-mar8x). Two or more such commits, none descending from another, fail closed (`unclearLink()`). With none, the record
+ * at `rev` stands in for it when `standIn` says so (on your machine, before the link is committed); else there's none.
+ */
+export function recordAtLinking(top: string, rev: string, project: string, opts: { standIn: boolean }): BeforeLinking | undefined {
   const config = `${RECORD_DIR}/config.json`;
+  // The commits in the given commits' history that changed the config: a merge counts when it differs from its parents.
+  const changing = (revs: string[]) => git(top, ["rev-list", "--full-history", ...revs, "--", config]).split("\n").filter(Boolean);
   let changed: string[];
   try {
-    changed = git(top, ["log", "--full-history", "--reverse", "--format=%H", rev, "--", config]).split("\n").filter(Boolean);
+    changed = changing([rev]);
   } catch {
     return undefined; // no commits yet
   }
@@ -337,22 +356,30 @@ function recordAtLinking(top: string, rev: string, project: string): BeforeLinki
       return false;
     }
   };
-  let commit = changed.find(names);
+  const naming = new Set(changed.filter(names));
+  // A commit whose config names the project either changed the config, and is in `naming`, or has the config of a parent,
+  // which then names it too. So a commit has an ancestor naming the project exactly when one in `naming` is among them.
+  const first = [...naming].filter((c) => {
+    const parents = git(top, ["rev-list", "--parents", "-n", "1", c]).split(" ").slice(1);
+    return !parents.length || !changing(parents).some((a) => naming.has(a));
+  });
+  // A shallow clone's oldest commits seem to add every file: the real link may be further back.
+  let shallow: string[] = [];
+  try {
+    shallow = readFileSync(git(top, ["rev-parse", "--path-format=absolute", "--git-path", "shallow"]), "utf8").split("\n");
+  } catch {
+    // not shallow
+  }
+  if (first.some((c) => shallow.includes(c))) return { problem: SHALLOW_HISTORY };
+  if (first.length > 1) return { problem: unclearLink(project, first.sort()) };
+  let commit = first[0];
   if (commit === undefined) {
+    if (!opts.standIn) return undefined;
     try {
       commit = git(top, ["rev-parse", "--verify", "-q", `${rev}^{commit}`]);
     } catch {
       return undefined;
     }
-  } else {
-    // A shallow clone's oldest commits seem to add every file: the real link may be further back.
-    let shallow: string[] = [];
-    try {
-      shallow = readFileSync(git(top, ["rev-parse", "--path-format=absolute", "--git-path", "shallow"]), "utf8").split("\n");
-    } catch {
-      // not shallow
-    }
-    if (shallow.includes(commit)) return { problem: SHALLOW_HISTORY };
   }
   const blobs = new Map<string, string>();
   for (const entry of git(top, ["ls-tree", "-r", "-z", commit, "--", RECORD_DIR]).split("\0")) {
@@ -691,15 +718,16 @@ export class Store {
   /**
    * Whether this is a hosted repo, and the keys its answers are checked with (D138): CI's pinned keys whenever it pins
    * any (D142, D159), or else the service's keys in this layer, when it has any. The layer's passkey keys count only with
-   * the service's signature; revocations count wherever they are, since they only take trust away. Undefined outside a
-   * hosted repo, where nothing here changes anything.
+   * the service's signature; revocations count wherever they are, since they only take trust away. The project is the one
+   * CI pins beside the keys (B-mar8x), whatever the config says, or else the config's. Undefined outside a hosted repo,
+   * where nothing here changes anything.
    */
   hosted(): Hosted | undefined {
     if (this.session?.hosted) return this.session.hosted.value;
     const pinned = this.pinnedRoot();
     const files = this.trustFiles();
     const revoked = [...(pinned?.revoked ?? []), ...files.revoked.map((r) => r.key)];
-    const project = this.config().project;
+    const project = pinned?.project ?? this.config().project;
     let value: Hosted | undefined;
     if (pinned) value = { pinned: true, root: { service: pinned.service, passkeys: pinned.passkeys, revoked }, project };
     else if (files.service.length) {
@@ -720,17 +748,34 @@ export class Store {
   }
 
   /**
-   * The record at the commit that linked the repo (B-45xz8), found once: in this store's commit's history (HEAD's on your
-   * machine), the first whose config names the project. A store with no repo, as the relay's, has none.
+   * The record at the commit that linked the repo (B-45xz8), found once: the one given (CI's, found from the tip it
+   * checks, B-mar8x), or in this store's commit's history (HEAD's on your machine), by ancestry (`recordAtLinking()`). With
+   * keys pinned it's the pinned project's, and no record stands in before there's one: a commit can't make up its own
+   * linking commit. A store with no repo, as the relay's, has none.
    */
   private linking(): BeforeLinking | undefined {
     if (this.linkCache) return this.linkCache.value;
-    const project = this.config().project;
-    const value = this.local && project ? recordAtLinking(this.local.repo.toplevel, this.options.commit ?? "HEAD", project) : undefined;
+    let value: BeforeLinking | undefined;
+    const given = this.options.trust.linking;
+    if (given !== undefined) value = given ?? undefined;
+    else if (this.local) {
+      const pinned = this.pinnedRoot();
+      const project = pinned?.project ?? this.config().project;
+      if (project) value = recordAtLinking(this.local.repo.toplevel, this.options.commit ?? "HEAD", project, { standIn: !pinned });
+    }
     this.linkCache = { value };
     return value;
   }
   private linkCache?: { value: BeforeLinking | undefined };
+
+  /**
+   * The commit that linked the repo, whose record holds the answers from before linking (B-45xz8), or why it can't be
+   * told: in a shallow clone, or with two in the history (B-mar8x). Undefined when there's none.
+   */
+  linkingCommit(): { commit: string } | { problem: string } | undefined {
+    const b = this.linking();
+    return b && ("problem" in b ? { problem: b.problem } : { commit: b.commit });
+  }
 
   /**
    * An unsigned file a person wrote counts as it is when it was in the record, with these bytes, at the commit that linked

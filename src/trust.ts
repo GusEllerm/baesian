@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { z } from "zod";
 import { BadSignature, DRAW_NAMESPACE, NAMESPACE, parseSignature, publicKeyBlob, signatureMatches } from "./sshsig.js";
-import { type FileKindName, NewerFormat, PasskeyKey, ServiceKey, ServiceKeyRevocation, describeError, upgradeFile } from "./schema.js";
+import { type FileKindName, NewerFormat, PasskeyKey, PinnedProject, ServiceKey, ServiceKeyRevocation, describeError, newestFormat, upgradeFile } from "./schema.js";
 
 // The keys `baesian verify` and the commit gate trust in a hosted repo (D138, D142, D159), and the checks made with them.
-// In CI, the keys are pinned in CI's own settings, outside the repo, where a commit can't change them; the record keeps a
-// copy for checks on your machine, and the two must agree. docs/vault/Modules/src-trust.md describes it.
+// In CI, the keys are pinned in CI's own settings, outside the repo, where a commit can't change them, with the repo's
+// project beside them (B-mar8x); the record keeps a copy of the keys for checks on your machine, and the two must agree.
+// docs/vault/Modules/src-trust.md describes it.
 
-/** CI's pinned keys: the trust files' JSON, one per line (D142, D159). */
+/** CI's pin: the trust files' JSON, one per line (D142, D159), and the line naming the repo's project (B-mar8x). */
 export const TRUST_ENV = "BAESIAN_TRUST";
 /** Or a path to a file of the same lines, for a protected file on a CI runner. */
 export const TRUST_FILE_ENV = "BAESIAN_TRUST_FILE";
@@ -17,6 +18,8 @@ export interface TrustRoot {
   service: ServiceKey[];
   revoked: ServiceKeyRevocation[];
   passkeys: PasskeyKey[];
+  /** The repo's project, as CI pins it beside the keys (B-mar8x). Only a pin names one, and a pin must. */
+  project?: string;
 }
 
 /** The pinned keys are unreadable: CI is misconfigured, and that must stop the check, never switch it off. */
@@ -45,40 +48,75 @@ export function addTo(root: TrustRoot, f: ServiceKey | ServiceKeyRevocation | Pa
   else root.passkeys.push(f);
 }
 
-/** Pinned keys from text: one trust file's JSON per line; blank lines and lines starting with `#` are skipped. */
+/** What to do about a pin that's empty, or lacks a line it needs: `baesian ci` prints every line (B-pt52b). */
+export const RUN_CI = "run `baesian ci` in the linked repo, and set it to the lines it prints";
+
+/** The pin's line naming the repo's project (B-mar8x), as `baesian ci` prints it: compact JSON, as each key's line is. */
+export function projectLine(project: string): string {
+  return JSON.stringify(PinnedProject.parse({ type: "project", format: newestFormat("project"), project }));
+}
+
+/** Set a pin's project from one of its lines: a pin names one project, however many of its lines name it. */
+function pinProject(root: TrustRoot, project: string, where: string): void {
+  if (root.project !== undefined && root.project !== project) {
+    throw new BadTrust(`${where} names project ${project}, but the pin already names ${root.project}: a pin names one project, the repo's (B-mar8x)`);
+  }
+  root.project = project;
+}
+
+/**
+ * A pin from text: one trust file's JSON per line, and the line naming the repo's project (`PinnedProject`, B-mar8x);
+ * blank lines and lines starting with `#` are skipped.
+ */
 export function parseTrust(text: string, where: string): TrustRoot {
   const root: TrustRoot = { service: [], revoked: [], passkeys: [] };
   text.split(/\r?\n/).forEach((line, i) => {
     const l = line.trim();
     if (!l || l.startsWith("#")) return;
+    const at = `${where}, line ${i + 1}`;
     let fields: unknown;
     try {
       fields = JSON.parse(l);
     } catch {
-      throw new BadTrust(`${where}, line ${i + 1}, isn't JSON: each line is one trust file's JSON`);
+      throw new BadTrust(`${at}, isn't JSON: each line is one trust file's JSON, or the project's`);
     }
-    addTo(root, readTrustFile(fields, `${where}, line ${i + 1}`));
+    if (typeof fields === "object" && fields !== null && (fields as { type?: unknown }).type === "project") {
+      const parsed = PinnedProject.safeParse(upgradeFile("project", fields, at));
+      if (!parsed.success) throw new BadTrust(`${at} is not valid:\n${describeError(parsed.error)}`);
+      pinProject(root, parsed.data.project, at);
+      return;
+    }
+    addTo(root, readTrustFile(fields, at));
   });
   return root;
 }
 
-/** A pin must hold the service's key: one with only passkeys would check nothing the service signs. */
-function needsServiceKey(root: TrustRoot, where: string): TrustRoot {
-  if (!root.service.length) throw new BadTrust(`${where} pins no service key: give at least the service's key (D142)`);
-  return root;
+/**
+ * A pin must hold the service's key, since one with only passkeys would check nothing the service signs; and the repo's
+ * project, since a commit can name another in its config (B-mar8x).
+ */
+export function pinComplete(root: TrustRoot, where: string): TrustRoot & { project: string } {
+  if (!root.service.length) throw new BadTrust(`${where} pins no service key: give at least the service's key (D142); ${RUN_CI}`);
+  if (root.project === undefined) {
+    throw new BadTrust(`${where} pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another (B-mar8x); ${RUN_CI}`);
+  }
+  return root as TrustRoot & { project: string };
 }
 
 /**
- * The keys CI pins (D142, D159), from `BAESIAN_TRUST` or the file `BAESIAN_TRUST_FILE` names, or both; undefined when
- * neither is set. Set but empty or unreadable throws: a misconfigured pin must fail the check, not quietly turn it off.
+ * CI's pin (D142, D159): the service's keys and passkey keys, and the repo's project beside them (B-mar8x), from
+ * `BAESIAN_TRUST` or the file `BAESIAN_TRUST_FILE` names, or both; undefined when neither is set. Set but empty or
+ * unreadable throws, as does a pin with no service key or no project: a misconfigured pin must fail the check, not quietly
+ * turn it off.
  */
-export function pinnedTrust(env: NodeJS.ProcessEnv = process.env): TrustRoot | undefined {
+export function pinnedTrust(env: NodeJS.ProcessEnv = process.env): (TrustRoot & { project: string }) | undefined {
   const inline = env[TRUST_ENV];
   const path = env[TRUST_FILE_ENV];
   if (inline === undefined && path === undefined) return undefined;
   const parts: TrustRoot[] = [];
   if (inline !== undefined) {
-    if (!inline.trim()) throw new BadTrust(`${TRUST_ENV} is set but empty: pin the service's keys, or unset it`);
+    // GitHub Actions gives a repository variable that isn't set as an empty string.
+    if (!inline.trim()) throw new BadTrust(`${TRUST_ENV} is set but empty, as GitHub Actions gives a variable that isn't set: ${RUN_CI}; or, in a repo that isn't linked, unset it`);
     parts.push(parseTrust(inline, TRUST_ENV));
   }
   if (path !== undefined) {
@@ -90,8 +128,10 @@ export function pinnedTrust(env: NodeJS.ProcessEnv = process.env): TrustRoot | u
     }
     parts.push(parseTrust(text, path));
   }
-  const root = { service: parts.flatMap((p) => p.service), revoked: parts.flatMap((p) => p.revoked), passkeys: parts.flatMap((p) => p.passkeys) };
-  return needsServiceKey(root, [inline !== undefined ? TRUST_ENV : "", path ?? ""].filter(Boolean).join(" and "));
+  const where = [inline !== undefined ? TRUST_ENV : "", path ?? ""].filter(Boolean).join(" and ");
+  const root: TrustRoot = { service: parts.flatMap((p) => p.service), revoked: parts.flatMap((p) => p.revoked), passkeys: parts.flatMap((p) => p.passkeys) };
+  for (const p of parts) if (p.project !== undefined) pinProject(root, p.project, where);
+  return pinComplete(root, where);
 }
 
 /** Why `key` couldn't sign at `at`: before it was valid, after it expired, or once it was revoked. */

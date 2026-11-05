@@ -1,21 +1,25 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { agentKind, beforeLinkingKind } from "../service/src/uploads.js";
+import type { runProgram } from "../src/ci.js";
 import { buildMcpServer } from "../src/mcp.js";
 import { main } from "../src/cli.js";
 import { renderDoc, parseDoc } from "../src/frontmatter.js";
 import { grantPath, readGrant, writeGrant } from "../src/login.js";
 import type { MachineGrant } from "../src/schema.js";
+import { NAMESPACE, signMessage } from "../src/sshsig.js";
 import { Store } from "../src/store.js";
 import { RELAY_STATE, agentWritten, linkProblem, unsent, unsentBeforeLinking } from "../src/sync.js";
+import { projectLine } from "../src/trust.js";
 import { cleanup, draftFile, repo, sh } from "./helpers.js";
 import { type LocalRelay, relayAvailable, startRelay } from "./relay-harness.js";
+import { TestPasskey, TestService } from "./service.js";
 
 // M9d: the CLI against the real relay, the service's own Worker run locally in workerd (test/relay-harness.ts): signing a
 // machine in, refreshing and revoking its grant, linking a repo, pushing and pulling, a revision revised elsewhere, a
@@ -41,7 +45,7 @@ afterAll(async () => {
 afterEach(() => cleanup());
 
 /** Run the CLI in a repo, with a login whose code the test approves as the person (or refuses) when it's shown. */
-async function run(cwd: string, args: string[], opts: { stdin?: string; fetch?: typeof fetch; approve?: "yes" | "no"; signal?: AbortSignal } = {}) {
+async function run(cwd: string, args: string[], opts: { stdin?: string; fetch?: typeof fetch; approve?: "yes" | "no"; signal?: AbortSignal; exec?: typeof runProgram } = {}) {
   const out: string[] = [];
   const err: string[] = [];
   let approval: Promise<void> = Promise.resolve();
@@ -59,6 +63,10 @@ async function run(cwd: string, args: string[], opts: { stdin?: string; fetch?: 
       await approval;
     },
     http: { ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.signal ? { signal: opts.signal } : {}) },
+    // `baesian ci --github` runs gh: a test gives a stand-in, and never runs gh for real.
+    run: opts.exec ?? (() => {
+      throw new Error("a test ran another program without a stand-in");
+    }),
   };
   const code = await main(["node", "baesian", ...args], io);
   return { code, out: out.join("\n"), err: err.join("\n") };
@@ -566,6 +574,63 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(login.out).toContain("this checkout is a copy of another repo");
       expect(copy.store.config().project).not.toBe("proj-1x");
       expect(copy.store.config().first_commit).toBe(sh(copy.dir, "rev-list", "--max-parents=0", "HEAD"));
+    });
+  });
+
+  describe("setting up CI: `baesian ci` (B-pt52b)", () => {
+    it("syncs, then prints the service it read the keys from, the pin's lines and the steps; --github sets it with gh", async () => {
+      const { dir, store } = await signedIn("proj-ci");
+      // The relay sends its key with the project's first file, and nothing's been filed yet.
+      const early = await run(dir, ["ci"]);
+      expect(early.code).toBe(1);
+      expect(early.err).toContain("the relay sends it with the project's first file. File a card, then run `baesian ci` again");
+      await fileCard(dir);
+      // A passkey's key file as the relay writes it at enrolment, signed with its key; and one signed by another key.
+      const passkey = new TestPasskey();
+      // Enrolled once the relay's key was valid (from 2026-11-01), so its signature counts.
+      const enrolled = "2026-11-04T12:00:00.000Z";
+      const keyFile = Buffer.from(`${JSON.stringify(passkey.keyFile(enrolled), null, 2)}\n`);
+      store.storage.create("trust/passkey-aaaaaaaaaaaa.json.sig", Buffer.from(signMessage(relay.signingKey, keyFile, NAMESPACE)));
+      store.storage.create("trust/passkey-aaaaaaaaaaaa.json", keyFile);
+      const eve = Buffer.from(`${JSON.stringify(new TestPasskey("acct-eve", "eve").keyFile(), null, 2)}\n`);
+      store.storage.create("trust/passkey-bbbbbbbbbbbb.json.sig", Buffer.from(new TestService("other").signature(eve)));
+      store.storage.create("trust/passkey-bbbbbbbbbbbb.json", eve);
+      const calls: { command: string; args: string[]; input: string; cwd: string }[] = [];
+      const r = await run(dir, ["ci", "--github"], {
+        exec: (command, args, o) => {
+          calls.push({ command, args, ...o });
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      });
+      expect(r.code, r.err).toBe(0);
+      expect(r.out).toContain(`keys read from ${relay.url}, the service .baesian/config.json names, for project proj-ci: if that isn't the service you meant, stop here`);
+      const keyName = readdirSync(join(store.live, "trust")).find((f) => /^service-.+\.json$/.test(f) && !f.endsWith("-revoked.json"))!;
+      const lines = [projectLine("proj-ci"), JSON.stringify(JSON.parse(readFileSync(join(store.live, "trust", keyName), "utf8"))), JSON.stringify(passkey.keyFile(enrolled))];
+      expect(r.out.split("\n").filter((l) => l.startsWith("{"))).toEqual(lines);
+      expect(r.out).toContain("Check each passkey is yours (gus's, added 2026-11-04): compare its line with the one the website showed when you added it, and with the passkeys on your account page, https://baesian.test/account.");
+      expect(r.out).toContain("fetch-depth: 0");
+      expect(r.err).toContain("left out trust/passkey-bbbbbbbbbbbb.json: it's signed by a key that isn't trusted");
+      // gh gets the lines on its input, in the repo, after they're shown.
+      expect(calls).toEqual([{ command: "gh", args: ["variable", "set", "BAESIAN_TRUST"], input: `${lines.join("\n")}\n`, cwd: dir }]);
+      expect(r.out.split("\n").at(-1)).toBe("set the repository variable BAESIAN_TRUST with gh: 3 lines");
+      // With --json, the same lines.
+      const j = await run(dir, ["ci", "--json"]);
+      expect(JSON.parse(j.out)).toMatchObject({ service: relay.url, project: "proj-ci", lines, passkeys: [{ handle: "gus" }] });
+      // gh not on PATH: the lines are printed, and it says the variable wasn't set.
+      const missing = await run(dir, ["ci", "--github"], { exec: () => ({ status: null, stdout: "", stderr: "spawn gh ENOENT", missing: true }) });
+      expect(missing.code).toBe(1);
+      expect(missing.out).toContain(lines[0]);
+      expect(missing.err).toContain("gh isn't on PATH, so BAESIAN_TRUST wasn't set");
+      // Offline, it stops: the keys must come from the service.
+      const off = await run(dir, ["ci"], { fetch: offline });
+      expect(off.code).toBe(1);
+      expect(off.err).toContain(`couldn't sync with ${relay.url}, and CI's keys must come from it`);
+      // Pointed at another service, as a commit could, it names that service, and this machine isn't signed in there.
+      const config = join(store.record, "config.json");
+      writeFileSync(config, JSON.stringify({ ...JSON.parse(readFileSync(config, "utf8")), service: "https://elsewhere.example" }));
+      const elsewhere = await run(dir, ["ci"]);
+      expect(elsewhere.code).toBe(1);
+      expect(elsewhere.err).toContain("this machine isn't signed in to project proj-ci on https://elsewhere.example: run `baesian login` first");
     });
   });
 });

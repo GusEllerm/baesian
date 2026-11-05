@@ -9,7 +9,7 @@ import { proofProblem } from "../src/passkey.js";
 import { Config, NewerFormat } from "../src/schema.js";
 import { NAMESPACE, parseSignature, signMessage } from "../src/sshsig.js";
 import { Store } from "../src/store.js";
-import { BadTrust, TRUST_ENV, TRUST_FILE_ENV, checkSigned, parseTrust, pinnedTrust } from "../src/trust.js";
+import { BadTrust, TRUST_ENV, TRUST_FILE_ENV, checkSigned, parseTrust, pinnedTrust, projectLine } from "../src/trust.js";
 import { describeVerify, verify } from "../src/verify.js";
 import { waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo, sh } from "./helpers.js";
@@ -515,7 +515,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain("trust/service-test-1.json isn't pinned in CI");
     for (const [name, value, says] of [
-      [TRUST_ENV, " ", "BAESIAN_TRUST is set but empty: pin the service's keys, or unset it"],
+      [TRUST_ENV, " ", "BAESIAN_TRUST is set but empty, as GitHub Actions gives a variable that isn't set: run `baesian ci` in the linked repo, and set it to the lines it prints"],
       [TRUST_ENV, "{not json", "BAESIAN_TRUST, line 1, isn't JSON"],
       [TRUST_ENV, JSON.stringify({ type: "passkey-key" }), "BAESIAN_TRUST, line 1 is not valid"],
       [TRUST_FILE_ENV, join(dir, "missing.jsonl"), "can't be read"],
@@ -540,7 +540,36 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     expect(() => pinnedTrust({ [TRUST_ENV]: JSON.stringify(passkey.keyFile()) })).toThrow("BAESIAN_TRUST pins no service key");
     writeFileSync(join(dir, "service.jsonl"), service.pin());
     const both = pinnedTrust({ [TRUST_ENV]: JSON.stringify(passkey.keyFile()), [TRUST_FILE_ENV]: join(dir, "service.jsonl") });
-    expect([both?.service.length, both?.passkeys.length]).toEqual([1, 1]);
+    expect([both?.service.length, both?.passkeys.length, both?.project]).toEqual([1, 1, "proj-test"]);
+  });
+
+  it("needs the repo's project pinned beside the keys, one project, as a line of its own (B-mar8x)", () => {
+    const service = new TestService();
+    const keys = JSON.stringify(service.serviceKey());
+    expect(projectLine("p-c81yx9gdvfr9yjsfdsrp")).toBe('{"type":"project","format":1,"project":"p-c81yx9gdvfr9yjsfdsrp"}');
+    expect(pinnedTrust({ [TRUST_ENV]: `${projectLine("proj-test")}\n${keys}` })?.project).toBe("proj-test");
+    // Keys with no project: the check fails, saying how to fix it.
+    expect(() => pinnedTrust({ [TRUST_ENV]: keys })).toThrow(BadTrust);
+    expect(() => pinnedTrust({ [TRUST_ENV]: keys })).toThrow("BAESIAN_TRUST pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another (B-mar8x); run `baesian ci` in the linked repo");
+    // Two projects, in one setting or across both: which is the repo's can't be told.
+    expect(() => pinnedTrust({ [TRUST_ENV]: `${projectLine("proj-a")}\n${projectLine("proj-b")}\n${keys}` })).toThrow("names project proj-b, but the pin already names proj-a");
+    const { dir } = repo();
+    writeFileSync(join(dir, "pin.jsonl"), `${projectLine("proj-b")}\n`);
+    expect(() => pinnedTrust({ [TRUST_ENV]: `${projectLine("proj-a")}\n${keys}`, [TRUST_FILE_ENV]: join(dir, "pin.jsonl") })).toThrow("a pin names one project");
+    // A project's line in a newer format is refused by name (D157), as a key's is.
+    expect(() => parseTrust(JSON.stringify({ type: "project", format: 2, project: "proj-a" }), "the pin")).toThrow("pinned project format 2");
+  });
+
+  it("fails a commit whose config names another project than CI pins, and HEAD's too (B-mar8x)", () => {
+    const { dir, store, repo, service } = branched();
+    store.setLink({ service: ORIGIN, project: "p-0000000000000000000a", first_commit: sh(dir, "rev-list", "--max-parents=0", "HEAD") });
+    commit(dir, store, "Point the repo elsewhere\n\nBaesian-Ack: infra:.baesian/config.json moving it");
+    const r = verify(repo, "main", { merge: false, pinned: service.pinned() });
+    expect(r.ok).toBe(false);
+    expect(r.commits[0]?.trust).toEqual([expect.stringContaining(".baesian/config.json names project p-0000000000000000000a, but CI pins project proj-test (B-mar8x)")]);
+    expect(describeVerify(r).join("\n")).toContain("run `baesian ci` and update BAESIAN_TRUST");
+    // A pin given without a project stops the run too.
+    expect(() => verify(repo, "main", { merge: false, pinned: { ...service.pinned(), project: undefined } as never })).toThrow("pins no project");
   });
 });
 
