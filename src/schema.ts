@@ -60,6 +60,8 @@ export const FILE_KINDS = {
   "service-key": { name: "service key", upgrades: [] },
   "service-key-revocation": { name: "service key revocation", upgrades: [] },
   "passkey-key": { name: "passkey key", upgrades: [] },
+  /** The repo's project, a line of CI's pin beside the keys (B-mar8x); never a file in `trust/`. */
+  project: { name: "pinned project", upgrades: [] },
   // M9d, the CLI's side of the hosted service (P16 section 8): what it keeps of the relay, and the machine's grant.
   relay: { name: "relay state", upgrades: [] },
   grant: { name: "machine grant", upgrades: [] },
@@ -806,6 +808,18 @@ export const PasskeyKey = z.strictObject({
   enrolled: Timestamp,
 });
 export type PasskeyKey = z.infer<typeof PasskeyKey>;
+
+/**
+ * The repo's project, pinned in CI beside the keys (B-mar8x): a line of `BAESIAN_TRUST`, never a file in `trust/`. With
+ * keys pinned, `baesian verify` checks every commit against this project, whatever a commit's config says, and finds the
+ * commit that linked the repo to it once, from the tip it checks. `baesian ci` prints it.
+ */
+export const PinnedProject = z.strictObject({
+  type: z.literal("project"),
+  format: formatOf("project"),
+  project: ProjectId,
+});
+export type PinnedProject = z.infer<typeof PinnedProject>;
 
 /**
  * A passkey's proof that a person made a file (D139, D163): `<file without .json>.passkey.json` beside a verdict on a

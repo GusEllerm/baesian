@@ -2,9 +2,9 @@
 type: module
 status: active
 authority: describes
-summary: "src/trust.ts, src/sshsig.ts and src/passkey.ts (M9a): the keys a hosted repo trusts, pinned in CI or copied in the record (D142, D159); the service's OpenSSH signatures (D160); passkey proofs on hard-card answers and loosened preferences (D139, D163); and the relay's draw proof (D158). All checked offline with Node's crypto, no new dependency."
+summary: "src/trust.ts, src/sshsig.ts and src/passkey.ts (M9a): the keys a hosted repo trusts, pinned in CI with the repo's project (B-mar8x) or copied in the record (D142, D159); the service's OpenSSH signatures (D160); passkey proofs on hard-card answers and loosened preferences (D139, D163); and the relay's draw proof (D158). All checked offline with Node's crypto, no new dependency."
 created: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-11-03
 tags: [baesian, module, hosted]
 ---
@@ -28,11 +28,11 @@ OpenSSH's signature format (PROTOCOL.sshsig), read and written around Node's Ed2
 
 ## src/trust.ts: the keys, and the checks made with them (D142, D159)
 
-- **`pinnedTrust()`** reads CI's pin: `BAESIAN_TRUST` (`TRUST_ENV`), the trust files' JSON one per line, or the file `BAESIAN_TRUST_FILE` (`TRUST_FILE_ENV`) names, or both; together they must hold a service key. **`parseTrust()`** reads the lines, each through its kind's schema (`readTrustFile()`). Set but empty, unreadable, or with no service key, the pin throws `BadTrust`, which stops the command: a misconfigured pin fails, never switches the checks off.
+- **`pinnedTrust()`** reads CI's pin: `BAESIAN_TRUST` (`TRUST_ENV`), the trust files' JSON one per line and the line naming the repo's project, or the file `BAESIAN_TRUST_FILE` (`TRUST_FILE_ENV`) names, or both. **`parseTrust()`** reads the lines, each key through its kind's schema (`readTrustFile()`), and the project's through `PinnedProject` (B-mar8x), into `TrustRoot.project`; a pin names one project, so two different ones throw. **`pinComplete()`** says the pin must hold a service key and a project, and `baesian verify` applies it to a pin it's given too. Set but empty (which is how GitHub Actions passes a variable that isn't set), unreadable, or with no service key or no project, the pin throws `BadTrust`, which stops the command, saying to run `baesian ci` for the lines (`RUN_CI`): a misconfigured pin fails, never switches the checks off. **`projectLine()`** is the project's line, as `baesian ci` prints it ([[src-sync#src/ci.ts: setting up CI (B-pt52b)]]).
 - **`checkSigned()`** says whether a file is the service's word: its signature parses, is in the `baesian` namespace, by a trusted service key, matches the bytes, and the key was valid at the file's own time (`valid_after`, `valid_before`) and not revoked by then. It returns the key, whose `origin` and `rp_id` a passkey proof must name.
 - **`pinProblems()`** lists the record's service keys and passkey keys that CI doesn't pin, or pins differently, compared field by field: each fails the commit (D142, D159), since the commit gate on a machine trusts the record's copy.
 - **`drawMessage()`** is what the relay signs for a card revision's draw: `<id> r<revision> <SHA-256 of the revision's bytes>`. **`drawOfProof()`** checks a relay's `draw_proof` under a trusted key in `DRAW_NAMESPACE`, and reads the draw from the signature's SHA-256, as `drawOf()` reads the CLI's (D158).
 
 ## Tests
 
-`test/hosted.test.ts`, against real temporary repos, with `test/service.ts` standing in for the service: a test Ed25519 key that signs what a person writes, and test passkeys (P-256, Ed25519 and RSA) that make assertions as a browser would. Each file is written into the live layer as a pull from the relay would write it, so the store, the commit gate and `baesian verify` are tested end to end without a service. Where `ssh-keygen` is on PATH, it checks the service's signatures and makes one that counts; otherwise those two tests are skipped.
+`test/hosted.test.ts`, against real temporary repos, with `test/service.ts` standing in for the service: a test Ed25519 key that signs what a person writes, and test passkeys (P-256, Ed25519 and RSA) that make assertions as a browser would. Each file is written into the live layer as a pull from the relay would write it, so the store, the commit gate and `baesian verify` are tested end to end without a service. The stand-in's pin names its project, as CI's must (B-mar8x); `test/linking.test.ts` covers the project and the linking commit under the pin. Where `ssh-keygen` is on PATH, it checks the service's signatures and makes one that counts; otherwise those two tests are skipped.

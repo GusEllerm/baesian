@@ -2,9 +2,9 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs and the trust files; the relay's entry (M9b); the accounts database's tables (M9c); relay.json and the machine's grant (M9d); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs, the trust files and the project line CI pins beside them (B-mar8x); the relay's entry (M9b); the accounts database's tables (M9c); relay.json and the machine's grant (M9d); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-10-23
 tags: [baesian, design, formats]
 ---
@@ -233,9 +233,22 @@ Its client data must be `webauthn.get`, from the service key's `origin`, not in 
 | `trust/service-<key>-revoked.json` (`ServiceKeyRevocation`) | `type` `service-key-revocation`, `format`, `key`, `reason`, `at`: a file signed at or after `at` doesn't count |
 | `trust/passkey-<suffix>.json` (`PasskeyKey`), with a `.sig` | `type` `passkey-key`, `format`, `account`, `handle`, `credential`, `public_key` (SubjectPublicKeyInfo, base64url), `alg` (COSE: -7, -8 or -257), `enrolled` |
 
-**What makes a repo hosted** (`Store.hosted`): keys pinned in CI's settings, whatever the record says, so a commit that drops the record's copy can't switch the checks off (D142); or else a service key in the layer's `trust/`. Pinned, the keys are CI's alone, and the record's copy must match them (`pinProblems()`). Unpinned, the layer's copy is used, its passkey keys only once the service signed them. Revocations count wherever they are, since they only take trust away. M9d adds the config's `service` field as a local switch too.
+**What makes a repo hosted** (`Store.hosted`): keys pinned in CI's settings, whatever the record says, so a commit that drops the record's copy can't switch the checks off (D142); or else a service key in the layer's `trust/`. Pinned, the keys are CI's alone, and the record's copy must match them (`pinProblems()`), and the project is the pinned one, whatever the config names (B-mar8x). Unpinned, the layer's copy is used, its passkey keys only once the service signed them. Revocations count wherever they are, since they only take trust away. M9d adds the config's `service` field as a local switch too.
 
-**The pin** (`pinnedTrust()`): `BAESIAN_TRUST` holds the trust files' JSON, one per line, as `parseTrust()` reads them, with blank lines and `#` comments skipped; or `BAESIAN_TRUST_FILE` names a file of the same lines, for a protected file on a runner. Both may be set. At least one service key must be among them. A pin that's set but empty, or that can't be read, stops every command with `BadTrust`: a misconfigured pin must never turn the checks off quietly.
+**The pin** (`pinnedTrust()`): `BAESIAN_TRUST` holds the repo's project and the trust files' JSON, one per line, as `parseTrust()` reads them, with blank lines and `#` comments skipped; or `BAESIAN_TRUST_FILE` names a file of the same lines, for a protected file on a runner. Both may be set. Among them must be at least one service key and the project's line (`pinComplete()`). A pin that's set but empty, that can't be read, or that lacks either stops every command with `BadTrust`, saying to run `baesian ci`, which prints every line from what the service sent (B-pt52b): a misconfigured pin must never turn the checks off quietly.
+
+**The project's line** (`PinnedProject`, B-mar8x), one per pin, and only ever in CI's pin, never a file in `trust/`:
+
+```json
+{"type":"project","format":1,"project":"p-c81yx9gdvfr9yjsfdsrp"}
+```
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `project`; 1. Its format is numbered as a file's is (`FILE_KINDS`, kind `project`), and a newer one is refused by name (D157) |
+| `project` | the repo's project, as `.baesian/config.json` names it (`ProjectId`) |
+
+A pin names one project: two lines naming different projects, in one setting or across both, stop the command. With it, `baesian verify` fails a commit whose config names another project, and finds the commit that linked the repo to the pinned one once, from the tip it checks, by ancestry ([[src-verify#In a hosted repo (M9a)]]). `projectLine()` writes it, as `baesian ci` prints it.
 
 **The relay's gate record** (D158) is the CLI's format (`GateRecord`, [[#Routing]]) with `by: relay`, signed, and when it holds a card, `draw_proof`: the service's SSH signature, unarmored, in the namespace `baesian-draw` (`DRAW_NAMESPACE`), over `drawMessage()`'s text: `<id> r<revision> <SHA-256 of the card revision's bytes, hex>` and a newline. The draw is the SHA-256 of the raw Ed25519 signature, its first six bytes read as a number from 0 to 1, as `drawOf()` reads the CLI's hash (`drawOfProof()`). Ed25519 is deterministic, so the relay can't redraw, and nobody without its key can predict a draw.
 

@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Entry point to the Baesian vault: what the project is, where it stands, what to read first, and where notes go."
 created: 2026-10-23
-updated: 2026-11-02
+updated: 2026-11-05
 reviewed: 2026-10-23
 tags: [baesian, index]
 ---
@@ -15,7 +15,13 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-11-04.*
+*As of 2026-11-05.*
+
+- **Setting up a linked repo's CI is built (2026-11-05)** ([[2026-11-05 CI Setup]]), on a builder's branch off `v1/next`, from three cards the user accepted:
+  - **CI pins the project beside the keys (B-mar8x):** `BAESIAN_TRUST` gains a line, `{"type":"project","format":1,"project":"p-…"}`; a commit naming another project fails, and the linking commit is found once, from HEAD, by ancestry, so branches in flight at linking pass and a backdated re-link fails closed.
+  - **`baesian ci` (B-pt52b)** prints the pin's lines from what the service sent, and the workflow steps; `--github` sets the variable with `gh`.
+  - **`baesian login` links to https://baesian.dev** when nobody names a service (B-f2mfb).
+  - **Before CI runs this code:** add the project's line to this repo's `BAESIAN_TRUST` (`baesian ci --github`, or by hand): without it, `verify` stops.
 
 - **The hosted service is live at https://baesian.dev (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
   - `v0.1.0`, tagged on `main` and deployed by CI (B-bk20v).
@@ -24,8 +30,8 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - **`v0.1.1`** fixed Globus sign-in (the client's credentials weren't sent as Globus reads them) and the privacy page's width. The user has signed up.
   - **This repo is linked (2026-11-05)**, as project `p-c81yx9gdvfr9yjsfdsrp`: its cards are on the service and answered at baesian.dev. CI's verify steps read the keys pinned in the repo variable `BAESIAN_TRUST` (`.github/workflows/ci.yml`).
   - **Next:**
-    - set the repo variable `BAESIAN_TRUST` before `v1/next` next merges into `main`: CI fails while it's unset;
-    - make setting up a repo easier, from what linking this one showed;
+    - set the repo variable `BAESIAN_TRUST`, with the project's line, before `v1/next` next merges into `main`: CI fails while it's unset;
+    - ~~make setting up a repo easier, from what linking this one showed~~ (built: B-mar8x, B-pt52b, B-f2mfb);
     - confirm Globus sign-in;
     - the checks on real devices;
     - then M10.

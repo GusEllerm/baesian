@@ -17,6 +17,12 @@ import type { Store } from "./store.js";
 
 /** Baesian's own CLI, the service's only client: public, with no secret (RFC 8628 section 3.1). */
 export const CLIENT_ID = "baesian-cli";
+
+/**
+ * The hosted service `baesian login` links a repo to when neither `--service` nor `$BAESIAN_SERVICE` names one (B-f2mfb).
+ * Its approval page names the service and takes a passkey before any card leaves the machine.
+ */
+export const DEFAULT_SERVICE = "https://baesian.dev";
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 
 /** How long one request to the service may take before it counts as unreachable. */

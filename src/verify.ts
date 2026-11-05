@@ -8,9 +8,9 @@ import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { TODAY, levelInForce, route } from "./routing.js";
 import { type GateRecord, HARD_BY_DEFAULT } from "./schema.js";
-import { BAESIAN, type Card, RECORD_DIR, SHALLOW_HISTORY, Store, type StoreTrust, drawOf, normalise, settingsOf } from "./store.js";
+import { BAESIAN, type Card, RECORD_DIR, SHALLOW_HISTORY, Store, type StoreTrust, drawOf, normalise, recordAtLinking, settingsOf } from "./store.js";
 import { parseTrailers } from "./trailers.js";
-import { TRUST_ENV, type TrustRoot, drawOfProof, pinProblems, pinnedTrust } from "./trust.js";
+import { TRUST_ENV, type TrustRoot, drawOfProof, pinComplete, pinProblems, pinnedTrust } from "./trust.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 
 // M3b: `baesian verify`, the same gate in CI, plus the merge gate (D31) and conflicts (D35, D38).
@@ -57,7 +57,10 @@ export interface CommitCheck {
   subject: string;
   cards: string[];
   report: GateReport;
-  /** The record's keys that CI doesn't pin, or pins differently (D142, D159): each fails the commit. */
+  /**
+   * The record's keys that CI doesn't pin, or pins differently (D142, D159), and a config naming another project than CI
+   * pins (B-mar8x): each fails the commit.
+   */
   trust: string[];
   ok: boolean;
 }
@@ -87,10 +90,12 @@ export interface VerifyResult {
   commits: CommitCheck[];
   merge?: MergeCheck;
   /**
-   * In a hosted repo (D138): where the keys came from, CI's pin or the record's copy, and the files a person writes in the
-   * record at HEAD that don't count, which are ignored, with a note.
+   * In a hosted repo (D138): where the keys came from, CI's pin or the record's copy; the project, as CI pins it
+   * (B-mar8x) or else as HEAD's config names it, and the commit that linked the repo to it (B-45xz8); the files a person
+   * writes in the record at HEAD that don't count, which are ignored, with a note; and what fails the run whatever the
+   * commits say: the link can't be told (two commits link the repo, B-mar8x), or HEAD names another project than CI pins.
    */
-  hosted?: { keys: "pinned" | "record"; skipped: { file: string; why: string }[]; shallow?: true };
+  hosted?: { keys: "pinned" | "record"; project?: string; linked?: string; skipped: { file: string; why: string }[]; shallow?: true; problems?: string[] };
   /** Advice that doesn't fail the check: the vault's missing notes (M6); keys checked against the record's copy alone. */
   warnings?: string[];
   ok: boolean;
@@ -115,7 +120,8 @@ function commitsIn(repo: Repo, base: string): string[] {
 
 /**
  * Check one commit the way the local commit-msg hook did: its diff, its message, its own record. In a hosted repo the
- * record's answers count only when signed (D138), and with keys pinned in CI, the record's copy must match them (D142).
+ * record's answers count only when signed (D138), and with keys pinned in CI, the record's copy must match them (D142),
+ * and its config may name no project but the pinned one (B-mar8x).
  */
 export function checkCommit(repo: Repo, records: RecordAt, sha: string, pinned?: TrustRoot): CommitCheck {
   const record = records.store(sha);
@@ -124,9 +130,22 @@ export function checkCommit(repo: Repo, records: RecordAt, sha: string, pinned?:
   return record.view(() => {
     const report = evaluate(record, detectStaged(record, commitSnapshot(repo.toplevel, sha)), trailers);
     const keys = record.trustFiles();
-    const trust = pinned ? pinProblems(pinned, [...keys.service, ...keys.passkeys]) : [];
+    const trust = pinned ? [...otherProject(record, pinned), ...pinProblems(pinned, [...keys.service, ...keys.passkeys])] : [];
     return { sha, subject: message.split("\n")[0] ?? "", cards: trailers.cards, report, trust, ok: report.ok && trust.length === 0 };
   });
+}
+
+/**
+ * Why a record's config names the wrong project, if it does (B-mar8x): with keys pinned, CI pins the repo's project too,
+ * so a commit can't link the repo to a project of its own making, whose answers it could write. A config that names no
+ * project is from before the link, and is checked against the pinned one.
+ */
+function otherProject(record: Store, pinned: TrustRoot): string[] {
+  const named = record.config().project;
+  if (named === undefined || pinned.project === undefined || named === pinned.project) return [];
+  return [
+    `.baesian/config.json names project ${named}, but CI pins project ${pinned.project} (B-mar8x): a commit can't link the repo to another project. If the repo was linked again on purpose, run \`baesian ci\` and update ${TRUST_ENV}.`,
+  ];
 }
 
 /** The merge gate (D31): every card the branch cites is resolved or deferred, in the record at HEAD. */
@@ -266,13 +285,19 @@ export function findConflicts(head: Store, baseRecord: Store): Conflict[] {
 }
 
 /**
- * Run every check for `base..HEAD`. `pinned` is CI's pinned keys (D142, D159); by default they're read from CI's settings
- * (`BAESIAN_TRUST`, `BAESIAN_TRUST_FILE`), and `null` pins none. With keys pinned, every commit is checked as hosted,
- * whatever its record says; without, a commit is hosted when its record holds the service's keys.
+ * Run every check for `base..HEAD`. `pinned` is CI's pin (D142, D159): the keys, and the repo's project beside them
+ * (B-mar8x); by default it's read from CI's settings (`BAESIAN_TRUST`, `BAESIAN_TRUST_FILE`), and `null` pins none. With
+ * a pin, every commit is checked as hosted, whatever its record says, in the pinned project, against one linking commit
+ * found from HEAD; without, a commit is hosted when its record holds the service's keys.
  */
 export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?: TrustRoot | null }): VerifyResult {
-  const pinned = opts.pinned !== undefined ? (opts.pinned ?? undefined) : pinnedTrust();
-  const records = new RecordAt(repo, { pinned: pinned ?? null });
+  const given = opts.pinned !== undefined ? (opts.pinned ?? undefined) : pinnedTrust();
+  const pinned = given && pinComplete(given, TRUST_ENV);
+  // The commit that linked the repo to the pinned project, found once, from the tip, by ancestry (B-mar8x): every commit's
+  // record counts its answers from before linking against that record, a commit from before the link included, and no
+  // commit can make up a linking commit of its own.
+  const linking = pinned ? (recordAtLinking(repo.toplevel, "HEAD", pinned.project, { standIn: false }) ?? null) : undefined;
+  const records = new RecordAt(repo, { pinned: pinned ?? null, ...(linking !== undefined ? { linking } : {}) });
   try {
     git(repo.toplevel, ["rev-parse", "--verify", "-q", `${base}^{commit}`]);
   } catch {
@@ -299,8 +324,31 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
       // Answers from before the repo was linked count as they are (B-45xz8), which takes the commit that linked it: a
       // shallow clone may not have it, and then the run fails, saying to fetch the full history.
       const shallow = skipped.some((s) => s.why === SHALLOW_HISTORY);
-      const hosted = h ? { hosted: { keys: h.pinned ? ("pinned" as const) : ("record" as const), skipped, ...(shallow ? { shallow: true as const } : {}) } } : {};
-      return { base, commits, ...(merge ? { merge } : {}), ...hosted, ...(warnings.length ? { warnings } : {}), ok: ok && !shallow };
+      // Two commits that each link the repo fail closed (B-mar8x), whatever the commits need; as does HEAD naming another
+      // project than CI pins, when HEAD is a merge, which isn't checked as a commit of its own.
+      const link = h ? head.linkingCommit() : undefined;
+      const problems: string[] = [];
+      if (link && "problem" in link && link.problem !== SHALLOW_HISTORY) problems.push(link.problem);
+      if (pinned) {
+        const tip = git(repo.toplevel, ["rev-parse", "HEAD"]);
+        if (!commits.some((c) => c.sha === tip)) problems.push(...otherProject(head, pinned).map((p) => `at HEAD, ${p}`));
+      }
+      if (pinned && linking === null) {
+        warnings.push(`no commit in HEAD's history links the repo to project ${pinned.project}, so no unsigned answer counts as one from before linking (B-45xz8, B-mar8x)`);
+      }
+      const hosted = h
+        ? {
+            hosted: {
+              keys: h.pinned ? ("pinned" as const) : ("record" as const),
+              ...(h.project ? { project: h.project } : {}),
+              ...(link && "commit" in link ? { linked: link.commit } : {}),
+              skipped,
+              ...(shallow ? { shallow: true as const } : {}),
+              ...(problems.length ? { problems } : {}),
+            },
+          }
+        : {};
+      return { base, commits, ...(merge ? { merge } : {}), ...hosted, ...(warnings.length ? { warnings } : {}), ok: ok && !shallow && !problems.length };
     });
   } finally {
     records.dispose();
@@ -314,7 +362,8 @@ export function describeVerify(r: VerifyResult): string[] {
   const localOnly = (l: string) =>
     l.startsWith("baesian: commit blocked") || l.includes("--no-verify") || l.includes("`baesian check` previews");
   if (r.hosted) {
-    out.push(`hosted: only answers the service signed count (D138), checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}`);
+    const where = [r.hosted.project ? `project ${r.hosted.project}` : "", r.hosted.linked ? `linked at ${r.hosted.linked.slice(0, 10)}` : ""].filter(Boolean).join(", ");
+    out.push(`hosted: only answers the service signed count (D138), checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}${where ? `; ${where}` : ""}`);
   }
   for (const c of r.commits) {
     out.push(`${c.ok ? "  ok  " : "  FAIL"} ${c.sha.slice(0, 10)} ${c.subject}`);
@@ -343,8 +392,11 @@ export function describeVerify(r: VerifyResult): string[] {
     for (const n of r.merge.notes) out.push(`  note: ${n}`);
   }
   if (r.hosted?.shallow) out.push("  FAIL answers from before the repo was linked can't be checked in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)");
-  // A file that doesn't count is ignored, not an error (D138): an answer given outside the website, say.
-  for (const s of r.hosted?.skipped ?? []) if (s.why !== SHALLOW_HISTORY) out.push(`note: ${s.file} doesn't count: ${s.why}`);
+  for (const p of r.hosted?.problems ?? []) out.push(`  FAIL ${p}`);
+  // A file that doesn't count is ignored, not an error (D138): an answer given outside the website, say. Those that don't
+  // count because the link can't be told are said once, above.
+  const told = new Set([SHALLOW_HISTORY, ...(r.hosted?.problems ?? [])]);
+  for (const s of r.hosted?.skipped ?? []) if (!told.has(s.why)) out.push(`note: ${s.file} doesn't count: ${s.why}`);
   for (const w of r.warnings ?? []) out.push(`warning: ${w}`);
   out.push(r.ok ? "baesian verify: ok" : "baesian verify: failed");
   return out;

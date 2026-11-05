@@ -3,6 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { agentName, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
+import { ciPin, runProgram, workflowSteps } from "./ci.js";
 import { CONFIG_PATH, stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
@@ -29,6 +30,7 @@ import {
   withdrawOp,
 } from "./ops.js";
 import {
+  DEFAULT_SERVICE,
   type Http,
   Offline,
   firstCommitToLink,
@@ -48,6 +50,7 @@ import { findRunningServer, serverUrl, startServer } from "./server.js";
 import { aroundFiling, linkProblem, syncRelay, waitWithRelay } from "./sync.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import { type Card, PossibleDuplicate, Store, ValidationError } from "./store.js";
+import { TRUST_ENV } from "./trust.js";
 import { cleanVaultPath, initVault, vaultGuidance, vaultPathProblem, writeNotes } from "./vault.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, WaitCancelled, type WaitOptions } from "./wait.js";
 
@@ -71,6 +74,8 @@ export interface Io {
   http?: Http;
   /** The sleep between `baesian login`'s polls, replaceable in tests. */
   sleep?: (ms: number) => Promise<void>;
+  /** Runs another program with text on its input (`baesian ci --github` runs `gh`); replaceable in tests, which never run gh. */
+  run?: typeof runProgram;
 }
 
 /** How long `baesian inbox --quiet`, a harness's hook, waits for the relay: a hook must stay quick, and never fail. */
@@ -524,7 +529,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   program
     .command("login")
     .description("sign this machine in to the hosted service for this repo's project, linking the repo first if it isn't (B-62qnz)")
-    .option("--service <url>", "the service's address, for a repo that isn't linked yet (default: $BAESIAN_SERVICE)")
+    .option("--service <url>", `the service's address, for a repo that isn't linked yet (default: $BAESIAN_SERVICE, else ${DEFAULT_SERVICE})`)
     .option("--machine <name>", "this machine's name, as the website shows it (default: its hostname)")
     .action(async (opts: { service?: string; machine?: string }) => {
       const s = store();
@@ -535,8 +540,10 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (c.service && asked && asked !== c.service) {
         throw new ValidationError(`this repo is linked to ${c.service}, not ${asked}: to move it, change the service and project in .baesian/config.json, a change the commit gate asks a card or an ack for (B-w4g6c)`);
       }
-      const service = c.service ?? asked;
-      if (!service) throw new ValidationError("this repo isn't linked to the service yet: name it with `baesian login --service <url>`, or set $BAESIAN_SERVICE");
+      // B-f2mfb: with none named, the hosted service. Its approval page names it, and takes a passkey, before any card
+      // leaves this machine; someone running their own names it once, and the config keeps it.
+      const service = c.service ?? asked ?? DEFAULT_SERVICE;
+      if (!c.service && !asked) io.out(`linking this repo to ${DEFAULT_SERVICE}, the hosted service: to use another, run \`baesian login --service <url>\` instead`);
       // Linking (B-62qnz, B-5gnea): a repo with no project, or a copy of another repo's (its history starts elsewhere),
       // gets a project of its own; one whose config lacks its first commit has it recorded.
       const copy = c.project !== undefined && c.first_commit !== undefined && linkProblem(s, c) !== undefined;
@@ -592,6 +599,60 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         // The link is a gate fact (B-w4g6c): a command to commit it with its ack, ready to run, the trailer its own paragraph.
         io.out("Commit the link: the commit gate asks an ack for where cards are sent (B-w4g6c). This commits it with one:");
         io.out(`  git add ${CONFIG_PATH} && git commit -m "Link this repo to Baesian" -m "${linkAck(service, link.project)}"`);
+      }
+    });
+
+  program
+    .command("ci")
+    .description("in a linked repo: the lines CI's BAESIAN_TRUST pins, read from the service, and the workflow steps that run baesian verify (B-pt52b)")
+    .option("--github", "also set the repository variable BAESIAN_TRUST with gh, after printing it")
+    .option("--json", "print the result as JSON")
+    .action(async (opts: { github?: boolean; json?: boolean }) => {
+      const s = store();
+      s.requireInit();
+      const c = s.config();
+      if (!c.service || !c.project) throw new ValidationError("this repo isn't linked to the hosted service: run `baesian login` first, then `baesian ci`");
+      // The keys come from the service, through this pull, never from the committed record, which a commit can change.
+      const relay = await syncRelay(s, { ...http(), push: false });
+      for (const n of relay.notes) io.err(n);
+      if (relay.state === "signed-out") throw new ValidationError(`this machine isn't signed in to project ${c.project} on ${c.service}: run \`baesian login\` first, then \`baesian ci\``);
+      if (relay.state === "stopped") throw new ValidationError("this checkout doesn't sync with the project its config names, so it can't read the project's keys (above)");
+      if (relay.state !== "synced") throw new ValidationError(`couldn't sync with ${c.service}, and CI's keys must come from it: run \`baesian ci\` again once it's reachable`);
+      const pin = ciPin(s, c.service, c.project);
+      if ("problem" in pin) throw new ValidationError(pin.problem);
+      for (const k of pin.skipped) io.err(`left out ${k.file}: ${k.why}`);
+      const steps = workflowSteps();
+      if (opts.json) json({ ...pin, steps: steps.join("\n") });
+      else {
+        const page = new URL("/account", pin.site).href;
+        const count = pin.passkeys.length === 1 ? "1 passkey" : `${pin.passkeys.length} passkeys`;
+        io.out(`keys read from ${c.service}, the service .baesian/config.json names, for project ${c.project}: if that isn't the service you meant, stop here, since a commit can change the config (B-pt52b)`);
+        io.out(`${TRUST_ENV}, a line each: the project's (B-mar8x), the service's key, and ${count}:`);
+        io.out("");
+        for (const line of pin.lines) io.out(line);
+        io.out("");
+        if (pin.passkeys.length) {
+          const whose = pin.passkeys.map((p) => `${p.handle}'s, added ${p.enrolled.slice(0, 10)}`).join("; ");
+          io.out(`Check each passkey is yours (${whose}): compare its line with the one the website showed when you added it, and with the passkeys on your account page, ${page}. Leave out a line that isn't yours.`);
+        } else {
+          io.out(`No passkey yet: CI counts an answer on a hard card only with a passkey it pins (D139, D159). Add one on your account page, ${page}, and run \`baesian ci\` again.`);
+        }
+        io.out(`Set them as the repository variable ${TRUST_ENV} (on GitHub: Settings, Secrets and variables, Actions, Variables), or run \`baesian ci --github\`. Run \`baesian ci\` again after adding a passkey.`);
+        io.out("");
+        io.out("The workflow's steps:");
+        io.out("");
+        for (const line of steps) io.out(line);
+      }
+      if (opts.github) {
+        // Only after the lines are shown (B-pt52b). gh reads the variable's value from its input.
+        const r = (io.run ?? runProgram)("gh", ["variable", "set", TRUST_ENV], { input: `${pin.lines.join("\n")}\n`, cwd: s.repo.toplevel });
+        if (r.missing) {
+          io.err(`gh isn't on PATH, so ${TRUST_ENV} wasn't set: set it by hand, or install GitHub's CLI (https://cli.github.com) and run \`baesian ci --github\` again`);
+          state.code = 1;
+        } else if (r.status !== 0) {
+          io.err(`gh variable set ${TRUST_ENV} failed${r.stderr.trim() ? `: ${r.stderr.trim()}` : ""}`);
+          state.code = 1;
+        } else (opts.json ? io.err : io.out)(`set the repository variable ${TRUST_ENV} with gh: ${pin.lines.length} lines`);
       }
     });
 

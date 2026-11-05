@@ -79,6 +79,18 @@ baesian serve               # opens the client
 Agents use the CLI: `baesian template` prints a card to fill in, `baesian file` files it, and `baesian wait` and
 `baesian inbox` bring the answers back. `baesian --help` lists the rest.
 
+To answer cards on the hosted service, https://baesian.dev, from a laptop or a phone, link the repo to it:
+
+```sh
+baesian login   # links the repo to baesian.dev and signs this machine in: approve it on the page it prints
+                # then run the `git add … && git commit …` it prints, which commits the link
+baesian ci      # prints the lines for CI's BAESIAN_TRUST variable and the workflow steps to paste
+```
+
+Set the repository variable `BAESIAN_TRUST` to the lines `baesian ci` prints (or run `baesian ci --github`), after
+checking its passkey lines against your account page, then add its steps to your workflow. `baesian login --service
+<url>` links to a service of your own instead.
+
 For Claude Code, install the plugin, which teaches the agent to write cards and brings your answers into its
 sessions:
 
