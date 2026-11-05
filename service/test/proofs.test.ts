@@ -88,7 +88,7 @@ describe("an answer on a hard card, proved by the reviewer's passkey (D139)", ()
     expect(verdict.sig).toBeDefined();
     const proof = entries.find((e) => e.path === proofPath(verdict.path))!;
     expect(JSON.parse(Buffer.from(proof.body!, "base64").toString())).toMatchObject({ type: "passkey-proof", format: 1, file: verdict.path.split("/")[1], credential: p.passkey.id });
-    // The key file is in the log, signed, with the very line the person was given to pin.
+    // The key file is in the log, signed, with the very line the account page shows for CI to pin (B-yj5d5).
     const key = entries.find((e) => e.path === keyFileName(p.passkey.id))!;
     expect(key.sig).toBeDefined();
     expect(JSON.parse(Buffer.from(key.body!, "base64").toString())).toEqual(JSON.parse(p.pin));

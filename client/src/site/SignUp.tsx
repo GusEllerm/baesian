@@ -6,14 +6,14 @@ import { Field, Go, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
 import { Turnstile } from "./Turnstile";
 
 // Signing up (M9c, D153): an email address and the code sent to it, behind Turnstile (B-1a03b); a handle; then a passkey.
-// Or, sent back from Globus (D176) with `#flow=…&via=globus`, only the handle and the passkey. Then the recovery code
-// and the passkey's line for CI, each shown exactly once.
+// Or, sent back from Globus (D176) with `#flow=…&via=globus`, only the handle and the passkey. Then the recovery code,
+// shown exactly once, and nothing else to keep: the passkey's line for CI is on the account page, any time (B-yj5d5).
 
 type Step =
   | { step: "email" }
   | { step: "code"; flow: string; email: string; globus: boolean }
   | { step: "passkey"; flow: string; options: CreationOptionsJSON; handle: string }
-  | { step: "done"; handle: string; recovery: string; pin: string };
+  | { step: "done"; handle: string; recovery: string };
 
 /** Turn the service's reason into what to do, where it knows more. */
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -74,9 +74,9 @@ export function SignUp({ onIn }: { onIn: () => Promise<void> }) {
   const makeIt = (s: Extract<Step, { step: "passkey" }>) =>
     run(async () => {
       const response = await makePasskey(s.options);
-      const r = await call<{ recovery_code: string; passkey: { pin: string } }>("POST", "/v1/signup/finish", { flow: s.flow, response });
+      const r = await call<{ recovery_code: string }>("POST", "/v1/signup/finish", { flow: s.flow, response });
       await onIn();
-      setStep({ step: "done", handle: s.handle, recovery: r.recovery_code, pin: r.passkey.pin });
+      setStep({ step: "done", handle: s.handle, recovery: r.recovery_code });
     });
 
   if (step.step === "done") {
@@ -88,15 +88,6 @@ export function SignUp({ onIn }: { onIn: () => Promise<void> }) {
             value={step.recovery}
             mono="big"
             why="If you lose every passkey, this code and one we email you get you back in. It's shown only now: keep it in your password manager, or on paper somewhere safe."
-          />
-          <ShownOnce
-            label="Your passkey's line for CI"
-            value={step.pin}
-            why={
-              <>
-                For <code>baesian verify</code> to count the hard cards you answer with this passkey, add this line to your CI's <code>BAESIAN_TRUST</code> setting. It's shown only now; each passkey you add gives its own.
-              </>
-            }
           />
           <label className="site-check">
             <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />

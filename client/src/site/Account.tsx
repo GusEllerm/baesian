@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { type CreationOptionsJSON, type RequestOptionsJSON, makePasskey } from "../webauthn";
-import { type Account as AccountData, type Ceremony, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
+import { type Account as AccountData, type Ceremony, type Passkey, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
 import { go, takeFragment } from "./nav";
 import { Notifications } from "./Notifications";
-import { Field, Go, Notice, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
+import { Copyable, Field, Go, Notice, Problem, Sheet, Shell, To } from "./Page";
 
-// Your account (M9c): your passkeys, and adding one, with its line for CI shown once (D159); where you're signed in, and
-// ending any of it (B-vtr1r, B-7bq05); your machines, and ending any (B-84e0d); Globus, linked or not (D176); and signing
-// out, here or everywhere. What adds a way in asks for your passkey afresh. And deleting the account (M9f, B-b46z3): closed
-// at once, restorable with its passkey for 14 days, then deleted.
+// Your account (M9c): your passkeys, each with its line for CI on request, any time (D159, B-yj5d5), and adding one;
+// where you're signed in, and ending any of it (B-vtr1r, B-7bq05); your machines, and ending any (B-84e0d); Globus, linked
+// or not (D176); and signing out, here or everywhere. What adds a way in asks for your passkey afresh. And deleting the
+// account (M9f, B-b46z3): closed at once, restorable with its passkey for 14 days, then deleted.
 
 /** A new passkey's options (`POST /v1/account/passkeys/start`), which take a recent check. */
 const enrolStart = () => call<Ceremony<CreationOptionsJSON>>("POST", "/v1/account/passkeys/start", {});
@@ -33,7 +33,8 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
   const config = useConfig();
   const [signIns, setSignIns] = useState<SignInRow[]>();
   const [machines, setMachines] = useState<MachineRow[]>();
-  const [added, setAdded] = useState<{ name: string; pin: string }>();
+  // The passkeys whose line for CI is open: none at first, and a new one's, opened for you.
+  const [lines, setLines] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string>();
   // A Globus round trip comes back with what happened in the address's fragment (M9c).
   const [fragment] = useState(takeFragment);
@@ -80,10 +81,18 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
       }
       const c = enrol.take();
       const response = await makePasskey(c.options);
-      const r = await call<{ passkey: { name: string; pin: string } }>("POST", "/v1/account/passkeys/finish", { flow: c.flow, response });
+      const r = await call<{ passkey: { credential: string; name: string } }>("POST", "/v1/account/passkeys/finish", { flow: c.flow, response });
       setChecked(false);
-      setAdded(r.passkey);
       await reload();
+      setLines((open) => new Set(open).add(r.passkey.credential));
+      setNotice("The new passkey is added, with its line for CI open in the list below.");
+    });
+
+  const toggleLine = (credential: string) =>
+    setLines((open) => {
+      const next = new Set(open);
+      if (!next.delete(credential)) next.add(credential);
+      return next;
     });
 
   const endSignIn = (s: SignInRow) =>
@@ -132,25 +141,9 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
       <Sheet title="Passkeys" sub label="Your passkeys" lead="They sign you in, and confirm your answers on hard cards. Add one on each device you answer from.">
         <ul className="site-rows">
           {account.passkeys.map((p) => (
-            <li key={p.credential} className="site-row">
-              <span className="nm">{p.name}</span>
-              <span className="st">
-                Added {day(p.enrolled)} · last used {ago(p.last_used)}
-              </span>
-            </li>
+            <PasskeyRow key={p.credential} passkey={p} open={lines.has(p.credential)} onToggle={() => toggleLine(p.credential)} />
           ))}
         </ul>
-        {added && (
-          <ShownOnce
-            label={`The line for CI, for ${added.name}`}
-            value={added.pin}
-            why={
-              <>
-                For <code>baesian verify</code> to count the hard cards you answer with this passkey, add this line to your CI's <code>BAESIAN_TRUST</code> setting. It's shown only now.
-              </>
-            }
-          />
-        )}
         <Go busy={busy === "passkey"} busyText="Waiting for your passkey…" disabled={!(freshNow ? enrol.ready : check.ready)} onClick={() => void addPasskey()}>
           {checked && freshNow ? "Make the new passkey" : "Add a passkey"}
         </Go>
@@ -232,6 +225,34 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
 
       <DeleteAccount handle={account.handle} fresh={freshNow} check={check} />
     </Shell>
+  );
+}
+
+/**
+ * One passkey: its name, when it was added and last used, and its line for CI, open on request, any time (B-yj5d5). The
+ * line is what CI's `BAESIAN_TRUST` pins for it (D159): its key file on one line, as every project of yours holds it. It's
+ * public, and signs nobody in.
+ */
+function PasskeyRow({ passkey: p, open, onToggle }: { passkey: Passkey; open: boolean; onToggle: () => void }) {
+  const id = useId();
+  return (
+    <li className="site-row">
+      <span className="nm">{p.name}</span>
+      <span className="st">
+        Added {day(p.enrolled)} · last used {ago(p.last_used)}
+      </span>
+      <button type="button" className="switch end" aria-expanded={open} aria-controls={id} aria-label={`Line for CI, for ${p.name}`} onClick={onToggle}>
+        Line for CI
+      </button>
+      {open && (
+        <div className="ci-line" id={id}>
+          <p className="hint">
+            For <code>baesian verify</code> to count the hard cards you answer with this passkey, add this line to your CI's <code>BAESIAN_TRUST</code> setting. <code>baesian ci</code> prints it too, with the rest of the setting.
+          </p>
+          <Copyable label={`The line for CI, for ${p.name}`} value={p.pin} />
+        </div>
+      )}
+    </li>
   );
 }
 

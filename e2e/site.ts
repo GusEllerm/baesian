@@ -223,8 +223,8 @@ export async function virtualAuthenticator(page: Page): Promise<{ cdp: CDPSessio
   return { cdp, id: authenticatorId };
 }
 
-/** Sign up through the website's pages, as a person does: email, code, handle, passkey. Returns the handle and the email. */
-export async function signUpOnPage(page: Page, site: LocalSite, who: { email: string; handle: string }): Promise<{ recovery: string; pin: string }> {
+/** Sign up through the website's pages, as a person does: email, code, handle, passkey. Returns the recovery code it showed. */
+export async function signUpOnPage(page: Page, site: LocalSite, who: { email: string; handle: string }): Promise<{ recovery: string }> {
   await page.goto(`${site.url}/sign-up`);
   await page.getByLabel("Email address").fill(who.email);
   const since = Date.now();
@@ -236,11 +236,10 @@ export async function signUpOnPage(page: Page, site: LocalSite, who: { email: st
   await page.getByRole("button", { name: "Make a passkey" }).click();
   await expect(page.getByRole("heading", { name: "Save your recovery code" })).toBeVisible();
   const recovery = (await page.getByLabel("Your recovery code", { exact: true }).textContent())!;
-  const pin = (await page.getByLabel("Your passkey's line for CI", { exact: true }).textContent())!;
   await page.getByLabel("I've saved my recovery code").check();
   await page.getByRole("button", { name: "Go to your projects" }).click();
   await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
-  return { recovery, pin };
+  return { recovery };
 }
 
 let n = 0;

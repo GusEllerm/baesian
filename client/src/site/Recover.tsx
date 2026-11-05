@@ -6,13 +6,14 @@ import { Field, Go, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
 import { Turnstile } from "./Turnstile";
 
 // Getting back in after losing every passkey (B-jzgy4): an emailed code and the recovery code you saved, together, then
-// a new passkey. Every other sign-in is ended, a notice is emailed, and a new recovery code is shown, once.
+// a new passkey. Every other sign-in is ended, a notice is emailed, and a new recovery code is shown, once. The new
+// passkey's line for CI is on the account page, beside it, any time (B-yj5d5).
 
 type Step =
   | { step: "email" }
   | { step: "codes"; flow: string; email: string }
   | { step: "passkey"; flow: string; options: CreationOptionsJSON }
-  | { step: "done"; handle: string; recovery: string; pin: string };
+  | { step: "done"; handle: string; recovery: string };
 
 export function Recover({ onIn }: { onIn: () => Promise<void> }) {
   const config = useConfig();
@@ -45,15 +46,6 @@ export function Recover({ onIn }: { onIn: () => Promise<void> }) {
       <Shell who={step.handle}>
         <Sheet title="You're back in" lead={<>Your new passkey is added, and this browser is signed in as <b>{step.handle}</b>. Every other sign-in was ended, and we emailed you a notice.</>}>
           <ShownOnce label="Your new recovery code" value={step.recovery} mono="big" why="The one you used is spent. Keep this one where you kept it: it's shown only now." />
-          <ShownOnce
-            label="Your new passkey's line for CI"
-            value={step.pin}
-            why={
-              <>
-                For <code>baesian verify</code> to count the hard cards you answer with this passkey, add this line to your CI's <code>BAESIAN_TRUST</code> setting. It's shown only now.
-              </>
-            }
-          />
           <label className="site-check">
             <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
             <span>I've saved my new recovery code</span>
@@ -61,6 +53,9 @@ export function Recover({ onIn }: { onIn: () => Promise<void> }) {
           <Go disabled={!saved} onClick={() => go("/", { replace: true })}>
             Go to your projects
           </Go>
+          <p className="small">
+            The hard cards you answer with the new passkey count in CI once its line is in your CI's <code>BAESIAN_TRUST</code>. Your account page has it, beside the passkey.
+          </p>
         </Sheet>
       </Shell>
     );
@@ -77,9 +72,9 @@ export function Recover({ onIn }: { onIn: () => Promise<void> }) {
             onClick={() =>
               void run(async () => {
                 const response = await makePasskey(step.options);
-                const r = await call<{ account: { handle: string }; recovery_code: string; passkey: { pin: string } }>("POST", "/v1/recover/finish", { flow: step.flow, response });
+                const r = await call<{ account: { handle: string }; recovery_code: string }>("POST", "/v1/recover/finish", { flow: step.flow, response });
                 await onIn();
-                setStep({ step: "done", handle: r.account.handle, recovery: r.recovery_code, pin: r.passkey.pin });
+                setStep({ step: "done", handle: r.account.handle, recovery: r.recovery_code });
               })
             }
           >

@@ -117,10 +117,21 @@ export function Field(p: {
 }
 
 /**
- * Something shown exactly once (M9c): the recovery code, or the line CI pins for a passkey (D159). It's in a box you can
- * select, with a button that copies it, and says it won't be shown again.
+ * Something shown exactly once (M9c): the recovery code. It's in a box you can select, with a button that copies it,
+ * and says it won't be shown again.
  */
-export function ShownOnce({ label, value, why, mono }: { label: string; value: string; why: ReactNode; mono?: "big" | "line" }) {
+export function ShownOnce({ label, value, why, mono }: { label: string; value: string; why: ReactNode; mono?: "big" }) {
+  return (
+    <div className="shown-once">
+      <span className="lbl">{label}</span>
+      <p className="hint">{why}</p>
+      <Copyable label={label} value={value} big={mono === "big"} />
+    </div>
+  );
+}
+
+/** A value in a box you can select, labelled for a screen reader, with a button that copies it. */
+export function Copyable({ label, value, big }: { label: string; value: string; big?: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -131,17 +142,13 @@ export function ShownOnce({ label, value, why, mono }: { label: string; value: s
     }
   };
   return (
-    <div className="shown-once">
-      <span className="lbl">{label}</span>
-      <p className="hint">{why}</p>
-      <div className="once-row">
-        <code className={mono === "big" ? "once big" : "once"} aria-label={label}>
-          {value}
-        </code>
-        <button type="button" className="switch" onClick={() => void copy()}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+    <div className="once-row">
+      <code className={big ? "once big" : "once"} aria-label={label}>
+        {value}
+      </code>
+      <button type="button" className="switch" onClick={() => void copy()}>
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }

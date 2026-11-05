@@ -100,7 +100,7 @@ describe("how long a sign-in lasts (B-vtr1r)", () => {
 });
 
 describe("enrolling another passkey", () => {
-  it("asks for a passkey you have first, then enrols the new one, mails a notice and gives the line to pin (D159)", async () => {
+  it("asks for a passkey you have first, then enrols the new one and mails a notice; the account lists each one's line to pin (D159, B-yj5d5)", async () => {
     const p = await signUp();
     const b = await signIn(p.passkey);
     // A sign-in checks the passkey, so it's fresh for five minutes; past that, enrolling asks again.
@@ -114,11 +114,15 @@ describe("enrolling another passkey", () => {
     const second = new WebPasskey("-", p.handle, -8);
     const done = await b.post("/v1/account/passkeys/finish", { flow: start.body.flow, response: second.register(start.body.options.challenge), name: "my laptop" });
     expect(done.status).toBe(201);
-    expect(done.body.passkey).toMatchObject({ credential: second.id, name: "my laptop" });
-    expect(JSON.parse(done.body.passkey.pin)).toMatchObject({ account: p.account, credential: second.id, alg: -8 });
-    expect(outbox.last(p.email)!.kind).toBe("passkey-added");
+    expect(done.body.passkey).toEqual({ credential: second.id, name: "my laptop" });
+    expect(outbox.last(p.email)!).toMatchObject({ kind: "passkey-added", text: expect.stringContaining("/account") });
     await signIn(second);
-    expect((await b.get("/v1/account")).body.passkeys).toHaveLength(2);
+    // Every passkey's line, any time: the key file each project holds, on one line.
+    const listed = (await b.get("/v1/account")).body.passkeys as { credential: string; pin: string }[];
+    expect(listed.map((k) => k.credential)).toEqual([p.passkey.id, second.id]);
+    expect(listed[0]!.pin).toBe(p.pin);
+    expect(listed[1]!.pin).not.toContain("\n");
+    expect(JSON.parse(listed[1]!.pin)).toEqual({ type: "passkey-key", format: 1, account: p.account, handle: p.handle, credential: second.id, public_key: second.spki.toString("base64url"), alg: -8, enrolled: expect.any(String) });
   });
 
   it("doesn't check the passkey afresh with another account's passkey", async () => {
@@ -145,9 +149,13 @@ describe("getting back in with an emailed code and a saved recovery code (B-jzgy
     expect(done.status).toBe(201);
     expect(done.body.account.id).toBe(p.account);
     expect(done.body.recovery_code).not.toBe(p.recovery);
+    // Only the new recovery code is given to keep; the new passkey's line for CI is on the account (B-yj5d5).
+    expect(done.body.passkey).toEqual({ credential: fresh.id, name: expect.any(String) });
     expect(outbox.last(p.email)!.kind).toBe("recovered");
     expect((await p.browser.get("/v1/account")).status).toBe(401);
-    expect((await b.get("/v1/account")).status).toBe(200);
+    const me = await b.get("/v1/account");
+    expect(me.status).toBe(200);
+    expect(me.body.passkeys.map((k: { pin: string }) => JSON.parse(k.pin).credential)).toEqual([p.passkey.id, fresh.id]);
     await signIn(fresh);
 
     // The old recovery code is spent.
