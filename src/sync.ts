@@ -157,7 +157,7 @@ export type Link = { kind: "off" } | { kind: "stopped" | "signed-out"; why: stri
  */
 export function linkProblem(store: Store, c: Config = store.config()): string | undefined {
   if (!c.project || !store.hasRepo) return undefined;
-  if (!c.first_commit) return `\`.baesian/config.json\` names project ${c.project} but not the repo's first commit, so this checkout can't be told from a copy (B-5gnea): run \`baesian login\` to link it again`;
+  if (!c.first_commit) return `\`${store.personal ? ".git/baesian/config.json" : ".baesian/config.json"}\` names project ${c.project} but not the repo's first commit, so this checkout can't be told from a copy (B-5gnea): run \`baesian login\` to link it again`;
   const top = store.repo.toplevel;
   if (isShallow(top)) return undefined;
   const roots = rootCommits(top);

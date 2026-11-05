@@ -50,7 +50,7 @@ The pre-commit hook (`runHook`, [[src-gate]]) and `baesian sync` ([[src-cli]]) c
 
 ## `baesian init --vault`
 
-`initVault` records the vault with `Store.setVault`, which keeps the config's other keys, then:
+`initVault` records the vault with `Store.setVault`, which keeps the config's other keys, then (never in personal mode, B-4rwyz, which commits nothing, so `baesian init --personal` refuses a vault):
 - **`enableBases`** turns on Obsidian's Bases core plugin in `.obsidian/core-plugins.json`: `"bases": true` in its object form, keeping the other keys in order, or `"bases"` added to its older list form. It never creates `.obsidian/` or the file.
 - **`insertLogQuery`** inserts `DECISION_LOG_SECTION`, the `base` code block from P17 §5, into the vault's `Decision Log.md` (`DECISION_LOG`), before its first second-level heading. It does it once: a log that already has the heading or a base over `Decisions` is left alone. With no log, `init` prints the section to paste.
 - **`vaultGuidance`** gives the `AGENTS.md` block its sentence (D173): the vault's routing notes that exist (`ROUTING_NOTES`, through `routingNotes`) and its `Rules/` folder. `agentsBlock` in `src/agents.ts` adds it.

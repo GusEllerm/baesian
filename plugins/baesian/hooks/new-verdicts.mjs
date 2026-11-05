@@ -1,7 +1,8 @@
 // SessionStart and UserPromptSubmit, for Claude Code and Codex (D116, D118): when a session starts or resumes, and
 // with your next message, the new verdicts on this branch's cards come in as plain text, which both harnesses add
 // to the agent's context. Each session keeps its own place in the inbox (B-ghhym). Nothing new, or no Baesian
-// installed, prints nothing.
+// installed, prints nothing. In a clone that uses Baesian in personal mode (B-4rwyz), where AGENTS.md says nothing of
+// it, a session's first look also brings Baesian's instructions, which the CLI prints.
 import { pathToFileURL } from "node:url";
 import { baesian, runHook, sessionArgs } from "./baesian.mjs";
 

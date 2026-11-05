@@ -1,16 +1,18 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
 import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock } from "./hookblock.js";
 import type { Http } from "./login.js";
-import { type Store } from "./store.js";
+import { RECORD_DIR, type Store } from "./store.js";
 import { syncRelay } from "./sync.js";
-import { parseTrailers } from "./trailers.js";
+import { type Trailers, parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
 import { findMerges, noteSquash, rebasing, recordCommitted, takeSquash } from "./merges.js";
+import { clearCited, noteCited, rewrites, takeCited, withoutBaesianTrailers } from "./personal.js";
 import { ledgerBody } from "./schema.js";
 
 // Baesian's hooks (D54) are installed here; their block's text is in src/hookblock.ts.
@@ -94,6 +96,227 @@ export function installHooks(store: Store, fallback: readonly string[]): Install
   for (const name of HOOKS) files[name] = writeHook(join(dir, name), hookBlock(name));
   setFallback(store, fallback);
   return { dir, versioned: !relative(top, dir).startsWith(".."), setHooksPath, files };
+}
+
+// ---------------------------------------------------------------- personal mode's hooks (B-4rwyz)
+
+/** Personal mode: the clone's own hooks folder, in the live layer (`.git/baesian/hooks/`), which `core.hooksPath` names. */
+export const PERSONAL_HOOKS = "hooks";
+
+/**
+ * Per-clone git config: the hooks folder this clone's git used before personal mode (`core.hooksPath` as it was), whose
+ * hooks still run after Baesian's. Unset: git's own, `hooks/` in the common directory.
+ */
+export const REPO_HOOKS_KEY = "baesian.repohooks";
+
+/** Every hook git runs from a hooks folder (githooks(5), git 2.56). */
+const GIT_HOOKS = new Set([
+  "applypatch-msg", "pre-applypatch", "post-applypatch", "pre-commit", "pre-merge-commit", "prepare-commit-msg", "commit-msg",
+  "post-commit", "pre-rebase", "post-checkout", "post-merge", "pre-push", "pre-receive", "update", "proc-receive", "post-receive",
+  "post-update", "reference-transaction", "push-to-checkout", "pre-auto-gc", "post-rewrite", "sendemail-validate",
+  "fsmonitor-watchman", "p4-changelist", "p4-prepare-changelist", "p4-post-changelist", "p4-pre-submit", "post-index-change",
+]);
+
+/**
+ * The hooks a working clone runs, each passed on to the repo's own whether or not it has one yet, so a hook the team adds
+ * later still runs. Others the repo has (`reference-transaction`, say) are passed on too, from when `baesian init
+ * --personal` sees them: one runs on every ref update, so it isn't there unless the repo has it.
+ */
+const PASSED_ON = [
+  "applypatch-msg", "pre-applypatch", "post-applypatch", "pre-commit", "pre-merge-commit", "prepare-commit-msg", "commit-msg",
+  "post-commit", "pre-rebase", "post-checkout", "post-merge", "pre-push", "post-rewrite", "pre-auto-gc", "sendemail-validate",
+];
+
+/** This clone's hooks folder in personal mode. */
+export function personalHooksDir(store: Store): string {
+  return join(store.live, PERSONAL_HOOKS);
+}
+
+/** A git config value, as git reads it from every level; undefined when it isn't set. */
+function gitConfig(top: string, key: string, level?: "--local"): string | undefined {
+  try {
+    return execFileSync("git", ["config", ...(level ? [level] : []), "--get", key], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).replace(/\n$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether two paths name the same folder. */
+function samePath(a: string, b: string): boolean {
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  return real(a) === real(b);
+}
+
+/** Whether git runs this clone's hooks from its personal-mode folder. */
+function pointsAtPersonal(store: Store): boolean {
+  try {
+    return samePath(git(store.repo.toplevel, ["rev-parse", "--path-format=absolute", "--git-path", "hooks"]), personalHooksDir(store));
+  } catch {
+    return false;
+  }
+}
+
+/** The repo's own hooks folder, as this clone's git had it: its setting, the folder for this worktree, and as a hook names it. */
+export interface RepoHooks {
+  /** `core.hooksPath` as it was; undefined for git's own folder. */
+  configured: string | undefined;
+  /** The folder, for this worktree. */
+  dir: string;
+  /** The folder as a shell word, relative where git's setting is (git runs a hook from the worktree's root). */
+  shell: string;
+  /** As people read it. */
+  shown: string;
+}
+
+function repoHooks(store: Store, configured: string | undefined): RepoHooks {
+  const top = store.repo.toplevel;
+  const shown = (dir: string) => (relative(top, dir).startsWith("..") ? dir : relative(top, dir));
+  if (!configured) {
+    const dir = join(store.repo.commonDir, "hooks");
+    return { configured: undefined, dir, shell: sq(dir), shown: shown(dir) };
+  }
+  if (configured.startsWith("~/")) return { configured, dir: join(homedir(), configured.slice(2)), shell: `"$HOME"/${sq(configured.slice(2))}`, shown: configured };
+  return { configured, dir: isAbsolute(configured) ? configured : join(top, configured), shell: sq(configured), shown: configured };
+}
+
+/** The hooks a folder has that git would run: files named for a hook. */
+function hookNames(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((f) => GIT_HOOKS.has(f) && statSync(join(dir, f)).isFile());
+  } catch {
+    return [];
+  }
+}
+
+/** The command that points this clone's git back at the repo's own hooks. */
+function restoreCommand(repo: RepoHooks): string {
+  return repo.configured === undefined ? "git config --unset core.hooksPath" : `git config core.hooksPath ${sq(repo.configured)}`;
+}
+
+/**
+ * One of this clone's hooks in personal mode (B-4rwyz): Baesian's block, for the hooks Baesian installs, then the repo's
+ * own hook of that name, if it has one git would run, with the same arguments and standard input, exiting as it does.
+ * `post-rewrite`'s input is read first, so Baesian and the repo's hook each get it.
+ */
+export function personalHook(name: string, repo: RepoHooks): string {
+  const gate = (HOOKS as readonly string[]).includes(name);
+  const rewrite = name === "post-rewrite";
+  const lines = [
+    "#!/bin/sh",
+    `# Baesian, in personal mode (B-4rwyz): this clone's own ${name} hook, written by \`baesian init --personal\`, never`,
+    `# committed. ${gate ? "It runs Baesian's gate, then" : "It runs"} the repo's own ${name}, from ${repo.shown}, with the same arguments and input.`,
+  ];
+  if (rewrite) lines.push(`baesian_input="$(cat; echo .)"; baesian_input="\${baesian_input%.}"`);
+  if (gate) lines.push(hookBlock(name as HookName, { restore: restoreCommand(repo) }));
+  lines.push(`repo_hook=${repo.shell}/${sq(name)}`);
+  lines.push(
+    rewrite
+      ? `if [ -f "$repo_hook" ] && [ -x "$repo_hook" ]; then printf '%s' "$baesian_input" | "$repo_hook" "$@"; exit $?; fi`
+      : `if [ -f "$repo_hook" ] && [ -x "$repo_hook" ]; then exec "$repo_hook" "$@"; fi`,
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+export interface PersonalInstall {
+  /** This clone's hooks folder. */
+  dir: string;
+  /** The repo's own, whose hooks run after Baesian's. */
+  repo: RepoHooks;
+  /** Whether `core.hooksPath` pointed elsewhere before: a first install, or one after something reset it. */
+  pointed: boolean;
+  /** Whether it had been installed, and something had pointed `core.hooksPath` elsewhere since (a setup script, say). */
+  wasReset: boolean;
+  /** The hooks in the folder. */
+  hooks: string[];
+}
+
+/**
+ * Personal mode's gate (B-4rwyz): this clone's own hooks, in the live layer, set as its `core.hooksPath`, each running
+ * Baesian's block and then the repo's own hook from the folder the clone used before. Nothing in the repo's hook files
+ * changes. Safe to run again: after something reset `core.hooksPath`, the folder it names now is the repo's.
+ */
+export function installPersonalHooks(store: Store, fallback: readonly string[]): PersonalInstall {
+  const top = store.repo.toplevel;
+  const dir = personalHooksDir(store);
+  const ours = pointsAtPersonal(store);
+  let configured = ours ? gitConfig(top, REPO_HOOKS_KEY, "--local") : gitConfig(top, "core.hooksPath");
+  // A personal hooks folder somewhere else: the clone moved, and its setting names where it was.
+  if (!ours && configured !== undefined && /[\\/]baesian[\\/]hooks[\\/]?$/.test(configured)) configured = gitConfig(top, REPO_HOOKS_KEY, "--local");
+  const repo = repoHooks(store, configured || undefined);
+  const hooks = [...new Set([...PASSED_ON, ...hookNames(repo.dir)])];
+  const wasReset = !ours && existsSync(dir);
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) if (!hooks.includes(f)) rmSync(join(dir, f), { recursive: true, force: true });
+  for (const name of hooks) {
+    writeFileSync(join(dir, name), personalHook(name, repo));
+    chmodSync(join(dir, name), 0o755);
+  }
+  // Absolute, since `.git` is a file in a linked worktree; shared by the clone's worktrees, never committed.
+  execFileSync("git", ["config", "--local", "core.hooksPath", dir], { cwd: top });
+  if (repo.configured !== undefined) execFileSync("git", ["config", "--local", REPO_HOOKS_KEY, repo.configured], { cwd: top });
+  else unsetRepoHooks(top);
+  setFallback(store, fallback);
+  return { dir, repo, pointed: !ours, wasReset, hooks };
+}
+
+function unsetRepoHooks(top: string): void {
+  try {
+    execFileSync("git", ["config", "--local", "--unset-all", REPO_HOOKS_KEY], { cwd: top, stdio: "ignore" });
+  } catch {
+    // wasn't set
+  }
+}
+
+/**
+ * Take personal mode's hooks out (B-4rwyz), when the clone switches to shared mode: `core.hooksPath` goes back to what it
+ * was, unless something set it elsewhere since, and the folder goes. Returns the setting it went back to.
+ */
+export function uninstallPersonalHooks(store: Store): string | undefined {
+  const top = store.repo.toplevel;
+  const dir = personalHooksDir(store);
+  const configured = gitConfig(top, REPO_HOOKS_KEY, "--local") || undefined;
+  const local = gitConfig(top, "core.hooksPath", "--local");
+  if (local !== undefined && samePath(local, dir)) {
+    execFileSync("git", ["config", "--local", "--unset-all", "core.hooksPath"], { cwd: top });
+    if (configured !== undefined && gitConfig(top, "core.hooksPath") !== configured) execFileSync("git", ["config", "--local", "core.hooksPath", configured], { cwd: top });
+  }
+  unsetRepoHooks(top);
+  rmSync(dir, { recursive: true, force: true });
+  return configured;
+}
+
+/**
+ * What's wrong with a personal-mode clone's setup, for any command to say (B-4rwyz): its gate is off because something
+ * pointed `core.hooksPath` elsewhere (a team's setup script, say); the repo's hooks folder has a hook this clone's don't
+ * pass on; or a `.baesian/` turned up in the worktree. A clone set up with `--no-hooks` has no gate to be off.
+ */
+export function personalProblems(store: Store): string[] {
+  if (!store.personal) return [];
+  const top = store.repo.toplevel;
+  const dir = personalHooksDir(store);
+  const out: string[] = [];
+  if (existsSync(dir)) {
+    if (!pointsAtPersonal(store)) {
+      const now = gitConfig(top, "core.hooksPath");
+      out.push(
+        `this clone's commit gate is off: core.hooksPath is ${now === undefined ? "unset" : `\`${now}\``}, not this clone's own hooks (personal mode, B-4rwyz), so git runs the repo's hooks without Baesian's. Something set it, such as the repo's setup script. Run \`baesian init --personal\` again: the repo's hooks still run, after Baesian's.`,
+      );
+    } else {
+      const repo = repoHooks(store, gitConfig(top, REPO_HOOKS_KEY, "--local") || undefined);
+      const missing = hookNames(repo.dir).filter((n) => !existsSync(join(dir, n)));
+      if (missing.length) out.push(`the repo's hooks folder, ${repo.shown}, has ${missing.join(" and ")}, which this clone's own hooks don't run yet (personal mode, B-4rwyz): run \`baesian init --personal\` again`);
+    }
+  }
+  if (existsSync(join(top, RECORD_DIR))) {
+    out.push(`this worktree has a ${RECORD_DIR}/, though this clone uses Baesian in personal mode, which writes none: git ignores it here (.git/info/exclude), so it won't be committed. Delete it.`);
+  }
+  return out;
 }
 
 export interface HookIo {
@@ -274,8 +497,57 @@ export function missingHooks(store: Store): HookName[] {
   });
 }
 
-/** Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. */
-export async function runHook(store: Store, name: string, args: string[], io: HookIo, http: Http = {}): Promise<number> {
+/**
+ * Personal mode (B-4rwyz): take the Baesian trailers out of the commit message, so the shared history never shows them,
+ * and note the cards it cites for `post-commit` to write the ledger from, as it reads the trailers in shared mode. Acks
+ * cover the commit's gate facts, and are checked here: nothing keeps them after.
+ */
+function moveTrailers(store: Store, path: string, raw: string, trailers: Trailers, io: HookIo): void {
+  const top = store.repo.toplevel;
+  const cards = trailers.cards.filter((id) => store.card(id));
+  noteCited(top, cards);
+  const next = withoutBaesianTrailers(raw, top);
+  if (next === raw) return;
+  writeFileSync(path, next);
+  const what = [cards.length ? `the card${cards.length === 1 ? "" : "s"} it cites (${cards.join(", ")})` : "", trailers.acks.size ? `its ack${trailers.acks.size === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+  io.err(`baesian: took ${what || "Baesian's trailers"} out of the commit message (personal mode, B-4rwyz): the shared history doesn't show them${cards.length ? ", and this clone's ledger records the cards" : ""}`);
+}
+
+/** Write a ledger entry for each card a commit cites (D15), on the branch it was made on. */
+function ledgerFor(store: Store, sha: string, cards: Iterable<string>): void {
+  const branch = store.repo.branch.startsWith("detached-") ? rebasing(store) : undefined;
+  for (const id of new Set(cards)) {
+    if (!store.card(id)) continue;
+    store.writeLedger(id, { commit: sha, ...(branch ? { branch } : {}) }, ledgerBody(sha, id));
+  }
+}
+
+/**
+ * Personal mode (B-4rwyz): commits an amend or a rebase rewrote keep the cards they cited, as their trailers would in
+ * shared mode (B-9v5xj): each ledger entry for a rewritten commit gets one for the commit it became, on the same branch.
+ * Returns how many it wrote.
+ */
+function carryLedger(store: Store, input: string): number {
+  const map = rewrites(input);
+  if (!map.size) return 0;
+  const entries = store.ledgerEntries();
+  const have = new Set(entries.map((e) => `${e.meta.card} ${e.meta.commit}`));
+  let n = 0;
+  for (const e of entries) {
+    const to = e.meta.commit ? map.get(e.meta.commit) : undefined;
+    if (!to || have.has(`${e.meta.card} ${to}`) || !store.card(e.meta.card)) continue;
+    store.writeLedger(e.meta.card, { commit: to, branch: e.meta.branch }, ledgerBody(to, e.meta.card));
+    have.add(`${e.meta.card} ${to}`);
+    n += 1;
+  }
+  return n;
+}
+
+/**
+ * Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. `input` is the hook's
+ * standard input, which only personal mode's `post-rewrite` reads (B-4rwyz).
+ */
+export async function runHook(store: Store, name: string, args: string[], io: HookIo, http: Http = {}, input = ""): Promise<number> {
   if (!store.isInitialised()) return 0;
   const top = store.repo.toplevel;
   switch (name) {
@@ -287,6 +559,13 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       // A repo set up before D181 lacks the hooks that find merges until `baesian init` runs again.
       const missing = missingHooks(store);
       if (missing.length) io.err(`baesian: this repo's hooks lack ${missing.join(" and ")}, which find merges: run \`baesian init\` to add ${missing.length === 1 ? "it" : "them"}`);
+      // Personal mode (B-4rwyz) commits no record and no notes: the live layer is the record. Each commit starts afresh.
+      if (store.personal) {
+        clearCited(top);
+        for (const p of personalProblems(store)) io.err(`baesian: ${p}`);
+        writeStaged(top, []);
+        return 0;
+      }
       // D37: bring the record up to date, then stage all of it. Staging only what this hook copied
       // would miss the cards `baesian file` wrote into the record when they were filed.
       store.syncRecord();
@@ -313,36 +592,43 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
         io.err("baesian: the commit-msg hook needs the message file");
         return 1;
       }
+      const path = isAbsolute(file) ? file : join(top, file);
+      const raw = readFileSync(path, "utf8");
+      const trailers = parseTrailers(raw, top);
       // Merge commits bring in commits that were each checked; CI checks them again (M3b).
-      if (mergeInProgress(store)) return 0;
-      const trailers = parseTrailers(readFileSync(isAbsolute(file) ? file : join(top, file), "utf8"), top);
+      if (mergeInProgress(store)) {
+        if (store.personal) moveTrailers(store, path, raw, trailers, io);
+        return 0;
+      }
       const report = evaluate(store, detectStaged(store, stagedSnapshot(top)), trailers);
       for (const line of describeReport(report, verdictsSinceLastCommit(store))) io.err(line);
       if (!report.ok) unstageOurs(top);
       writeStaged(top, []);
+      // Personal mode (B-4rwyz): the trailers did their work here, and go to this clone's ledger, not the shared history.
+      if (report.ok && store.personal) moveTrailers(store, path, raw, trailers, io);
       return report.ok ? 0 : 1;
     }
     case "post-commit": {
       // D15: the ledger. Which commits build on which cards. Just the commit (D120): what it changed is git's to say, and
       // its subject and message never leave the machine (D181). A commit a rebase makes is its branch's, though HEAD is
-      // detached while it runs.
+      // detached while it runs. In personal mode (B-4rwyz), the cards commit-msg took out of the message, too.
       const message = git(top, ["log", "-1", "--format=%B", "HEAD"]);
       const sha = git(top, ["rev-parse", "HEAD"]);
-      const branch = store.repo.branch.startsWith("detached-") ? rebasing(store) : undefined;
-      for (const id of parseTrailers(message, top).cards) {
-        if (!store.card(id)) continue;
-        store.writeLedger(id, { commit: sha, ...(branch ? { branch } : {}) }, ledgerBody(sha, id));
-      }
+      ledgerFor(store, sha, [...parseTrailers(message, top).cards, ...(store.personal ? takeCited(top, sha) : [])]);
       // D181: a squash commit, or a merge whose conflicts were resolved and committed, merges a branch.
       recordMerges(store, "post-commit", io);
       return 0;
     }
     case "post-merge":
+      // A merge commit's own trailers, in personal mode, which commit-msg took out of its message (B-4rwyz).
+      if (store.personal && args[0] !== "1") ledgerFor(store, git(top, ["rev-parse", "HEAD"]), takeCited(top, "HEAD"));
       // D181: a merge or a fast-forward, `git pull` included. A squash (`$1` is 1) moved nothing yet: noted for its commit.
       if (args[0] === "1") noteSquash(store);
       else if (recordMerges(store, "post-merge", io)) await sendMerges(store, io, http);
       return 0;
     case "post-rewrite":
+      // Personal mode (B-4rwyz): the ledger follows the commits an amend or a rebase rewrote.
+      if (store.personal) carryLedger(store, input);
       // D181: a rebase, `git pull --rebase` included, may bring in merges made upstream. An amend brings nothing.
       if (args[0] === "rebase" && recordMerges(store, "post-rewrite", io)) await sendMerges(store, io, http);
       return 0;

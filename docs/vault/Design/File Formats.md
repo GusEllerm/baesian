@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files, with what the commit gate looks at (B-qkek1), and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs, the trust files and the project line CI pins beside them (B-mar8x); the relay's entry (M9b); the accounts database's tables (M9c); relay.json and the machine's grant (M9d); merges, found by the hooks (D181); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
+summary: "Baesian's file formats (accepted as D124): card revisions (with the M4 card content: question, trigger, two options, crux, facets), verdicts, withdrawals, ledger entries, decks, rules, topic aliases, attachments, waiting markers and config; preference files, with what the commit gate looks at (B-qkek1), and gate records (M8); the hosted service's proof (M9a): the account field, OpenSSH signature files, passkey proofs, the trust files and the project line CI pins beside them (B-mar8x); the relay's entry (M9b); the accounts database's tables (M9c); relay.json and the machine's grant (M9d); merges, found by the hooks (D181); personal mode's config and before-linking snapshot (B-4rwyz); where each lives, which are immutable, and the format number every file carries (D156, D157). Defined in src/schema.ts."
 created: 2026-10-23
 updated: 2026-11-05
 reviewed: 2026-10-23
@@ -52,9 +52,10 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
 | `port.json` | `LastPort` | yes (mutable) | no | `baesian serve`, kept after it stops (D103) |
-| `config.json` | `Config` | no | yes (mutable) | `baesian init`; `baesian login` links the repo (M9d) |
+| `config.json` | `Config` | in personal mode only, in place of the record's (B-4rwyz; mutable) | yes (mutable), except in personal mode | `baesian init`; `baesian login` links the repo (M9d) |
 | `~/.config/baesian/config.json` | `UserConfig` | — | — | the user; never in a repo |
 | `relay.json` | `RelayState` | yes (mutable) | no | the CLI, whenever it syncs with the relay (M9d; [[#The CLI's side of the relay (M9d)]]) |
+| `before-linking.json` | `BeforeLinkingSnapshot` | yes, in personal mode (mutable) | no | `baesian login`, when it links a personal clone ([[#Personal mode (B-4rwyz)]]) |
 | `~/.config/baesian/grants/<project>.json` | `MachineGrant` | — | — | `baesian login`, at each refresh, and `baesian logout` removes it; readable only by the user (B-gq8j1); never in a repo |
 | `<file>.sig` | OpenSSH's signature format (D160) | yes | yes, with its file | the hosted service, beside each file a person writes ([[#The hosted service's proof (M9a)]]) |
 | `verdicts/<name>.passkey.json`, `preferences/<name>.passkey.json` | `PasskeyProof` | yes | yes, with its file | the hosted service, from the browser's assertion (D139, D163) |
@@ -366,6 +367,25 @@ What a machine keeps of the hosted service ([[src-sync]]; [[Formats for v1]] sec
 
 **What a pull writes:** each entry's file into the live layer with an exclusive create, its `.sig` first, as if it had been written there; only in the folders the relay holds (`cards`, `decks`, `verdicts`, `rules`, `topics`, `preferences`, `trust`, `attachments`, and since D181 `ledger` and `merges`), and only when its bytes match the entry's size and digest. Where this machine wrote other bytes at the path first, the relay's copy replaces this machine's, in the worktree's record too, since it's everyone's; for a merge, quietly.
 
+## Personal mode (B-4rwyz)
+
+The user decided B-4rwyz: one person can use Baesian in a repo whose collaborators don't, and then nothing of Baesian's is committed. Before v1 these change freely (D108).
+
+- **The config** is the clone's own: `config.json` in the live layer (`PERSONAL_CONFIG`), the same `Config` in the same format, in place of `.baesian/config.json`. Its being there is what makes a clone personal (`Store.personal`). There's no record: the live layer plays its part, and `/.baesian/` is in the clone's `.git/info/exclude`, so a stray one is never committed. A vault, whose notes are committed, isn't set.
+- **`before-linking.json`** (`BeforeLinkingSnapshot`), in the live layer only, written once per project when `baesian login` links a personal clone, never committed or sent. It stands for the record at the linking commit, which a personal clone has none of (B-45xz8): an unsigned answer counts as from before linking when its blob ID is the one kept here.
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `before-linking`, 1 |
+| `project` | the project the clone was linked to; linking to another takes a new snapshot |
+| `at` | when it was taken |
+| `object_format` | `sha1` or `sha256`, the repo's, which each blob ID was taken in |
+| `files` | each unsigned verdict, rule, retirement, topic merge and preference file, by its path in the layer, with its git blob ID |
+
+- **`baesian-cited.json`**, beside the worktree's index, as `baesian-staged.json` is: the cards a commit cites, which `commit-msg` notes once it has taken their trailers out of the message, with the tree being committed, for `post-commit` to write the ledger from ([[src-gate#Personal mode (B-4rwyz)]]). It lasts one commit, so it has no format.
+- **Git's own settings, in the clone:** `core.hooksPath` names the clone's own hooks, `.git/baesian/hooks/`, and `baesian.repohooks` the hooks folder it named before, whose hooks run after Baesian's.
+- **Commit trailers** are written as ever, and taken out of the message by the `commit-msg` hook once the gate has checked them ([[#Commit trailers (D52)]]).
+
 ## Vault notes (M6)
 
 With `vault` set, the vault adapter writes two more files, in the vault rather than in Baesian's layers ([[Vault Adapter]], D170–D175; `src/vault.ts`, [[src-vault]]). They're views of the record: the pre-commit hook and `baesian sync` write them, from the branch's record and nothing else, and the gate never reads them (D173).
@@ -407,6 +427,7 @@ These aren't files, but they're part of the same public interface. They go in th
 
 - **`Baesian-Card: <id>`**, one line per card; comma-separated IDs are accepted too. The commit builds on the card. It covers the commit's detected facts whose kind is in the card's `touches` (D53). The post-commit hook writes a ledger entry for it. A changed answer's brief finds the card's commits by this trailer in the history of every branch (B-9v5xj), so they're still found after a rebase, or a squash whose message keeps the trailer in its last paragraph; a ledger entry whose commit is on no branch now is shown as rewritten.
 - **`Baesian-Ack: <fact-id> <reason>`** acknowledges a detected decision as a two-way door. The fact ID is the one the gate prints (`dep:httpx`, `schema:<path>`, `infra:<path>`, and later `api:<symbol>`). The reason is required.
+- **In personal mode** (B-4rwyz) both are written the same, and the `commit-msg` hook takes them out of the message once the gate has let the commit through, so the shared history never shows them: the cards cited go to the clone's ledger, which an amend or a rebase carries over to the commits it makes, and acks are kept nowhere.
 
 ## Decided points of P12 (2026-11-01, 2026-11-02)
 

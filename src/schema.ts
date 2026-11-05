@@ -67,6 +67,8 @@ export const FILE_KINDS = {
   // M9d, the CLI's side of the hosted service (P16 section 8): what it keeps of the relay, and the machine's grant.
   relay: { name: "relay state", upgrades: [] },
   grant: { name: "machine grant", upgrades: [] },
+  // B-4rwyz, personal mode: what a clone that commits nothing held when it was linked, in the record's place.
+  "before-linking": { name: "before-linking snapshot", upgrades: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
@@ -891,7 +893,10 @@ export const PasskeyProof = z.strictObject({
 });
 export type PasskeyProof = z.infer<typeof PasskeyProof>;
 
-/** `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it. */
+/**
+ * `.baesian/config.json`: committed, shared by everyone working on the repo. Its `format` is optional: people write it.
+ * In personal mode (B-4rwyz) the same config is the clone's own, `.git/baesian/config.json`, and nothing is committed.
+ */
 export const Config = z
   .strictObject({
     format: formatOf("config").optional(),
@@ -1001,6 +1006,25 @@ export const RelayState = z.strictObject({
   at: Timestamp,
 });
 export type RelayState = z.infer<typeof RelayState>;
+
+/**
+ * What a clone in personal mode (B-4rwyz) held of what a person writes when it was linked: `before-linking.json` in the
+ * live layer, written once per project by `baesian login`. Nothing is committed in personal mode, so there's no record at
+ * the linking commit to say which answers from before linking count (B-45xz8): this plays its part. Never committed, and
+ * never sent: the relay takes the answers themselves, at first link (B-3zjjx).
+ */
+export const BeforeLinkingSnapshot = z.strictObject({
+  type: z.literal("before-linking"),
+  format: formatOf("before-linking"),
+  project: ProjectId,
+  /** When it was taken: when the clone was linked. */
+  at: Timestamp,
+  /** The repo's object format, which says how each blob ID was taken. */
+  object_format: z.enum(["sha1", "sha256"]),
+  /** Each unsigned file a person wrote, by its path in the live layer, with its git blob ID. */
+  files: z.record(z.string().min(1), z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "a blob ID in lowercase hex")),
+});
+export type BeforeLinkingSnapshot = z.infer<typeof BeforeLinkingSnapshot>;
 
 /**
  * A machine's grant for one project (B-84e0d, B-gq8j1, M9d): `grants/<project>.json` beside the personal config,
