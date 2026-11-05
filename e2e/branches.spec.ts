@@ -11,11 +11,11 @@ import { skipSetup } from "./setup.js";
 import { type LocalSite, siteAvailable, signUpOnPage, somebody, standInTurnstile, startLogin, startSite, virtualAuthenticator } from "./site.js";
 import { PHONES, phone } from "./touch.js";
 
-// D181: "Your decisions, by branch", on the local desk and the website's, at a desktop's size and a phone's. A real repo's
-// history, made by git and the hooks (e2e/branches.ts): feat/checkout merged into main by a merge commit, fix/typo squashed
-// into it, feat/catalog still open with a card waiting, and the commits that cite cards. Locally the server reads them from
-// the live layer; on the website they went up through the relay, and commit subjects never did. With BAESIAN_SHOTS set to
-// a folder, each screen is saved there.
+// D181 redrawn (B-v8jzy, B-vfdhz, B-tgq5p): "Your decisions, by branch", a list in a drawer beside the desk on a computer,
+// and filling the screen on a phone, on the local desk and the website's. A real repo's history, made by git and the hooks
+// (e2e/branches.ts): feat/checkout merged into main by a merge commit, fix/typo squashed into it, feat/catalog still open
+// with a card waiting, and the commits that cite cards. Locally the server reads them from the live layer; on the website
+// they went up through the relay, and commit subjects never did. With BAESIAN_SHOTS set to a folder, each screen is saved.
 
 let server: RunningServer | undefined;
 test.afterEach(async () => {
@@ -24,17 +24,11 @@ test.afterEach(async () => {
   cleanup();
 });
 
-const panelOf = (page: Page) => page.getByRole("complementary", { name: "Your decisions, by branch" });
-const openPanel = async (page: Page, tap = false) => {
-  const more = page.getByRole("button", { name: "More" });
-  await (tap ? more.tap() : more.click());
-  const item = page.getByRole("menuitem", { name: "Your decisions, by branch" });
-  await (tap ? item.tap() : item.click());
-  await expect(panelOf(page)).toBeVisible();
-  return panelOf(page);
-};
-const laneName = (panel: Locator, name: string) => panel.locator(".lane-name", { has: panel.page().locator("b", { hasText: new RegExp(`^${name.replace("/", "\\/")}$`) }) });
-const callout = (panel: Locator) => panel.locator(".lane-callout");
+const CARD = ".stage article.card:not([data-leaving])";
+const drawerOf = (page: Page) => page.getByRole("dialog", { name: "Your decisions, by branch" });
+const branchesButton = (page: Page) => page.getByRole("button", { name: /^Branches/ });
+const row = (d: Locator, key: string) => d.locator(`[data-row="${key}"]`);
+const detail = (d: Locator) => d.locator(".br-row.is-detail .br-callout");
 
 async function shot(page: Page, name: string) {
   const dir = process.env.BAESIAN_SHOTS;
@@ -50,29 +44,36 @@ async function check(page: Page, phoneSize = false) {
   if (phoneSize) expect(await page.evaluate(smallTargets)).toEqual([]);
 }
 
-/** What the panel must show of the history, wherever it's drawn from. */
-async function seesHistory(page: Page, panel: Locator, h: History, opts: { answered: boolean }) {
-  await expect(panel.locator(".lane-name b")).toHaveText(["main", "feat/checkout", "fix/typo", "feat/catalog"]);
-  await expect(laneName(panel, "feat/checkout").locator(".lane-end")).toHaveText(/^Merged into main on \d{1,2} \w{3}$/);
-  await expect(laneName(panel, "fix/typo").locator(".lane-end")).toHaveText(/^Merged into main on /);
-  await expect(laneName(panel, "feat/catalog").locator(".lane-end")).toHaveText(opts.answered ? "Merge held: 1 waiting" : "Merge held: 2 waiting");
-  await expect(laneName(panel, "feat/catalog")).toContainText("codex · 2 cards");
-  // Two merges, each ending its lane in main; six cards; and the commits that cite them, each joined to its card.
-  const lanes = panel.locator(".lanes");
-  await expect(lanes.locator(".lane-mark.merge")).toHaveCount(2);
-  await expect(lanes.locator(".lane-merge:not(.sync)")).toHaveCount(2);
-  await expect(lanes.locator(".lane-mark.card")).toHaveCount(6);
-  await expect(lanes.locator(".lane-mark.commit")).toHaveCount(h.commits.length);
-  await expect(lanes.locator(".lane-cites")).toHaveCount(h.commits.length);
-  // feat/catalog isn't merged: its join is the dotted, inferred one; the merged lanes start from main.
-  await expect(lanes.locator(".lane-fork.inferred")).toHaveCount(1);
-  await expect(lanes.locator(".lane-fork:not(.inferred)")).toHaveCount(2);
-  // The lanes scroll in their own box, opening on the latest day.
-  const scroll = panel.locator(".lane-scroll");
-  await expect.poll(() => scroll.evaluate((s) => s.scrollWidth - s.clientWidth - s.scrollLeft)).toBeLessThan(2);
+/** What the list must show of the history, wherever it's drawn from. */
+async function seesHistory(d: Locator, h: History, opts: { answered: boolean }) {
+  const waiting = opts.answered ? 1 : 2;
+  await expect(d.locator(".br-status")).toHaveText(
+    `${opts.answered ? "One card is" : "Two cards are"} waiting for you, holding feat/catalog from merging. 6 cards on 4 branches: you chose otherwise than the agent on 1, and 1 was withdrawn. Two branches have merged. Show the oldest`,
+  );
+  // The branches still open, at the top; main is the trunk, with no end.
+  await expect(d.locator(".is-now .br-endtag")).toHaveText([`feat/catalog · No merge recorded · Merge held: ${waiting} waiting`]);
+  await expect(d.locator(".br-endtag", { hasText: /^main/ })).toHaveCount(0);
+  // A row per card, merge and branch start, newest first.
+  await expect(d.locator(".br-row.is-card")).toHaveCount(6);
+  // (Git keeps a merge's time to the second, and the history is made in a few: their order within a second isn't fixed.)
+  await expect(d.locator(".br-row.is-merge")).toHaveCount(2);
+  expect((await d.locator(".br-row.is-merge .br-rs").allTextContents()).sort()).toEqual(["feat/checkout merged into main", "fix/typo merged into main"]);
+  await expect(d.locator(".br-row.is-fork")).toHaveCount(3);
+  expect((await d.locator(".br-row.is-fork .br-tx").allTextContents()).sort()).toEqual(["feat/catalog began, from main (a guess: nothing records it)", "feat/checkout began, from main", "fix/typo began, from main"]);
+  await expect(d.locator(".br-row.is-card .br-rt").first()).toHaveText("How prices are stored");
+  await expect(d.locator(".br-row.is-card .br-rt").last()).toHaveText("Where the session lives");
+  // Where a branch began is dashed, a guess; a merge is solid, with its arrowhead.
+  await expect(d.locator(".is-fork path.fork")).toHaveCount(3);
+  await expect(d.locator(".is-merge path.m-merge")).toHaveCount(2);
+  // No commit rows until the switch is on, and no lines from commits to cards anywhere.
+  await expect(d.locator(".br-row.is-commit")).toHaveCount(0);
+  await d.getByRole("switch", { name: "Commits" }).click();
+  await expect(d.locator(".br-row.is-commit")).toHaveCount(h.commits.length);
+  await d.getByRole("switch", { name: "Commits" }).click();
+  await expect(d.locator(".br-row.is-commit")).toHaveCount(0);
   // Nothing anywhere says a commit's subject.
-  await expect(panel).not.toContainText("Secret subject");
-  await expect(panel).not.toContainText("acquisition");
+  await expect(d).not.toContainText("Secret subject");
+  await expect(d).not.toContainText("acquisition");
 }
 
 test.describe("the local desk", () => {
@@ -83,74 +84,266 @@ test.describe("the local desk", () => {
     await skipSetup(page, dir);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(server.url);
-    await expect(page.locator("article.card:not([data-leaving])")).toBeVisible();
+    await expect(page.locator(CARD)).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     return { dir, h };
   }
 
-  test("draws the lanes from the live layer: merges ending lanes, the commits joined to their cards, a callout by hover and keys", async ({ page }) => {
+  test("opens beside the desk and closes every way, giving focus back; the desk moves aside, whole, under a veil", async ({ page }) => {
+    await open(page);
+    const d = drawerOf(page);
+    await expect(d).toBeHidden();
+
+    // The header's button: focus goes to the list, on the oldest card waiting, opened.
+    await branchesButton(page).click();
+    await expect(d).toBeVisible();
+    await expect(branchesButton(page)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(":focus")).toHaveAttribute("data-row", /^card:/);
+    await expect(page.locator(":focus .br-rt")).toHaveText("How prices are stored");
+    await expect(detail(d)).toContainText("Waiting for you");
+    // 480 px from the right; the card on the desk is whole, beside it, and the desk takes no keys or clicks.
+    const box = (await d.boundingBox())!;
+    expect(Math.round(box.width)).toBe(480);
+    expect(Math.round(box.x + box.width)).toBe(1440);
+    const card = (await page.locator(CARD).boundingBox())!;
+    expect(card.x).toBeGreaterThanOrEqual(0);
+    expect(card.x + card.width).toBeLessThanOrEqual(box.x);
+    await expect(page.locator("main.desk")).toHaveAttribute("inert", "");
+    await check(page);
+    await shot(page, "local-open");
+    // Esc closes it, and focus goes back to the button.
+    await page.keyboard.press("Escape");
+    await expect(d).toBeHidden();
+    await expect(branchesButton(page)).toBeFocused();
+    await expect(branchesButton(page)).toHaveAttribute("aria-expanded", "false");
+
+    // B opens it and closes it, from the card.
+    await page.locator(CARD).focus();
+    await page.keyboard.press("b");
+    await expect(d).toBeVisible();
+    await page.keyboard.press("b");
+    await expect(d).toBeHidden();
+    await expect(page.locator(CARD)).toBeFocused();
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
+
+    // The menu's item, with its key, and the Close button: focus goes back to More.
+    await page.getByRole("button", { name: "More" }).click();
+    await expect(page.getByRole("menuitem", { name: "Your decisions, by branch B" })).toBeVisible();
+    await page.getByRole("menuitem", { name: /^Your decisions, by branch/ }).click();
+    await expect(d).toBeVisible();
+    await d.getByRole("button", { name: /^Close/ }).click();
+    await expect(d).toBeHidden();
+    await expect(page.getByRole("button", { name: "More" })).toBeFocused();
+
+    // A click on the desk, under its veil.
+    await branchesButton(page).click();
+    await expect(d).toBeVisible();
+    await page.mouse.click(300, 450);
+    await expect(d).toBeHidden();
+
+    // The keys panel names B.
+    await page.keyboard.press("?");
+    await expect(page.getByRole("complementary", { name: "Keyboard shortcuts" })).toContainText("Your decisions, by branch: opens them beside the desk, and closes them");
+  });
+
+  test("lists the history from the live layer, newest first, with one tab stop and the arrow keys between rows", async ({ page }) => {
     const { h } = await open(page);
-    const panel = await openPanel(page);
-    await seesHistory(page, panel, h, { answered: true });
-    await expect(panel.locator(".lanes-summary")).toHaveText("6 cards on 4 branches, cited by 6 commits. You've answered 4, choosing otherwise than the agent on 1. 2 branches merged. 1 branch is held by a card still waiting.");
-    // It opens on the latest card, with its callout.
-    await expect(callout(panel).locator("h3")).toHaveText("How prices are stored");
-    await expect(callout(panel)).toContainText("waiting for you");
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await seesHistory(d, h, { answered: true });
+    await expect(d.locator(".br-list [tabindex='0']")).toHaveCount(1);
     await check(page);
-    await shot(page, "local");
+    await shot(page, "local-list");
 
-    // A card by hover: what you chose, against the agent's pick.
-    const deletion = panel.locator(`.lane-mark.card[data-key="card:${h.cards.deletion}"]`);
-    await deletion.hover();
-    await expect(callout(panel).locator("h3")).toHaveText("What deleting an account removes");
-    await expect(callout(panel).locator(".said")).toHaveText("you chose “Postgres”, not the agent's pick");
-    await expect(callout(panel)).toContainText(`claude-code on feat/checkout`);
-    await check(page);
-
-    // By the keys: from the latest card along its lane to the commit citing it, which says its short ID and time, and
-    // never its subject; then up a lane, and Enter on a merge.
-    await panel.locator(`.lane-mark.card[data-key="card:${h.cards.prices}"]`).focus();
+    // The arrow keys: down and back up return; along a branch, left is newer and right older; Home and End.
+    const focused = () => page.locator(":focus");
+    await row(d, `card:${h.cards.prices}`).focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+    await expect(focused()).toHaveAttribute("data-row", /^(card|merge):/);
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowUp");
+    await expect(focused()).toHaveAttribute("data-row", `card:${h.cards.prices}`);
     await page.keyboard.press("ArrowRight");
-    const commit = h.commits.at(-1)!;
-    await expect(page.locator(":focus")).toHaveAttribute("data-key", `commit:${commit}:${h.cards.prices}`);
-    await expect(callout(panel).locator("h3")).toHaveText(`Commit ${commit.slice(0, 7)}`);
-    await expect(callout(panel).locator(".said")).toHaveText("cites “How prices are stored”");
-    await expect(callout(panel).locator(".meta")).toHaveText(/^on feat\/catalog · \d{1,2} \w{3}, \d\d:\d\d$/);
-    await expect(page.locator(":focus")).toHaveAttribute("aria-label", new RegExp(`^Commit ${commit.slice(0, 7)}, .*: cites How prices are stored$`));
-    await callout(panel).getByRole("button", { name: "Show the card" }).click();
-    await expect(callout(panel).locator("h3")).toHaveText("How prices are stored");
-    await panel.locator(`.lane-mark.merge[data-key="merge:${h.merged}:feat/checkout"]`).focus();
-    await expect(callout(panel).locator("h3")).toHaveText("feat/checkout merged into main");
-    await expect(callout(panel).locator(".said")).toHaveText(/^with 2 cards: (“The session cookie”, “What deleting an account removes”|“What deleting an account removes”, “The session cookie”)$/);
-    await expect(callout(panel).locator(".meta")).toContainText(`commit ${h.merged.slice(0, 7)}`);
-    await page.keyboard.press("ArrowDown");
-    await expect(page.locator(":focus")).toHaveAttribute("data-key", /^(card|commit):/);
-    // Only one mark is in the tab order at a time; the arrows reach the rest.
-    await expect(panel.locator('.lane-mark[tabindex="0"]')).toHaveCount(1);
-    await check(page);
+    await expect(focused()).toHaveAttribute("data-row", `card:${h.cards.kitchen}`);
+    await page.keyboard.press("ArrowLeft");
+    await expect(focused()).toHaveAttribute("data-row", `card:${h.cards.prices}`);
+    await page.keyboard.press("ArrowLeft");
+    await expect(focused()).toHaveAttribute("data-row", "lane:feat/catalog");
+    await page.keyboard.press("End");
+    await expect(focused()).toHaveAttribute("data-row", `card:${h.cards.session}`);
+    // Page Up: the day's first row (the history is made in a day).
+    await page.keyboard.press("PageUp");
+    await expect(focused()).toHaveAttribute("data-row", (await d.locator(".br-dayrows .br-rb").first().getAttribute("data-row"))!);
+    await page.keyboard.press("Home");
+    await expect(focused()).toHaveAttribute("data-row", "lane:feat/catalog");
+    await expect(d.locator(".br-list [tabindex='0']")).toHaveCount(1);
+    // The arrow keys stay in the list: the card on the desk didn't lean.
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
 
-    // A card still waiting opens on the desk from its callout.
-    await panel.locator(`.lane-mark.card[data-key="card:${h.cards.prices}"]`).click();
-    await callout(panel).getByRole("button", { name: "Answer it on the desk" }).click();
-    await expect(panelOf(page)).toBeHidden();
-    await expect(page.locator("article.card:not([data-leaving])")).toHaveAttribute("aria-label", "How should prices be stored?");
+    // Enter opens a row's detail inline; again closes it. A branch's end opens its summary.
+    await row(d, `card:${h.cards.deletion}`).focus();
+    await page.keyboard.press("Enter");
+    await expect(detail(d)).toContainText("You chose “Postgres”, not the agent's pick");
+    await expect(detail(d)).toContainText("claude-code on feat/checkout");
+    await expect(detail(d)).toContainText("The branch merged into main on");
+    await page.keyboard.press("Enter");
+    await expect(detail(d)).toHaveCount(0);
+    await row(d, "lane:feat/catalog").click();
+    await expect(detail(d)).toContainText("Merge held: 1 waiting");
+    await expect(detail(d)).toContainText("from main: a guess, nothing records it");
+    await check(page);
+  });
+
+  test("picking a card lights the commits that cite it, and lists them (B-vfdhz)", async ({ page }) => {
+    const { h } = await open(page);
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await d.getByRole("switch", { name: "Commits" }).click();
+    await row(d, `card:${h.cards.deletion}`).click();
+    const cites = h.commits[2]!;
+    const lit = d.locator(".br-row.is-commit.linked");
+    await expect(lit).toHaveCount(1);
+    await expect(lit.locator(".br-rb")).toHaveAttribute("data-row", `commit:${cites}`);
+    await expect(lit).toContainText("↳ cites the selected card");
+    await expect(lit.locator(".m-commit.lit")).toHaveCount(1);
+    await expect(d.locator(".br-row.linked")).toHaveCount(1);
+    // Its detail lists them as buttons; one opens the commit in the card's place, with Back.
+    await expect(detail(d).locator(".br-list-h")).toHaveText("Cited by 1 commit:");
+    await detail(d).getByRole("button", { name: new RegExp(`^${cites.slice(0, 7)} \\d\\d:\\d\\d · this branch$`) }).click();
+    await expect(detail(d).locator(".br-h")).toHaveText(`Commit ${cites.slice(0, 7)}`);
+    await expect(detail(d)).toContainText("on feat/checkout");
+    await check(page);
+    await shot(page, "local-commits");
+    await detail(d).getByRole("button", { name: "← Back" }).click();
+    await expect(detail(d)).toContainText("You chose “Postgres”");
+    // Picking the commit lights its card.
+    await row(d, `commit:${cites}`).click();
+    await expect(d.locator(".br-row.is-card.linked .br-rb")).toHaveAttribute("data-row", `card:${h.cards.deletion}`);
+    await expect(d.locator(".br-row.is-card.linked")).toContainText("↳ cited by the selected commit");
+    // With the switch off, the commits have no rows, and the card's detail still lists them.
+    await d.getByRole("switch", { name: "Commits" }).click();
+    await row(d, `card:${h.cards.cookie}`).click();
+    await expect(d.locator(".br-row.is-commit")).toHaveCount(0);
+    await expect(detail(d).locator(".br-lnk")).toHaveCount(1);
+  });
+
+  test("opens a card on the desk: one to answer as from the path, a settled one to look at, with the way back", async ({ page }) => {
+    const { h } = await open(page);
+    await page.locator(CARD).focus();
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    // A settled card: the drawer closes, and the card is on the desk as it was settled.
+    await row(d, `card:${h.cards.deletion}`).click();
+    await detail(d).getByRole("button", { name: "Open it on the desk" }).click();
+    await expect(d).toBeHidden();
+    await expect(page.locator(CARD)).toHaveAttribute("aria-label", "What should deleting an account remove?");
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "past");
+    await expect(page.locator(CARD)).toBeFocused();
+    await expect(page.locator(`${CARD} .result`)).toContainText("You chose “Postgres”, not the agent's pick.");
+    await expect(page.locator(`${CARD} .opt.chosen h2`)).toHaveText("Postgres");
+    await check(page);
+    await shot(page, "local-past");
+    // B goes back to the list, where it was.
+    await page.keyboard.press("b");
+    await expect(d).toBeVisible();
+    await expect(page.locator(":focus")).toHaveAttribute("data-row", `card:${h.cards.deletion}`);
+    await page.keyboard.press("Escape");
+    // Esc on the desk goes back to the next card.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(CARD)).toHaveAttribute("aria-label", "How should prices be stored?");
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
+
+    // A card to answer opens to answer.
+    await branchesButton(page).click();
+    await row(d, `card:${h.cards.prices}`).click();
+    if (!(await detail(d).count())) await row(d, `card:${h.cards.prices}`).click();
+    await detail(d).getByRole("button", { name: "Open it on the desk" }).click();
+    await expect(d).toBeHidden();
+    await expect(page.locator(CARD)).toHaveAttribute("aria-label", "How should prices be stored?");
+    await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
+  });
+
+  test("Wider puts each row on one line; the handle drags, or takes the arrow keys; the filters fold the rest", async ({ page }) => {
+    const { h } = await open(page);
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await d.getByRole("button", { name: "Wider" }).click();
+    await expect(d.getByRole("button", { name: "Wider" })).toHaveAttribute("aria-pressed", "true");
+    expect(Math.round((await d.boundingBox())!.width)).toBe(880);
+    // A card's time, title and what you chose on one line.
+    const r = d.locator(`.br-row.is-card:has([data-row="card:${h.cards.kitchen}"])`);
+    const [tm, rt, rm] = await Promise.all([r.locator(".br-tm"), r.locator(".br-rt"), r.locator(".br-rm")].map(async (l) => (await l.boundingBox())!));
+    expect(Math.abs(tm!.y - rt!.y)).toBeLessThan(8);
+    expect(Math.abs(rm!.y - rt!.y)).toBeLessThan(8);
+    // The desk keeps its card whole beside it, its path folded away.
+    const card = (await page.locator(CARD).boundingBox())!;
+    expect(card.x + card.width).toBeLessThanOrEqual((await d.boundingBox())!.x);
+    await check(page);
+    await shot(page, "local-wide");
+
+    // The handle: the arrow keys, Home and End.
+    const grip = d.getByRole("separator", { name: /The drawer's width/ });
+    await grip.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(grip).toHaveAttribute("aria-valuenow", "840");
+    await page.keyboard.press("Home");
+    await expect(grip).toHaveAttribute("aria-valuenow", "440");
+    await page.keyboard.press("End");
+    await expect(grip).toHaveAttribute("aria-valuenow", "920");
+    // A drag.
+    const g = (await grip.boundingBox())!;
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(1440 - 600, g.y + g.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect(grip).toHaveAttribute("aria-valuenow", "600");
+    await d.getByRole("button", { name: "Wider" }).click();
+    await expect(grip).toHaveAttribute("aria-valuenow", "880");
+    await d.getByRole("button", { name: "Wider" }).click();
+    await expect(grip).toHaveAttribute("aria-valuenow", "480");
+
+    // A filter: the cards it matches, and the rest folded into rows that show them.
+    await d.getByRole("button", { name: /^You chose otherwise/ }).click();
+    await expect(d.locator(".br-row.is-card .br-rt")).toHaveText(["What deleting an account removes"]);
+    await expect(d.locator(".br-row.is-more").first()).toContainText(/\d other cards?\. Show them/);
+    await check(page);
+    await d.locator(".br-row.is-more .br-rb").first().click();
+    await expect(d.locator(".br-row.is-card")).toHaveCount(6);
+    // Under reduced motion, nothing slides.
+    expect(await d.evaluate((el) => getComputedStyle(el).transitionDuration)).toMatch(/^0s/);
   });
 
   for (const size of PHONES) {
     test.describe(`${size.name}, ${size.width}×${size.height}`, () => {
       test.use(phone(size));
-      test("fills the phone, scrolls sideways in its own box, every mark 44 px, a tap shows its callout", async ({ page }) => {
+      test("fills the phone: a tap opens a row's detail inline, every target 44 px", async ({ page }) => {
         const { h } = await open(page);
-        const panel = await openPanel(page, true);
-        await seesHistory(page, panel, h, { answered: true });
+        await branchesButton(page).tap();
+        const d = drawerOf(page);
+        await expect(d).toBeVisible();
+        const box = (await d.boundingBox())!;
+        expect([Math.round(box.x), Math.round(box.width)]).toEqual([0, size.width]);
+        await seesHistory(d, h, { answered: true });
+        // It opens on the card waiting, open.
+        await expect(detail(d)).toContainText("Waiting for you");
         await check(page, true);
         await shot(page, "local-phone");
-        const mark = panel.locator(`.lane-mark.commit[data-key="commit:${h.commits.at(-1)}:${h.cards.prices}"]`);
-        await mark.scrollIntoViewIfNeeded();
-        await mark.tap();
-        await expect(callout(panel).locator("h3")).toHaveText(`Commit ${h.commits.at(-1)!.slice(0, 7)}`);
+        // A tap opens a row's detail under it; a second closes it.
+        await row(d, `card:${h.cards.deletion}`).tap();
+        await expect(detail(d)).toContainText("You chose “Postgres”");
         await check(page, true);
-        await shot(page, "local-phone-commit");
+        await shot(page, "local-phone-row");
+        await row(d, `card:${h.cards.deletion}`).tap();
+        await expect(detail(d)).toHaveCount(0);
+        // The filter is a select here, and the Commits switch adds the commits' rows.
+        await d.getByRole("combobox", { name: "Show" }).selectOption("against");
+        await expect(d.locator(".br-row.is-card")).toHaveCount(1);
+        await d.getByRole("combobox", { name: "Show" }).selectOption("all");
+        await d.getByRole("switch", { name: "Commits" }).tap();
+        await expect(d.locator(".br-row.is-commit")).toHaveCount(h.commits.length);
+        await check(page, true);
+        await shot(page, "local-phone-commits");
+        await d.getByRole("button", { name: /^Close/ }).tap();
+        await expect(d).toBeHidden();
       });
     });
   }
@@ -187,11 +380,11 @@ test.describe("the website", () => {
     await page.addInitScript((key) => localStorage.setItem(key, "true"), `baesian:${project}:setup`);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(`${site.url}/projects/${project}`);
-    await expect(page.locator("article.card:not([data-leaving])")).toBeVisible();
+    await expect(page.locator(CARD)).toBeVisible();
     return { dir, h, project };
   }
 
-  test("draws the lanes from the relay's state: the merges and the commits went up, the commits' subjects didn't", async ({ page }) => {
+  test("lists the history from the relay's state in the drawer: the merges and the commits went up, the commits' subjects didn't", async ({ page }) => {
     const { h, project } = await linked(page);
     // What the relay keeps: each commit's ID, time, branch and card; each merge's branches, commit, time and cards.
     const state = await page.evaluate(async (p) => (await fetch(`/v1/projects/${p}/state`)).json(), project);
@@ -206,21 +399,32 @@ test.describe("the website", () => {
     expect(ledger.length).toBe(h.commits.length + 2);
     for (const e of ledger) expect(Buffer.from(e.body, "base64").toString()).not.toMatch(/Secret subject|acquisition/);
 
-    const panel = await openPanel(page);
+    await branchesButton(page).click();
+    const d = drawerOf(page);
+    await expect(d).toBeVisible();
     // Answered before linking, in the record at the linking commit (main's), counts (B-3zjjx); feat/catalog's answer
-    // wasn't in it, so both its cards wait.
-    await seesHistory(page, panel, h, { answered: false });
+    // wasn't in it, so both its cards wait, and the oldest is open.
+    await expect(page.locator(":focus .br-rt")).toHaveText("How orders reach the kitchen");
+    await seesHistory(d, h, { answered: false });
+    // A picked card lights the commit citing it.
+    await d.getByRole("switch", { name: "Commits" }).click();
+    await row(d, `card:${h.cards.cookie}`).click();
+    await expect(d.locator(".br-row.is-commit.linked")).toContainText("↳ cites the selected card");
     await check(page);
     await shot(page, "site");
+    await page.keyboard.press("Escape");
+    await expect(d).toBeHidden();
+    await expect(branchesButton(page)).toBeFocused();
   });
 
   for (const size of PHONES.slice(0, 1)) {
     test.describe(`${size.name}, ${size.width}×${size.height}`, () => {
       test.use(phone(size));
-      test("fits the phone, every mark 44 px", async ({ page }) => {
+      test("fills the phone, every target 44 px", async ({ page }) => {
         const { h } = await linked(page);
-        const panel = await openPanel(page, true);
-        await seesHistory(page, panel, h, { answered: false });
+        await branchesButton(page).tap();
+        const d = drawerOf(page);
+        await seesHistory(d, h, { answered: false });
         await check(page, true);
         await shot(page, "site-phone");
       });

@@ -11,7 +11,9 @@ tags: [baesian, research]
 
 Provenance: a research agent's survey on 2026-11-05, at the user's request ("ideally we would not build this in-house"), read-only: npm registry and GitHub for maintenance, bundlephobia for sizes, each package's published bundle searched for what breaks the site's CSP (`script-src 'self'`, `style-src 'self'`, no `'unsafe-eval'`).
 
-**The panel today** (D181): `client/src/lanes.ts` and `client/src/Branches.tsx`, about 700 lines with their CSS, plus `lanes.test.ts`. Most of it is Baesian's own logic (card states and words, merges, lane order, forks, how lanes end, the callout); about 100 lines are SVG drawing and placing marks. The x axis is ordinal (a slot per event, broken at days), not a time scale.
+**The panel when this was written** (D181's first build): `client/src/lanes.ts` and `client/src/Branches.tsx`, about 700 lines with their CSS, plus `lanes.test.ts`. Most of it was Baesian's own logic (card states and words, merges, lane order, forks, how lanes end, the callout); about 100 lines were SVG drawing and placing marks. The x axis was ordinal (a slot per event, broken at days), not a time scale.
+
+**Since 2026-11-05** (B-v8jzy, B-vfdhz, B-tgq5p) it's a list in a drawer, newest first: the model is still pure functions in `lanes.ts` (`branchModel()`, `columnsOf()`, `listRows()`), and each row draws its own short gutter of lines as plain React SVG ([[Client Build]] item 26). That's less drawing than the lanes were, so the recommendation below holds the more.
 
 ## The shortlist
 

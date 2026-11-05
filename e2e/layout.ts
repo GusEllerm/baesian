@@ -13,10 +13,11 @@
 // 6. text hidden under something painted over it (added in 5f);
 // 7. anything that scrolls sideways: the page, or a box that scrolls (added for the phone layout, D130).
 //
-// A box made to scroll sideways says so (`data-scrolls="sideways"`: the branches panel's lanes, D181): what it scrolls out
-// of view at the left or right isn't cut off, off the window, or covered, and its scrolling isn't a problem.
+// A header that sticks to the top of a box as it scrolls (the branches list's days, D181) covers what scrolls under it on
+// purpose: text under a sticky element, from outside it, isn't overlapped or covered.
 //
-// With a modal open (the path's sheet on a phone), only the modal is checked: the rest is behind it on purpose.
+// With a modal open (the path's sheet on a phone, the branches drawer), only the modal is checked: the rest is behind it
+// on purpose.
 // `smallTargets` checks, for a touch screen, that everything you can tap is at least 44 px each way.
 //
 // Self-contained, so `page.evaluate` can send it to the page.
@@ -28,9 +29,12 @@ export function layoutProblems(): string[] {
   const TOL = 0.75;
   const OVERLAY = ".menu, .panel, .toast, .fly, .lift-signals";
   const TRANSIENT = ".toast, .fly";
-  const SIDEWAYS = '[data-scrolls="sideways"]';
-  const inSideways = (el: Element) => !!el.parentElement?.closest(SIDEWAYS);
   const modal = document.querySelector('[aria-modal="true"]');
+  /** The sticky element an element is in, if any. */
+  const stuck = (el: Element): Element | null => {
+    for (let e: Element | null = el; e && e !== document.body; e = e.parentElement) if (getComputedStyle(e).position === "sticky") return e;
+    return null;
+  };
 
   type Box = { l: number; t: number; r: number; b: number };
   const box = (r: DOMRect): Box => ({ l: r.left, t: r.top, r: r.right, b: r.bottom });
@@ -47,7 +51,8 @@ export function layoutProblems(): string[] {
     if (d && !d.open && !el.closest("summary")) return false;
     for (let e: Element | null = el; e; e = e.parentElement) {
       const cs = getComputedStyle(e);
-      if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) < 0.05) return false;
+      // Visually hidden, for a screen reader only (the branches drawer's announcements): clipped to nothing.
+      if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) < 0.05 || cs.clipPath === "inset(50%)") return false;
     }
     const r = el.getBoundingClientRect();
     // A straight line has no height (or no width), and is still drawn.
@@ -113,8 +118,7 @@ export function layoutProblems(): string[] {
       const scrolls = cs.overflowY === "auto" || cs.overflowY === "scroll";
       // Scrolled down, it hides what's above on purpose (a long panel, M8b).
       const scrolledUp = scrolls && a.scrollTop > 0;
-      const sideways = a.matches(SIDEWAYS);
-      const cut = [!sideways && p.l < inner.l - TOL && "left", !sideways && p.r > inner.r + TOL && "right", !scrolledUp && p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
+      const cut = [p.l < inner.l - TOL && "left", p.r > inner.r + TOL && "right", !scrolledUp && p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
       if (cut.length) out.push(`clipped: ${name(el)} is cut off at the ${cut.join(" and ")} by ${name(a).slice(0, 40)}`);
       break;
     }
@@ -124,18 +128,19 @@ export function layoutProblems(): string[] {
   // on screen, so it can't overlap or be covered: it's skipped.
   const scrolledAway = (el: Element, r: Box): boolean => {
     const y = (r.t + r.b) / 2;
-    const x = (r.l + r.r) / 2;
     for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
       const cs = getComputedStyle(a);
-      if (a.matches(SIDEWAYS)) {
-        const ar = a.getBoundingClientRect();
-        if (x < ar.left + a.clientLeft || x > ar.left + a.clientLeft + a.clientWidth) return true;
-      }
       if (cs.overflowY !== "auto" && cs.overflowY !== "scroll") continue;
       const ar = a.getBoundingClientRect();
       if (y < ar.top + a.clientTop || y > ar.top + a.clientTop + a.clientHeight) return true;
     }
     return false;
+  };
+  // Text cut short with an ellipsis shows only as far as its box: it's measured that far (a project's name in a phone's
+  // header, squeezed by the buttons beside it).
+  const ellipsisBox = (el: Element): Box | null => {
+    for (let e: Element | null = el; e && e !== document.body; e = e.parentElement) if (getComputedStyle(e).textOverflow === "ellipsis") return box(e.getBoundingClientRect());
+    return null;
   };
   const runs: { el: Element; r: Box; over: boolean }[] = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -143,7 +148,12 @@ export function layoutProblems(): string[] {
     if (!n.textContent?.trim() || !n.parentElement || !shown(n.parentElement)) continue;
     const range = document.createRange();
     range.selectNodeContents(n);
-    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1 && !scrolledAway(n.parentElement, box(r))) runs.push({ el: n.parentElement, r: box(r), over: overlay(n.parentElement) });
+    const cut = ellipsisBox(n.parentElement);
+    for (const rect of range.getClientRects()) {
+      const r = box(rect);
+      if (cut) (r.l = Math.max(r.l, cut.l)), (r.r = Math.min(r.r, cut.r));
+      if (r.r - r.l > 1 && r.b - r.t > 1 && !scrolledAway(n.parentElement, r)) runs.push({ el: n.parentElement, r, over: overlay(n.parentElement) });
+    }
   }
 
   // 3. Text overlapping text, from different elements. An overlay may cover the desk. Text inside one tilted element
@@ -166,6 +176,8 @@ export function layoutProblems(): string[] {
       if (a.el.closest(TRANSIENT) || b.el.closest(TRANSIENT)) continue;
       const turned = tilted(a.el);
       if (turned && turned === tilted(b.el)) continue;
+      // A sticky header lies over what scrolls under it.
+      if (stuck(a.el) !== stuck(b.el)) continue;
       // Glyph boxes overlap by a hair between lines; count it only when the lines really collide.
       const key = `${name(a.el)} / ${name(b.el)}`;
       if (!seen.has(key)) {
@@ -202,6 +214,9 @@ export function layoutProblems(): string[] {
       if (x < 0 || x >= W || y < 0 || y >= H) continue;
       const top = document.elementFromPoint(x, y);
       if (!top || top === t.el || t.el.contains(top) || top.contains(t.el) || overlay(top)) continue;
+      // Scrolled under a sticky header, as it's meant to.
+      const header = stuck(top);
+      if (header && header !== stuck(t.el)) continue;
       covered.add(t.el);
       out.push(`covered: ${name(t.el)} is hidden under ${name(top).slice(0, 50)}`);
       break;
@@ -223,8 +238,7 @@ export function layoutProblems(): string[] {
       for (let e: Element | null = el; e; e = e.parentElement) if (getComputedStyle(e).position === "fixed") return true;
       return false;
     })();
-    const sideways = inSideways(el);
-    const off = [!sideways && r.l < -TOL && "left", !sideways && r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
+    const off = [r.l < -TOL && "left", r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
     if (off.length) out.push(`off the window: ${name(el)} goes past the ${off.join(" and ")}`);
   }
 
@@ -233,7 +247,7 @@ export function layoutProblems(): string[] {
   if (page.scrollWidth > W + 1) out.push(`scrolls sideways: the page is ${page.scrollWidth - W}px wider than the window`);
   for (const el of all) {
     const cs = getComputedStyle(el);
-    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1 && !el.matches(SIDEWAYS)) out.push(`scrolls sideways: ${name(el)} is ${el.scrollWidth - el.clientWidth}px wider than its box`);
+    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1) out.push(`scrolls sideways: ${name(el)} is ${el.scrollWidth - el.clientWidth}px wider than its box`);
   }
   return out;
 }
