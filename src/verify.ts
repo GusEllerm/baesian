@@ -387,7 +387,7 @@ export function describeVerify(r: VerifyResult): Line[] {
     : [failing.length ? commits : "", mergeFails ? "the merge gate" : "", hostedFails ? "the hosted record" : ""].filter(Boolean).join(", and ") || commits;
   out.push(r.ok ? head("done", strong("baesian verify:"), " ", ok("ok"), `: ${what}`) : failed(strong("baesian verify:"), " ", failure("failed"), `: ${what}`));
   if (r.hosted) {
-    const where = [r.hosted.project ? `project ${r.hosted.project}` : "", r.hosted.linked ? `linked at ${r.hosted.linked.slice(0, 10)}` : ""].filter(Boolean).join(", ");
+    const where = [r.hosted.project ? `project ${r.hosted.project}` : "", r.hosted.linked ? `linked at ${r.hosted.linked.slice(0, 7)}` : ""].filter(Boolean).join(", ");
     out.push(
       ...fields([
         { label: "hosted", value: `only answers the service signed count${cite("D138")}, checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}${where ? `; ${where}` : ""}` },

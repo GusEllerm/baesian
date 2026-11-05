@@ -287,7 +287,7 @@ describe("CI pins the project beside the keys, and finds the linking commit once
     expect(r.ok, describeVerify(r).join("\n")).toBe(true);
     expect(r.commits.map((c) => [c.sha, c.ok])).toEqual([[inFlight, true]]);
     expect(r.hosted).toMatchObject({ keys: "pinned", project: "proj-test", linked, skipped: [] });
-    expect(describeVerify(r).join("\n")).toContain(`checked with the keys CI pins; project proj-test, linked at ${linked.slice(0, 10)}`);
+    expect(describeVerify(r).join("\n")).toContain(`checked with the keys CI pins; project proj-test, linked at ${linked.slice(0, 7)}`);
   });
 
   it("takes the linking commit by ancestry, not date: a later commit naming the project again isn't it", () => {

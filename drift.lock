@@ -5553,7 +5553,7 @@ sig = "36358eeffb9cdb65"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/verify.ts#describeVerify"
-sig = "6f254cf576f81bc9"
+sig = "fc320590077ac018"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -8528,7 +8528,7 @@ sig = "ad9a1a96c5bf3624"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/verify.ts#describeVerify"
-sig = "6f254cf576f81bc9"
+sig = "fc320590077ac018"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
