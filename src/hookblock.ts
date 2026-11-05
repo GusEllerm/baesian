@@ -4,7 +4,11 @@ import { basename } from "node:path";
 // shebang, because livedocs' pre-commit ends in `exec`. The block's text is here, apart from the installer in
 // src/hooks.ts, so the fact detector can tell Baesian's own block from any other change to a hook (B-g6ywj).
 
-export const HOOKS = ["pre-commit", "commit-msg", "post-commit"] as const;
+/**
+ * The hooks Baesian installs. `post-merge` and `post-rewrite` find merges (D181): git runs the first after a merge or a
+ * fast-forward (`git pull` too), never `post-commit`; the second after a rebase (`git pull --rebase` too).
+ */
+export const HOOKS = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite"] as const;
 export type HookName = (typeof HOOKS)[number];
 
 export const BEGIN = "# >>> baesian >>>";
@@ -21,11 +25,15 @@ export const NEW_HOOK = (block: string) => `#!/bin/sh\n${block}\n`;
  * the machine-specific fallback lives in the clone's own git config, never in the file.
  */
 export function hookBlock(name: HookName): string {
-  const args = name === "commit-msg" ? ` ${name} "$1"` : ` ${name}`;
-  const evalArgs = name === "commit-msg" ? ` ${name} \\"\\$1\\"` : ` ${name}`;
-  // post-commit can't stop a commit; it only records the ledger, so a missing binary is skipped quietly.
+  // commit-msg gets the message file; post-merge whether it was a squash; post-rewrite what rewrote (D181). post-rewrite's
+  // standard input (the commits rewritten) is left for the repo's own lines after the block: Baesian doesn't read it.
+  const withArg = name === "commit-msg" || name === "post-merge" || name === "post-rewrite";
+  const stdin = name === "post-rewrite" ? " </dev/null" : "";
+  const args = withArg ? ` ${name} "$1"${stdin}` : ` ${name}`;
+  const evalArgs = withArg ? ` ${name} \\"\\$1\\"${stdin}` : ` ${name}`;
+  // The hooks after the fact can't stop anything: they record the ledger and merges, so a missing binary is skipped quietly.
   const missing =
-    name === "post-commit"
+    name === "post-commit" || name === "post-merge" || name === "post-rewrite"
       ? "  :"
       : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
   return [

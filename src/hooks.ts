@@ -10,6 +10,8 @@ import { type Store } from "./store.js";
 import { syncRelay } from "./sync.js";
 import { parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
+import { findMerges, noteSquash, rebasing, recordCommitted, takeSquash } from "./merges.js";
+import { ledgerBody } from "./schema.js";
 
 // Baesian's hooks (D54) are installed here; their block's text is in src/hookblock.ts.
 
@@ -208,6 +210,70 @@ function stageNotes(store: Store, io: HookIo): string[] {
 /** How long `pre-commit` waits for the relay's log in a linked repo (Hosted Service section 1): a commit never waits long. */
 export const PRE_COMMIT_PULL_MS = 3000;
 
+/**
+ * Find the merges a hook's movement of the branch made, and record each (D181): `post-merge` and `post-rewrite` from
+ * where the branch was (`ORIG_HEAD`), `post-commit` from the commit's first parent, for a squash commit or a merge
+ * whose conflicts were committed. Where the record isn't committed (personal mode), a plain commit can't merge anything,
+ * so it isn't looked at. Never fails the hook. Returns how many it recorded.
+ */
+function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-rewrite", io: HookIo): number {
+  const top = store.repo.toplevel;
+  const into = store.repo.branch;
+  if (into.startsWith("detached-")) return 0;
+  try {
+    const to = git(top, ["rev-parse", "HEAD"]);
+    let from: string;
+    let squashed: ReturnType<typeof takeSquash>;
+    if (hook === "post-commit") {
+      const parents = git(top, ["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1);
+      if (!parents.length) return 0;
+      from = parents[0]!;
+      squashed = takeSquash(store, from);
+      if (parents.length < 2 && !squashed && !recordCommitted(store, to)) return 0;
+    } else {
+      try {
+        from = git(top, ["rev-parse", "-q", "--verify", "ORIG_HEAD^{commit}"]);
+      } catch {
+        return 0;
+      }
+      if (from === to) return 0;
+    }
+    let n = 0;
+    for (const f of findMerges(store, { into, from, to, ...(squashed ? { squashed } : {}), deep: hook !== "post-commit" })) {
+      if (!store.writeMerge(f)) continue;
+      n += 1;
+      io.err(`baesian: recorded ${f.branch} merged into ${f.into}${f.cards.length ? `, with ${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : ""} (${f.commit.slice(0, 7)})`);
+    }
+    return n;
+  } catch (e) {
+    io.err(`baesian: couldn't look for merges (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`);
+    return 0;
+  }
+}
+
+/** Send new merges to the relay, in a linked repo, as briefly as `pre-commit` pulls; offline, they go at the next sync. */
+async function sendMerges(store: Store, io: HookIo, http: Http): Promise<void> {
+  const r = await syncRelay(store, { ...http, signal: http.signal ?? AbortSignal.timeout(PRE_COMMIT_PULL_MS) });
+  if (r.state === "synced") for (const n of r.notes) io.err(`baesian: ${n}`);
+}
+
+/**
+ * The hooks Baesian installs that this repo's hooks folder lacks, its block included (D181 added two): a repo set up
+ * before them gets them by running `baesian init` again, which `pre-commit` says.
+ */
+export function missingHooks(store: Store): HookName[] {
+  let dir: string;
+  try {
+    dir = git(store.repo.toplevel, ["rev-parse", "--path-format=absolute", "--git-path", "hooks"]);
+  } catch {
+    return [];
+  }
+  return HOOKS.filter((name) => {
+    const path = join(dir, name);
+    return !existsSync(path) || !readFileSync(path, "utf8").includes(BEGIN);
+  });
+}
+
 /** Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. */
 export async function runHook(store: Store, name: string, args: string[], io: HookIo, http: Http = {}): Promise<number> {
   if (!store.isInitialised()) return 0;
@@ -218,6 +284,9 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       // never failing the commit: offline, it commits what's here.
       const pulled = await syncRelay(store, { ...http, push: false, signal: http.signal ?? AbortSignal.timeout(PRE_COMMIT_PULL_MS) });
       for (const n of pulled.notes) io.err(`baesian: ${n}`);
+      // A repo set up before D181 lacks the hooks that find merges until `baesian init` runs again.
+      const missing = missingHooks(store);
+      if (missing.length) io.err(`baesian: this repo's hooks lack ${missing.join(" and ")}, which find merges: run \`baesian init\` to add ${missing.length === 1 ? "it" : "them"}`);
       // D37: bring the record up to date, then stage all of it. Staging only what this hook copied
       // would miss the cards `baesian file` wrote into the record when they were filed.
       store.syncRecord();
@@ -254,15 +323,29 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       return report.ok ? 0 : 1;
     }
     case "post-commit": {
-      // D15: the ledger. Which commits build on which cards. Just the commit (D120): what it changed is git's to say.
+      // D15: the ledger. Which commits build on which cards. Just the commit (D120): what it changed is git's to say, and
+      // its subject and message never leave the machine (D181). A commit a rebase makes is its branch's, though HEAD is
+      // detached while it runs.
       const message = git(top, ["log", "-1", "--format=%B", "HEAD"]);
       const sha = git(top, ["rev-parse", "HEAD"]);
+      const branch = store.repo.branch.startsWith("detached-") ? rebasing(store) : undefined;
       for (const id of parseTrailers(message, top).cards) {
         if (!store.card(id)) continue;
-        store.writeLedger(id, { commit: sha }, `Commit \`${sha.slice(0, 12)}\` builds on ${id}.\n`);
+        store.writeLedger(id, { commit: sha, ...(branch ? { branch } : {}) }, ledgerBody(sha, id));
       }
+      // D181: a squash commit, or a merge whose conflicts were resolved and committed, merges a branch.
+      recordMerges(store, "post-commit", io);
       return 0;
     }
+    case "post-merge":
+      // D181: a merge or a fast-forward, `git pull` included. A squash (`$1` is 1) moved nothing yet: noted for its commit.
+      if (args[0] === "1") noteSquash(store);
+      else if (recordMerges(store, "post-merge", io)) await sendMerges(store, io, http);
+      return 0;
+    case "post-rewrite":
+      // D181: a rebase, `git pull --rebase` included, may bring in merges made upstream. An amend brings nothing.
+      if (args[0] === "rebase" && recordMerges(store, "post-rewrite", io)) await sendMerges(store, io, http);
+      return 0;
     default:
       io.err(`baesian: unknown hook "${name}"`);
       return 1;

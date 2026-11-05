@@ -13,6 +13,9 @@
 // 6. text hidden under something painted over it (added in 5f);
 // 7. anything that scrolls sideways: the page, or a box that scrolls (added for the phone layout, D130).
 //
+// A box made to scroll sideways says so (`data-scrolls="sideways"`: the branches panel's lanes, D181): what it scrolls out
+// of view at the left or right isn't cut off, off the window, or covered, and its scrolling isn't a problem.
+//
 // With a modal open (the path's sheet on a phone), only the modal is checked: the rest is behind it on purpose.
 // `smallTargets` checks, for a touch screen, that everything you can tap is at least 44 px each way.
 //
@@ -25,6 +28,8 @@ export function layoutProblems(): string[] {
   const TOL = 0.75;
   const OVERLAY = ".menu, .panel, .toast, .fly, .lift-signals";
   const TRANSIENT = ".toast, .fly";
+  const SIDEWAYS = '[data-scrolls="sideways"]';
+  const inSideways = (el: Element) => !!el.parentElement?.closest(SIDEWAYS);
   const modal = document.querySelector('[aria-modal="true"]');
 
   type Box = { l: number; t: number; r: number; b: number };
@@ -108,7 +113,8 @@ export function layoutProblems(): string[] {
       const scrolls = cs.overflowY === "auto" || cs.overflowY === "scroll";
       // Scrolled down, it hides what's above on purpose (a long panel, M8b).
       const scrolledUp = scrolls && a.scrollTop > 0;
-      const cut = [p.l < inner.l - TOL && "left", p.r > inner.r + TOL && "right", !scrolledUp && p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
+      const sideways = a.matches(SIDEWAYS);
+      const cut = [!sideways && p.l < inner.l - TOL && "left", !sideways && p.r > inner.r + TOL && "right", !scrolledUp && p.t < inner.t - TOL && "top", !scrolls && p.b > inner.b + TOL && "bottom"].filter(Boolean);
       if (cut.length) out.push(`clipped: ${name(el)} is cut off at the ${cut.join(" and ")} by ${name(a).slice(0, 40)}`);
       break;
     }
@@ -118,8 +124,13 @@ export function layoutProblems(): string[] {
   // on screen, so it can't overlap or be covered: it's skipped.
   const scrolledAway = (el: Element, r: Box): boolean => {
     const y = (r.t + r.b) / 2;
+    const x = (r.l + r.r) / 2;
     for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
       const cs = getComputedStyle(a);
+      if (a.matches(SIDEWAYS)) {
+        const ar = a.getBoundingClientRect();
+        if (x < ar.left + a.clientLeft || x > ar.left + a.clientLeft + a.clientWidth) return true;
+      }
       if (cs.overflowY !== "auto" && cs.overflowY !== "scroll") continue;
       const ar = a.getBoundingClientRect();
       if (y < ar.top + a.clientTop || y > ar.top + a.clientTop + a.clientHeight) return true;
@@ -212,7 +223,8 @@ export function layoutProblems(): string[] {
       for (let e: Element | null = el; e; e = e.parentElement) if (getComputedStyle(e).position === "fixed") return true;
       return false;
     })();
-    const off = [r.l < -TOL && "left", r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
+    const sideways = inSideways(el);
+    const off = [!sideways && r.l < -TOL && "left", !sideways && r.r > W + TOL && "right", r.t < -TOL && !scrollsInWindow(el) && "top", fixed && r.b > H + TOL && !scrollsInWindow(el) && "bottom"].filter(Boolean);
     if (off.length) out.push(`off the window: ${name(el)} goes past the ${off.join(" and ")}`);
   }
 
@@ -221,7 +233,7 @@ export function layoutProblems(): string[] {
   if (page.scrollWidth > W + 1) out.push(`scrolls sideways: the page is ${page.scrollWidth - W}px wider than the window`);
   for (const el of all) {
     const cs = getComputedStyle(el);
-    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1) out.push(`scrolls sideways: ${name(el)} is ${el.scrollWidth - el.clientWidth}px wider than its box`);
+    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1 && !el.matches(SIDEWAYS)) out.push(`scrolls sideways: ${name(el)} is ${el.scrollWidth - el.clientWidth}px wider than its box`);
   }
   return out;
 }

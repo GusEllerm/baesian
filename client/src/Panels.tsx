@@ -13,7 +13,7 @@ import { Prose } from "./Prose";
 // list and your preferences (Preferences.tsx); D180 redraws your calibration as a bar per row (AnswerBars.tsx).
 
 /** "path" is the path's sheet, on a phone (D130): it opens and closes as a panel does. */
-export type PanelKind = "calibration" | "keys" | "deck" | "held" | "preferences" | "path";
+export type PanelKind = "calibration" | "branches" | "keys" | "deck" | "held" | "preferences" | "path";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
@@ -40,6 +40,9 @@ export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number;
         <div className="menu" id="menu" role="menu" ref={menu}>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("calibration"))}>
             Your calibration
+          </button>
+          <button type="button" role="menuitem" onClick={pick(() => p.onPanel("branches"))}>
+            Your decisions, by branch
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("preferences"))}>
             Your preferences
@@ -86,9 +89,9 @@ export function moveInMenu(dir: "up" | "down") {
   items[(i + (dir === "down" ? 1 : items.length - 1) + items.length) % items.length]!.focus();
 }
 
-export function Panel({ label, onClose, children, id, wide }: { label: string; onClose: () => void; children: ReactNode; id?: string; wide?: boolean }) {
+export function Panel({ label, onClose, children, id, wide, className }: { label: string; onClose: () => void; children: ReactNode; id?: string; wide?: boolean; className?: string }) {
   return (
-    <aside className={wide ? "panel wide" : "panel"} aria-label={label} {...(id ? { id } : {})}>
+    <aside className={["panel", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")} aria-label={label} {...(id ? { id } : {})}>
       <button type="button" className="panel-close" onClick={onClose}>
         Close <kbd>Esc</kbd>
       </button>

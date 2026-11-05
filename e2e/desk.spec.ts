@@ -112,7 +112,7 @@ test("the keys and your calibration open from the menu; ? and Esc open and close
   // The menu takes the arrow keys while it's open, so they don't move the card.
   await page.getByRole("button", { name: "More" }).click();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("menuitem", { name: "Your preferences" })).toBeFocused();
+  await expect(page.getByRole("menuitem", { name: "Your decisions, by branch" })).toBeFocused(); // after "Your calibration" (D181)
   await expect(page.locator(CARD)).toHaveAttribute("data-mode", "live");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);

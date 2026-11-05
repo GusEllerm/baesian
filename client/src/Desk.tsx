@@ -17,6 +17,7 @@ import { NotConfirmed, ProofPrompt } from "./proof";
 import { ASK_BEFORE_EXPIRY_MS, type Wait, askNow, confirmedLine, expiredLine, loadWaiting, saveWaiting, waitingLine } from "./waiting";
 import { LIFT_TILT, type LiftLabel, LiftSignals, type LiftLabels, answerLabel, choiceLabel, useLift } from "./Lift";
 import { PHONE, TOUCH, useMedia } from "./media";
+import { BranchesPanel } from "./Branches";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path, type PathProps, flyToBar } from "./Path";
 import { PathSheet } from "./Sheet";
@@ -880,6 +881,20 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
+      {/* D181: your decisions by branch, with merges and the commits that cite cards. A card still to answer opens on the desk. */}
+      {panel === "branches" && (
+        <BranchesPanel
+          state={state}
+          nowMs={now}
+          phone={phone}
+          canOpen={(id) => [...ordered, ...aside, ...held].some((c) => c.meta.id === id)}
+          onOpen={(id) => {
+            setPanel(undefined);
+            goTo(id);
+          }}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
       {panel === "held" && (
         <HeldPanel
           held={held}

@@ -14,7 +14,8 @@ import { renderDoc, parseDoc } from "../src/frontmatter.js";
 import { grantPath, readGrant, writeGrant } from "../src/login.js";
 import type { MachineGrant } from "../src/schema.js";
 import { NAMESPACE, signMessage } from "../src/sshsig.js";
-import { Store } from "../src/store.js";
+import { runHook } from "../src/hooks.js";
+import { Store, mergeFile } from "../src/store.js";
 import { RELAY_STATE, agentWritten, linkProblem, unsent, unsentBeforeLinking } from "../src/sync.js";
 import { projectLine } from "../src/trust.js";
 import { cleanup, draftFile, repo, sh } from "./helpers.js";
@@ -178,6 +179,71 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(existsSync(grantPath("proj-3"))).toBe(false);
       const row = await relay.db.prepare("SELECT revoked FROM grants WHERE project = ? ORDER BY created DESC").bind("proj-3").first<{ revoked: string | null }>();
       expect(row?.revoked).toBeTruthy();
+    });
+  });
+
+  describe("the ledger and merges (D181)", () => {
+    it("go up from the clone that found them and come down to another; a commit's subject never leaves, and an entry listing files stays", async () => {
+      const a = await signedIn("proj-d181");
+      sh(a.dir, "add", "-A");
+      sh(a.dir, "commit", "-q", "-m", "Link");
+      // A card on a branch, a commit citing it, and the branch merged: the hooks write the ledger's entry and the merge.
+      sh(a.dir, "checkout", "-q", "-b", "feat/runs");
+      const id = await fileCard(a.dir, { title: "The run-metadata store", touches: [] });
+      Store.open(a.dir).syncRecord();
+      writeFileSync(join(a.dir, "runs.txt"), "runs\n");
+      sh(a.dir, "add", "-A");
+      sh(a.dir, "commit", "-q", "-m", `Secret subject: the acquisition talks\n\nThe body says more.\n\nBaesian-Card: ${id}`);
+      const cited = sh(a.dir, "rev-parse", "HEAD");
+      const quiet = { out: () => {}, err: () => {} };
+      await runHook(Store.open(a.dir), "post-commit", [], quiet);
+      sh(a.dir, "checkout", "-q", "main");
+      sh(a.dir, "merge", "-q", "--no-ff", "--no-edit", "feat/runs");
+      const merged = sh(a.dir, "rev-parse", "HEAD");
+      const said: string[] = [];
+      // post-merge sends what it found at once, as briefly as pre-commit pulls.
+      await runHook(Store.open(a.dir), "post-merge", ["0"], { out: () => {}, err: (l) => said.push(l) });
+      expect(said.join("\n")).toContain("recorded feat/runs merged into main, with 1 card");
+      const store = Store.open(a.dir);
+      const entry = store.ledgerEntries().find((e) => e.meta.commit === cited)!;
+      expect(entry.meta).toMatchObject({ card: id, branch: "feat/runs" });
+      const ledgerPath = `ledger/${readdirSync(join(store.live, "ledger")).find((f) => f.startsWith(id))}`;
+      const mergePath = mergeFile(merged, "feat/runs");
+      expect(await relayPaths("proj-d181")).toEqual(expect.arrayContaining([ledgerPath, mergePath]));
+      // An entry written before D120 lists the commit's files: it stays on this machine.
+      const legacy = `ledger/${id}-old01.md`;
+      store.storage.create(legacy, new TextEncoder().encode(renderDoc({ type: "ledger", format: 1, card: id, branch: "feat/runs", commit: cited, at: new Date().toISOString() }, `Commit \`${cited.slice(0, 12)}\` builds on ${id}.\n\n- src/secret-path.ts\n`)));
+      expect(unsent(store, new Set())).not.toContain(legacy);
+      const synced = await run(a.dir, ["sync"]);
+      expect(synced.code, synced.err).toBe(0);
+      expect(await relayPaths("proj-d181")).not.toContain(legacy);
+      // What the relay holds of them: no subject, no message, no file.
+      const grant = readGrant("proj-d181")!;
+      const log = (await (await fetch(`${relay.url}/v1/projects/proj-d181/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { entries: { path: string; body?: string }[] };
+      const theirs = log.entries.filter((e) => e.path.startsWith("ledger/") || e.path.startsWith("merges/"));
+      expect(theirs.map((e) => e.path).sort()).toEqual([ledgerPath, mergePath].sort());
+      for (const e of theirs) expect(Buffer.from(e.body!, "base64").toString()).not.toMatch(/Secret subject|acquisition|body says|secret-path/);
+      const merge = JSON.parse(Buffer.from(theirs.find((e) => e.path === mergePath)!.body!, "base64").toString());
+      expect(merge).toEqual({ type: "merge", format: 1, branch: "feat/runs", into: "main", commit: merged, at: expect.any(String), cards: [id] });
+      // The relay's state carries them, for the website's panel.
+      const state = (await (await fetch(`${relay.url}/v1/projects/proj-d181/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: unknown[]; commits: unknown[] };
+      expect(state.merges).toEqual([{ branch: "feat/runs", into: "main", commit: merged, at: merge.at, cards: [id] }]);
+      expect(state.commits).toEqual([{ commit: cited, branch: "feat/runs", card: id, at: entry.meta.at }]);
+
+      // Another clone pulls them into its live layer, as if it had found them.
+      const b = join(realpathSync(mkdtempSync(join(tmpdir(), "baesian-clone-"))), "b");
+      sh(tmpdir(), "clone", "-q", a.dir, b);
+      Store.open(b).init();
+      const pulled = await run(b, ["sync"]);
+      expect(pulled.code, pulled.err).toBe(0);
+      const there = Store.open(b);
+      expect(there.merges()).toEqual([merge]);
+      expect(there.ledgerEntries().map((e) => e.meta.commit)).toEqual([cited]);
+      // Finding the same merge again there writes nothing new, and sends nothing.
+      expect(there.writeMerge({ branch: "feat/runs", into: "main", commit: merged, at: new Date().toISOString(), cards: [id] })).toBeUndefined();
+      const again = await run(b, ["sync"]);
+      expect(again.out).toContain("sent 0");
+      rmSync(join(b, ".."), { recursive: true, force: true });
     });
   });
 
@@ -724,7 +790,7 @@ describe("the first-commit check in a shallow clone (B-5gnea)", () => {
 
 describe("what a machine pushes is what the relay takes (Hosted Service section 1)", () => {
   it("every kind the CLI pushes is one the relay's uploads accept, and nothing a person writes", () => {
-    const pushed = ["decks/branch-main.md", "cards/B-7f3kq/r1.md", "cards/B-7f3kq/r2.md", "cards/B-7f3kq/gate-r1-cli.json", "cards/B-7f3kq/withdrawn.json", "cards/B-7f3kq/fallback-ab3de.json", "attachments/B-7f3kq-ab3de.json"];
+    const pushed = ["decks/branch-main.md", "cards/B-7f3kq/r1.md", "cards/B-7f3kq/r2.md", "cards/B-7f3kq/gate-r1-cli.json", "cards/B-7f3kq/withdrawn.json", "cards/B-7f3kq/fallback-ab3de.json", "attachments/B-7f3kq-ab3de.json", "ledger/B-7f3kq-ab3de.md", mergeFile("a".repeat(40), "feat/x")];
     for (const p of pushed) {
       expect(agentWritten(p), p).toBe(true);
       expect(agentKind(p), p).toBeDefined();

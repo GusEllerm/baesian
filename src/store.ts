@@ -40,6 +40,7 @@ import {
   HARD_BY_DEFAULT,
   LedgerMeta,
   type Level,
+  MergeEvent,
   NewerFormat,
   PREFERENCE_FILE,
   type PasskeyKey,
@@ -74,7 +75,7 @@ export const LIVE_DIR = "baesian";
 /** The record layer, committed on the branch (D34). */
 export const RECORD_DIR = ".baesian";
 
-const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting"] as const;
+const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting", "merges"] as const;
 
 export type { Brief, BriefCommit, Status } from "./api.js";
 import type { Brief, BriefCommit, Status } from "./api.js";
@@ -159,6 +160,12 @@ const RELAY_GATE = /^gate-r\d+-relay\.json$/;
 
 /** A file that goes with another: its signature (D160), or its passkey proof (D139). Copied with it, never read as it. */
 const isCompanion = (name: string) => name.endsWith(".sig") || name.endsWith(".passkey.json");
+
+/**
+ * Where a merge is recorded (D181): `merges/<commit>-<key>.json`, the key the first 12 hex digits of the SHA-256 of the
+ * merged branch's name, so the same merge found on two machines is the same file, and a branch's name never needs escaping.
+ */
+export const mergeFile = (commit: string, branch: string) => `merges/${commit}-${createHash("sha256").update(branch).digest("hex").slice(0, 12)}.json`;
 
 /** Where a file's passkey proof would be: beside it, `.passkey.json` for `.json` (P16 section 7). */
 export const proofPath = (rel: string) => rel.replace(/\.json$/, ".passkey.json");
@@ -1517,11 +1524,53 @@ export class Store {
   ledger(id: string): { meta: LedgerMeta; body: string }[] {
     return this.list("ledger")
       .filter((f) => f.startsWith(`${id}-`))
-      .flatMap((f) => this.read(`ledger/${f}`, (text) => {
-        const { meta, body } = parseDoc(text);
-        return { meta: readAs("ledger", LedgerMeta, meta, `ledger/${f}`), body };
-      }) ?? [])
+      .flatMap((f) => this.ledgerFile(f) ?? [])
       .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
+  }
+
+  /** Every ledger entry, any card's, oldest first (D181): the commits that cite cards, for the branches panel and merges. */
+  ledgerEntries(): { meta: LedgerMeta; body: string }[] {
+    return this.list("ledger")
+      .filter((f) => f.endsWith(".md"))
+      .flatMap((f) => this.ledgerFile(f) ?? [])
+      .sort((a, b) => a.meta.at.localeCompare(b.meta.at));
+  }
+
+  private ledgerFile(f: string): { meta: LedgerMeta; body: string } | undefined {
+    return this.read(`ledger/${f}`, (text) => {
+      const { meta, body } = parseDoc(text);
+      return { meta: readAs("ledger", LedgerMeta, meta, `ledger/${f}`), body };
+    });
+  }
+
+  // ---------------------------------------------------------------- merges (D181)
+
+  /**
+   * Record that a branch merged into another (D181), as the hooks found it: `merges/<commit>-<key>.json`, named by the
+   * commit and the merged branch (`mergeFile()`), so the same merge found twice, here or on another machine, is one file.
+   * Returns it, or undefined when that merge is recorded already. Live only: it goes to the relay, never the record.
+   */
+  writeMerge(m: Omit<MergeEvent, "type" | "format">): MergeEvent | undefined {
+    this.requireInit();
+    if (m.branch === m.into) throw new ValidationError(`a merge is of one branch into another, not ${m.branch} into itself`);
+    const event = parse(MergeEvent, { type: "merge", format: newestFormat("merge"), ...m, cards: [...new Set(m.cards)].sort() }, "the merge");
+    const rel = mergeFile(event.commit, event.branch);
+    if (this.storage.read(rel) !== undefined) return undefined;
+    try {
+      this.writeOnce(rel, `${JSON.stringify(event, null, 2)}\n`);
+    } catch (e) {
+      if (alreadyExists(e)) return undefined;
+      throw e;
+    }
+    return event;
+  }
+
+  /** Every merge recorded, oldest first. */
+  merges(): MergeEvent[] {
+    return this.list("merges")
+      .filter((f) => f.endsWith(".json"))
+      .flatMap((f) => this.read(`merges/${f}`, (t) => readAs("merge", MergeEvent, JSON.parse(t), `merges/${f}`)) ?? [])
+      .sort((a, b) => a.at.localeCompare(b.at));
   }
 
   /** Every rule, retired or not: a retired one carries its retirement (D119). In a hosted repo, only those signed (D138). */

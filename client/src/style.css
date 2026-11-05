@@ -417,6 +417,69 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .cal-reading b { display: block; margin-bottom: 2px; font: 700 13px/1.3 var(--ui); font-stretch: 90%; }
 .cal-time { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 18px; font: 500 13.5px/1.35 var(--ui); font-stretch: 92%; color: var(--ink-soft); }
 .cal-time b { color: var(--ink); }
+
+/* Your decisions, by branch (D181): the mockup the user approved, in round 5's look. A lane per branch, the names on the
+   left, the lanes scrolling sideways in their own box, a callout in the README figure's look. The panel is as wide as the
+   window allows; text spans its box. */
+.panel.wide.branches { width: min(1180px, calc(100vw - 48px)); --with: var(--ok); --against: #c0406a; --waiting: var(--left); --gone: #a59bb2; --lane: var(--ink-soft); --aside: #b9ab7c; --ok-bg: #e2eee5; --held-bg: #f6e3ea; }
+.lanes-summary { font: var(--t-body); font-size: 16px; color: var(--ink-soft); }
+.lanes-legend { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 10px; background: var(--face-light); font: 600 13px/1.3 var(--ui); font-stretch: 90%; }
+.lanes-legend .row { display: flex; align-items: center; gap: 10px; }
+.lanes-legend svg { flex: 0 0 auto; overflow: visible; }
+.lanes-legend .fine { font-weight: 500; color: var(--ink-soft); }
+.lanes { position: relative; display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); margin-top: 18px; border-top: 1px solid var(--rule); }
+.lane-names { display: flex; flex-direction: column; }
+.lane-name { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding-right: 14px; border-bottom: 1px solid var(--rule); min-width: 0; }
+.lane-name b { font: 700 14px/1.2 var(--ui); font-stretch: 85%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane-name span { font: 500 12px/1.2 var(--ui); font-stretch: 90%; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane-name .lane-end { align-self: flex-start; max-width: 100%; margin-top: 3px; padding: 2px 8px 3px; border-radius: 999px; font: 650 11.5px/1.3 var(--ui); font-stretch: 90%; }
+.lane-end.ready { background: var(--ok-bg); color: #2f6b45; box-shadow: inset 0 0 0 1.5px #8cc19d; }
+.lane-end.held { background: var(--held-bg); color: var(--waiting); box-shadow: inset 0 0 0 1.5px #d999b2; }
+.lane-end.merged { background: var(--face-light); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+.lane-scroll { position: relative; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.lane-scroll svg { display: block; }
+.lane-day { stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.lane-daylabel { font: 600 11.5px var(--ui); fill: var(--ink-soft); }
+.lane-rule { stroke: var(--rule); stroke-width: 1; }
+.lane-line { stroke: var(--lane); stroke-width: 2.5; stroke-linecap: round; }
+.lane-fork, .lane-merge { fill: none; stroke: var(--lane); stroke-width: 2.5; stroke-linecap: round; }
+.lane-fork.inferred { stroke-width: 1.6; stroke-dasharray: 2 4; opacity: .7; }
+.lane-merge.sync { stroke-width: 1.6; opacity: .75; }
+.lane-cites { fill: none; stroke: var(--ink-faint); stroke-width: 1.2; stroke-dasharray: 1.5 3; }
+.lane-endmark.ready { fill: #fffbea; stroke: var(--ink); stroke-width: 2.5; }
+.lane-endmark.held circle { fill: var(--held-bg); stroke: var(--waiting); stroke-width: 2; }
+.lane-endmark.held line { stroke: var(--waiting); stroke-width: 2.5; stroke-linecap: round; }
+.lane-mark { cursor: pointer; }
+.lane-mark:focus { outline: none; }
+.lane-mark:focus-visible .hit, .lane-mark.on .hit { stroke: var(--ink); stroke-width: 1.5; }
+.lane-mark.on .hit { stroke-dasharray: 2 2; }
+.lane-mark:focus-visible .hit { stroke-dasharray: none; stroke-width: 2; }
+.m-with { fill: var(--with); stroke: #fffbea; stroke-width: 1.5; }
+.m-against { fill: var(--against); stroke: #fffbea; stroke-width: 1.5; }
+.m-waiting { fill: #fffbea; stroke: var(--waiting); stroke-width: 3; animation: lane-pulse 1.6s ease-in-out infinite; }
+.m-aside { fill: #fffbea; stroke: var(--aside); stroke-width: 2.5; }
+.m-gone { fill: #fffbea; stroke: var(--gone); stroke-width: 2; stroke-dasharray: 2 2; }
+.m-hard { fill: #fffbea; stroke: var(--ink); stroke-width: 1.5; }
+.m-commit { fill: var(--ink-soft); stroke: #fffbea; stroke-width: 1.5; }
+.m-merge { fill: #fffbea; stroke: var(--ink); stroke-width: 2.5; }
+@keyframes lane-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .m-waiting { animation: none; } }
+/* The callout sits under the lanes, joined to its mark by a dotted line, as the README figure joins its callouts. */
+.lane-band { grid-column: 1 / -1; padding: 12px 0 4px; }
+.lane-leader { position: absolute; width: 0; border-left: 1.5px dotted var(--ink-soft); pointer-events: none; }
+.lane-callout { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 13px; border-radius: 12px; background: var(--face); box-shadow: 0 0 0 2px var(--line), 0 16px 26px -16px #2e234370; }
+.lane-callout h3 { margin: 0; font: 700 17px/1.2 var(--prose); text-wrap: balance; }
+.lane-callout .said { font: 650 13px/1.3 var(--ui); font-stretch: 90%; }
+.lane-callout .said.with { color: #2f6b45; }
+.lane-callout .said.against { color: var(--against); }
+.lane-callout .said.waiting { color: var(--waiting); }
+.lane-callout .said.gone, .lane-callout .said.aside { color: var(--ink-faint); }
+.lane-callout .said.commit, .lane-callout .said.merge { color: var(--ink-soft); }
+.lane-callout .meta { font: 500 12px/1.3 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+.lane-callout code { font: 600 11.5px/1 ui-monospace, Menlo, monospace; color: var(--ink-soft); }
+.lane-callout h3 code { font-size: 15px; color: var(--ink); }
+.lane-callout button { align-self: flex-start; margin-top: 4px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--ink); color: #fffbea; font: 650 12.5px/1 var(--ui); font-stretch: 90%; cursor: pointer; }
+.lanes-note { margin-top: 18px; font: 500 12.5px/1.4 var(--ui); font-stretch: 92%; color: var(--ink-soft); }
 .pref-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
 .pref-total { font: var(--t-body); font-size: 16px; }
 .pref-foot .why-line input { max-width: 460px; }
@@ -527,6 +590,12 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
   .cal-table th, .cal-table td { padding-right: 8px; }
   .cal-table .col-stop { display: none; }
   .cal-table .in-row { display: block; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); }
+  /* Your decisions, by branch: narrower names; the lanes still scroll sideways in their own box, and a callout's button is 44 px */
+  .lanes { grid-template-columns: 8.5rem minmax(0, 1fr); }
+  .lane-name { padding-right: 8px; }
+  .panel.wide.branches { width: auto; }
+  .lane-name .lane-end { line-height: 1.2; white-space: normal; }
+  .lane-callout button { min-height: 44px; }
 
   /* the path's bar, at the foot of the screen (Sheet.tsx) */
   .sheet-bar { padding: 0 max(var(--gutter), env(safe-area-inset-right)) env(safe-area-inset-bottom) max(var(--gutter), env(safe-area-inset-left)); background: var(--desk-deep); box-shadow: 0 -10px 18px -16px #2e234380; }

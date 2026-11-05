@@ -43,6 +43,10 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   await expect(kept.getByRole("listitem").filter({ hasText: "once answered or withdrawn" })).toContainText("30 days after every machine signed in to the project has the answer or the withdrawal");
   await expect(kept.getByRole("listitem").filter({ hasText: "held back by your settings" })).toContainText("90 days after it arrived");
   await expect(kept.getByRole("listitem").filter({ hasText: "Usage events" })).toContainText("90 days, then only daily totals");
+  // D181: the commits that cite cards and the merges, with how long; a commit's subject never reaches the service.
+  await expect(kept.getByRole("listitem").filter({ hasText: "A commit's ID, time and branch" })).toContainText("As long as that card's text: removed with it.");
+  await expect(kept.getByRole("listitem").filter({ hasText: "A merge: its two branches" })).toContainText("Until the text of every card it brought is removed.");
+  await expect(page.getByRole("region", { name: "What it keeps, and why" })).toContainText("A commit's subject and message, and what it changed, never reach the service.");
   await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("For 14 days, signing in with your passkey can restore it");
   for (const name of ["Cloudflare, Inc.", "Globus"]) await expect(page.getByRole("region", { name: "Who else handles it" }).getByText(name, { exact: true })).toBeVisible();
   await page.getByRole("region", { name: "What it keeps, and why" }).getByRole("link", { name: "Every field is listed" }).click();

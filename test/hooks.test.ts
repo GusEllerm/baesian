@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { main, selfCommand } from "../src/cli.js";
 import { hookBlock, writeHook } from "../src/hooks.js";
+import { Store } from "../src/store.js";
 import { BODY, REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
@@ -65,7 +66,7 @@ describe("installing the gate (D54)", () => {
   it("creates versioned hooks and points git at them", async () => {
     const { dir } = repo();
     const out = await init(dir);
-    expect(out).toMatch(/pre-commit created, commit-msg created, post-commit created in \.githooks\//);
+    expect(out).toMatch(/pre-commit created, commit-msg created, post-commit created, post-merge created, post-rewrite created in \.githooks\//);
     // Read the real setting: `sh` overrides core.hooksPath for its own commands.
     expect(spawnSync("git", ["config", "core.hooksPath"], { cwd: dir, encoding: "utf8" }).stdout.trim()).toBe(".githooks");
     expect(await init(dir)).not.toMatch(/git gate/); // unchanged the second time
@@ -88,11 +89,58 @@ describe("installing the gate (D54)", () => {
   it("keeps machine paths out of the committed hooks, in the clone's git config instead", async () => {
     const { dir } = repo();
     await init(dir);
-    const hooks = ["pre-commit", "commit-msg", "post-commit"].map((h) => readFileSync(join(dir, ".githooks", h), "utf8")).join("\n");
+    const hooks = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite"].map((h) => readFileSync(join(dir, ".githooks", h), "utf8")).join("\n");
     expect(hooks).not.toContain(ROOT);
     expect(hooks).not.toContain(process.execPath);
     const local = spawnSync("git", ["config", "--local", "--get", "baesian.fallback"], { cwd: dir, encoding: "utf8" });
     expect(local.stdout).toContain(join(ROOT, "src", "bin.ts"));
+  });
+});
+
+describe("the hooks that find merges (D181)", { timeout: 60_000 }, () => {
+  it("are added to a hooks folder set up before them: `baesian init` inserts its block in the repo's own post-merge, and pre-commit says to run it", async () => {
+    const { dir } = repo();
+    await init(dir);
+    // As a repo set up before D181 has it: no post-rewrite, and a post-merge of the repo's own.
+    rmSync(join(dir, ".githooks", "post-rewrite"));
+    writeFileSync(join(dir, ".githooks", "post-merge"), "#!/bin/sh\necho the repo's own post-merge\n");
+    put(dir, "README.md", "hi\n");
+    const hint = commit(dir, "Docs\n");
+    expect(hint.code).toBe(0);
+    expect(hint.err).toContain("this repo's hooks lack post-merge and post-rewrite, which find merges: run `baesian init` to add them");
+    expect(await init(dir)).toMatch(/git gate: {4}post-merge inserted, post-rewrite created in \.githooks\//);
+    const merge = readFileSync(join(dir, ".githooks", "post-merge"), "utf8");
+    expect(merge.startsWith(`#!/bin/sh\n${hookBlock("post-merge")}\n`)).toBe(true);
+    expect(merge).toContain("echo the repo's own post-merge");
+    put(dir, "README.md", "hi again\n");
+    expect(commit(dir, "Docs again\n").err).not.toContain("lack");
+  });
+
+  it("record a real merge as git runs them, and leave post-rewrite's input to the repo's own lines", async () => {
+    const { dir } = repo();
+    await init(dir);
+    put(dir, "README.md", "hi\n");
+    expect(commit(dir, "Set up Baesian\n").code).toBe(0);
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const id = Store.open(dir).fileCard(draft({ touches: [] }), BODY, { agent: "a" }).card.meta.id;
+    put(dir, "feature.txt", "a feature\n");
+    expect(commit(dir, `A feature\n\nBaesian-Card: ${id}\n`).code).toBe(0);
+    sh(dir, "checkout", "-q", "main");
+    put(dir, "other.txt", "main moves on\n");
+    expect(commit(dir, "Main moves on\n").code).toBe(0);
+    const merged = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "merge", "--no-ff", "--no-edit", "feat"], { cwd: dir, encoding: "utf8", env: ENV });
+    expect(merged.status).toBe(0);
+    expect(merged.stderr).toMatch(/baesian: recorded feat merged into main, with 1 card/);
+    expect(Store.open(dir).merges()).toMatchObject([{ branch: "feat", into: "main", commit: sh(dir, "rev-parse", "HEAD"), cards: [id] }]);
+
+    // A rebase gives post-rewrite the commits it rewrote on its standard input; the repo's own lines still read them.
+    writeFileSync(join(dir, ".githooks", "post-rewrite"), `${readFileSync(join(dir, ".githooks", "post-rewrite"), "utf8")}cat > rewritten.txt\n`);
+    sh(dir, "checkout", "-q", "-b", "topic", "HEAD~1");
+    put(dir, "topic.txt", "topic\n");
+    expect(commit(dir, "Topic\n").code).toBe(0);
+    const rebased = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "rebase", "main"], { cwd: dir, encoding: "utf8", env: ENV });
+    expect(rebased.status).toBe(0);
+    expect(readFileSync(join(dir, "rewritten.txt"), "utf8")).toMatch(/^[0-9a-f]{40} [0-9a-f]{40}/);
   });
 });
 
@@ -174,7 +222,8 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     const rebase = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "rebase", "-q", "main", "feat"], { cwd: dir, encoding: "utf8", env: ENV });
     expect(rebase.status).toBe(0);
     const rebased = sh(dir, "rev-parse", "HEAD");
-    expect(store.ledger(id).map((e) => [e.meta.commit, e.meta.branch])).toEqual([[old, "feat"], [rebased, `detached-${rebased.slice(0, 7)}`]]);
+    // HEAD is detached while the rebase runs, but the commit is feat's (D181): the ledger says so.
+    expect(store.ledger(id).map((e) => [e.meta.commit, e.meta.branch])).toEqual([[old, "feat"], [rebased, "feat"]]);
 
     store.addVerdict({ card: id, revision: 1, response: "alternative", choice: "Postgres", ...REVIEWER });
     const brief = store.briefs(id)[0];

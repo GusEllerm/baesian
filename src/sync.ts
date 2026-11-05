@@ -4,7 +4,8 @@ import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync
 import { join } from "node:path";
 import { isShallow, rootCommits } from "./git.js";
 import { type Http, Offline, REQUEST_MS, SignedOut, readGrant, reason, refreshGrant } from "./login.js";
-import { CARD_ID, CardDraft, type Config, type MachineGrant, Presence, type RelayEntry, RelayState, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
+import { parseDoc } from "./frontmatter.js";
+import { CARD_ID, CardDraft, type Config, type MachineGrant, Presence, type RelayEntry, RelayState, isLedgerBody, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
 import { alreadyExists, checkPath } from "./storage.js";
 import type { Store } from "./store.js";
 import type { WaitOptions } from "./wait.js";
@@ -21,26 +22,46 @@ import type { WaitOptions } from "./wait.js";
 /** `relay.json` in the live layer. */
 export const RELAY_STATE = "relay.json";
 
-/** The live layer's top folders a relay's log may write into: the files it holds. Never presence, cursors or markers. */
-const PULLED = new Set(["cards", "decks", "verdicts", "rules", "topics", "preferences", "trust", "attachments"]);
+/**
+ * The live layer's top folders a relay's log may write into: the files it holds, with the ledger and merges another
+ * machine found (D181). Never presence, cursors or markers.
+ */
+const PULLED = new Set(["cards", "decks", "verdicts", "rules", "topics", "preferences", "trust", "attachments", "ledger", "merges"]);
 
 const ID = CARD_ID.source.replace(/^\^|\$$/g, "");
 const REVISION = new RegExp(`^cards/(${ID})/r(\\d+)\\.md$`);
 const CARD_FILE = new RegExp(`^cards/(${ID})/(?:gate-r\\d+-cli\\.json|withdrawn\\.json|fallback-[0-9a-z]+\\.json)$`);
 const ATTACHMENT = new RegExp(`^attachments/(${ID})-[0-9a-z]+\\.json$`);
 const DECK = /^decks\/[a-z0-9][a-z0-9-]*\.md$/;
+const LEDGER = new RegExp(`^ledger/(${ID})-[0-9a-z]+\\.md$`);
+const MERGE = /^merges\/(?:[0-9a-f]{40}|[0-9a-f]{64})-[0-9a-f]{12}\.json$/;
 
 /**
  * Whether a live-layer file is one of the kinds an agent writes, which a machine pushes (Hosted Service section 1): card
- * revisions, the CLI's gate records, withdrawals, fallbacks, attachments and decks. Waiting markers go up only while
- * `baesian wait` runs. Everything a person writes comes down, signed, and never goes up.
+ * revisions, the CLI's gate records, withdrawals, fallbacks, attachments and decks; and what the hooks write (D181), the
+ * ledger's entries and merges. Waiting markers go up only while `baesian wait` runs. Everything a person writes comes
+ * down, signed, and never goes up.
  */
 export function agentWritten(rel: string): boolean {
-  return DECK.test(rel) || REVISION.test(rel) || CARD_FILE.test(rel) || ATTACHMENT.test(rel);
+  return DECK.test(rel) || REVISION.test(rel) || CARD_FILE.test(rel) || ATTACHMENT.test(rel) || LEDGER.test(rel) || MERGE.test(rel);
 }
 
-/** The card a file belongs to, if any. */
-const cardOf = (rel: string) => (REVISION.exec(rel) ?? CARD_FILE.exec(rel) ?? ATTACHMENT.exec(rel))?.[1];
+/** The card a file belongs to, if any: a ledger entry is its card's. */
+const cardOf = (rel: string) => (REVISION.exec(rel) ?? CARD_FILE.exec(rel) ?? ATTACHMENT.exec(rel) ?? LEDGER.exec(rel))?.[1];
+
+/**
+ * Whether a ledger entry may leave the machine (D181): its body is the one line naming the commit's short ID and the card
+ * (`ledgerBody()`), and it names its commit. Entries written before D120 listed the commit's files, and stay here.
+ */
+export function plainLedger(bytes: Uint8Array): boolean {
+  try {
+    const { meta, body } = parseDoc(Buffer.from(bytes).toString("utf8"));
+    const m = meta as { card?: unknown; commit?: unknown };
+    return typeof m.commit === "string" && typeof m.card === "string" && isLedgerBody(body, m.commit, m.card);
+  } catch {
+    return false;
+  }
+}
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -285,6 +306,12 @@ function put(store: Store, rel: string, bytes: Uint8Array, run: Run): void {
   if (here && same(here, bytes)) return;
   const m = REVISION.exec(rel);
   const taken = m?.[2] === "1" && !run.w.uploaded.has(rel) ? takeOut(store, m[1]!) : undefined;
+  // Two machines found the same merge (D181), and said it differently (the cards each knew of, when): the relay's stands.
+  if (MERGE.test(rel)) {
+    store.storage.replace(rel, bytes);
+    run.out.replaced.push(rel);
+    return;
+  }
   if (taken) {
     run.refiles.push(taken);
     store.storage.create(rel, bytes);
@@ -380,8 +407,9 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
 
 /**
  * The agent-written files the relay doesn't have yet, in the order it takes them (M9c): decks first, then card
- * revisions, each card's in order, then the rest (the CLI's gate records, withdrawals, fallbacks, attachments). When a
- * repo is first linked, that's every one in the live layer (B-6k0rk).
+ * revisions, each card's in order, then the rest (the CLI's gate records, withdrawals, fallbacks, attachments), then the
+ * ledger's entries whose body names only the commit (`plainLedger()`) and the merges (D181). When a repo is first linked,
+ * that's every one in the live layer (B-6k0rk).
  */
 export function unsent(store: Store, uploaded: ReadonlySet<string>): string[] {
   const list = (dir: string) => store.storage.list(dir).sort();
@@ -398,7 +426,9 @@ export function unsent(store: Store, uploaded: ReadonlySet<string>): string[] {
     rest.push(...files.filter((p) => CARD_FILE.test(p)));
   }
   rest.push(...list("attachments").map((f) => `attachments/${f}`).filter((p) => ATTACHMENT.test(p)));
-  return [...decks, ...revisions, ...rest].filter((p) => !uploaded.has(p));
+  const ledger = list("ledger").map((f) => `ledger/${f}`).filter((p) => LEDGER.test(p) && !uploaded.has(p) && plainLedger(store.storage.read(p) ?? new Uint8Array()));
+  const merges = list("merges").map((f) => `merges/${f}`).filter((p) => MERGE.test(p));
+  return [...decks, ...revisions, ...rest, ...ledger, ...merges].filter((p) => !uploaded.has(p));
 }
 
 /** The folders of what a person writes: answers, rules, topic merges and preference files (Hosted Service section 3). */

@@ -33,10 +33,16 @@ export const RETENTION: Retention = {
 export type Ended = ApiRemovedCard["ended"];
 
 const ID = CARD_ID.source.replace(/^\^|\$$/g, "");
-/** The live layer's paths that belong to one card: its folder, its answers (and their proofs), its attachments, its waiting markers. */
-const CARD_PATHS = [new RegExp(`^cards/(${ID})/`), new RegExp(`^verdicts/\\d{8}T\\d{6}\\.\\d{3}Z-(${ID})-r\\d+-`), new RegExp(`^attachments/(${ID})-`), new RegExp(`^waiting/(${ID})-`)];
+/**
+ * The live layer's paths that belong to one card: its folder, its answers (and their proofs), its attachments, its
+ * waiting markers, and the ledger's entries for the commits that cite it (D181), which go with its text.
+ */
+const CARD_PATHS = [new RegExp(`^cards/(${ID})/`), new RegExp(`^verdicts/\\d{8}T\\d{6}\\.\\d{3}Z-(${ID})-r\\d+-`), new RegExp(`^attachments/(${ID})-`), new RegExp(`^waiting/(${ID})-`), new RegExp(`^ledger/(${ID})-`)];
 
-/** The card a path in the live layer belongs to, if it belongs to one. Rules, topic merges, preferences, decks and trust files don't. */
+/** A ledger entry (D181): its card's, removed with its text, but a commit citing it later doesn't put that off. */
+export const isLedgerPath = (path: string) => path.startsWith("ledger/");
+
+/** The card a path in the live layer belongs to, if it belongs to one. Rules, topic merges, preferences, decks, trust files and merges don't. */
 export function cardOfPath(path: string): string | undefined {
   for (const re of CARD_PATHS) {
     const m = re.exec(path);

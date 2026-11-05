@@ -3,9 +3,10 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { Buffer } from "node:buffer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiState } from "../../src/api.js";
-import { type RelayEntry, readRelayEntry } from "../../src/schema.js";
+import { renderDoc } from "../../src/frontmatter.js";
+import { type RelayEntry, ledgerBody, readRelayEntry } from "../../src/schema.js";
 import { MemoryStorage } from "../../src/storage.js";
-import type { Store } from "../../src/store.js";
+import { type Store, mergeFile } from "../../src/store.js";
 import type { ProjectRelay } from "../src/index.js";
 import { RETENTION, RetentionLedger, cardOfPath, delivered, due } from "../src/retention.js";
 import { type Person, machineLogin, signUp } from "./browser.js";
@@ -104,7 +105,8 @@ describe("the rules, as pure functions", () => {
     expect(cardOfPath("verdicts/20270301T090000.000Z-B-7f3kq-r1-ab12.passkey.json")).toBe("B-7f3kq");
     expect(cardOfPath("attachments/B-7f3kq-ab12.json")).toBe("B-7f3kq");
     expect(cardOfPath("waiting/B-7f3kq-ab12.json")).toBe("B-7f3kq");
-    for (const p of ["rules/R-ab12.md", "topics/alias-x.json", "preferences/20270301T090000.000Z-ab.json", "decks/hosted.md", "trust/service-relay-1.json"]) expect(cardOfPath(p)).toBeUndefined();
+    expect(cardOfPath("ledger/B-7f3kq-ab12.md")).toBe("B-7f3kq");
+    for (const p of ["rules/R-ab12.md", "topics/alias-x.json", "preferences/20270301T090000.000Z-ab.json", "decks/hosted.md", "trust/service-relay-1.json", `merges/${"c".repeat(40)}-0123456789ab.json`]) expect(cardOfPath(p)).toBeUndefined();
   });
 
   it("delivered: every machine signed in now was sent the entry, and at least one was", () => {
@@ -239,6 +241,51 @@ describe("an answered card (B-9jqt4)", () => {
     expect(s.cards.find((c) => c.meta.id === parent)!.status).toBe("resolved");
     expect(s.cards.find((c) => c.meta.id === child)!.status).toBe("returned");
     expect(s.removed).toBeUndefined();
+  });
+});
+
+describe("the commits that cite a card, and merges (D181)", () => {
+  it("a ledger entry goes with its card's text, without putting off the day; a merge goes once all its cards have; one with none stays", async () => {
+    const o = await owner();
+    const t0 = now;
+    const id = await file(o);
+    const other = await file(o);
+    await answer(o, { card: id });
+    await pull(o);
+    // The daily look notes when the answer was delivered: the 30 days run from there.
+    expect(await sweep(o)).toEqual([]);
+    const put = async (path: string, text: string) => {
+      const r = await inObject(o, (relay) => relay.upload(o.project, path, new TextEncoder().encode(text), "laptop"));
+      expect(r.status, `${path}: ${JSON.stringify(r.body)}`).toBe(201);
+    };
+    // Ten days on, a commit cites the answered card: its ledger entry arrives, after the answer.
+    at(t0 + 10 * DAY);
+    await keepSignedIn(o);
+    const commit = "c".repeat(40);
+    const ledger = `ledger/${id}-abcde.md`;
+    await put(ledger, renderDoc({ type: "ledger", format: 1, card: id, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, id)));
+    const merge = (sha: string, cards: string[]) => ({ path: mergeFile(sha, "feat/x"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, at: new Date(now).toISOString(), cards }) });
+    const both = merge("d".repeat(40), [id, other]);
+    const mine = merge("e".repeat(40), [id]);
+    const none = merge("f".repeat(40), []);
+    for (const m of [both, mine, none]) await put(m.path, m.text);
+    await pull(o);
+    expect((await state(o)).commits).toEqual([{ commit, branch: "feat/x", card: id, at: new Date(now).toISOString() }]);
+    // Thirty days after the answer was delivered, not after the commit: the card's text goes, its ledger entry with it.
+    at(t0 + 30 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([id]);
+    const files = await inObject(o, (_r, s) => s.storage.sql.exec<{ path: string }>("SELECT path FROM files").toArray().map((f) => f.path));
+    expect(files).not.toContain(ledger);
+    // The merge that brought only that card goes too; one that brought a card still kept stays, as does one with none.
+    expect(files).not.toContain(mine.path);
+    expect(files).toEqual(expect.arrayContaining([both.path, none.path]));
+    const s = await state(o);
+    expect(s.commits).toEqual([]);
+    expect(s.merges?.map((m) => m.commit).sort()).toEqual(["d".repeat(40), "f".repeat(40)]);
+    // Their log entries stay, without their bodies.
+    const entries = await pull(o);
+    for (const p of [ledger, mine.path]) expect(entries.find((e) => e.path === p)?.body, p).toBeUndefined();
   });
 });
 

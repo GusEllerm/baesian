@@ -114,6 +114,33 @@ export interface ApiState {
    * without it, and can't be answered. Only the relay sets it; `baesian serve` never removes anything.
    */
   removed?: ApiRemovedCard[];
+  /**
+   * The merges the CLI's hooks found (D181), oldest first: each a branch merged into another, at a commit and a time, with
+   * the cards it brought. For the branches panel; absent from a server that predates them.
+   */
+  merges?: ApiMerge[];
+  /**
+   * The commits that cite cards, from the ledger (D181), oldest first: each one's ID, time, branch and card. Never its
+   * subject or message, which stay on the machine.
+   */
+  commits?: ApiCommit[];
+}
+
+/** A merge the CLI found (D181): `branch` merged into `into` at `commit`, at `at`, bringing `cards`. */
+export interface ApiMerge {
+  branch: string;
+  into: string;
+  commit: string;
+  at: string;
+  cards: string[];
+}
+
+/** A commit that cites a card (D181), as the ledger records it: made on `branch`, at `at`. */
+export interface ApiCommit {
+  commit: string;
+  branch: string;
+  card: string;
+  at: string;
 }
 
 /** A card the relay keeps only the metadata of (M9f): no title, question or answer, only what retention keeps. */

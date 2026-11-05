@@ -56,7 +56,7 @@ function everyKind() {
   const rule = store.rules()[0]!.meta.id;
   const b = file({ title: "The cache store", question: "Where should the cache live?", topic: "storage/cache", proposal_breaks: [rule] });
   store.addVerdict({ card: b, revision: 1, response: "accept", retire_rules: [rule], ...REVIEWER });
-  // A topic alias, a withdrawal, an attachment, a fallback, a ledger entry.
+  // A topic alias, a withdrawal, an attachment, a fallback, a ledger entry, a merge.
   const c = file({ title: "Somewhere else", question: "Where else?", topic: "storage/other" });
   store.mergeTopics("storage/other", "storage/cache", "gus");
   store.withdraw(c, "not needed", "claude-code");
@@ -64,6 +64,8 @@ function everyKind() {
   store.attach(d, "codex");
   store.recordFallback(d, "timeout", "claude-code");
   store.writeLedger(a, { commit: "0123456789abcdef" }, "Built in `0123456789`.\n");
+  // A merge the hooks found (D181).
+  store.writeMerge({ branch: "feat/x", into: "main", commit: "0".repeat(40), at: new Date().toISOString(), cards: [a] });
   // A preference file, which only the client writes (D147); every card above has its gate record.
   store.writePreferences({ preset: "fewer-interruptions" }, { by: "gus", client: "web" });
   // The mutable files: presence, a waiting marker, and the cursors, the branch's and a session's, with a delivery.

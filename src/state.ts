@@ -73,8 +73,25 @@ export function snapshot(store: Store, ctx: StateContext): ApiState {
       cards,
       routing: routingState(store, problems),
       problems,
+      ...branchesState(store),
     };
   }, (path, error) => problems.push({ path, error }));
+}
+
+/**
+ * What the branches panel draws besides the cards (D181): the merges the hooks found, and the commits the ledger says cite
+ * cards, each once: its ID, time, branch and card, never its subject.
+ */
+function branchesState(store: Store): Pick<ApiState, "merges" | "commits"> {
+  const merges = store.merges().map(({ type: _t, format: _f, ...m }) => m);
+  const seen = new Set<string>();
+  const commits = store.ledgerEntries().flatMap((e) => {
+    const commit = e.meta.commit;
+    if (!commit || seen.has(`${commit} ${e.meta.card}`)) return [];
+    seen.add(`${commit} ${e.meta.card}`);
+    return [{ commit, branch: e.meta.branch, card: e.meta.card, at: e.meta.at }];
+  });
+  return { merges, commits };
 }
 
 /** The preferences in force, their history, and the report per row (M8), for the state. */

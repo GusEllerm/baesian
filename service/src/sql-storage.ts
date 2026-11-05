@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { parseDoc } from "../../src/frontmatter.js";
 import { type RelayEntry, readRelayEntry } from "../../src/schema.js";
 import { FileExists, type Storage, checkPath } from "../../src/storage.js";
-import { cardOfPath } from "./retention.js";
+import { cardOfPath, isLedgerPath } from "./retention.js";
 
 // The live layer in a Durable Object's SQLite (B-0ag7h, D140): one row per path, and beside it the relay's append-only
 // log of entries (P16 section 8), written in the same transaction. The store runs over it as over a folder.
@@ -298,7 +298,9 @@ export class SqlFileStorage implements Storage {
 
   /**
    * The log, by the card each entry belongs to (`cardOfPath()`): its last entry's sequence number and time, when its
-   * first and latest revisions arrived, its files' bytes in all, and the paths logged. What retention decides from.
+   * first and latest revisions arrived, its files' bytes in all, and the paths logged. What retention decides from. A
+   * ledger entry (D181) is among its card's paths, but isn't its last entry: a commit citing an answered card doesn't put
+   * off the day its text goes.
    */
   cardsInLog(): Map<string, CardInLog> {
     const out = new Map<string, CardInLog>();
@@ -306,8 +308,10 @@ export class SqlFileStorage implements Storage {
       const card = cardOfPath(r.path);
       if (!card) continue;
       const c = out.get(card) ?? { last: 0, lastAt: r.at, firstAt: undefined, revisionAt: undefined, revision: 0, size: 0, paths: [] };
-      c.last = r.seq;
-      c.lastAt = r.at;
+      if (!isLedgerPath(r.path)) {
+        c.last = r.seq;
+        c.lastAt = r.at;
+      }
       c.size += r.size;
       c.paths.push(r.path);
       const rev = /^cards\/[^/]+\/r(\d+)\.md$/.exec(r.path);
@@ -332,6 +336,18 @@ export class SqlFileStorage implements Storage {
     this.storage.transactionSync(() => {
       for (const path of paths) this.sql.exec("DELETE FROM files WHERE path = ? OR path = ?", path, `${path}${SIG}`);
       this.sql.exec("DELETE FROM files WHERE path >= ? AND path < ?", `waiting/${card}-`, `waiting/${card}.`);
+      this.bump();
+    });
+  }
+
+  /**
+   * Remove files' bytes, with their signatures, keeping their log entries, as `dropCard` does: the merges whose cards'
+   * text has all gone (D181). One move of the version, never logged.
+   */
+  dropFiles(paths: readonly string[]): void {
+    if (!paths.length) return;
+    this.storage.transactionSync(() => {
+      for (const path of paths) this.sql.exec("DELETE FROM files WHERE path = ? OR path = ?", path, `${path}${SIG}`);
       this.bump();
     });
   }

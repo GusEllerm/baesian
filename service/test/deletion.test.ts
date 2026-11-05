@@ -2,7 +2,10 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiState } from "../../src/api.js";
+import { renderDoc } from "../../src/frontmatter.js";
+import { ledgerBody } from "../../src/schema.js";
 import { MemoryStorage } from "../../src/storage.js";
+import { mergeFile } from "../../src/store.js";
 import { LIMITS } from "../src/accounts.js";
 import { DELETION } from "../src/deletion.js";
 import { hashOf } from "../src/secret.js";
@@ -49,6 +52,16 @@ async function owner(): Promise<{ p: Person; project: string; machine: { access:
     expect(r.status, await r.clone().text()).toBeLessThan(300);
   }
   expect((await p.browser.post(`/v1/projects/${project}/verdicts`, { card, revision: 1, response: "accept" })).status).toBe(201);
+  // D181: a commit that cites it, and the merge that brought it.
+  const commit = "c".repeat(40);
+  const hooks: [string, string][] = [
+    [`ledger/${card}-abcde.md`, renderDoc({ type: "ledger", format: 1, card, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, card))],
+    [mergeFile(commit, "feat/x"), JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit, at: new Date(now).toISOString(), cards: [card] })],
+  ];
+  for (const [path, text] of hooks) {
+    const r = await call("PUT", `files/${path}`, { as: { headers: { authorization: `Bearer ${machine.access}` } }, project, body: new TextEncoder().encode(text) });
+    expect(r.status, await r.clone().text()).toBe(201);
+  }
   await db().prepare("INSERT INTO push_subscriptions (id, account, endpoint, p256dh, auth, name, created) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(`push-${n}`, p.account, `https://push.test/${p.account}`, "key", "auth", "Firefox on a Mac", new Date(now).toISOString()).run();
   return { p, project, machine, card };
 }
@@ -175,6 +188,8 @@ describe("14 days on, the daily job deletes it (B-b46z3)", () => {
     const daily = await count("SELECT COUNT(*) AS n FROM usage_daily");
     expect(await relayRows(a.project)).toMatchObject({ log: expect.any(Number) });
     expect((await relayRows(a.project)).log).toBeGreaterThan(0);
+    const before = await runInDurableObject(stub(a.project), (_i: ProjectRelay, s) => s.storage.sql.exec<{ path: string }>("SELECT path FROM files WHERE path LIKE 'ledger/%' OR path LIKE 'merges/%'").toArray().length);
+    expect(before).toBe(2);
     const bRows = await rowsOf(b.p.account, b.project, null);
     const bRelay = await relayRows(b.project);
 

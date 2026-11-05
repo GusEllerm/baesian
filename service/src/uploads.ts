@@ -1,6 +1,6 @@
 import { parseDoc } from "../../src/frontmatter.js";
-import { Attachment, CARD_ID, CardMeta, DeckMeta, Fallback, type FileKindName, GateRecord, NewerFormat, Preferences, RuleMeta, RuleRetirement, TopicAlias, Verdict, Waiting, Withdrawal, describeError, upgradeFile } from "../../src/schema.js";
-import type { Store } from "../../src/store.js";
+import { Attachment, CARD_ID, CardMeta, CommitId, DeckMeta, Fallback, type FileKindName, GateRecord, LedgerMeta, MergeEvent, NewerFormat, Preferences, RuleMeta, RuleRetirement, TopicAlias, Verdict, Waiting, Withdrawal, describeError, isLedgerBody, upgradeFile } from "../../src/schema.js";
+import { type Store, mergeFile } from "../../src/store.js";
 
 // What a machine may upload (Hosted Service sections 1 and 3): only the kinds of file an agent writes, each checked
 // against the store's own schema and against its path. Verdicts, rules, topic merges, preferences, signatures, the
@@ -26,8 +26,8 @@ interface AgentKind {
   doc?: true;
   /** A waiting marker: mutable state, replaced and removed, never in the log (D90). */
   mutable?: true;
-  /** What's wrong with it, given its path's parts and the project's store, or nothing. */
-  check(parts: string[], fields: Record<string, unknown>, store: Store): string | undefined;
+  /** What's wrong with it, given its path's parts, the project's store, and a document's body, or nothing. */
+  check(parts: string[], fields: Record<string, unknown>, store: Store, body?: string): string | undefined;
 }
 
 const sameCard = (parts: string[], fields: Record<string, unknown>) => (fields.card === parts[1] ? undefined : `it's for ${String(fields.card)}, but its path is ${parts[1]}'s`);
@@ -81,6 +81,33 @@ export const AGENT_KINDS: readonly AgentKind[] = [
     schema: DeckMeta,
     doc: true,
     check: ([, id], f) => (f.id === id ? undefined : `it's deck ${String(f.id)}, but its path says ${id}`),
+  },
+  // D181: what the hooks write. A ledger entry's body names only the commit's short ID and the card, never its subject
+  // or message; a merge names its branches, commit, time and cards.
+  {
+    name: "a ledger entry",
+    path: new RegExp(`^ledger/(${ID})-${SUFFIX}\\.md$`),
+    kind: "ledger",
+    schema: LedgerMeta,
+    doc: true,
+    check: (parts, f, store, body) => {
+      if (f.card !== parts[1]) return `it's for ${String(f.card)}, but its path is ${parts[1]}'s`;
+      if (typeof f.commit !== "string" || !CommitId.safeParse(f.commit).success) return "it must name its commit, in full";
+      if (body === undefined || !isLedgerBody(body, f.commit, parts[1]!)) return "its body must be the one line naming the commit's short ID and the card: a commit's subject and message stay on the machine";
+      return cardHere(parts[1]!, store);
+    },
+  },
+  {
+    name: "a merge",
+    path: /^merges\/([0-9a-f]{40}|[0-9a-f]{64})-([0-9a-f]{12})\.json$/,
+    kind: "merge",
+    schema: MergeEvent,
+    check: ([path, commit], f) => {
+      if (f.commit !== commit) return `it's for commit ${String(f.commit)}, but its path names ${commit}`;
+      if (f.branch === f.into) return "a merge is of one branch into another";
+      const named = mergeFile(commit!, String(f.branch));
+      return path === named ? undefined : `its path isn't named for its branch: it would be ${named}`;
+    },
   },
   {
     name: "a waiting marker",
@@ -167,7 +194,7 @@ export function notAgentWritten(path: string): string {
   const theirs = ["verdicts", "rules", "topics", "preferences", "trust"].includes(top!) || path.endsWith(".sig") || /\/gate-r\d+-relay\.json$/.test(path);
   return theirs
     ? `${path} is a kind of file only a person writes, through the relay, which signs it: a machine never uploads one (P15 section 3), but for the answers from before linking, before anyone answers on the website (B-3zjjx)`
-    : `${path} isn't a kind of file an agent writes: a machine uploads card revisions, the CLI's gate records, withdrawals, fallbacks, attachments, decks and waiting markers`;
+    : `${path} isn't a kind of file an agent writes: a machine uploads card revisions, the CLI's gate records, withdrawals, fallbacks, attachments, decks, waiting markers, ledger entries and merges`;
 }
 
 /**
@@ -182,8 +209,10 @@ export function uploadProblem(kind: AgentKind, parts: string[], path: string, by
     return { status: 400, error: `${path} isn't UTF-8 text` };
   }
   let fields: unknown;
+  let body: string | undefined;
   try {
-    fields = kind.doc ? parseDoc(text).meta : JSON.parse(text);
+    if (kind.doc) ({ meta: fields, body } = parseDoc(text));
+    else fields = JSON.parse(text);
   } catch (e) {
     return { status: 400, error: `${path} can't be read as ${kind.name}: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -196,6 +225,6 @@ export function uploadProblem(kind: AgentKind, parts: string[], path: string, by
   }
   const parsed = kind.schema.safeParse(upgraded);
   if (!parsed.success) return { status: 400, error: `${path} isn't valid as ${kind.name}:\n${describeError(parsed.error)}` };
-  const why = kind.check(parts, parsed.data as Record<string, unknown>, store);
+  const why = kind.check(parts, parsed.data as Record<string, unknown>, store, body);
   return why ? { status: 400, error: `${path}: ${why}` } : undefined;
 }

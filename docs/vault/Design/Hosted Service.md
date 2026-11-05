@@ -34,7 +34,9 @@ tags: [baesian, design]
 
 - **Up:** what agents write (cards, revisions, withdrawals, fallbacks, attachments, decks) and waiting heartbeats.
 - **Down:** what people write (verdicts, rules, rule retirements, topic merges), each with the service's signature, and the reviewer's presence. Also other machines' cards, if the repo has more than one machine.
-- **Never leaves the machine:** the record, the gate, ledger entries, inbox cursors, the server file, the personal config, and the code.
+- **Never leaves the machine:** the record, the gate, inbox cursors, the server file, the personal config, and the code. Ledger entries stayed too, until D181 (below).
+
+> **D181 (2026-11-05):** what the hooks find goes up and comes down too: each ledger entry (a commit's ID and time, its branch and the card it cites, never its subject or message) and each merge of a branch into another ([[File Formats#The others]], [[src-gate#src/merges.ts: finding merges (D181)]], [[src-sync]]). The website draws them as the branches panel ([[Client Build]] item 26). A ledger entry goes with its card's text; a merge once all its cards' text has gone ([[Privacy Policy]]).
 
 ## 1. The relay
 
@@ -53,7 +55,8 @@ tags: [baesian, design]
 | rules, rule retirements, topic aliases | the web client, through the relay | down, signed | kept while the repo uses them |
 | waiting markers (`Waiting`) | `baesian wait` | up, as a heartbeat | short-lived state, stale after 90 seconds (D90) |
 | presence (`Presence`) | the web client | down, as state | short-lived state, stale after 90 seconds (D41) |
-| ledger entries, inbox cursors, `server.json`, `port.json` | the gate, the CLI, `baesian serve` | stay local | not sent |
+| ledger entries, whose body names only the commit, and merges (D181) | the hooks | up, and down to other machines | a ledger entry with its card's text; a merge until all its cards' text has gone |
+| inbox cursors, `server.json`, `port.json` | the CLI, `baesian serve` | stay local | not sent |
 
 The rule behind the table: **the relay accepts uploads from a machine only for the kinds of file an agent writes.** Verdicts, rules, retirements and aliases are made only by the relay, from a person's signed-in session, and signed (section 4). This is how "only the client resolves" (D32) becomes something the service enforces, not just a convention. Rules count as much as verdicts here. A forged rule file would let the gate acknowledge whatever it covers.
 

@@ -42,6 +42,8 @@ export const FILE_KINDS = {
   "rule-retirement": { name: "rule retirement", upgrades: [] },
   "topic-alias": { name: "topic alias", upgrades: [] },
   attachment: { name: "attachment", upgrades: [] },
+  // D181: a branch merged into another, as the CLI found it.
+  merge: { name: "merge", upgrades: [] },
   cursor: { name: "inbox cursor", upgrades: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
   presence: { name: "presence", upgrades: [] },
   waiting: { name: "waiting marker", upgrades: [] },
@@ -178,7 +180,7 @@ export const ProjectId = z.string().max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$
 const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, "a SHA-256 digest in lowercase hex");
 
 /** A git commit's full ID, in lowercase hex: SHA-1's 40 digits, or SHA-256's 64. */
-const CommitId = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "a commit's full ID, in lowercase hex");
+export const CommitId = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "a commit's full ID, in lowercase hex");
 
 /** Bytes as base64url, with no padding, as WebAuthn gives them. */
 const Base64Url = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/, "base64url, with no padding");
@@ -472,6 +474,36 @@ export const LedgerMeta = z.strictObject({
   at: Timestamp,
 });
 export type LedgerMeta = z.infer<typeof LedgerMeta>;
+
+/**
+ * A ledger entry's body (D120): one line naming the commit's short ID and the card, never its subject or message, which
+ * stay on the machine (D181). Only an entry whose body is exactly this goes up to the relay; those written before D120
+ * listed the commit's files, and stay on the machine.
+ */
+export const ledgerBody = (commit: string, card: string) => `Commit \`${commit.slice(0, 12)}\` builds on ${card}.\n`;
+
+/** Whether a ledger entry's body, as `parseDoc()` reads it (after the blank line under the frontmatter), is `ledgerBody()`. */
+export const isLedgerBody = (body: string, commit: string, card: string) => body.replace(/^\n+/, "") === ledgerBody(commit, card);
+
+/**
+ * A branch merged into another (D181): `merges/<commit>-<key>.json` in the live layer, where `key` is the first 12 hex
+ * digits of the SHA-256 of `branch` (`mergeFile()`), so two machines that find the same merge write the same path. Found
+ * by the CLI's hooks (src/merges.ts), never in the record; it goes up to the relay and comes down to the project's other
+ * machines. `commit` is the merge commit, the squash commit, or for a fast-forward the commit the branch moved to; `at`
+ * is when, as git says it (a fast-forward found as it happens: then); `cards`, the cards whose `source_branch` is
+ * `branch` it brought, or the cards its commits cite, where the record isn't committed. Commit subjects and messages are
+ * never in it.
+ */
+export const MergeEvent = z.strictObject({
+  type: z.literal("merge"),
+  format: formatOf("merge"),
+  branch: z.string().min(1),
+  into: z.string().min(1),
+  commit: CommitId,
+  at: Timestamp,
+  cards: z.array(CardId).default([]),
+});
+export type MergeEvent = z.infer<typeof MergeEvent>;
 
 /** Frontmatter of a deck: `decks/<id>.md`. The body is the briefing. Membership is computed from cards. */
 export const DeckMeta = z.strictObject({

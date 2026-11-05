@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { renderDoc } from "../../src/frontmatter.js";
 import type { RelayEntry } from "../../src/schema.js";
+import { mergeFile } from "../../src/store.js";
 import { call, fileCard, machineStore, pullLog, push, upload } from "./client.js";
 
 // Uploads (P15 sections 1 and 3): a machine sends only the kinds of file an agent writes, each checked against the
@@ -76,11 +77,56 @@ describe("uploads (P15 section 3)", () => {
       const r = await read(await upload(p, "{}"));
       expect(r.status, p).toBe(400);
     }
-    for (const p of ["ledger/B-aaaaa-abcde.md", "presence.json", "cursors/main.json", "server.json", "notes/x.md"]) {
+    for (const p of ["presence.json", "cursors/main.json", "server.json", "notes/x.md", "merges/x.json", "ledger/x.md"]) {
       const r = await read(await upload(p, "{}"));
       expect(r.status, p).toBe(403);
       expect(r.body.error, p).toMatch(/isn't a kind of file an agent writes/);
     }
+  });
+
+  it("takes a ledger entry that names only its commit, and a merge named for its branch; refuses the rest, a commit's subject among them (D181)", async () => {
+    const local = machineStore();
+    const id = fileCard(local);
+    await push(local);
+    const commit = "c".repeat(40);
+    const meta = { type: "ledger", format: 1, card: id, branch: "feat/runs", commit, at: new Date().toISOString() };
+    const plain = renderDoc(meta, `Commit \`${commit.slice(0, 12)}\` builds on ${id}.\n`);
+    const ledger = `ledger/${id}-abcde.md`;
+    const taken = await read(await upload(ledger, plain));
+    expect(taken.status, taken.body.error).toBe(201);
+    expect(taken.body.entry).toMatchObject({ path: ledger, machine: "laptop" });
+    // One saying more than the commit's short ID and the card: a subject, a message, the files it changed.
+    for (const body of [`Commit \`${commit.slice(0, 12)}\` builds on ${id}: the acquisition talks.\n`, `Commit \`${commit.slice(0, 12)}\` builds on ${id}.\n\n- src/secret.ts\n`]) {
+      const r = await read(await upload(`ledger/${id}-fghjk.md`, renderDoc(meta, body)));
+      expect(r.status).toBe(400);
+      expect(r.body.error).toMatch(/subject and message stay on the machine/);
+    }
+    expect((await read(await upload(`ledger/${id}-mnpqr.md`, renderDoc({ ...meta, commit: undefined }, `Commit \`${commit.slice(0, 12)}\` builds on ${id}.\n`)))).body.error).toMatch(/must name its commit/);
+    expect((await read(await upload(`ledger/B-zzzzz-abcde.md`, plain))).body.error).toMatch(/its path is B-zzzzz's/);
+    expect((await read(await upload(`ledger/${id}-stvwx.md`, renderDoc({ ...meta, subject: "Secret" }, `Commit \`${commit.slice(0, 12)}\` builds on ${id}.\n`)))).status).toBe(400);
+
+    const merge = { type: "merge", format: 1, branch: "feat/runs", into: "main", commit, at: new Date().toISOString(), cards: [id] };
+    const path = mergeFile(commit, "feat/runs");
+    const ok = await read(await upload(path, JSON.stringify(merge)));
+    expect(ok.status, ok.body.error).toBe(201);
+    // The same merge found on another machine, said the same way, is already there; said otherwise, it's refused.
+    expect((await read(await upload(path, JSON.stringify(merge)))).status).toBe(200);
+    expect((await read(await upload(path, JSON.stringify({ ...merge, cards: [] })))).status).toBe(409);
+    const malformed: [string, unknown, RegExp][] = [
+      [mergeFile(commit, "other"), merge, /isn't named for its branch/],
+      [mergeFile("d".repeat(40), "feat/runs"), merge, /path names d{40}/],
+      [mergeFile("e".repeat(40), "main"), { ...merge, commit: "e".repeat(40), branch: "main" }, /one branch into another/],
+      [mergeFile("f".repeat(40), "feat/runs"), { ...merge, commit: "f".repeat(40), cards: ["not-a-card"] }, /card ID/],
+      [mergeFile("a".repeat(40), "feat/runs"), { ...merge, commit: "a".repeat(40), subject: "the acquisition talks" }, /subject/],
+      [mergeFile("b".repeat(40), "feat/runs"), { ...merge, commit: "b".repeat(40), at: "yesterday" }, /at/],
+    ];
+    for (const [p, body, why] of malformed) {
+      const r = await read(await upload(p, JSON.stringify(body)));
+      expect(r.status, p).toBe(400);
+      expect(r.body.error, p).toMatch(why);
+    }
+    const logged = (await pullLog()).filter((e) => e.path.startsWith("merges/") || e.path.startsWith("ledger/")).map((e) => e.path);
+    expect(logged.filter((p) => p === ledger || p === path)).toEqual([ledger, path]);
   });
 
   it("checks each upload against the store's schema, and its fields against its path", async () => {

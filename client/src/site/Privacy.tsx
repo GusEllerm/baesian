@@ -30,6 +30,9 @@ const KEPT: [string, string][] = [
   ["A card's text, once answered or withdrawn", "30 days after every machine signed in to the project has the answer or the withdrawal. Then only its ID, times, sizes and level stay."],
   ["A card's text, held back by your settings and never answered", "90 days after it arrived. Then only its ID, times, sizes and level stay."],
   ["A card's text, waiting for you", "Until it's answered or withdrawn."],
+  ["A commit's ID, time and branch, for the card it cites", "As long as that card's text: removed with it."],
+  ["A merge: its two branches, its time, its commit's ID and the cards it brought", "Until the text of every card it brought is removed. One that brought only a branch's deck: while the project exists."],
+  ["Your decks, each a branch's or a piece of work's, with its name", "While the project exists."],
   ["Your rules, topic merges and gate settings", "While the project exists."],
   ["Usage events", "90 days, then only daily totals, with no ID."],
   ["A sign-in", "Until you sign out, or 30 days unused, or 90 days in all."],
@@ -80,7 +83,8 @@ export function Privacy({ who }: { who?: string | undefined }) {
           <li>
             Each machine you approve with <code>baesian login</code>: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
           </li>
-          <li>What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it.</li>
+          <li>What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.</li>
+          <li>What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; and for each merge of a branch with cards into another, the two branches, when, the ID of the merge's commit, and the cards it brought. A commit's subject and message, and what it changed, never reach the service.</li>
           <li>What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.</li>
           <li>While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.</li>
         </List>
@@ -94,7 +98,7 @@ export function Privacy({ who }: { who?: string | undefined }) {
         <List>
           <li>Your network address, which is used in passing to limit how often sign-in can be tried and to check for bots, then forgotten.</li>
           <li>Passwords: there are none.</li>
-          <li>Your repository: its code, file paths and name never reach the service. Only what an agent writes in a card does, with the name of the branch it was filed on.</li>
+          <li>Your repository: its code, file paths and name never reach the service, nor any commit's subject or message. Only what an agent writes in a card does, with the name of the branch it was filed on, and, for the commits that cite cards and the merges that bring them, their IDs, times and branches.</li>
         </List>
         <h3 className="site-sub">In your browser</h3>
         <List>

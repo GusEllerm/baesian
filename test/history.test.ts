@@ -62,7 +62,7 @@ describe("reading trailers from the history (B-9v5xj)", () => {
     expect(h.onBranch(a)).toBe(true);
     expect(h.onBranch(sh(dir, "rev-parse", "HEAD~2"))).toBe(true); // on a branch, though it cites nothing
     expect(h.onBranch(loose)).toBe(false);
-    expect(h.onBranch("abc1234def5678")).toBe(false); // never existed
+    expect(h.onBranch("abc1234def5678")).toBe(true); // not in this clone: another machine's, pulled from the relay (D181), not known to be rewritten
   });
 
   it("is cached while the branches stay put, and read again when they move", () => {

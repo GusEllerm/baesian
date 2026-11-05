@@ -75,7 +75,10 @@ export interface CitingCommit {
 export interface History {
   /** Card ID → the commits on any branch, local or remote-tracking, whose trailers cite it, oldest first. */
   citing: Map<string, CitingCommit[]>;
-  /** Whether a commit is on a branch, local or remote-tracking: false once it's rewritten, or if it never existed. */
+  /**
+   * Whether a commit is on a branch, local or remote-tracking: false once it's rewritten. A commit this clone doesn't have,
+   * which another machine's ledger names (pulled from the relay, D181), counts as on one: nothing here says it was rewritten.
+   */
   onBranch(commit: string): boolean;
 }
 
@@ -120,7 +123,7 @@ export function readHistory(cwd: string): History {
   const onBranch = (commit: string): boolean => {
     if (found.has(commit)) return true;
     if (!/^[0-9a-f]{4,64}$/i.test(commit)) return false;
-    if (!memo.has(commit)) memo.set(commit, !!gitOut(cwd, ["for-each-ref", "--count=1", `--contains=${commit}`, "--format=%(refname)", ...BRANCH_REFS])?.trim());
+    if (!memo.has(commit)) memo.set(commit, gitOut(cwd, ["cat-file", "-e", `${commit}^{commit}`]) === undefined || !!gitOut(cwd, ["for-each-ref", "--count=1", `--contains=${commit}`, "--format=%(refname)", ...BRANCH_REFS])?.trim());
     return memo.get(commit)!;
   };
   const history = { citing, onBranch };
