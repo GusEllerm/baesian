@@ -1,0 +1,21 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-t3tev",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-05T19:52:31.596Z"
+}
