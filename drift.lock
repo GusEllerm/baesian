@@ -8111,6 +8111,16 @@ target = "src/verify.ts#verify"
 sig = "dc1264ad0d7673cc"
 
 [[bindings]]
+doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
+target = "client/src/Branches.tsx"
+sig = "98e380368a6a4c07"
+
+[[bindings]]
+doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
+target = "client/src/lanes.ts"
+sig = "d2b0a1d3903f8350"
+
+[[bindings]]
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"
 target = "design/explorations/round3/atlas.js#level"
 sig = "5e500011f99b3490"
