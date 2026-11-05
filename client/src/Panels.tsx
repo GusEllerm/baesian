@@ -42,7 +42,13 @@ export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number;
             Your calibration
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("branches"))}>
-            Your decisions, by branch
+            {p.touch ? (
+              "Your decisions, by branch"
+            ) : (
+              <>
+                Your decisions, by branch <kbd>B</kbd>
+              </>
+            )}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("preferences"))}>
             Your preferences
@@ -158,6 +164,10 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
           <kbd>Z</kbd>
         </dt>
         <dd>Undo, for 5 seconds</dd>
+        <dt>
+          <kbd>B</kbd>
+        </dt>
+        <dd>Your decisions, by branch: opens them beside the desk, and closes them</dd>
         <dt>
           <kbd>Esc</kbd>
         </dt>

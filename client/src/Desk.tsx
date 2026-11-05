@@ -17,7 +17,8 @@ import { NotConfirmed, ProofPrompt } from "./proof";
 import { ASK_BEFORE_EXPIRY_MS, type Wait, askNow, confirmedLine, expiredLine, loadWaiting, saveWaiting, waitingLine } from "./waiting";
 import { LIFT_TILT, type LiftLabel, LiftSignals, type LiftLabels, answerLabel, choiceLabel, useLift } from "./Lift";
 import { PHONE, TOUCH, useMedia } from "./media";
-import { BranchesPanel } from "./Branches";
+import { BranchesDrawer } from "./Branches";
+import { chosenOf, saidOf } from "./lanes";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
 import { type CardMotion, Path, type PathProps, flyToBar } from "./Path";
 import { PathSheet } from "./Sheet";
@@ -30,7 +31,8 @@ import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Surv
 // (D82); every card goes through the reveal (D86). M8b: audits come through the queue and held cards from their list,
 // both answered blind first (D151); the setup survey comes before the cards, once (B-5na1k). Beside the card, the path
 // (Path.tsx); under it, the pile of the rest of its area. In the header, the menu and its panels (Panels.tsx,
-// Preferences.tsx). While it's open, it says you're there
+// Preferences.tsx), and your decisions by branch, a drawer the desk moves aside for (Branches.tsx, B-v8jzy). While it's
+// open, it says you're there
 // (D41), and notifies you of cards an agent stops for (D40). Round 5's behaviour, ported:
 // design/explorations/round5/app.js. On a phone (D130), the card fills the screen and the path folds into a sheet you
 // pull up (Sheet.tsx). On a touch screen (B-yfehp), a drag on a card scrolls, and a card is answered by holding it until
@@ -175,6 +177,10 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const exitDir = useRef<Leave>("fade");
   const [menuOpen, setMenuOpen] = useState(false);
   const [panel, setPanel] = useState<PanelKind>();
+  /** Your decisions, by branch (B-v8jzy): a drawer beside the desk, open as a panel is. */
+  const drawerOpen = panel === "branches";
+  /** A settled card opened on the desk from the drawer, to look at as it was settled. */
+  const [viewing, setViewing] = useState<string>();
   /** The setup survey, once you've started it (B-5na1k); before that, it may be offered. */
   const [setupStep, setSetupStep] = useState<Setup>();
   /** A draft for the preferences panel to open with: the survey's suggestion, to adjust. */
@@ -203,18 +209,20 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const staying = ordered.find((c) => keyOf(c) === shownKey);
   // A card you put aside can be answered after all, and so can one held back (D150): picked from their lists.
   const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick) ?? held.find((c) => c.meta.id === pick)) : undefined;
-  const current = reviewCard ?? picked ?? staying ?? ordered[0];
+  // A settled card opened from your decisions, by branch (B-v8jzy): on the desk to look at, not to answer.
+  const pastCard = viewing ? state.cards.find((c) => c.meta.id === viewing) : undefined;
+  const current = pastCard ?? reviewCard ?? picked ?? staying ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
   // With no preference file, the setup survey is offered once, before the cards (B-5na1k), unless an agent has
   // stopped for you: then it waits until none has.
   const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
-  const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked;
+  const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked && !pastCard;
   const setup: Setup | undefined = setupStep ?? (offerDue ? { step: "offer" } : undefined);
   const presets = usePresets(panel === "preferences" || setup !== undefined, state.version);
   // The first card you reach from a deck with a briefing comes after its briefing card, once per deck (B-j6b75).
   // A card reopened from the path is one you've already reached.
-  const briefing = !setup && !reviewCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
+  const briefing = !setup && !reviewCard && !pastCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
   const sides = current ? sidesFor(current.meta.id, salt) : { left: "alternative" as const, right: "proposal" as const };
@@ -226,7 +234,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const [shownAt, setShownAt] = useState(() => performance.now());
   if (shownKey !== key) {
     setShownKey(key);
-    setMode(reviewing && reviewing === key ? { kind: "review" } : { kind: "live" });
+    setMode(pastCard ? { kind: "past" } : reviewing && reviewing === key ? { kind: "review" } : { kind: "live" });
     setProblem(undefined);
     setLean(undefined);
     setHover(undefined);
@@ -498,6 +506,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   };
   const back = () => {
     setProblem(undefined);
+    if (viewing) {
+      exitDir.current = "fade";
+      setViewing(undefined);
+      return;
+    }
     if (reviewing && (mode.kind === "review" || answered.has(reviewing))) {
       exitDir.current = "fade";
       setReviewing(undefined);
@@ -531,6 +544,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     if (setup) setupAway();
     if (id === current?.meta.id) return;
     exitDir.current = "fade";
+    setViewing(undefined);
     const answeredKey = [...answered.keys()].find((k) => k.startsWith(`${id}@`));
     if (answeredKey) setReviewing(answeredKey);
     else {
@@ -570,6 +584,24 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const showPanel = (kind: PanelKind) => {
     if (kind === "preferences") setPrefsInitial(undefined);
     setPanel((p) => (p === kind ? undefined : kind));
+  };
+  /**
+   * "Open it on the desk", from your decisions, by branch (B-v8jzy): the drawer closes and the card is on the desk. One
+   * still to answer (waiting, put aside, held back), or answered this session, opens as from the path; a settled one opens
+   * to look at, as it was settled, until you go back.
+   */
+  const openFromBranches = (id: string) => {
+    setPanel(undefined);
+    if (id === current?.meta.id) return focusCard();
+    const answerable = [...ordered, ...aside, ...held].some((c) => c.meta.id === id) || [...answered.keys()].some((k) => k.startsWith(`${id}@`));
+    if (answerable) return goTo(id);
+    if (mode.kind === "write" || mode.kind === "pass") return say("Send or cancel your written answer first.");
+    if (!state.cards.some((c) => c.meta.id === id)) return;
+    if (setup) setupAway();
+    exitDir.current = "fade";
+    setReviewing(undefined);
+    setViewing(id);
+    focusCard();
   };
 
   // The setup survey (B-5na1k): the offer, the example decisions one by one, then the preset they suggest.
@@ -690,6 +722,14 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         }
         return;
       }
+      // B opens your decisions, by branch, and closes them (B-v8jzy), from anywhere but a field you type in or a list.
+      if ((e.key === "b" || e.key === "B") && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea, select, [contenteditable="true"]'))) {
+        e.preventDefault();
+        if (!e.repeat) setPanel((p) => (p === "branches" ? undefined : "branches"));
+        return;
+      }
+      // The drawer is modal: the keys are its own, Esc and B aside.
+      if (h.panel === "branches") return;
       // Typing goes to the field, and a radio button keeps its arrows; a ticked box (make this a rule) leaves the keys
       // to the card. Inside a panel, the keys are the panel's.
       if (e.target instanceof Element && e.target.closest('input:not([type="checkbox"]), textarea, .panel, .sheet')) return;
@@ -859,7 +899,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   return (
     <>
-      <header className="bar">
+      <header className="bar" inert={drawerOpen}>
         {endpoints.hosted ? (
           // On the website (M9e): the wordmark goes to your projects, and the project's name says where you are (B-zqkwk).
           <>
@@ -876,25 +916,24 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         <p className="summary" aria-live="polite">
           {summary}
         </p>
+        {/* B-v8jzy: your decisions, by branch, in a drawer; B opens and closes it too. */}
+        <button type="button" className="bar-btn branches" aria-haspopup="dialog" aria-expanded={drawerOpen} aria-controls="branches-drawer" onClick={() => showPanel("branches")}>
+          {/* On a narrow phone, where the header has the project's name too, the button is its glyph; its name stays. */}
+          <svg className="bar-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <circle cx="5" cy="3.5" r="2" />
+            <circle cx="5" cy="14.5" r="2" />
+            <circle cx="13" cy="5" r="2" />
+            <path d="M5 5.5v7M13 7c0 3.5-8 2.5-8 5.5" />
+          </svg>
+          <span className="bar-lbl">Branches</span> <kbd>B</kbd>
+        </button>
         <MoreMenu open={menuOpen} notify={notifications.status} held={held.length + heldGone.length} touch={touch} site={!!endpoints.hosted} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
       </header>
       {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
       {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
-      {/* D181: your decisions by branch, with merges and the commits that cite cards. A card still to answer opens on the desk. */}
-      {panel === "branches" && (
-        <BranchesPanel
-          state={state}
-          nowMs={now}
-          phone={phone}
-          canOpen={(id) => [...ordered, ...aside, ...held].some((c) => c.meta.id === id)}
-          onOpen={(id) => {
-            setPanel(undefined);
-            goTo(id);
-          }}
-          onClose={() => setPanel(undefined)}
-        />
-      )}
+      {/* D181, B-v8jzy: your decisions by branch, in a drawer beside the desk, or filling a phone's screen. */}
+      <BranchesDrawer state={state} nowMs={now} open={drawerOpen} phone={phone} touch={touch} onClose={() => setPanel(undefined)} onOpenCard={openFromBranches} />
       {panel === "held" && (
         <HeldPanel
           held={held}
@@ -929,7 +968,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
           onClose={() => setPanel(undefined)}
         />
       )}
-      <main className="desk" ref={deskRef} inert={sheetOpen}>
+      <main className="desk" ref={deskRef} inert={sheetOpen || drawerOpen}>
         {/* On a phone, the path is in the sheet, below. */}
         {!phone && <Path {...pathProps} {...(cardMotion ? { card: cardMotion } : {})} {...(fly ? { fly, onFlown: () => setFly(undefined) } : {})} />}
         <section className="stage" aria-label="The card to answer">
@@ -1064,7 +1103,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
                     ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent", waiting: answered.get(reviewing)!.phase === "waiting" } } : {}),
-                    ...(near.length ? { near, onMerge: (into: string) => void merge(into) } : {}),
+                    ...(pastCard ? { past: { words: saidOf(pastCard, now).words, chosen: chosenOf(pastCard), onBranches: () => setPanel("branches") } } : {}),
+                    ...(near.length && !pastCard ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
                     onMode: (m) => {
                       setProblem(undefined);

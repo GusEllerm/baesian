@@ -63,17 +63,17 @@ sig = "c6905b99e0842ec1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Branches.tsx"
-sig = "98e380368a6a4c07"
+sig = "b4dfa358c9902ba5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "7f98858f265ca861"
+sig = "bb4bf9258f43ead2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "08bacbd8f9b46929"
+sig = "d238a099bb44407a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -93,7 +93,7 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "32d28e8c561f59c8"
+sig = "246e71588422d6b6"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -207,18 +207,53 @@ sig = "ee9b6dbe66c017e9"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
-target = "client/src/lanes.ts"
-sig = "d2b0a1d3903f8350"
+target = "client/src/lanes.ts#BranchesState"
+sig = "304e02fc692e2263"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
-target = "client/src/lanes.ts#DESK_GEOMETRY"
-sig = "ca79865e5fc53356"
+target = "client/src/lanes.ts#COLUMNS"
+sig = "240797e99616d6fa"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
-target = "client/src/lanes.ts#layoutBranches"
-sig = "11b58008a861da9a"
+target = "client/src/lanes.ts#IDLE_MS"
+sig = "7c397137a35cf437"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#branchModel"
+sig = "d90999147820cd61"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#chosenOf"
+sig = "9f2e980451760915"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#columnsOf"
+sig = "249a14e35d9011f9"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#commitsOf"
+sig = "d643278735dafa35"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#endWords"
+sig = "dc60721817f9ee18"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#linkedKeys"
+sig = "e7e1be2ea609d1c2"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#listRows"
+sig = "5818e357e7d1d5a7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -228,7 +263,22 @@ sig = "fdbe461f1401ce81"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#saidOf"
-sig = "963481343f232dbc"
+sig = "5a4b2389018e802b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#shortNames"
+sig = "f049ce1af27440e4"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#statusOf"
+sig = "0476d1a514e32b54"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#trunkOf"
+sig = "acd066c50ac44509"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -892,6 +942,11 @@ sig = "d30622daef88b1b7"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "src/routing.ts#Mode"
+sig = "d9058f630bdc5627"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "src/routing.ts#replay"
 sig = "6b7d54b629bba9af"
 
@@ -923,7 +978,7 @@ sig = "030d6295cf6d1a84"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/Card.tsx"
-sig = "7f98858f265ca861"
+sig = "bb4bf9258f43ead2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1118,12 +1173,12 @@ sig = "b346b2b146c7c63e"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Card.tsx"
-sig = "7f98858f265ca861"
+sig = "bb4bf9258f43ead2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Desk.tsx"
-sig = "08bacbd8f9b46929"
+sig = "d238a099bb44407a"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1132,8 +1187,18 @@ sig = "13bac2fb32723ff0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "client/src/lanes.ts#Commit"
+sig = "a79a099b23c2ece5"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "client/src/lanes.ts#Lane"
-sig = "a5f8b125ce159d30"
+sig = "fe29dd40f7bcdd99"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "client/src/lanes.ts#Model"
+sig = "5d6ab46c34097bab"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2213,7 +2278,7 @@ sig = "030d6295cf6d1a84"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/Desk.tsx"
-sig = "08bacbd8f9b46929"
+sig = "d238a099bb44407a"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2238,7 +2303,7 @@ sig = "82a9caef3a27a9f7"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/lanes.ts#Lane"
-sig = "a5f8b125ce159d30"
+sig = "fe29dd40f7bcdd99"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2633,7 +2698,7 @@ sig = "030d6295cf6d1a84"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/Desk.tsx"
-sig = "08bacbd8f9b46929"
+sig = "d238a099bb44407a"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2653,7 +2718,7 @@ sig = "13bac2fb32723ff0"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/lanes.ts#Lane"
-sig = "a5f8b125ce159d30"
+sig = "fe29dd40f7bcdd99"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -3968,7 +4033,7 @@ sig = "e8ef63540e060b6d"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "08bacbd8f9b46929"
+sig = "d238a099bb44407a"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -3982,18 +4047,8 @@ sig = "13bac2fb32723ff0"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
-target = "client/src/lanes.ts#CardMark"
-sig = "e975395b6b8531c1"
-
-[[bindings]]
-doc = "docs/vault/Home.md"
-target = "client/src/lanes.ts#CommitMark"
-sig = "6108e85b71d96b07"
-
-[[bindings]]
-doc = "docs/vault/Home.md"
-target = "client/src/lanes.ts#MergeMark"
-sig = "3c606b92eb029eae"
+target = "client/src/lanes.ts#Merge"
+sig = "97972c51739c198e"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -6147,8 +6202,23 @@ sig = "dc9d944f2ac47f29"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "client/src/lanes.ts#Commit"
+sig = "a79a099b23c2ece5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "client/src/lanes.ts#Lane"
-sig = "a5f8b125ce159d30"
+sig = "fe29dd40f7bcdd99"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
+target = "client/src/lanes.ts#Lane"
+sig = "fe29dd40f7bcdd99"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
+target = "client/src/lanes.ts#Model"
+sig = "5d6ab46c34097bab"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -7573,7 +7643,7 @@ sig = "1ebada7599d6a7b9"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "client/src/Card.tsx"
-sig = "7f98858f265ca861"
+sig = "bb4bf9258f43ead2"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -7582,8 +7652,18 @@ sig = "13bac2fb32723ff0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
+target = "client/src/lanes.ts#Commit"
+sig = "a79a099b23c2ece5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
 target = "client/src/lanes.ts#Lane"
-sig = "a5f8b125ce159d30"
+sig = "fe29dd40f7bcdd99"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
+target = "client/src/lanes.ts#Model"
+sig = "5d6ab46c34097bab"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -8552,13 +8632,18 @@ sig = "dc9d944f2ac47f29"
 
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
-target = "client/src/Branches.tsx"
-sig = "98e380368a6a4c07"
+target = "client/src/lanes.ts#branchModel"
+sig = "d90999147820cd61"
 
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
-target = "client/src/lanes.ts"
-sig = "d2b0a1d3903f8350"
+target = "client/src/lanes.ts#columnsOf"
+sig = "249a14e35d9011f9"
+
+[[bindings]]
+doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
+target = "client/src/lanes.ts#listRows"
+sig = "5818e357e7d1d5a7"
 
 [[bindings]]
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"

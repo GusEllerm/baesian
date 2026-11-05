@@ -24,7 +24,9 @@ export type Mode =
   | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
-  | { kind: "review" };
+  | { kind: "review" }
+  /** A settled card opened from your decisions, by branch (B-v8jzy): to look at, as it was settled. */
+  | { kind: "past" };
 
 export interface CardProps {
   card: ApiCard;
@@ -51,6 +53,8 @@ export interface CardProps {
    * your passkey (B-a6xpc).
    */
   review?: { words: string; sent: boolean; waiting?: boolean };
+  /** A settled card opened from your decisions, by branch: what was said, the option chosen, and the way back to them. */
+  past?: { words: string; chosen?: OptionKind; onBranches: () => void };
   onReach: (dir: Side | "up" | "down") => void;
   onMode: (mode: Mode) => void;
   onConfirm: () => void;
@@ -105,6 +109,7 @@ export function Card(p: CardProps) {
       )}
       {mode.kind === "reveal" && <Reveal {...p} mode={mode} />}
       {mode.kind === "review" && <Review {...p} />}
+      {mode.kind === "past" && <Past {...p} />}
       {(mode.kind === "write" || mode.kind === "pass") && <Written {...p} mode={mode} />}
     </div>
   );
@@ -188,9 +193,11 @@ function OptionButton(p: CardProps & { side: Side }) {
   const kind = p.sides[side];
   const live = mode.kind === "live";
   // The agent's pick shows only after you choose (D86); on a held card, it's what the agent went ahead with (D151).
-  const showPick = kind === "proposal" && mode.kind === "reveal";
+  // A settled card, opened to look at, shows its pick and the option chosen, if one was.
+  const showPick = kind === "proposal" && (mode.kind === "reveal" || mode.kind === "past");
   const pickWords = isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
-  const cls = (mode.kind === "reveal" ? (mode.option === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
+  const chosen = mode.kind === "reveal" ? mode.option : mode.kind === "past" ? p.past?.chosen : undefined;
+  const cls = (chosen ? (chosen === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
   return (
     <button
       type="button"
@@ -477,6 +484,28 @@ function Review(p: CardProps) {
         </button>
       </div>
       {p.review?.sent && <p className="small">A changed answer goes to {agent} with a brief of what it changes.</p>}
+    </div>
+  );
+}
+
+/** A settled card opened from your decisions, by branch (B-v8jzy): what was said, and the ways back. Nothing to answer. */
+function Past(p: CardProps) {
+  const words = p.past?.words ?? "";
+  return (
+    <div className="panel-in">
+      <div className="result">
+        <p>
+          <b>{words.charAt(0).toUpperCase() + words.slice(1)}.</b> Opened from your decisions, by branch: it's settled, so there's nothing to answer here.
+        </p>
+      </div>
+      <div className="row">
+        <button type="button" className="send" onClick={p.past?.onBranches}>
+          Back to your decisions, by branch <kbd>B</kbd>
+        </button>
+        <button type="button" className="cancel" onClick={p.onBack}>
+          Back to the next card <kbd>Esc</kbd>
+        </button>
+      </div>
     </div>
   );
 }
