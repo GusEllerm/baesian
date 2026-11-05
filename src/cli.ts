@@ -187,7 +187,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
   };
 
   // Personal mode (B-4rwyz): every command but the hooks', the MCP server's, `init` (which fixes it) and a harness's quiet
-  // inbox (which says it once a session) says what's wrong with the clone's setup, such as a gate a setup script turned off.
+  // inbox (which says it once a session) says what's wrong with the clone's setup, such as a gate that's off because the
+  // clone's .git/config no longer includes Baesian's setting.
   program.hook("preAction", (_program, command) => {
     const name = command.name();
     if (name === "hook" || name === "mcp" || name === "init" || (name === "inbox" && command.opts().quiet)) return;

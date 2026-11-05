@@ -1687,6 +1687,16 @@ sig = "f17c76a607e71e4b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "src/hooks.ts#PERSONAL_GIT_CONFIG"
+sig = "708268da07aee806"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/hooks.ts#PERSONAL_INCLUDE"
+sig = "d69c0e91e6eaea8c"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "src/ids.ts#newId"
 sig = "c4d124dfd65d66c4"
 
@@ -3448,7 +3458,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "76f24dd7ac1c95bf"
+sig = "b04c68d0fede9ca7"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -5088,7 +5098,7 @@ sig = "912d523b00dcd41d"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "76f24dd7ac1c95bf"
+sig = "b04c68d0fede9ca7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5122,18 +5132,23 @@ sig = "663035fcab104af9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "src/hooks.ts#PersonalInstall"
+sig = "9d249f3ad14bb62e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#installHooks"
 sig = "f7dd811e90979b2f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#installPersonalHooks"
-sig = "5809538a341ab8e5"
+sig = "780e239e77e65254"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#personalProblems"
-sig = "58256f715e5c31f6"
+sig = "40a910841c5c2cf6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5143,7 +5158,7 @@ sig = "265a0614de92a0c4"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#uninstallPersonalHooks"
-sig = "6d7081a44e1cc00f"
+sig = "2b869eba0a721ded"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5163,7 +5178,7 @@ sig = "a56440c199050343"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/modes.ts"
-sig = "4634019f8c527382"
+sig = "9f491a7fb149982b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5178,7 +5193,7 @@ sig = "6286a283d7c419a6"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/modes.ts#setUpPersonal"
-sig = "e159e7b951872795"
+sig = "d20e624ef29d2ce4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5707,8 +5722,28 @@ sig = "1372a85dbd33bce9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#PERSONAL_GIT_CONFIG"
+sig = "708268da07aee806"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#PERSONAL_HOOKS"
 sig = "da8918cf35202820"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#PERSONAL_INCLUDE"
+sig = "d69c0e91e6eaea8c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#PERSONAL_MARK"
+sig = "eca6d9b7afa10335"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#PERSONAL_STOP"
+sig = "f7122edce4a1bcc2"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5717,8 +5752,13 @@ sig = "43eadadb66c88e11"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
-target = "src/hooks.ts#REPO_HOOKS_KEY"
-sig = "f259f555e84ecc75"
+target = "src/hooks.ts#PersonalInstall"
+sig = "9d249f3ad14bb62e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#includeLast"
+sig = "8eae9fdd585c9b83"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5728,7 +5768,7 @@ sig = "f7dd811e90979b2f"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#installPersonalHooks"
-sig = "5809538a341ab8e5"
+sig = "780e239e77e65254"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5737,8 +5777,13 @@ sig = "6b119a7d7a98a053"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#personalGitConfig"
+sig = "7ba5e875dd9f2ab1"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#personalHook"
-sig = "93c7e5af99350448"
+sig = "37e2c74949fe6786"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5748,7 +5793,17 @@ sig = "c6f9e1149113a883"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#personalProblems"
-sig = "58256f715e5c31f6"
+sig = "40a910841c5c2cf6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#repoHooks"
+sig = "f285a037b33c89e6"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#restoreRepoSetting"
+sig = "0ad1e80550962f9a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5763,7 +5818,7 @@ sig = "453252026840420b"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#uninstallPersonalHooks"
-sig = "6d7081a44e1cc00f"
+sig = "2b869eba0a721ded"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

@@ -67,8 +67,9 @@ export function setUpShared(s: Store, o: InitOptions): { lines: string[]; agents
 
 /**
  * `baesian init --personal` (B-4rwyz): the live layer with the clone's config in it, `/.baesian/` in the clone's
- * `info/exclude`, and the clone's own hooks, which run Baesian's gate and then the repo's. Nothing in the worktree
- * changes. Refused where the repo is shared already, and with a vault, whose notes are committed files.
+ * `info/exclude`, and the clone's own hooks, which run Baesian's gate and then the repo's, named by a config file of
+ * Baesian's that the clone's `.git/config` includes last. Nothing in the worktree changes. Refused where the repo is
+ * shared already, and with a vault, whose notes are committed files.
  */
 export function setUpPersonal(s: Store, o: InitOptions): string[] {
   if (o.vault !== undefined) {
@@ -89,11 +90,14 @@ export function setUpPersonal(s: Store, o: InitOptions): string[] {
   if (excludeRecord(s)) out.push(`git ignores: ${RECORD_DIR}/, in this clone only (.git/info/exclude), so a stray record is never committed`);
   if (o.hooks) {
     const r = installPersonalHooks(s, o.fallback);
-    if (r.wasReset) out.push(`git gate:    on again: something had set core.hooksPath to ${r.repo.shown}, which turned it off`);
+    if (r.moved) out.push(`git gate:    moved out of the clone's core.hooksPath, which names the repo's own hooks again (${r.repo.shown}), into ${shown(s, r.config)}, so a setup script that sets core.hooksPath no longer turns it off`);
+    if (r.wasOff) out.push(`git gate:    on again (it was off: ${r.wasOff})`);
     if (r.pointed) {
-      out.push(`git gate:    this clone's own hooks, in ${shown(s, r.dir)}/ (its core.hooksPath), run Baesian's gate, then the repo's own hooks from ${r.repo.shown}/, which are unchanged`);
+      out.push(`git gate:    this clone's own hooks, in ${shown(s, r.dir)}/, run Baesian's gate, then the repo's own hooks from ${r.repo.shown}/, which are unchanged`);
+      out.push(`             git finds them through ${shown(s, r.config)}, which the clone's .git/config includes last: a setup script that sets core.hooksPath leaves the gate on, and the repo's hooks run from the folder it names`);
       out.push("             commits keep no Baesian trailers: the gate takes them out of the message, into this clone's ledger");
     } else out.push(`git gate:    this clone's own hooks, refreshed in ${shown(s, r.dir)}/, then the repo's from ${r.repo.shown}/`);
+    if (r.stillOff) out.push(`warning:     git doesn't run them here yet: ${r.stillOff}. Take that setting out, and the gate is on.`);
   }
   if (!was) {
     out.push("agents:      AGENTS.md is left as it is: agents hear of Baesian from its plugin, for Claude Code or Codex, at the start of each session");
@@ -126,8 +130,9 @@ export function cardsForBranch(s: Store, branch: string = s.repo.branch): string
 
 /**
  * `baesian init --shared` (B-4rwyz). In a personal clone, the switch: the clone's config becomes the record's, this
- * branch's record is written from the live layer, the clone's own hooks go and Baesian's block goes into the repo's,
- * `core.hooksPath` goes back to what it was, AGENTS.md gets its block, and `info/exclude` no longer hides `.baesian/`.
+ * branch's record is written from the live layer, the clone's own hooks go (with the include of Baesian's setting in the
+ * clone's `.git/config`, so `core.hooksPath` is the repo's again) and Baesian's block goes into the repo's, AGENTS.md
+ * gets its block, and `info/exclude` no longer hides `.baesian/`.
  * Nothing is committed: the lines end with the commit to make, and the gate facts it raises. Elsewhere, shared mode's
  * setup, as `baesian init` does it, and this branch's cards into its record when they aren't there.
  */

@@ -63,10 +63,13 @@ function git(dir: string, ...args: string[]) {
   return { code: r.status, out: r.stdout.trim(), err: r.stderr };
 }
 
-function commit(dir: string, message: string) {
-  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-F", "-"], { cwd: dir, input: message, encoding: "utf8", env: ENV });
+/** A commit, as a person makes it, with the hooks live; one that takes longer than 30 seconds (a loop) is stopped, with no exit code. */
+function commit(dir: string, message: string, env: NodeJS.ProcessEnv = {}) {
+  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-F", "-"], { cwd: dir, input: message, encoding: "utf8", env: { ...ENV, ...env }, timeout: 30_000 });
   return { code: r.status, err: r.stderr };
 }
+
+const HONO = JSON.stringify({ name: "x", dependencies: { hono: "^4" } }, null, 2);
 
 function put(dir: string, path: string, text: string): void {
   mkdirSync(dirname(join(dir, path)), { recursive: true });
@@ -85,6 +88,17 @@ async function run(dir: string, ...args: string[]) {
 const status = (dir: string) => sh(dir, "status", "--porcelain", "--untracked-files=all");
 const config = (dir: string, key: string) => spawnSync("git", ["config", "--get", key], { cwd: dir, encoding: "utf8" }).stdout.trim();
 const commonDir = (dir: string) => sh(dir, "rev-parse", "--path-format=absolute", "--git-common-dir");
+/** The clone's own git config, and the clone's own hooks folder in personal mode. */
+const cloneConfig = (dir: string) => join(commonDir(dir), "config");
+const hooksDir = (dir: string) => join(commonDir(dir), "baesian", "hooks");
+/** A value from one config file alone, as `git config --file` reads it: its includes not followed. */
+const fileConfig = (file: string, key: string) => spawnSync("git", ["config", "--file", file, "--get", key], { encoding: "utf8" }).stdout.trim();
+/** A hooks folder of the team's that logs its pre-commit to the clone's common directory, under a name of its own. */
+function hooksFolder(dir: string, name: string, tag: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, name), `#!/bin/sh\necho "${tag} ${name}" >> "$(git rev-parse --git-common-dir)/team.log"\n`);
+  chmodSync(join(dir, name), 0o755);
+}
 const teamLog = (dir: string) => (existsSync(join(commonDir(dir), "team.log")) ? readFileSync(join(commonDir(dir), "team.log"), "utf8") : "");
 const fileCard = (dir: string, overrides: Record<string, unknown> = {}) => Store.open(dir).fileCard(draft(overrides), BODY, { agent: "claude-code", force: true }).card.meta.id;
 
@@ -103,16 +117,23 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     const store = Store.open(dir);
     expect(store.personal).toBe(true);
     expect(JSON.parse(readFileSync(join(commonDir(dir), "baesian", "config.json"), "utf8"))).toEqual({ format: 1 });
-    expect(config(dir, "core.hooksPath")).toBe(join(commonDir(dir), "baesian", "hooks"));
-    expect(config(dir, "baesian.repohooks")).toBe(".githooks");
+    // Git finds the clone's own hooks through a file of Baesian's, which the clone's .git/config includes at its end; the
+    // clone's own core.hooksPath, in .git/config, is the team's as it was.
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
+    expect(fileConfig(join(commonDir(dir), "baesian", "git.config"), "core.hooksPath")).toBe(hooksDir(dir));
+    expect(readFileSync(cloneConfig(dir), "utf8")).toMatch(/\n\[include\]\n\tpath = baesian\/git\.config\n$/);
+    expect(config(dir, "baesian.repohooks")).toBe("");
     expect(readFileSync(join(commonDir(dir), "info", "exclude"), "utf8")).toContain("\n/.baesian/\n");
     // Each of Baesian's hooks runs its block, then the repo's own; the team's hooks Baesian doesn't install are passed on.
-    const preCommit = readFileSync(join(commonDir(dir), "baesian", "hooks", "pre-commit"), "utf8");
-    expect(preCommit).toContain(hookBlock("pre-commit", { restore: "git config core.hooksPath '.githooks'" }));
-    expect(preCommit.indexOf("baesian hook pre-commit")).toBeLessThan(preCommit.indexOf("repo_hook='.githooks'/'pre-commit'"));
-    expect(readFileSync(join(commonDir(dir), "baesian", "hooks", "post-checkout"), "utf8")).not.toContain("baesian hook");
-    // Running it again changes nothing, and says so; plain `init` keeps a personal clone personal.
+    const preCommit = readFileSync(join(hooksDir(dir), "pre-commit"), "utf8");
+    expect(preCommit).toContain(hookBlock("pre-commit", { restore: "git config --unset-all include.path baesian/git.config" }));
+    expect(preCommit.indexOf("baesian hook pre-commit")).toBeLessThan(preCommit.indexOf(`repo_hook="$repo_hooks"/'pre-commit'`));
+    expect(readFileSync(join(hooksDir(dir), "post-checkout"), "utf8")).not.toContain("baesian hook");
+    // Running it again changes nothing, and says so; plain `init` keeps a personal clone personal. The include is there once.
+    const before = readFileSync(cloneConfig(dir), "utf8");
     expect((await run(dir, "init", "--personal")).out).toContain("personal mode, as before");
+    expect(readFileSync(cloneConfig(dir), "utf8")).toBe(before);
     const plain = await run(dir, "init");
     expect(plain.out).toContain("personal mode, as before");
     expect(existsSync(join(dir, ".baesian"))).toBe(false);
@@ -149,8 +170,8 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect(blocked.err).toContain("baesian: commit blocked.");
     expect(blocked.err).toContain("dep:hono");
 
-    // A linked worktree of the clone runs the same hooks: the clone's core.hooksPath is absolute, and the repo's own
-    // hooks are found in that worktree, as git would find them.
+    // A linked worktree of the clone runs the same hooks: Baesian's setting is absolute, and the repo's own hooks are
+    // found in that worktree, as git would find them.
     const wt = `${dir}-wt`;
     made.push(wt);
     sh(dir, "worktree", "add", "-q", "-b", "in-worktree", wt);
@@ -209,13 +230,106 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect(teamLog(theirs)).toContain("team pre-commit");
   });
 
-  it("notices a setup script that points core.hooksPath back at the repo's hooks, and `init --personal` puts the gate back", async () => {
+  it("stays on when the team's setup script sets core.hooksPath (`make setup`): an uncovered decision is still blocked", async () => {
     const dir = teamRepo();
     await run(dir, "init", "--personal");
-    // The team's setup script, run again.
-    git(dir, "config", "core.hooksPath", ".githooks");
+    // The team's `make setup`, run again after cloning or a lock change: it sets core.hooksPath in the clone's .git/config.
+    expect(git(dir, "config", "core.hooksPath", ".githooks").code).toBe(0);
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+    expect((await run(dir, "list")).err).toBe("");
+    put(dir, "package.json", HONO);
+    const blocked = commit(dir, "Add hono\n");
+    expect(blocked.code).toBe(1);
+    expect(blocked.err).toContain("dep:hono");
+    // The team's pre-commit ran too, after Baesian's.
+    expect(teamLog(dir)).toContain("team pre-commit");
+    // A setup that takes every value out first, then sets its own, leaves it on as well.
+    expect(git(dir, "config", "--unset-all", "core.hooksPath").code).toBe(0);
+    expect(git(dir, "config", "core.hooksPath", ".githooks").code).toBe(0);
+    expect(commit(dir, "Add hono\n").code).toBe(1);
+    sh(dir, "reset", "-q", "--", "package.json");
+    put(dir, "notes.txt", "a note\n");
+    expect(commit(dir, "A note\n").code).toBe(0);
+  });
+
+  it("stays on when the setup runs in a linked worktree, which changes the config every checkout of the clone reads", async () => {
+    const dir = teamRepo();
+    await run(dir, "init", "--personal");
+    const wt = `${dir}-wt`;
+    made.push(wt);
+    sh(dir, "worktree", "add", "-q", "-b", "in-worktree", wt);
+    // A sub-agent's `make setup`, in its own worktree.
+    expect(git(wt, "config", "core.hooksPath", ".githooks").code).toBe(0);
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
+    // The worktree's own copy of the team's pre-commit, so it's clear which one ran.
+    writeFileSync(join(wt, ".githooks", "pre-commit"), `#!/bin/sh\necho "worktree pre-commit" >> "$(git rev-parse --git-common-dir)/team.log"\n`);
+    for (const [where, tag] of [[wt, "worktree pre-commit"], [dir, "team pre-commit"]] as const) {
+      expect(config(where, "core.hooksPath")).toBe(hooksDir(dir));
+      expect((await run(where, "list")).err).toBe("");
+      put(where, "package.json", JSON.stringify({ name: "x", dependencies: { zod: "^4" } }, null, 2));
+      const r = commit(where, "Add zod\n");
+      expect(r.code).toBe(1);
+      expect(r.err).toContain("dep:zod");
+      expect(teamLog(dir).trim().split("\n").at(-1)).toBe(tag);
+    }
+  });
+
+  it("runs the team's hooks from whichever folder core.hooksPath names when they run, or git's own when it names none", async () => {
+    const dir = teamRepo();
+    await run(dir, "init", "--personal");
+    // The team moves its hooks to a new folder, and its setup points core.hooksPath there.
+    hooksFolder(join(dir, ".hooks2"), "pre-commit", "moved");
+    git(dir, "config", "core.hooksPath", ".hooks2");
+    put(dir, "notes.txt", "a note\n");
+    expect(commit(dir, "A note\n").code).toBe(0);
+    expect(teamLog(dir)).toBe("moved pre-commit\n");
+    put(dir, "package.json", HONO);
+    expect(commit(dir, "Add hono\n").code).toBe(1);
+    sh(dir, "reset", "-q", "--", "package.json");
+    // With none set, git's own folder, as git would use without Baesian.
+    git(dir, "config", "--unset", "core.hooksPath");
+    hooksFolder(join(commonDir(dir), "hooks"), "pre-commit", "git's own");
+    put(dir, "more.txt", "more\n");
+    expect(commit(dir, "More\n").code).toBe(0);
+    expect(teamLog(dir)).toBe("moved pre-commit\nmoved pre-commit\ngit's own pre-commit\n");
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+
+    // A hook the folder has now, of a kind not passed on unless the repo has one, is noticed, and passed on once init sees it.
+    git(dir, "config", "core.hooksPath", ".hooks2");
+    hooksFolder(join(dir, ".hooks2"), "reference-transaction", "moved");
+    expect((await run(dir, "list")).err).toContain("the repo's hooks folder, .hooks2, has reference-transaction, which this clone's own hooks don't run yet");
+    expect((await run(dir, "init", "--personal")).out).toContain("then the repo's from .hooks2/");
+    expect((await run(dir, "list")).err).toBe("");
+    expect(existsSync(join(hooksDir(dir), "reference-transaction"))).toBe(true);
+  });
+
+  it("runs the hooks a person's global core.hooksPath names, where the clone sets none, as git would", async () => {
+    const dir = teamRepo();
+    git(dir, "config", "--unset", "core.hooksPath");
+    await run(dir, "init", "--personal");
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "baesian-global-")));
+    made.push(home);
+    hooksFolder(join(home, "hooks"), "pre-commit", "global");
+    writeFileSync(join(home, "gitconfig"), `[core]\n\thooksPath = ${join(home, "hooks")}\n`);
+    const global = { GIT_CONFIG_GLOBAL: join(home, "gitconfig") };
+    put(dir, "notes.txt", "a note\n");
+    expect(commit(dir, "A note\n", global).code).toBe(0);
+    expect(teamLog(dir)).toBe("global pre-commit\n");
+    put(dir, "package.json", HONO);
+    expect(commit(dir, "Add hono\n", global).code).toBe(1);
+  });
+
+  it("notices when the clone's .git/config no longer includes Baesian's setting, or reads another after it; `init --personal` puts it back", async () => {
+    const dir = teamRepo();
+    await run(dir, "init", "--personal");
+    // Someone takes the include out, as the hooks say to when Baesian is missing.
+    expect(git(dir, "config", "--unset-all", "include.path", "baesian/git.config").code).toBe(0);
+    expect(config(dir, "core.hooksPath")).toBe(".githooks");
     const listed = await run(dir, "list");
-    expect(listed.err).toContain("warning: this clone's commit gate is off: core.hooksPath is `.githooks`");
+    expect(listed.err).toContain(
+      "warning: this clone's commit gate is off: the clone's .git/config no longer includes Baesian's setting (`[include] path = baesian/git.config`), so core.hooksPath is `.githooks`",
+    );
     expect(listed.err).toContain("Run `baesian init --personal` again");
     // A harness's first look at a session hears it too, after the instructions.
     const hook = await run(dir, "inbox", "--quiet", "--session", "s-1");
@@ -224,17 +338,45 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect((await run(dir, "inbox", "--quiet", "--session", "s-1")).out).toBe("");
 
     const again = await run(dir, "init", "--personal");
-    expect(again.out).toContain("git gate:    on again: something had set core.hooksPath to .githooks");
-    expect(config(dir, "core.hooksPath")).toBe(join(commonDir(dir), "baesian", "hooks"));
-    expect(config(dir, "baesian.repohooks")).toBe(".githooks");
+    expect(again.out).toContain("git gate:    on again (it was off: the clone's .git/config no longer includes Baesian's setting");
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
     expect((await run(dir, "list")).err).toBe("");
 
-    // A hook the team adds later, of a kind not passed on unless the repo has one, is noticed too.
-    writeFileSync(join(dir, ".githooks", "reference-transaction"), "#!/bin/sh\n");
-    chmodSync(join(dir, ".githooks", "reference-transaction"), 0o755);
-    expect((await run(dir, "list")).err).toContain("has reference-transaction, which this clone's own hooks don't run yet");
-    await run(dir, "init", "--personal");
+    // Another include after Baesian's that sets core.hooksPath wins over it: it's named, and `init` moves Baesian's last.
+    writeFileSync(join(commonDir(dir), "team.config"), "[core]\n\thooksPath = .githooks\n");
+    writeFileSync(cloneConfig(dir), `${readFileSync(cloneConfig(dir), "utf8")}[include]\n\tpath = team.config\n`);
+    expect((await run(dir, "list")).err).toContain("this clone's commit gate is off: core.hooksPath is `.githooks`, set in .git/team.config, which git reads after Baesian's setting");
+    expect((await run(dir, "init", "--personal")).out).toContain("git gate:    on again");
+    expect(readFileSync(cloneConfig(dir), "utf8")).toMatch(/\[include\]\n\tpath = team\.config\n\[include\]\n\tpath = baesian\/git\.config\n$/);
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
     expect((await run(dir, "list")).err).toBe("");
+  });
+
+  it("never runs its own hooks as the repo's, however core.hooksPath names them: no loop", async () => {
+    const dir = teamRepo();
+    await run(dir, "init", "--personal");
+    symlinkSync(hooksDir(dir), join(commonDir(dir), "linked-hooks"));
+    for (const named of [hooksDir(dir), ".git/baesian/hooks", join(commonDir(dir), "linked-hooks")]) {
+      expect(git(dir, "config", "core.hooksPath", named).code).toBe(0);
+      put(dir, "notes.txt", `${named}\n`);
+      const r = commit(dir, "A note\n");
+      expect(r.code, `${named}: ${r.err}`).toBe(0);
+      put(dir, "package.json", HONO);
+      expect(commit(dir, "Add hono\n").code).toBe(1);
+      sh(dir, "reset", "-q", "--", "package.json");
+    }
+    // It says the repo's hooks don't run so, and `init --personal` takes that setting out.
+    expect((await run(dir, "list")).err).toContain("this clone's core.hooksPath, in its .git/config, names Baesian's own hooks, so the repo's own hooks don't run after Baesian's");
+    await run(dir, "init", "--personal");
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe("");
+    expect((await run(dir, "list")).err).toBe("");
+    // A copy of one of the clone's hooks in the team's folder isn't run from it either.
+    git(dir, "config", "core.hooksPath", ".githooks");
+    writeFileSync(join(dir, ".githooks", "pre-commit"), readFileSync(join(hooksDir(dir), "pre-commit"), "utf8"));
+    put(dir, "notes.txt", "a copy\n");
+    const copied = commit(dir, "A note\n");
+    expect(copied.code, copied.err).toBe(0);
+    expect(teamLog(dir)).toBe("");
   });
 
   it("finds merges from the ledger, end to end, as git runs the hooks; and a rebase carries the ledger over", async () => {
@@ -297,6 +439,76 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
   });
 });
 
+describe("a clone an older `baesian init --personal` set up, with core.hooksPath itself naming its hooks (B-4rwyz)", { timeout: 60_000 }, () => {
+  /**
+   * The layout an older `init --personal` left: the clone's own core.hooksPath naming its hooks, the folder it named
+   * before in `baesian.repohooks` (none for git's own), and no include.
+   */
+  async function olderClone(team: string | undefined): Promise<string> {
+    const dir = teamRepo();
+    if (!team) git(dir, "config", "--unset", "core.hooksPath");
+    await run(dir, "init", "--personal");
+    sh(dir, "config", "--file", cloneConfig(dir), "--unset-all", "include.path", "baesian/git.config");
+    rmSync(join(commonDir(dir), "baesian", "git.config"));
+    sh(dir, "config", "--file", cloneConfig(dir), "core.hooksPath", hooksDir(dir));
+    if (team) sh(dir, "config", "--file", cloneConfig(dir), "baesian.repohooks", team);
+    writeFileSync(join(hooksDir(dir), "pre-commit"), `#!/bin/sh\nrepo_hook='${team ?? ".git/hooks"}'/'pre-commit'\n`);
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+    return dir;
+  }
+
+  it("is told to run `init --personal`, which puts the team's setting back and Baesian's in the included file", async () => {
+    const dir = await olderClone(".githooks");
+    expect((await run(dir, "list")).err).toContain(
+      "warning: this clone's core.hooksPath, in its .git/config, names its own hooks, as an older `baesian init --personal` set it, so a setup script that sets core.hooksPath turns the commit gate off",
+    );
+    const r = await run(dir, "init", "--personal");
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toContain("git gate:    moved out of the clone's core.hooksPath, which names the repo's own hooks again (.githooks), into .git/baesian/git.config");
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
+    expect(config(dir, "baesian.repohooks")).toBe("");
+    expect(readFileSync(cloneConfig(dir), "utf8")).toMatch(/\n\[include\]\n\tpath = baesian\/git\.config\n$/);
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+    expect(readFileSync(join(hooksDir(dir), "pre-commit"), "utf8")).toContain(`repo_hook="$repo_hooks"/'pre-commit'`);
+    expect((await run(dir, "list")).err).toBe("");
+    // Now the team's setup leaves the gate on.
+    git(dir, "config", "core.hooksPath", ".githooks");
+    put(dir, "package.json", HONO);
+    expect(commit(dir, "Add hono\n").code).toBe(1);
+    expect(teamLog(dir)).toContain("team pre-commit");
+  });
+
+  it("unsets core.hooksPath where the team used git's own hooks folder", async () => {
+    const dir = await olderClone(undefined);
+    await run(dir, "init", "--personal");
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe("");
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+    hooksFolder(join(commonDir(dir), "hooks"), "pre-commit", "git's own");
+    put(dir, "notes.txt", "a note\n");
+    expect(commit(dir, "A note\n").code).toBe(0);
+    expect(teamLog(dir)).toBe("git's own pre-commit\n");
+  });
+
+  it("puts the gate back where a setup script had turned it off", async () => {
+    const dir = await olderClone(".githooks");
+    git(dir, "config", "core.hooksPath", ".githooks");
+    expect((await run(dir, "list")).err).toContain("warning: this clone's commit gate is off: core.hooksPath is `.githooks`, not this clone's own hooks");
+    const r = await run(dir, "init", "--personal");
+    expect(r.out).toContain("git gate:    on again (it was off: core.hooksPath is `.githooks`, not this clone's own hooks)");
+    expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
+    expect(config(dir, "baesian.repohooks")).toBe("");
+    expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
+  });
+
+  it("switches to shared mode with the team's setting put back", async () => {
+    const dir = await olderClone(".githooks");
+    expect((await run(dir, "init", "--shared")).code).toBe(0);
+    expect(config(dir, "core.hooksPath")).toBe(".githooks");
+    expect(config(dir, "baesian.repohooks")).toBe("");
+    expect(readFileSync(join(dir, ".githooks", "pre-commit"), "utf8")).toContain(hookBlock("pre-commit"));
+  });
+});
+
 describe("switching a personal clone to shared mode: `baesian init --shared` (B-4rwyz)", { timeout: 60_000 }, () => {
   it("writes this branch's record from the live layer, the hooks' block and AGENTS.md, for the person to commit, which the gate lets through", async () => {
     const dir = teamRepo();
@@ -326,7 +538,11 @@ describe("switching a personal clone to shared mode: `baesian init --shared` (B-
     const preCommit = readFileSync(join(dir, ".githooks", "pre-commit"), "utf8");
     expect(preCommit.startsWith(`#!/bin/sh\n${hookBlock("pre-commit")}\n`)).toBe(true);
     expect(preCommit).toContain("exec true");
+    // The clone's .git/config includes Baesian's setting no more, whose file is gone with the hooks; its own is as it was.
     expect(config(dir, "core.hooksPath")).toBe(".githooks");
+    expect(fileConfig(cloneConfig(dir), "include.path")).toBe("");
+    expect(readFileSync(cloneConfig(dir), "utf8")).not.toContain("[include]");
+    expect(existsSync(join(commonDir(dir), "baesian", "git.config"))).toBe(false);
     expect(config(dir, "baesian.repohooks")).toBe("");
     expect(existsSync(join(commonDir(dir), "baesian", "hooks"))).toBe(false);
     expect(readFileSync(join(commonDir(dir), "info", "exclude"), "utf8")).not.toContain("/.baesian/");

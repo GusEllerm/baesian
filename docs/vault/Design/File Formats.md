@@ -383,7 +383,7 @@ The user decided B-4rwyz: one person can use Baesian in a repo whose collaborato
 | `files` | each unsigned verdict, rule, retirement, topic merge and preference file, by its path in the layer, with its git blob ID |
 
 - **`baesian-cited.json`**, beside the worktree's index, as `baesian-staged.json` is: the cards a commit cites, which `commit-msg` notes once it has taken their trailers out of the message, with the tree being committed, for `post-commit` to write the ledger from ([[src-gate#Personal mode (B-4rwyz)]]). It lasts one commit, so it has no format.
-- **Git's own settings, in the clone:** `core.hooksPath` names the clone's own hooks, `.git/baesian/hooks/`, and `baesian.repohooks` the hooks folder it named before, whose hooks run after Baesian's.
+- **Git's own settings, in the clone:** `.git/baesian/git.config` (`PERSONAL_GIT_CONFIG`), a git config file that sets `core.hooksPath` to the clone's own hooks, `.git/baesian/hooks/`, absolute; and, at the end of the clone's `.git/config`, `[include] path = baesian/git.config` (`PERSONAL_INCLUDE`), so Baesian's value is read last and wins. The clone's own `core.hooksPath`, in `.git/config`, is left as the team sets it, and names the folder whose hooks run after Baesian's ([[src-gate#Personal mode (B-4rwyz)]]). `baesian.repohooks`, which an older `init --personal` wrote, is read once to put the team's setting back, then unset.
 - **Commit trailers** are written as ever, and taken out of the message by the `commit-msg` hook once the gate has checked them ([[#Commit trailers (D52)]]).
 
 ## Vault notes (M6)

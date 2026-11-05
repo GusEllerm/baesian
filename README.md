@@ -109,8 +109,10 @@ and commits nothing: your cards, answers and config stay in `.git/baesian/`, the
 as they are, and your clone's own hooks run Baesian's gate before the repo's. The gate still checks your commits, and
 takes its `Baesian-Card` and `Baesian-Ack` trailers out of the message once it has, so the shared history never shows
 them. Your agents hear about Baesian from the plugin, which you need here. `baesian login` links your clone the same
-way, but CI can't check decisions that aren't committed. If the repo's setup script points `core.hooksPath` back at its
-own hooks, `baesian` says so: run `baesian init --personal` again. Once the team wants the record, `baesian init
+way, but CI can't check decisions that aren't committed. The repo's setup script can still set `core.hooksPath`: the
+gate stays on, since your clone's `.git/config` includes Baesian's setting last, and the repo's hooks run from the folder
+the script names. If something turns the gate off, `baesian` says so: run `baesian init --personal` again, which also
+moves a clone set up by an older Baesian to the included setting. Once the team wants the record, `baesian init
 --shared` writes it into the repo, with the hooks' block and `AGENTS.md`, for you to commit.
 
 ## Status

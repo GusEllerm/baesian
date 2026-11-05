@@ -1,13 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { chmodSync, closeSync, existsSync, fchmodSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
 import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock } from "./hookblock.js";
 import type { Http } from "./login.js";
-import { RECORD_DIR, type Store } from "./store.js";
+import { LIVE_DIR, RECORD_DIR, type Store, ValidationError } from "./store.js";
 import { syncRelay } from "./sync.js";
 import { type Trailers, parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
@@ -104,10 +103,27 @@ export function installHooks(store: Store, fallback: readonly string[]): Install
 export const PERSONAL_HOOKS = "hooks";
 
 /**
- * Per-clone git config: the hooks folder this clone's git used before personal mode (`core.hooksPath` as it was), whose
- * hooks still run after Baesian's. Unset: git's own, `hooks/` in the common directory.
+ * Personal mode: a git config file of Baesian's own, in the live layer (`.git/baesian/git.config`), that sets
+ * `core.hooksPath` to the clone's own hooks. The clone's `.git/config` includes it at its end (`PERSONAL_INCLUDE`), and git
+ * reads an include where it appears, the last value of a key winning: so Baesian's value wins over the clone's own
+ * `core.hooksPath`, which a team's setup script sets at will, and which names the repo's hooks, run after Baesian's.
  */
-export const REPO_HOOKS_KEY = "baesian.repohooks";
+export const PERSONAL_GIT_CONFIG = "git.config";
+
+/** The `include.path` in the clone's `.git/config` that reads `PERSONAL_GIT_CONFIG`: relative, so to the config's own folder. */
+export const PERSONAL_INCLUDE = `${LIVE_DIR}/${PERSONAL_GIT_CONFIG}`;
+
+/** The first words of each of the clone's own hooks: a repo's hook that has them is one of these, never run again from one. */
+const PERSONAL_MARK = "# Baesian, in personal mode (B-4rwyz): this clone's own";
+
+/** The command that stops this clone's git running Baesian's hooks: its `.git/config` no longer includes Baesian's setting. */
+export const PERSONAL_STOP = `git config --unset-all include.path ${PERSONAL_INCLUDE}`;
+
+/**
+ * Per-clone git config an older `baesian init --personal` wrote, when it set the clone's `core.hooksPath` itself: the
+ * folder that named before. Read only to put it back (`restoreRepoSetting()`), then unset.
+ */
+const OLD_REPO_HOOKS_KEY = "baesian.repohooks";
 
 /** Every hook git runs from a hooks folder (githooks(5), git 2.56). */
 const GIT_HOOKS = new Set([
@@ -132,13 +148,40 @@ export function personalHooksDir(store: Store): string {
   return join(store.live, PERSONAL_HOOKS);
 }
 
-/** A git config value, as git reads it from every level; undefined when it isn't set. */
-function gitConfig(top: string, key: string, level?: "--local"): string | undefined {
+/** The config file that names it as `core.hooksPath`, which the clone's `.git/config` includes. */
+export function personalGitConfig(store: Store): string {
+  return join(store.live, PERSONAL_GIT_CONFIG);
+}
+
+/** The clone's own git config, `config` in its common directory: every worktree of the clone reads it. */
+function cloneConfig(store: Store): string {
+  return join(store.repo.commonDir, "config");
+}
+
+/** A git config value, as git reads it from every level and include, or from one file alone; undefined when it isn't set. */
+function gitConfig(top: string, key: string, file?: string): string | undefined {
   try {
-    return execFileSync("git", ["config", ...(level ? [level] : []), "--get", key], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).replace(/\n$/, "");
+    return execFileSync("git", ["config", ...(file ? ["--file", file] : []), "--get", key], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).replace(/\n$/, "");
   } catch {
     return undefined;
   }
+}
+
+/** One config file's entries, in the order git reads them, its includes not followed: lower-case keys, and values. */
+function configEntries(top: string, file: string): [string, string][] {
+  let out: string;
+  try {
+    out = execFileSync("git", ["config", "--file", file, "--no-includes", "--list", "-z"], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return [];
+  }
+  return out
+    .split("\0")
+    .filter(Boolean)
+    .map((e): [string, string] => {
+      const i = e.indexOf("\n");
+      return i < 0 ? [e, ""] : [e.slice(0, i), e.slice(i + 1)];
+    });
 }
 
 /** Whether two paths name the same folder. */
@@ -162,27 +205,46 @@ function pointsAtPersonal(store: Store): boolean {
   }
 }
 
-/** The repo's own hooks folder, as this clone's git had it: its setting, the folder for this worktree, and as a hook names it. */
+/**
+ * Whether a `core.hooksPath` names the clone's own hooks folder: as an older `baesian init --personal` set it (absolute,
+ * and where the clone was, if it has moved since), or as anything naming the same folder.
+ */
+function namesPersonal(store: Store, value: string): boolean {
+  if (isAbsolute(value) && /[\\/]baesian[\\/]hooks[\\/]?$/.test(value)) return true;
+  return samePath(isAbsolute(value) ? value : join(store.repo.toplevel, value), personalHooksDir(store));
+}
+
+/** The repo's own hooks folder, as git would find it without Baesian's setting: the setting, the folder for this worktree, and as people read it. */
 export interface RepoHooks {
-  /** `core.hooksPath` as it was; undefined for git's own folder. */
+  /** `core.hooksPath` without Baesian's; undefined for git's own folder. */
   configured: string | undefined;
   /** The folder, for this worktree. */
   dir: string;
-  /** The folder as a shell word, relative where git's setting is (git runs a hook from the worktree's root). */
-  shell: string;
   /** As people read it. */
   shown: string;
 }
 
-function repoHooks(store: Store, configured: string | undefined): RepoHooks {
+/**
+ * The repo's own hooks folder (B-4rwyz), found as the clone's hooks find it each time they run (`personalHook()`): the
+ * last `core.hooksPath` git reads, at any level and through any include, other than the value Baesian's own file sets;
+ * else git's own, `hooks/` in the common directory. So it's whatever the clone's `.git/config` names now (where a team's
+ * setup script sets it), or a global setting, as git would have used without Baesian.
+ */
+export function repoHooks(store: Store): RepoHooks {
   const top = store.repo.toplevel;
-  const shown = (dir: string) => (relative(top, dir).startsWith("..") ? dir : relative(top, dir));
+  const ours = gitConfig(top, "core.hooksPath", personalGitConfig(store)) ?? personalHooksDir(store);
+  let values: string[] = [];
+  try {
+    values = execFileSync("git", ["config", "--type=path", "--get-all", "core.hooksPath"], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n");
+  } catch {
+    // none set
+  }
+  const configured = values.filter((v) => v && v !== ours).at(-1);
   if (!configured) {
     const dir = join(store.repo.commonDir, "hooks");
-    return { configured: undefined, dir, shell: sq(dir), shown: shown(dir) };
+    return { configured: undefined, dir, shown: shownPath(top, dir) };
   }
-  if (configured.startsWith("~/")) return { configured, dir: join(homedir(), configured.slice(2)), shell: `"$HOME"/${sq(configured.slice(2))}`, shown: configured };
-  return { configured, dir: isAbsolute(configured) ? configured : join(top, configured), shell: sq(configured), shown: configured };
+  return { configured, dir: isAbsolute(configured) ? configured : join(top, configured), shown: configured };
 }
 
 /** The hooks a folder has that git would run: files named for a hook. */
@@ -194,107 +256,235 @@ function hookNames(dir: string): string[] {
   }
 }
 
-/** The command that points this clone's git back at the repo's own hooks. */
-function restoreCommand(repo: RepoHooks): string {
-  return repo.configured === undefined ? "git config --unset core.hooksPath" : `git config core.hooksPath ${sq(repo.configured)}`;
-}
-
 /**
  * One of this clone's hooks in personal mode (B-4rwyz): Baesian's block, for the hooks Baesian installs, then the repo's
  * own hook of that name, if it has one git would run, with the same arguments and standard input, exiting as it does.
- * `post-rewrite`'s input is read first, so Baesian and the repo's hook each get it.
+ * The repo's folder is found as the hook runs, as `repoHooks()` finds it (the last `core.hooksPath` git reads other than
+ * `at.hooks`, Baesian's own, else `at.gitHooks`, git's own), so when a team points `core.hooksPath` somewhere new, its
+ * hooks run from there. A hook that is one of these (`PERSONAL_MARK`: from Baesian's own folder, however it's named, or
+ * a copy or a link of one) is never run from here, so the chain can't loop. `post-rewrite`'s input is read first, so
+ * Baesian and the repo's hook each get it.
  */
-export function personalHook(name: string, repo: RepoHooks): string {
+export function personalHook(name: string, at: { hooks: string; gitHooks: string }): string {
   const gate = (HOOKS as readonly string[]).includes(name);
   const rewrite = name === "post-rewrite";
   const lines = [
     "#!/bin/sh",
-    `# Baesian, in personal mode (B-4rwyz): this clone's own ${name} hook, written by \`baesian init --personal\`, never`,
-    `# committed. ${gate ? "It runs Baesian's gate, then" : "It runs"} the repo's own ${name}, from ${repo.shown}, with the same arguments and input.`,
+    `${PERSONAL_MARK} ${name} hook, written by \`baesian init --personal\`, never`,
+    `# committed. ${gate ? "It runs Baesian's gate, then" : "It runs"} the repo's own ${name}, with the same arguments and input, from the`,
+    "# folder core.hooksPath names apart from Baesian's own setting (git's own hooks folder where it names none).",
   ];
   if (rewrite) lines.push(`baesian_input="$(cat; echo .)"; baesian_input="\${baesian_input%.}"`);
-  if (gate) lines.push(hookBlock(name as HookName, { restore: restoreCommand(repo) }));
-  lines.push(`repo_hook=${repo.shell}/${sq(name)}`);
+  if (gate) lines.push(hookBlock(name as HookName, { restore: PERSONAL_STOP }));
+  const runs = `[ -f "$repo_hook" ] && [ -x "$repo_hook" ] && ! grep -qF ${sq(PERSONAL_MARK)} "$repo_hook" 2>/dev/null`;
   lines.push(
-    rewrite
-      ? `if [ -f "$repo_hook" ] && [ -x "$repo_hook" ]; then printf '%s' "$baesian_input" | "$repo_hook" "$@"; exit $?; fi`
-      : `if [ -f "$repo_hook" ] && [ -x "$repo_hook" ]; then exec "$repo_hook" "$@"; fi`,
+    `repo_hooks="$(git config --type=path --get-all core.hooksPath 2>/dev/null | grep -vxF ${sq(at.hooks)} | tail -n 1)"`,
+    `[ -n "$repo_hooks" ] || repo_hooks=${sq(at.gitHooks)}`,
+    `repo_hook="$repo_hooks"/${sq(name)}`,
+    rewrite ? `if ${runs}; then printf '%s' "$baesian_input" | "$repo_hook" "$@"; exit $?; fi` : `if ${runs}; then exec "$repo_hook" "$@"; fi`,
   );
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Put the repo's own `core.hooksPath` back in the clone's `.git/config` (B-4rwyz), where an older `baesian init
+ * --personal` had set it to the clone's own hooks and kept the repo's in `baesian.repohooks` (unset where it had none):
+ * Baesian's setting is in a file of its own now. A `core.hooksPath` there that names Baesian's folder some other way is
+ * taken out the same way, since the repo's hooks never run from it. Returns whether it changed anything.
+ */
+function restoreRepoSetting(store: Store): boolean {
+  const top = store.repo.toplevel;
+  const file = cloneConfig(store);
+  const kept = gitConfig(top, OLD_REPO_HOOKS_KEY, file);
+  const set = gitConfig(top, "core.hooksPath", file);
+  let changed = false;
+  if (set !== undefined && namesPersonal(store, set)) {
+    if (kept) execFileSync("git", ["config", "--file", file, "--replace-all", "core.hooksPath", kept], { cwd: top });
+    else execFileSync("git", ["config", "--file", file, "--unset-all", "core.hooksPath"], { cwd: top });
+    changed = true;
+  }
+  if (kept !== undefined) {
+    execFileSync("git", ["config", "--file", file, "--unset-all", OLD_REPO_HOOKS_KEY], { cwd: top });
+    changed = true;
+  }
+  return changed;
+}
+
+/** Write Baesian's own config file: `core.hooksPath`, absolute, since the clone's linked worktrees read it too. */
+function writePersonalGitConfig(store: Store): void {
+  const file = personalGitConfig(store);
+  writeFileSync(
+    file,
+    [
+      "# Baesian, in personal mode (B-4rwyz): written by `baesian init --personal`, never committed. The clone's .git/config",
+      "# includes it at its end, so this core.hooksPath wins over the one there, which names the repo's own hooks: they run",
+      "# after Baesian's. `baesian init --shared` takes it out.",
+      "",
+    ].join("\n"),
+  );
+  execFileSync("git", ["config", "--file", file, "core.hooksPath", personalHooksDir(store)], { cwd: store.repo.toplevel });
+}
+
+/** Take the include of Baesian's setting out of the clone's `.git/config` (and its section, when nothing else is in it). */
+function removeInclude(store: Store): void {
+  try {
+    execFileSync("git", ["config", "--file", cloneConfig(store), "--unset-all", "include.path", `^${PERSONAL_INCLUDE.replace(/\./g, "\\.")}$`], { cwd: store.repo.toplevel, stdio: "ignore" });
+  } catch {
+    // wasn't there
+  }
+}
+
+/** Append text to a git config file, holding git's own lock on it (`config.lock`), as git does when it writes one. */
+function appendToGitConfig(file: string, text: string): void {
+  const lock = `${file}.lock`;
+  let fd: number;
+  try {
+    fd = openSync(lock, "wx");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new ValidationError(`${lock} exists: a git command is changing this clone's config. Run \`baesian init --personal\` again once it's done (or, if no git command is running, delete the lock first).`);
+    }
+    throw e;
+  }
+  try {
+    const before = readFileSync(file, "utf8");
+    writeSync(fd, `${before}${before && !before.endsWith("\n") ? "\n" : ""}${text}`);
+    fchmodSync(fd, statSync(file).mode & 0o7777);
+    closeSync(fd);
+    renameSync(lock, file);
+  } catch (e) {
+    try {
+      closeSync(fd);
+    } catch {
+      // closed already
+    }
+    rmSync(lock, { force: true });
+    throw e;
+  }
+}
+
+/**
+ * Have the clone's `.git/config` include Baesian's setting at its end, once (B-4rwyz). `git config core.hooksPath …`, as a
+ * team's setup script runs it, edits the `[core]` section above, so Baesian's value is still read last. An include that
+ * something able to set `core.hooksPath` again has come after (that setting itself, or another include) is moved to the
+ * end. Returns whether it changed anything.
+ */
+function includeLast(store: Store): boolean {
+  const top = store.repo.toplevel;
+  const file = cloneConfig(store);
+  const entries = configEntries(top, file);
+  const at = entries.findLastIndex(([k, v]) => k === "include.path" && v === PERSONAL_INCLUDE);
+  const overriding = (k: string) => k === "core.hookspath" || k === "include.path" || /^includeif\..+\.path$/.test(k);
+  if (at >= 0 && !entries.slice(at + 1).some(([k]) => overriding(k))) return false;
+  if (at >= 0) removeInclude(store);
+  appendToGitConfig(file, `[include]\n\tpath = ${PERSONAL_INCLUDE}\n`);
+  return true;
+}
+
+/** Whether the clone's `.git/config` includes Baesian's setting. */
+function included(store: Store): boolean {
+  return configEntries(store.repo.toplevel, cloneConfig(store)).some(([k, v]) => k === "include.path" && v === PERSONAL_INCLUDE);
+}
+
+/** A path as people read it: relative to the worktree when it's inside it. */
+function shownPath(top: string, path: string): string {
+  const rel = relative(top, path);
+  return rel && !rel.startsWith("..") ? rel : path;
+}
+
+/**
+ * Why git doesn't run this clone's own hooks, when it doesn't (B-4rwyz), for a warning: the setting an older `init
+ * --personal` made was replaced; the clone's `.git/config` no longer includes Baesian's; Baesian's file is missing or
+ * names another folder (the clone moved); or something read after the include sets `core.hooksPath` again (a
+ * worktree's own config, or `git -c`), which only taking it out puts right.
+ */
+function gateOff(store: Store): string {
+  const top = store.repo.toplevel;
+  const file = cloneConfig(store);
+  const now = gitConfig(top, "core.hooksPath");
+  const is = now === undefined ? "unset" : `\`${now}\``;
+  if (gitConfig(top, OLD_REPO_HOOKS_KEY, file) !== undefined) return `core.hooksPath is ${is}, not this clone's own hooks`;
+  if (!included(store)) {
+    return `the clone's .git/config no longer includes Baesian's setting (\`[include] path = ${PERSONAL_INCLUDE}\`), so core.hooksPath is ${is}`;
+  }
+  const own = personalGitConfig(store);
+  const set = gitConfig(top, "core.hooksPath", own);
+  if (set === undefined) return `Baesian's setting, ${shownPath(top, own)}, is missing, so core.hooksPath is ${is}`;
+  if (!samePath(set, personalHooksDir(store))) return `Baesian's setting, ${shownPath(top, own)}, names \`${set}\`, not this clone's own hooks (did the clone move?)`;
+  let origin = "";
+  try {
+    origin = execFileSync("git", ["config", "--show-origin", "--get", "core.hooksPath"], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\t")[0] ?? "";
+  } catch {
+    // unset
+  }
+  const where = origin.startsWith("file:") ? `in ${origin.slice("file:".length)}` : origin ? `on ${origin.replace(/:$/, "")}` : "somewhere";
+  return `core.hooksPath is ${is}, set ${where}, which git reads after Baesian's setting`;
 }
 
 export interface PersonalInstall {
   /** This clone's hooks folder. */
   dir: string;
-  /** The repo's own, whose hooks run after Baesian's. */
+  /** Baesian's own config file, which names it, and which the clone's `.git/config` includes. */
+  config: string;
+  /** The repo's own, whose hooks run after Baesian's, as it is now. */
   repo: RepoHooks;
-  /** Whether `core.hooksPath` pointed elsewhere before: a first install, or one after something reset it. */
+  /** Whether git didn't run this clone's hooks before: a first install, or one after something turned the gate off. */
   pointed: boolean;
-  /** Whether it had been installed, and something had pointed `core.hooksPath` elsewhere since (a setup script, say). */
-  wasReset: boolean;
+  /** Why the gate was off, when it had been installed and something turned it off since. */
+  wasOff: string | undefined;
+  /** Whether an older `init --personal`'s setting, `core.hooksPath` itself, gave way to the included file. */
+  moved: boolean;
+  /** Why git still doesn't run the clone's hooks here, when something read after the include sets `core.hooksPath`. */
+  stillOff: string | undefined;
   /** The hooks in the folder. */
   hooks: string[];
 }
 
 /**
- * Personal mode's gate (B-4rwyz): this clone's own hooks, in the live layer, set as its `core.hooksPath`, each running
- * Baesian's block and then the repo's own hook from the folder the clone used before. Nothing in the repo's hook files
- * changes. Safe to run again: after something reset `core.hooksPath`, the folder it names now is the repo's.
+ * Personal mode's gate (B-4rwyz): this clone's own hooks, in the live layer, each running Baesian's block and then the
+ * repo's own hook, from whichever folder the repo's setting names when it runs. Git finds them through Baesian's own
+ * config file, which the clone's `.git/config` includes at its end, so a team's setup script that sets `core.hooksPath`
+ * leaves the gate on. Nothing in the repo's hook files changes. Safe to run again, and it moves a clone an older
+ * `init --personal` set up (`core.hooksPath` itself naming the clone's hooks) to the included file.
  */
 export function installPersonalHooks(store: Store, fallback: readonly string[]): PersonalInstall {
-  const top = store.repo.toplevel;
   const dir = personalHooksDir(store);
-  const ours = pointsAtPersonal(store);
-  let configured = ours ? gitConfig(top, REPO_HOOKS_KEY, "--local") : gitConfig(top, "core.hooksPath");
-  // A personal hooks folder somewhere else: the clone moved, and its setting names where it was.
-  if (!ours && configured !== undefined && /[\\/]baesian[\\/]hooks[\\/]?$/.test(configured)) configured = gitConfig(top, REPO_HOOKS_KEY, "--local");
-  const repo = repoHooks(store, configured || undefined);
-  const hooks = [...new Set([...PASSED_ON, ...hookNames(repo.dir)])];
-  const wasReset = !ours && existsSync(dir);
+  const was = pointsAtPersonal(store);
+  const wasOff = !was && existsSync(dir) ? gateOff(store) : undefined;
+  const moved = restoreRepoSetting(store);
   mkdirSync(dir, { recursive: true });
+  writePersonalGitConfig(store);
+  // The fallback first: a first `[baesian]` section goes at the end of the clone's .git/config, and the include after it.
+  setFallback(store, fallback);
+  includeLast(store);
+  const repo = repoHooks(store);
+  const hooks = [...new Set([...PASSED_ON, ...hookNames(repo.dir)])];
   for (const f of readdirSync(dir)) if (!hooks.includes(f)) rmSync(join(dir, f), { recursive: true, force: true });
+  const at = { hooks: dir, gitHooks: join(store.repo.commonDir, "hooks") };
   for (const name of hooks) {
-    writeFileSync(join(dir, name), personalHook(name, repo));
+    writeFileSync(join(dir, name), personalHook(name, at));
     chmodSync(join(dir, name), 0o755);
   }
-  // Absolute, since `.git` is a file in a linked worktree; shared by the clone's worktrees, never committed.
-  execFileSync("git", ["config", "--local", "core.hooksPath", dir], { cwd: top });
-  if (repo.configured !== undefined) execFileSync("git", ["config", "--local", REPO_HOOKS_KEY, repo.configured], { cwd: top });
-  else unsetRepoHooks(top);
-  setFallback(store, fallback);
-  return { dir, repo, pointed: !ours, wasReset, hooks };
-}
-
-function unsetRepoHooks(top: string): void {
-  try {
-    execFileSync("git", ["config", "--local", "--unset-all", REPO_HOOKS_KEY], { cwd: top, stdio: "ignore" });
-  } catch {
-    // wasn't set
-  }
+  return { dir, config: personalGitConfig(store), repo, pointed: !was, wasOff, moved, stillOff: pointsAtPersonal(store) ? undefined : gateOff(store), hooks };
 }
 
 /**
- * Take personal mode's hooks out (B-4rwyz), when the clone switches to shared mode: `core.hooksPath` goes back to what it
- * was, unless something set it elsewhere since, and the folder goes. Returns the setting it went back to.
+ * Take personal mode's hooks out (B-4rwyz), when the clone switches to shared mode: the clone's `.git/config` no longer
+ * includes Baesian's setting, whose file goes, as does the folder. The repo's own `core.hooksPath` was never changed
+ * (an older `init --personal`'s is put back first), so git runs the repo's hooks again.
  */
-export function uninstallPersonalHooks(store: Store): string | undefined {
-  const top = store.repo.toplevel;
-  const dir = personalHooksDir(store);
-  const configured = gitConfig(top, REPO_HOOKS_KEY, "--local") || undefined;
-  const local = gitConfig(top, "core.hooksPath", "--local");
-  if (local !== undefined && samePath(local, dir)) {
-    execFileSync("git", ["config", "--local", "--unset-all", "core.hooksPath"], { cwd: top });
-    if (configured !== undefined && gitConfig(top, "core.hooksPath") !== configured) execFileSync("git", ["config", "--local", "core.hooksPath", configured], { cwd: top });
-  }
-  unsetRepoHooks(top);
-  rmSync(dir, { recursive: true, force: true });
-  return configured;
+export function uninstallPersonalHooks(store: Store): void {
+  restoreRepoSetting(store);
+  removeInclude(store);
+  rmSync(personalGitConfig(store), { force: true });
+  rmSync(personalHooksDir(store), { recursive: true, force: true });
 }
 
 /**
- * What's wrong with a personal-mode clone's setup, for any command to say (B-4rwyz): its gate is off because something
- * pointed `core.hooksPath` elsewhere (a team's setup script, say); the repo's hooks folder has a hook this clone's don't
- * pass on; or a `.baesian/` turned up in the worktree. A clone set up with `--no-hooks` has no gate to be off.
+ * What's wrong with a personal-mode clone's setup, for any command to say (B-4rwyz): its gate is off (`gateOff()`: the
+ * clone's `.git/config` no longer includes Baesian's setting, say); its gate is set as an older `init --personal` set
+ * it, where a team's setup script turns it off; the repo's hooks folder has a hook this clone's don't pass on; or a
+ * `.baesian/` turned up in the worktree. A clone set up with `--no-hooks` has no gate to be off.
  */
 export function personalProblems(store: Store): string[] {
   if (!store.personal) return [];
@@ -302,14 +492,20 @@ export function personalProblems(store: Store): string[] {
   const dir = personalHooksDir(store);
   const out: string[] = [];
   if (existsSync(dir)) {
+    const set = gitConfig(top, "core.hooksPath", cloneConfig(store));
     if (!pointsAtPersonal(store)) {
-      const now = gitConfig(top, "core.hooksPath");
       out.push(
-        `this clone's commit gate is off: core.hooksPath is ${now === undefined ? "unset" : `\`${now}\``}, not this clone's own hooks (personal mode, B-4rwyz), so git runs the repo's hooks without Baesian's. Something set it, such as the repo's setup script. Run \`baesian init --personal\` again: the repo's hooks still run, after Baesian's.`,
+        `this clone's commit gate is off: ${gateOff(store)}, so git runs the repo's hooks without Baesian's (personal mode, B-4rwyz). Run \`baesian init --personal\` again: the repo's hooks still run, after Baesian's.`,
+      );
+    } else if (set !== undefined && namesPersonal(store, set)) {
+      out.push(
+        included(store)
+          ? `this clone's core.hooksPath, in its .git/config, names Baesian's own hooks, so the repo's own hooks don't run after Baesian's (personal mode, B-4rwyz). Set it to the repo's hooks folder, or run \`baesian init --personal\` again, which takes it out.`
+          : `this clone's core.hooksPath, in its .git/config, names its own hooks, as an older \`baesian init --personal\` set it, so a setup script that sets core.hooksPath turns the commit gate off (personal mode, B-4rwyz). Run \`baesian init --personal\` again: it puts the repo's setting back, and Baesian's in a file of its own that .git/config includes.`,
       );
     } else {
-      const repo = repoHooks(store, gitConfig(top, REPO_HOOKS_KEY, "--local") || undefined);
-      const missing = hookNames(repo.dir).filter((n) => !existsSync(join(dir, n)));
+      const repo = repoHooks(store);
+      const missing = samePath(repo.dir, dir) ? [] : hookNames(repo.dir).filter((n) => !existsSync(join(dir, n)));
       if (missing.length) out.push(`the repo's hooks folder, ${repo.shown}, has ${missing.join(" and ")}, which this clone's own hooks don't run yet (personal mode, B-4rwyz): run \`baesian init --personal\` again`);
     }
   }
