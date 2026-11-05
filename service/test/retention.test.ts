@@ -287,6 +287,42 @@ describe("the commits that cite a card, and merges (D181)", () => {
     const entries = await pull(o);
     for (const p of [ledger, mine.path]) expect(entries.find((e) => e.path === p)?.body, p).toBeUndefined();
   });
+
+  it("a merge that brought commits citing cards (B-w41p7) goes once their ledger entries have, with those cards' text, and its own cards'", async () => {
+    const o = await owner();
+    const t0 = now;
+    const id = await file(o);
+    const other = await file(o);
+    await answer(o, { card: id });
+    await pull(o);
+    expect(await sweep(o)).toEqual([]);
+    const put = async (path: string, text: string) => {
+      const r = await inObject(o, (relay) => relay.upload(o.project, path, new TextEncoder().encode(text), "laptop"));
+      expect(r.status, `${path}: ${JSON.stringify(r.body)}`).toBe(201);
+    };
+    at(t0 + 10 * DAY);
+    await keepSignedIn(o);
+    // One commit cites the answered card, another the card still waiting.
+    const cites = { [id]: "1".repeat(40), [other]: "2".repeat(40) };
+    for (const [card, commit] of Object.entries(cites)) {
+      await put(`ledger/${card}-abcde.md`, renderDoc({ type: "ledger", format: 1, card, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, card)));
+    }
+    const merge = (sha: string, cards: string[], commits: string[]) => ({ path: mergeFile(sha, "feat/x"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, tip: sha, at: new Date(now).toISOString(), cards, commits }) });
+    // A later fast-forward that brought only the commit citing the answered card; one that brought both commits; and one
+    // that brought the answered card and the commit citing the waiting one.
+    const followUp = merge("a".repeat(40), [], [cites[id]!]);
+    const both = merge("b".repeat(40), [], [cites[id]!, cites[other]!]);
+    const crossed = merge("9".repeat(40), [id], [cites[other]!]);
+    for (const m of [followUp, both, crossed]) await put(m.path, m.text);
+    expect((await state(o)).merges?.find((m) => m.commit === "a".repeat(40))).toMatchObject({ tip: "a".repeat(40), cards: [], commits: [cites[id]] });
+    at(t0 + 30 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([id]);
+    const files = await inObject(o, (_r, s) => s.storage.sql.exec<{ path: string }>("SELECT path FROM files").toArray().map((f) => f.path));
+    expect(files).not.toContain(followUp.path);
+    expect(files).toEqual(expect.arrayContaining([both.path, crossed.path]));
+    expect((await state(o)).merges?.map((m) => m.commit).sort()).toEqual(["9".repeat(40), "b".repeat(40)]);
+  });
 });
 
 describe("what a machine sends for a card whose text went", () => {

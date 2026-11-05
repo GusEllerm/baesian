@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
 import { PREFERENCE_FIELDS, VERDICT_FIELDS } from "../../src/api.js";
 import { unmark } from "../../src/cite.js";
+import { parseDoc } from "../../src/frontmatter.js";
 import { afterVerdict } from "../../src/proposals.js";
 import { BAESIAN, type Settings, loosening } from "../../src/routing.js";
 import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, newestFormat, upgradeFile } from "../../src/schema.js";
@@ -402,7 +403,8 @@ export class Relay {
    * held card nobody answered 90 days after its latest revision arrived (B-ec3kj), a withdrawn card as B-dsqyd says. A
    * card whose removal would change another card's status or level (a card that builds on it, one it supersedes or
    * conflicts with) waits until that one goes too. `live` is the machines whose grants for the project are live. Returns
-   * the cards removed. Then the merges whose every card's text has gone go too (D181).
+   * the cards removed. Then the merges whose every card's text has gone go too, with the cards their commits cite (D181,
+   * B-w41p7).
    */
   sweep(now: number, live: ReadonlySet<string>, r: Retention = RETENTION): string[] {
     const removed = this.sweepCards(now, live, r);
@@ -411,21 +413,38 @@ export class Relay {
   }
 
   /**
-   * A merge (D181) names its branches, commit and time, and the cards it brought: once every one of those cards' text has
-   * gone, so do its bytes, its log entry kept, as a card's are. One that names no card, a branch's deck alone, stays while
-   * the project does, as decks do. Returns the paths removed.
+   * A merge (D181) names its branches, commit and time, the cards it brought, and since B-w41p7 the commits citing cards
+   * it brought: once every one of those cards' text has gone, and every one of those commits' ledger entries with its
+   * card's (so every card they cite has gone too), so do its bytes, its log entry kept, as a card's are. One that names no
+   * card and no commit, a branch's deck alone, stays while the project does, as decks do. Returns the paths removed.
    */
   private dropMerges(): string[] {
     const ledger = this.retention;
     if (!ledger) return [];
+    // The commits whose ledger entries are still here: a ledger entry goes with its card's text (D181).
+    let cited: Set<string> | undefined;
+    const stillCited = () =>
+      (cited ??= new Set(
+        this.files.list("ledger").flatMap((name) => {
+          const bytes = this.files.read(`ledger/${name}`);
+          if (!bytes) return [];
+          try {
+            const commit = (parseDoc(new TextDecoder().decode(bytes)).meta as { commit?: unknown }).commit;
+            return typeof commit === "string" ? [commit] : [];
+          } catch {
+            return [];
+          }
+        }),
+      ));
     const gone: string[] = [];
     for (const name of this.files.list("merges")) {
       const path = `merges/${name}`;
       const bytes = this.files.read(path);
       if (!bytes) continue;
       try {
-        const { cards } = MergeEvent.parse(upgradeFile("merge", JSON.parse(new TextDecoder().decode(bytes)), path));
-        if (cards.length && cards.every((c) => ledger.isRemoved(c))) gone.push(path);
+        const { cards, commits } = MergeEvent.parse(upgradeFile("merge", JSON.parse(new TextDecoder().decode(bytes)), path));
+        if (!cards.length && !commits.length) continue;
+        if (cards.every((c) => ledger.isRemoved(c)) && (!commits.length || !commits.some((c) => stillCited().has(c)))) gone.push(path);
       } catch {
         // not a merge the relay took: left as it is
       }
@@ -523,7 +542,8 @@ export class Relay {
   /** A waiting marker stops: `DELETE /v1/projects/{project}/files/waiting/{name}` (D90). Nothing else is ever removed. */
   stopWaiting(path: string): Reply {
     const found = agentKind(path);
-    if (!found?.kind.mutable) return fail(403, `${path}: only a waiting marker is removed; everything else is written once`);
+    // The default branch (B-jr8mk) is mutable too, but replaced, never removed.
+    if (!found?.kind.mutable || found.kind.kind !== "waiting") return fail(403, `${path}: only a waiting marker is removed; everything else is written once, or replaced`);
     this.files.remove(path);
     return { status: 204 };
   }

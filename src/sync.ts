@@ -6,9 +6,9 @@ import { cite } from "./cite.js";
 import { isShallow, rootCommits } from "./git.js";
 import { type Http, Offline, REQUEST_MS, SignedOut, readGrant, reason, refreshGrant } from "./login.js";
 import { parseDoc } from "./frontmatter.js";
-import { CARD_ID, CardDraft, type Config, type MachineGrant, Presence, type RelayEntry, RelayState, isLedgerBody, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
+import { CARD_ID, CardDraft, type Config, DefaultBranch, type MachineGrant, Presence, type RelayEntry, RelayState, isLedgerBody, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
 import { alreadyExists, checkPath } from "./storage.js";
-import type { Store } from "./store.js";
+import { DEFAULT_BRANCH, type Store } from "./store.js";
 import type { WaitOptions } from "./wait.js";
 
 // The CLI's side of the relay (M9d, Hosted Service sections 1 and 2): pulling the project's log into the live layer, as
@@ -196,6 +196,8 @@ interface Working {
   project: string;
   pulled: number;
   uploaded: Set<string>;
+  /** The default branch this machine last sent (B-jr8mk). */
+  defaultBranch?: string | undefined;
 }
 
 /** This machine's state for a relay, from `relay.json`; afresh when there's none, or it's for another relay, or unreadable. */
@@ -214,7 +216,7 @@ export function readRelayState(store: Store, service: string, project: string): 
 
 /** Replace `relay.json` whole (`Storage.replace`): a reader sees the old state or the new. */
 function saveState(store: Store, w: Working): void {
-  const state = RelayState.parse({ type: "relay", format: newestFormat("relay"), service: w.service, project: w.project, pulled: w.pulled, uploaded: [...w.uploaded].sort(), at: new Date().toISOString() });
+  const state = RelayState.parse({ type: "relay", format: newestFormat("relay"), service: w.service, project: w.project, pulled: w.pulled, uploaded: [...w.uploaded].sort(), ...(w.defaultBranch ? { default_branch: w.defaultBranch } : {}), at: new Date().toISOString() });
   store.storage.replace(RELAY_STATE, encode(`${JSON.stringify(state, null, 2)}\n`));
 }
 
@@ -378,6 +380,7 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
       run.out.notes.push(`relay: the project's log on ${client.service} is shorter than what this machine had pulled, so it was deleted and made again: this machine starts afresh, and sends everything its agents wrote`);
       run.w.pulled = 0;
       run.w.uploaded = new Set();
+      run.w.defaultBranch = undefined;
       continue;
     }
     const entries = Array.isArray(page?.entries) ? page.entries : [];
@@ -510,13 +513,35 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
     }
     run.out.notes.push(`relay: refused ${rel}, from before linking (${errorOf(r)}); it stays here, and is offered again at the next sync`);
   }
+  await pushDefaultBranch(store, client, run);
   return conflicted;
+}
+
+/**
+ * Send the repo's default branch (B-jr8mk), as git says it here (`Store.defaultBranch`), when it isn't what this machine
+ * last sent: `default-branch.json`, only its name, which the relay keeps in place of the one before, for the website's
+ * branches panel. Quietly: one the relay doesn't take (an older relay's) is offered again at the next sync, and it's
+ * never counted among the files sent. Only a machine whose reading changed sends it, so two that read it differently
+ * don't take turns.
+ */
+async function pushDefaultBranch(store: Store, client: RelayClient, run: Run): Promise<void> {
+  if (!store.hasRepo) return;
+  const branch = store.defaultBranch();
+  if (!branch || branch === run.w.defaultBranch) return;
+  let bytes: Uint8Array;
+  try {
+    bytes = encode(`${JSON.stringify(DefaultBranch.parse({ type: "default-branch", format: newestFormat("default-branch"), branch }))}\n`);
+  } catch {
+    return; // not a name git allows: nothing to send
+  }
+  const r = await client.request("PUT", `files/${DEFAULT_BRANCH}`, bytes);
+  if (r.status === 200 || r.status === 201) run.w.defaultBranch = branch;
 }
 
 /** Pull, push, or both, with this client, keeping `relay.json` up to date with whatever got done. */
 async function syncWith(store: Store, client: RelayClient, o: { pull: boolean; push: boolean; sending?: (count: number) => void }): Promise<SyncReport> {
   const s = readRelayState(store, client.service, client.project);
-  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded) }, out: report("synced"), refiles: [], missing: [], ...(o.sending ? { sending: o.sending } : {}) };
+  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded), defaultBranch: s.default_branch }, out: report("synced"), refiles: [], missing: [], ...(o.sending ? { sending: o.sending } : {}) };
   try {
     if (o.pull) await pull(store, client, run);
     // A push refused for what another machine wrote first pulls the relay's copy, then pushes again: a card filed again

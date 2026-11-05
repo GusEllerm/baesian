@@ -164,6 +164,41 @@ describe("uploads (P15 section 3)", () => {
     const after = (await (await call("GET", "state", { as: "machine" })).json()) as typeof s;
     expect(after.cards.find((c) => c.meta.id === id)!.waiting).toHaveLength(0);
   });
+
+  it("takes the repo's default branch as state: only a branch's name, replaced, never logged, never removed; the state carries it (B-jr8mk)", async () => {
+    const local = machineStore();
+    fileCard(local);
+    await push(local);
+    const head = (await pullLog()).at(-1)!.seq;
+    const file = (branch: unknown, extra: Record<string, unknown> = {}) => `${JSON.stringify({ type: "default-branch", format: 1, branch, ...extra })}\n`;
+    const stateNow = async () => (await (await call("GET", "state", { as: "person" })).json()) as { defaultBranch?: string };
+    expect(await stateNow()).not.toHaveProperty("defaultBranch");
+    expect((await read(await upload("default-branch.json", file("main")))).status).toBe(200);
+    expect((await stateNow()).defaultBranch).toBe("main");
+    // A later reading replaces it, the same bytes or not.
+    expect((await read(await upload("default-branch.json", file("release/2026-11")))).status).toBe(200);
+    expect((await stateNow()).defaultBranch).toBe("release/2026-11");
+    // Only a name git allows, and nothing beside it: no path, no message, no other field.
+    for (const [body, why] of [
+      [file("main; the acquisition talks"), /branch's name/],
+      [file("../../etc"), /branch's name/],
+      [file(""), /branch/],
+      [file(42), /branch/],
+      [file("main", { remote: "https://github.com/x/y.git" }), /remote/],
+      [file("main").replace('"format":1', '"format":2'), /format 2/],
+    ] as const) {
+      const r = await read(await upload("default-branch.json", body));
+      expect(r.status, body).toBeGreaterThanOrEqual(400);
+      expect(r.body.error, body).toMatch(why);
+    }
+    expect((await stateNow()).defaultBranch).toBe("release/2026-11");
+    // Never in the log, so no machine pulls it; and a machine can't remove it, only replace it.
+    expect((await pullLog()).at(-1)!.seq).toBe(head);
+    expect((await call("DELETE", "files/default-branch.json", { as: "machine" })).status).toBe(403);
+    expect((await stateNow()).defaultBranch).toBe("release/2026-11");
+    // A person doesn't send it: only a machine, which reads git.
+    expect((await upload("default-branch.json", file("main"), { as: "person" })).status).toBe(403);
+  });
 });
 
 describe("the log (P16 section 8)", () => {

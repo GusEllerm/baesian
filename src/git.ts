@@ -57,6 +57,51 @@ export function isShallow(toplevel: string): boolean {
   }
 }
 
+/** Where the default branch was read from (B-jr8mk). */
+export type DefaultBranchFrom = "remote" | "init.defaultBranch" | "first-commit";
+
+/**
+ * The repo's default branch (B-jr8mk), the trunk the branches panel draws on top, read in this order, the first that
+ * names one:
+ * 1. **the remote's HEAD**: `refs/remotes/origin/HEAD`, which `git clone` sets (and `git fetch` since git 2.48, where it's
+ *    missing), naming the branch the remote calls its default; with no `origin`, the one remote's HEAD, if there's one;
+ * 2. **`init.defaultBranch`**, as git's config sets it at any level, if a local branch of that name exists: a setting for
+ *    new repos says nothing of an older one that never had the branch;
+ * 3. **the branch `git init` ran on**: the local branch whose reflog starts with the repo's first commit,
+ *    `commit (initial)`; the oldest, if an orphan branch started another. Reflogs are local and expire (90 days, by
+ *    default), so a clone or an old repo may have none, but those have a remote's HEAD.
+ * Undefined when none does: the panel then guesses as it did. A few git calls, none of them over the network.
+ */
+export function defaultBranch(toplevel: string): { branch: string; from: DefaultBranchFrom } | undefined {
+  const tryGit = (args: string[]) => {
+    try {
+      return git(toplevel, args);
+    } catch {
+      return undefined;
+    }
+  };
+  const heads = (tryGit(["for-each-ref", "--format=%(refname) %(symref)", "refs/remotes/*/HEAD"]) ?? "")
+    .split("\n")
+    .flatMap((l) => {
+      const m = /^refs\/remotes\/([^/]+)\/HEAD refs\/remotes\/\1\/(.+)$/.exec(l);
+      return m ? [{ remote: m[1]!, branch: m[2]! }] : [];
+    });
+  const remote = heads.find((h) => h.remote === "origin") ?? (heads.length === 1 ? heads[0] : undefined);
+  if (remote) return { branch: remote.branch, from: "remote" };
+  const configured = tryGit(["config", "--get", "init.defaultBranch"]);
+  if (configured && tryGit(["show-ref", "--verify", "--quiet", `refs/heads/${configured}`]) !== undefined) return { branch: configured, from: "init.defaultBranch" };
+  // `--date=unix` names each entry by when it was written, which is when that first commit was made here.
+  const initial = (tryGit(["log", "-g", "--all", "--grep-reflog=commit (initial)", "--date=unix", "--format=%gD"]) ?? "")
+    .split("\n")
+    .flatMap((l) => {
+      const m = /^refs\/heads\/(.+)@\{(\d+)\}$/.exec(l);
+      return m ? [{ at: Number(m[2]), branch: m[1]! }] : [];
+    })
+    // A deleted branch's reflog goes with it, so each of these still exists.
+    .sort((a, b) => a.at - b.at);
+  return initial[0] ? { branch: initial[0].branch, from: "first-commit" } : undefined;
+}
+
 /** `feat/run-store` → `feat-run-store`. */
 export function slug(text: string): string {
   return (

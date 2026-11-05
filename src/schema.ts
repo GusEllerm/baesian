@@ -45,6 +45,8 @@ export const FILE_KINDS = {
   attachment: { name: "attachment", upgrades: [] },
   // D181: a branch merged into another, as the CLI found it.
   merge: { name: "merge", upgrades: [] },
+  // B-jr8mk: the repo's default branch, as the CLI read it, which it sends the relay for the website.
+  "default-branch": { name: "default branch", upgrades: [] },
   cursor: { name: "inbox cursor", upgrades: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
   presence: { name: "presence", upgrades: [] },
   waiting: { name: "waiting marker", upgrades: [] },
@@ -492,10 +494,13 @@ export const isLedgerBody = (body: string, commit: string, card: string) => body
  * A branch merged into another (D181): `merges/<commit>-<key>.json` in the live layer, where `key` is the first 12 hex
  * digits of the SHA-256 of `branch` (`mergeFile()`), so two machines that find the same merge write the same path. Found
  * by the CLI's hooks (src/merges.ts), never in the record; it goes up to the relay and comes down to the project's other
- * machines. `commit` is the merge commit, the squash commit, or for a fast-forward the commit the branch moved to; `at`
- * is when, as git says it (a fast-forward found as it happens: then); `cards`, the cards whose `source_branch` is
- * `branch` it brought, or the cards its commits cite, where the record isn't committed. Commit subjects and messages are
- * never in it.
+ * machines. `commit` is where it landed on `into`: the merge commit, the squash commit, or for a fast-forward the commit
+ * the branch moved to; `tip`, the commit that landed from the merged side (B-w41p7): a merge commit's other parent, the
+ * commit a fast-forward moved to, the tip a squash squashed; `at` is when, as git says it (a fast-forward found as it
+ * happens: then); `cards`, the cards whose `source_branch` is `branch` it brought, or the cards its commits cite, where
+ * the record isn't committed; `commits`, the commits made on `branch` that cite cards which it brought, oldest first,
+ * checked against git's ancestry as it's written: reachable from `tip`, and not from `into` before. A later fast-forward
+ * of the same branch is a merge of its own, at its own commit. Commit subjects and messages are never in it.
  */
 export const MergeEvent = z.strictObject({
   type: z.literal("merge"),
@@ -503,10 +508,40 @@ export const MergeEvent = z.strictObject({
   branch: z.string().min(1),
   into: z.string().min(1),
   commit: CommitId,
+  /** Absent only from a merge recorded before B-w41p7 (2026-11-05): before v1 a format changes in place (D108). */
+  tip: CommitId.optional(),
   at: Timestamp,
   cards: z.array(CardId).default([]),
+  commits: z.array(CommitId).default([]),
 });
 export type MergeEvent = z.infer<typeof MergeEvent>;
+
+/**
+ * A branch's name as git allows one (`git check-ref-format --branch`): no spaces, control characters or `~^:?*[\`, no
+ * `..` or `@{`, no part starting with a dot or ending in `.lock`, not starting with a dash or a slash, nor ending in a
+ * slash or a dot, and not `@`. Only a name, so nothing else can ride in it.
+ */
+export const BranchName = z
+  .string()
+  .min(1)
+  .max(255)
+  .refine(
+    (b) => b !== "@" && !/[\x00-\x20\x7f~^:?*[\\]/.test(b) && !b.includes("..") && !b.includes("@{") && !b.includes("//") && !/^[-/]|[/.]$/.test(b) && !b.split("/").some((p) => p.startsWith(".") || p.endsWith(".lock")),
+    "a branch's name, as git allows one",
+  );
+
+/**
+ * The repo's default branch (B-jr8mk), as the command line read it (`defaultBranch()`): `default-branch.json`, which a
+ * machine sends the relay, so the website's branches panel knows which branch is the trunk. Only its name. Mutable: the
+ * relay keeps the latest a machine sent, never logs it, and keeps it while the project exists. Never in the record, nor
+ * in a machine's own live layer, which reads git instead.
+ */
+export const DefaultBranch = z.strictObject({
+  type: z.literal("default-branch"),
+  format: formatOf("default-branch"),
+  branch: BranchName,
+});
+export type DefaultBranch = z.infer<typeof DefaultBranch>;
 
 /** Frontmatter of a deck: `decks/<id>.md`. The body is the briefing. Membership is computed from cards. */
 export const DeckMeta = z.strictObject({
@@ -1003,6 +1038,8 @@ export const RelayState = z.strictObject({
   pulled: z.number().int().min(0),
   /** The live layer's files the relay has: those it acknowledged an upload of, and those pulled from it. */
   uploaded: z.array(z.string().min(1)),
+  /** The repo's default branch as this machine last sent it (B-jr8mk): sent again only when what it reads changes. */
+  default_branch: BranchName.optional(),
   /** The last sync. */
   at: Timestamp,
 });

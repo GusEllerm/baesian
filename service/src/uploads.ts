@@ -1,5 +1,5 @@
 import { parseDoc } from "../../src/frontmatter.js";
-import { Attachment, CARD_ID, CardMeta, CommitId, DeckMeta, Fallback, type FileKindName, GateRecord, LedgerMeta, MergeEvent, NewerFormat, Preferences, RuleMeta, RuleRetirement, TopicAlias, Verdict, Waiting, Withdrawal, describeError, isLedgerBody, upgradeFile } from "../../src/schema.js";
+import { Attachment, CARD_ID, CardMeta, CommitId, DeckMeta, DefaultBranch, Fallback, type FileKindName, GateRecord, LedgerMeta, MergeEvent, NewerFormat, Preferences, RuleMeta, RuleRetirement, TopicAlias, Verdict, Waiting, Withdrawal, describeError, isLedgerBody, upgradeFile } from "../../src/schema.js";
 import { type Store, mergeFile } from "../../src/store.js";
 
 // What a machine may upload (Hosted Service sections 1 and 3): only the kinds of file an agent writes, each checked
@@ -117,6 +117,16 @@ export const AGENT_KINDS: readonly AgentKind[] = [
     mutable: true,
     check: (parts, f, store) => sameCard(parts, f) ?? cardHere(parts[1]!, store),
   },
+  // B-jr8mk: the repo's default branch, as a machine read it from git, for the website's branches panel. Only a branch's
+  // name, as git allows one (`BranchName`); the latest replaces the one before, never logged, kept while the project is.
+  {
+    name: "the repo's default branch",
+    path: /^default-branch\.json$/,
+    kind: "default-branch",
+    schema: DefaultBranch,
+    mutable: true,
+    check: () => undefined,
+  },
 ];
 
 /** What a person wrote before the repo was linked names no account or project: those come only from the website. */
@@ -194,7 +204,7 @@ export function notAgentWritten(path: string): string {
   const theirs = ["verdicts", "rules", "topics", "preferences", "trust"].includes(top!) || path.endsWith(".sig") || /\/gate-r\d+-relay\.json$/.test(path);
   return theirs
     ? `${path} is a kind of file only a person writes, through the relay, which signs it: a machine never uploads one (P15 section 3), but for the answers from before linking, before anyone answers on the website (B-3zjjx)`
-    : `${path} isn't a kind of file an agent writes: a machine uploads card revisions, the CLI's gate records, withdrawals, fallbacks, attachments, decks, waiting markers, ledger entries and merges`;
+    : `${path} isn't a kind of file an agent writes: a machine uploads card revisions, the CLI's gate records, withdrawals, fallbacks, attachments, decks, waiting markers, ledger entries, merges and the repo's default branch`;
 }
 
 /**

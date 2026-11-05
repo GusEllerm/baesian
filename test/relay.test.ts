@@ -15,7 +15,7 @@ import { grantPath, readGrant, writeGrant } from "../src/login.js";
 import type { MachineGrant } from "../src/schema.js";
 import { NAMESPACE, signMessage } from "../src/sshsig.js";
 import { runHook } from "../src/hooks.js";
-import { Store, mergeFile } from "../src/store.js";
+import { DEFAULT_BRANCH, Store, mergeFile } from "../src/store.js";
 import { RELAY_STATE, agentWritten, linkProblem, unsent, unsentBeforeLinking } from "../src/sync.js";
 import { projectLine } from "../src/trust.js";
 import { cleanup, draftFile, repo, sh } from "./helpers.js";
@@ -225,10 +225,11 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(theirs.map((e) => e.path).sort()).toEqual([ledgerPath, mergePath].sort());
       for (const e of theirs) expect(Buffer.from(e.body!, "base64").toString()).not.toMatch(/Secret subject|acquisition|body says|secret-path/);
       const merge = JSON.parse(Buffer.from(theirs.find((e) => e.path === mergePath)!.body!, "base64").toString());
-      expect(merge).toEqual({ type: "merge", format: 1, branch: "feat/runs", into: "main", commit: merged, at: expect.any(String), cards: [id] });
+      // The tip that landed, and the commit citing a card it brought (B-w41p7).
+      expect(merge).toEqual({ type: "merge", format: 1, branch: "feat/runs", into: "main", commit: merged, tip: cited, at: expect.any(String), cards: [id], commits: [cited] });
       // The relay's state carries them, for the website's panel.
       const state = (await (await fetch(`${relay.url}/v1/projects/proj-d181/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: unknown[]; commits: unknown[] };
-      expect(state.merges).toEqual([{ branch: "feat/runs", into: "main", commit: merged, at: merge.at, cards: [id] }]);
+      expect(state.merges).toEqual([{ branch: "feat/runs", into: "main", commit: merged, tip: cited, at: merge.at, cards: [id], commits: [cited] }]);
       expect(state.commits).toEqual([{ commit: cited, branch: "feat/runs", card: id, at: entry.meta.at }]);
 
       // Another clone pulls them into its live layer, as if it had found them.
@@ -245,6 +246,70 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const again = await run(b, ["sync"]);
       expect(again.out).toContain("sent 0");
       rmSync(join(b, ".."), { recursive: true, force: true });
+    });
+
+    it("a later fast-forward of the same branch goes up as a merge of its own, beside the first, which stands (B-w41p7)", async () => {
+      const a = await signedIn("proj-w41p7");
+      sh(a.dir, "add", "-A");
+      sh(a.dir, "commit", "-q", "-m", "Link");
+      const quiet = { out: () => {}, err: () => {} };
+      sh(a.dir, "checkout", "-q", "-b", "feat/log");
+      const id = await fileCard(a.dir, { title: "The run-metadata store", touches: [] });
+      Store.open(a.dir).syncRecord();
+      sh(a.dir, "add", "-A");
+      sh(a.dir, "commit", "-q", "-m", `Filed\n\nBaesian-Card: ${id}`);
+      const filed = sh(a.dir, "rev-parse", "HEAD");
+      await runHook(Store.open(a.dir), "post-commit", [], quiet);
+      sh(a.dir, "checkout", "-q", "main");
+      sh(a.dir, "merge", "-q", "--ff-only", "feat/log");
+      await runHook(Store.open(a.dir), "post-merge", ["0"], quiet);
+      sh(a.dir, "checkout", "-q", "feat/log");
+      writeFileSync(join(a.dir, "log.md"), "answered\n");
+      sh(a.dir, "add", "log.md");
+      sh(a.dir, "commit", "-q", "-m", `Log it\n\nBaesian-Card: ${id}`);
+      const log = sh(a.dir, "rev-parse", "HEAD");
+      await runHook(Store.open(a.dir), "post-commit", [], quiet);
+      sh(a.dir, "checkout", "-q", "main");
+      sh(a.dir, "merge", "-q", "--ff-only", "feat/log");
+      await runHook(Store.open(a.dir), "post-merge", ["0"], quiet);
+      expect(await relayPaths("proj-w41p7")).toEqual(expect.arrayContaining([mergeFile(filed, "feat/log"), mergeFile(log, "feat/log")]));
+      const grant = readGrant("proj-w41p7")!;
+      const state = (await (await fetch(`${relay.url}/v1/projects/proj-w41p7/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: Record<string, unknown>[] };
+      expect(state.merges.map(({ at: _at, ...m }) => m)).toEqual([
+        { branch: "feat/log", into: "main", commit: filed, tip: filed, cards: [id], commits: [filed] },
+        { branch: "feat/log", into: "main", commit: log, tip: log, cards: [], commits: [log] },
+      ]);
+    });
+  });
+
+  describe("the default branch (B-jr8mk)", () => {
+    it("goes up with a sync, as git says it here, again only when that changes; the relay's state carries it, and its log doesn't", async () => {
+      const { dir, store } = await signedIn("proj-jr8mk");
+      const grant = readGrant("proj-jr8mk")!;
+      const stateOf = async () => (await (await fetch(`${relay.url}/v1/projects/proj-jr8mk/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { defaultBranch?: string };
+      const sent = () => JSON.parse(readFileSync(join(store.live, RELAY_STATE), "utf8")).default_branch as string | undefined;
+      // Signing in synced: the branch the repo's first commit was made on, since there's no remote.
+      expect(sent()).toBe("main");
+      expect((await stateOf()).defaultBranch).toBe("main");
+      // The remote's HEAD names another, and the next sync sends it, counting no file.
+      sh(dir, "update-ref", "refs/remotes/origin/trunk", "HEAD");
+      sh(dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
+      const synced = await run(dir, ["sync"]);
+      expect(synced.code, synced.err).toBe(0);
+      expect(synced.out).toContain("sent 0");
+      expect(sent()).toBe("trunk");
+      expect((await stateOf()).defaultBranch).toBe("trunk");
+      // It's state, not a file written once: never in the log, so no machine pulls it.
+      expect(await relayPaths("proj-jr8mk")).not.toContain("default-branch.json");
+      // Sent only when what git says changes: another machine's reading stands until this one's changes.
+      const other = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}` }, body: `${JSON.stringify({ type: "default-branch", format: 1, branch: "develop" })}\n` });
+      expect(other.status).toBe(200);
+      await run(dir, ["sync"]);
+      expect((await stateOf()).defaultBranch).toBe("develop");
+      // Only a branch's name: anything else is refused.
+      const bad = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}` }, body: JSON.stringify({ type: "default-branch", format: 1, branch: "main; the acquisition talks" }) });
+      expect(bad.status).toBe(400);
+      expect((await stateOf()).defaultBranch).toBe("develop");
     });
   });
 
@@ -845,5 +910,9 @@ describe("what a machine pushes is what the relay takes (Hosted Service section 
     // The answers from before linking go up only through their own path, at first link (B-3zjjx), and the relay knows them.
     for (const p of theirs.slice(0, 4)) expect(beforeLinkingKind(p), p).toBeDefined();
     for (const p of theirs.slice(4)) expect(beforeLinkingKind(p), p).toBeUndefined();
+    // The default branch (B-jr8mk) isn't a file of the live layer the CLI pushes: a sync sends it on its own, from git, and
+    // the relay takes it, as it takes a waiting marker.
+    expect(agentWritten(DEFAULT_BRANCH)).toBe(false);
+    expect(agentKind(DEFAULT_BRANCH)?.kind.mutable).toBe(true);
   });
 });

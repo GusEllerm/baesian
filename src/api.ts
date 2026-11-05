@@ -124,15 +124,30 @@ export interface ApiState {
    * subject or message, which stay on the machine.
    */
   commits?: ApiCommit[];
+  /**
+   * The repo's default branch (B-jr8mk), the trunk: read from git by `baesian serve`, and on the relay what a machine last
+   * sent. Absent when it can't be read, and from a server that predates it.
+   */
+  defaultBranch?: string;
 }
 
-/** A merge the CLI found (D181): `branch` merged into `into` at `commit`, at `at`, bringing `cards`. */
+/**
+ * A merge the CLI found (D181): `branch` merged into `into` at `commit`, at `at`, bringing `cards`. Since B-w41p7, `tip`
+ * is the commit that landed from `branch`'s side (a merge commit's other parent, the commit a fast-forward moved to, the
+ * tip a squash squashed), and `commits` the commits made on `branch` that cite cards which it brought, oldest first,
+ * checked against git's ancestry when it was found: reachable from `tip`, not from `into` before. A commit listed there
+ * is part of this merge, whatever its time; `tip` is too, though its ledger entry may not have been known then. A later
+ * fast-forward of the same branch is a merge of its own. A merge found before B-w41p7 has no `tip`, and `commits` empty;
+ * a server that predates it sends neither.
+ */
 export interface ApiMerge {
   branch: string;
   into: string;
   commit: string;
+  tip?: string;
   at: string;
   cards: string[];
+  commits?: string[];
 }
 
 /** A commit that cites a card (D181), as the ledger records it: made on `branch`, at `at`. */

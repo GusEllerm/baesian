@@ -144,9 +144,10 @@ describe("a written file carries its format (D156)", () => {
     // Every kind Baesian writes but the server's two files, which `serve` writes (below). Drafts and the personal
     // config are written by people; signatures, passkey proofs and the keys by the hosted service (test/hosted.test.ts);
     // relay.json and the machine's grant by the CLI when it syncs and signs in (test/relay.test.ts); personal mode's
-    // before-linking snapshot when a personal clone is linked (test/personal.test.ts); and the pin's project line is
-    // printed by `baesian ci`, never written (test/ci.test.ts).
-    const relay = ["signature", "passkey-proof", "service-key", "service-key-revocation", "passkey-key", "relay", "grant", "project", "before-linking"];
+    // before-linking snapshot when a personal clone is linked (test/personal.test.ts); the pin's project line is printed
+    // by `baesian ci`, never written (test/ci.test.ts); and the default branch is sent to the relay, never written here
+    // (test/relay.test.ts, B-jr8mk).
+    const relay = ["signature", "passkey-proof", "service-key", "service-key-revocation", "passkey-key", "relay", "grant", "project", "before-linking", "default-branch"];
     const written = Object.keys(FILE_KINDS).filter((k) => !["card-draft", "user-config", "config", "server", "port", ...relay].includes(k));
     expect([...seen].sort()).toEqual(written.sort());
     // The revisions Baesian writes from a draft, a revision and a reply are all in the newest card format.
