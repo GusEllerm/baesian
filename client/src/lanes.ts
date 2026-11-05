@@ -279,6 +279,15 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const commits = commitsOf(state.commits ?? []);
   const commitByHash = new Map(commits.map((c) => [c.hash, c]));
+  // A commit a merge says it brought (B-w41p7: its commits and the tip that landed) is before that merge, whatever time its
+  // ledger entry was written, which can be seconds after git's time for the merge.
+  for (const m of state.merges ?? []) {
+    const mt = Date.parse(m.at);
+    for (const h of [...(m.commits ?? []), ...(m.tip ? [m.tip] : [])]) {
+      const c = commitByHash.get(h);
+      if (c && c.branch === m.branch && c.t >= mt) c.t = mt - 1;
+    }
+  }
 
   // Lanes: every branch with a card, or named by a recorded merge. Branches with commits only are loose.
   const names: string[] = [];

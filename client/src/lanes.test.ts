@@ -249,6 +249,20 @@ describe("what happened, by branch", () => {
     expect(m2.merges[1]!.own?.short).toBe(sha("elater").slice(0, 7));
   });
 
+  it("puts a commit a merge says it brought before that merge, though its ledger entry was written after it (B-w41p7)", () => {
+    const a = [card(W("f0"), 0)];
+    const base = [card("main", -10), ...a];
+    // git's time for the merge is 6:00; the hook wrote the ledger entry for the commit it brought at 6:04.
+    const commits = [cite(a[0]!, 6 + 4 / 60, "fbrought")];
+    const recorded = { ...merge(W("f0"), "main", 6, a, "fmerge"), tip: sha("fbrought"), commits: [sha("fbrought")] };
+    const m = branchModel({ cards: base, commits, merges: [recorded] }, { nowMs: T0 + 60 * 60_000 });
+    expect(lane(m, W("f0")).end).toMatchObject({ kind: "merged", into: "main" });
+    expect(m.merges[0]!.ends).toBe(true);
+    // Without the merge's list, the late entry keeps the branch open, as it did before B-w41p7.
+    const old = branchModel({ cards: base, commits, merges: [merge(W("f0"), "main", 6, a, "fmerge")] }, { nowMs: T0 + 60 * 60_000 });
+    expect(lane(old, W("f0")).end).toMatchObject({ kind: "open" });
+  });
+
   it("counts the same merge found twice, with nothing on its branch between, once", () => {
     const f = card("feat", 10);
     const m = branchModel({ cards: [card("main", 0), f], commits: [], merges: [merge("feat", "main", 20, [f], "m1"), merge("feat", "main", 21, [f], "m2")] }, { nowMs: T0 + 60 * 60_000 });

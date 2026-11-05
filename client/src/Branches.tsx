@@ -2,6 +2,13 @@ import { type CSSProperties, Fragment, type KeyboardEvent, type PointerEvent as 
 import type { ApiCard } from "../../src/api";
 import { type BCard, type BranchesState, type Commit, type Lane, type Live, type Merge, type Model, type Row, branchModel, columnsOf, dayKey, daysOf, endWords, linkedKeys, listRows, openingKey, plural, saidOf, statusOf } from "./lanes";
 
+/** What a merge brought, in words: its cards, and the commits citing cards that came with it (B-w41p7). */
+const broughtWords = (m: { cards: string[]; commits?: string[] | undefined }) => {
+  const commits = m.commits?.length ?? 0;
+  if (!m.cards.length && commits) return `${plural(commits, "commit")} citing cards`;
+  return `${plural(m.cards.length, "card")}${commits ? ` and ${plural(commits, "commit")} citing cards` : ""}`;
+};
+
 // D181, redrawn: "Your decisions, by branch" as a list, newest first, a row per card, merge, branch start, commit and
 // day, with each branch a line in a gutter of fixed columns beside the rows (B-tgq5p). On a computer it's a drawer from
 // the right (B-v8jzy): the Branches button in the header, the menu's item, or the B key opens it; the desk moves aside and
@@ -877,7 +884,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
           </span>
           <span className="br-rm">
             <span className="br-nar">{hm(mg.gitT)} · </span>
-            {plural(mg.cards.length, "card")}
+            {broughtWords(mg)}
             {mg.own ? ` · its commit cites ${plural(mg.own.cards.length, "card")}` : ""}
             {isLit && (
               <>
@@ -888,7 +895,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
           </span>
         </>
       );
-      label = `${sn(mg.branch)} merged into ${sn(mg.into)}, ${when(mg.gitT)}, with ${plural(mg.cards.length, "card")}.${isLit ? ` ${cap1(litWords)}.` : ""}`;
+      label = `${sn(mg.branch)} merged into ${sn(mg.into)}, ${when(mg.gitT)}, with ${broughtWords(mg)}.${isLit ? ` ${cap1(litWords)}.` : ""}`;
     }
     const open = sel === e.key;
     return (
