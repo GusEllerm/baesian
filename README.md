@@ -77,7 +77,21 @@ baesian serve               # opens the client
 ```
 
 Agents use the CLI: `baesian template` prints a card to fill in, `baesian file` files it, and `baesian wait` and
-`baesian inbox` bring the answers back. `baesian --help` lists the rest.
+`baesian inbox` bring the answers back. `baesian --help` lists the rest. Each command says what happened first, and
+ends with the next command to run, IDs filled in:
+
+```text
+filed B-ym5s9 "How prices are stored"
+  level:  blocking, the level you asked for
+  deck:   branch-main
+next: baesian wait B-ym5s9  # before building on it
+  Commits that build on it carry the trailer  Baesian-Card: B-ym5s9
+```
+
+That's what an agent reads, and what a pipe gets. At a terminal the same words come with colour and a symbol on each
+headline (✓ ✗ ! →), wrapped at its width; never when an agent's harness runs the command, and never under `NO_COLOR`.
+`--no-color` shows you what the agent reads, and `--verbose` adds which of Baesian's own design decisions a message
+rests on.
 
 To answer cards on the hosted service, https://baesian.dev, from a laptop or a phone, link the repo to it:
 

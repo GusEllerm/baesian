@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
 import { PREFERENCE_FIELDS, VERDICT_FIELDS } from "../../src/api.js";
+import { unmark } from "../../src/cite.js";
 import { afterVerdict } from "../../src/proposals.js";
 import { BAESIAN, type Settings, loosening } from "../../src/routing.js";
 import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, newestFormat, upgradeFile } from "../../src/schema.js";
@@ -654,7 +655,7 @@ export class Relay {
         const check = this.store();
         for (const n of need) {
           const j = check.judge(n.path);
-          if (!j.ok) throw new Changed(`the passkey's proof doesn't count: ${j.why}`);
+          if (!j.ok) throw new Changed(`the passkey's proof doesn't count: ${unmark(j.why)}`);
         }
         return result;
       });

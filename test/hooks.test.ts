@@ -66,7 +66,7 @@ describe("installing the gate (D54)", () => {
   it("creates versioned hooks and points git at them", async () => {
     const { dir } = repo();
     const out = await init(dir);
-    expect(out).toMatch(/pre-commit created, commit-msg created, post-commit created, post-merge created, post-rewrite created in \.githooks\//);
+    expect(out).toMatch(/git gate: +\.githooks\/ +pre-commit, commit-msg, post-commit, post-merge and post-rewrite; core\.hooksPath points here, so each clone runs `baesian init` once/);
     // Read the real setting: `sh` overrides core.hooksPath for its own commands.
     expect(spawnSync("git", ["config", "core.hooksPath"], { cwd: dir, encoding: "utf8" }).stdout.trim()).toBe(".githooks");
     expect(await init(dir)).not.toMatch(/git gate/); // unchanged the second time
@@ -107,8 +107,8 @@ describe("the hooks that find merges (D181)", { timeout: 60_000 }, () => {
     put(dir, "README.md", "hi\n");
     const hint = commit(dir, "Docs\n");
     expect(hint.code).toBe(0);
-    expect(hint.err).toContain("this repo's hooks lack post-merge and post-rewrite, which find merges: run `baesian init` to add them");
-    expect(await init(dir)).toMatch(/git gate: {4}post-merge inserted, post-rewrite created in \.githooks\//);
+    expect(hint.err).toContain("baesian: warning: this repo's hooks lack post-merge and post-rewrite, which find merges\nbaesian: next: baesian init  # to add them");
+    expect(await init(dir)).toMatch(/git gate: +\.githooks\/ +post-merge inserted; post-rewrite created/);
     const merge = readFileSync(join(dir, ".githooks", "post-merge"), "utf8");
     expect(merge.startsWith(`#!/bin/sh\n${hookBlock("post-merge")}\n`)).toBe(true);
     expect(merge).toContain("echo the repo's own post-merge");
@@ -151,11 +151,13 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     put(dir, "package.json", pkg({ hono: "^4" }));
     const blocked = commit(dir, "Add hono\n");
     expect(blocked.code).toBe(1);
-    expect(blocked.err).toContain("baesian: commit blocked.");
+    expect(blocked.err).toContain("baesian: commit blocked: 1 decision in it isn't covered by a card or an ack");
+    // Every line says it's Baesian's, so git's own can be told apart, but the trailers to paste.
+    for (const l of blocked.err.trimEnd().split("\n")) expect(l.startsWith("baesian: ") || l.startsWith("Baesian-"), l).toBe(true);
     expect(blocked.err).toContain("Baesian-Ack: dep:hono <why this is fine>");
     const ok = commit(dir, "Add hono\n\nBaesian-Ack: dep:hono a two-way door: tiny, swappable router\n");
     expect(ok.code).toBe(0);
-    expect(ok.err).toContain("decisions covered: dep:hono (ack)");
+    expect(ok.err).toContain("baesian: its decision is covered\nbaesian:   dep:hono  ack");
   });
 
   it("unstages the record files it staged for a commit it blocks, and leaves what you staged (D122)", async () => {
@@ -189,7 +191,7 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     const id = store.fileCard(draft({ touches: ["dependency"] }), BODY, { agent: "a" }).card.meta.id;
     put(dir, "package.json", pkg({ "better-sqlite3": "^11" }));
     const r = commit(dir, `Use SQLite\n\nBaesian-Card: ${id}\n`);
-    expect(r.err).toContain(`dep:better-sqlite3 (${id})`);
+    expect(r.err).toContain(`baesian:   dep:better-sqlite3  ${id}`);
     expect(r.code).toBe(0);
     const sha = sh(dir, "rev-parse", "HEAD");
     const ledger = store.ledger(id);
@@ -240,9 +242,9 @@ describe("the gate on real commits", { timeout: 60_000 }, () => {
     put(dir, "migrations/2.sql", "alter table runs add x;");
     const r = commit(dir, `More runs\n\nBaesian-Card: ${id}\n`);
     expect(r.code).toBe(1);
-    expect(r.err).toContain("new verdicts since this branch's last commit");
+    expect(r.err).toContain("baesian: 1 new verdict since this branch's last commit");
     expect(r.err).toContain(`${id} was rejected by gus (a person): "Use Parquet."`);
-    expect(r.err).toMatch(/Commits already built on it: [0-9a-f]{10}/);
+    expect(r.err).toMatch(/Commits already built on it: [0-9a-f]{7}/);
   });
 
   it("lets commits through untouched where Baesian isn't set up", async () => {

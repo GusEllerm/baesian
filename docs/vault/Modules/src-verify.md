@@ -15,6 +15,8 @@ tags: [baesian, module]
 
 CI has no live layer, only what was committed. `RecordAt` reads `.baesian/` from any commit: it extracts it with `git archive` into a temporary directory and opens it with `Store.overRecord`, a read-only view.
 
+`describeVerify` prints the result for CI's log (B-eyrt5, [[src-cli#What it prints: src/style.ts (B-eyrt5)]]): a headline saying whether it passed and what failed (`baesian verify: failed: 1 of 2 commits since main, and the merge gate`); each commit as a row, `ok` or `FAIL`, its ID to seven characters and its subject; under a failing one, why, and the trailers that would cover it, each at the start of its line, with no advice on previewing or bypassing, which is for a commit not yet made; then the merge gate; and for a failing commit, `next: git rebase -i <base>`, which rewords it. The data `--json` gives, `VerifyResult`, is unchanged.
+
 ## Per-commit checks
 
 `checkCommit` runs once for every non-merge commit in `<base>..HEAD`, oldest first. Each run uses:

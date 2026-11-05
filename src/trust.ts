@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { z } from "zod";
+import { Told, cite } from "./cite.js";
 import { BadSignature, DRAW_NAMESPACE, NAMESPACE, parseSignature, publicKeyBlob, signatureMatches } from "./sshsig.js";
 import { type FileKindName, NewerFormat, PasskeyKey, PinnedProject, ServiceKey, ServiceKeyRevocation, describeError, newestFormat, upgradeFile } from "./schema.js";
 
@@ -23,7 +24,7 @@ export interface TrustRoot {
 }
 
 /** The pinned keys are unreadable: CI is misconfigured, and that must stop the check, never switch it off. */
-export class BadTrust extends Error {}
+export class BadTrust extends Told {}
 
 const KINDS: Record<string, { kind: FileKindName; schema: z.ZodType }> = {
   "service-key": { kind: "service-key", schema: ServiceKey },
@@ -59,7 +60,7 @@ export function projectLine(project: string): string {
 /** Set a pin's project from one of its lines: a pin names one project, however many of its lines name it. */
 function pinProject(root: TrustRoot, project: string, where: string): void {
   if (root.project !== undefined && root.project !== project) {
-    throw new BadTrust(`${where} names project ${project}, but the pin already names ${root.project}: a pin names one project, the repo's (B-mar8x)`);
+    throw new BadTrust(`${where} names project ${project}, but the pin already names ${root.project}: a pin names one project, the repo's${cite("B-mar8x")}`);
   }
   root.project = project;
 }
@@ -96,9 +97,9 @@ export function parseTrust(text: string, where: string): TrustRoot {
  * project, since a commit can name another in its config (B-mar8x).
  */
 export function pinComplete(root: TrustRoot, where: string): TrustRoot & { project: string } {
-  if (!root.service.length) throw new BadTrust(`${where} pins no service key: give at least the service's key (D142); ${RUN_CI}`);
+  if (!root.service.length) throw new BadTrust(`${where} pins no service key: give at least the service's key${cite("D142")}; ${RUN_CI}`);
   if (root.project === undefined) {
-    throw new BadTrust(`${where} pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another (B-mar8x); ${RUN_CI}`);
+    throw new BadTrust(`${where} pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another${cite("B-mar8x")}; ${RUN_CI}`);
   }
   return root as TrustRoot & { project: string };
 }
@@ -188,8 +189,8 @@ export function pinProblems(pinned: TrustRoot, record: { file: string; key: Serv
     .filter(({ key }) => !pins.has(canonical(key)))
     .map(({ file, key }) =>
       key.type === "service-key"
-        ? `${file} isn't pinned in CI, or differs from the pinned copy (D142). If the service rotated its key, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`
-        : `${file}, ${key.handle}'s passkey, isn't pinned in CI, or differs from the pinned copy (D159). If you enrolled it, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`,
+        ? `${file} isn't pinned in CI, or differs from the pinned copy${cite("D142")}. If the service rotated its key, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`
+        : `${file}, ${key.handle}'s passkey, isn't pinned in CI, or differs from the pinned copy${cite("D159")}. If you enrolled it, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`,
     );
 }
 

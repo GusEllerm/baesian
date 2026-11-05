@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { personalInstructions } from "../src/agents.js";
+import { unmark } from "../src/cite.js";
 import { main } from "../src/cli.js";
 import { hookBlock } from "../src/hooks.js";
 import { MCP_INSTRUCTIONS, MCP_PERSONAL, instructionsFor } from "../src/mcp.js";
@@ -107,8 +108,8 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     const dir = teamRepo();
     const r = await run(dir, "init", "--personal");
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toContain("personal mode (B-4rwyz)");
-    expect(r.out).toMatch(/run Baesian's gate, then the repo's own hooks from \.githooks\//);
+    expect(r.out).toContain("in personal mode: nothing of Baesian's is committed, so the repo's collaborators see no change");
+    expect(r.out).toMatch(/this clone's own hooks: Baesian's gate, then the repo's own hooks from \.githooks\//);
     expect(status(dir)).toBe("");
     for (const [name, text] of Object.entries(TEAM_HOOKS)) expect(readFileSync(join(dir, ".githooks", name), "utf8")).toBe(text);
     expect(existsSync(join(dir, ".baesian"))).toBe(false);
@@ -132,10 +133,10 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect(readFileSync(join(hooksDir(dir), "post-checkout"), "utf8")).not.toContain("baesian hook");
     // Running it again changes nothing, and says so; plain `init` keeps a personal clone personal. The include is there once.
     const before = readFileSync(cloneConfig(dir), "utf8");
-    expect((await run(dir, "init", "--personal")).out).toContain("personal mode, as before");
+    expect((await run(dir, "init", "--personal")).out).toContain("Baesian is set up in this clone already, in personal mode");
     expect(readFileSync(cloneConfig(dir), "utf8")).toBe(before);
     const plain = await run(dir, "init");
-    expect(plain.out).toContain("personal mode, as before");
+    expect(plain.out).toContain("Baesian is set up in this clone already, in personal mode");
     expect(existsSync(join(dir, ".baesian"))).toBe(false);
     expect(status(dir)).toBe("");
   });
@@ -167,7 +168,7 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     put(dir, "package.json", JSON.stringify({ name: "x", dependencies: { hono: "^4" } }, null, 2));
     const blocked = commit(dir, "Add hono\n");
     expect(blocked.code).toBe(1);
-    expect(blocked.err).toContain("baesian: commit blocked.");
+    expect(blocked.err).toContain("baesian: commit blocked: 1 decision in it isn't covered by a card or an ack");
     expect(blocked.err).toContain("dep:hono");
 
     // A linked worktree of the clone runs the same hooks: Baesian's setting is absolute, and the repo's own hooks are
@@ -191,7 +192,7 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     put(dir, "package.json", JSON.stringify({ name: "x", dependencies: { hono: "^4" } }, null, 2));
     const r = commit(dir, `Add hono\n\nThe router.\n\nBaesian-Card: ${id}\nCo-Authored-By: Someone <s@example.com>\n`);
     expect(r.code, r.err).toBe(0);
-    expect(r.err).toContain(`took the card it cites (${id}) out of the commit message (personal mode, B-4rwyz)`);
+    expect(r.err).toContain(`took the card it cites (${id}) out of the commit message (personal mode)`);
     expect(sh(dir, "log", "-1", "--format=%B")).toBe("Add hono\n\nThe router.\n\nCo-Authored-By: Someone <s@example.com>");
     const head = sh(dir, "rev-parse", "HEAD");
     expect(Store.open(dir).ledger(id).map((e) => e.meta.commit)).toEqual([head]);
@@ -333,12 +334,12 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect(listed.err).toContain("Run `baesian init --personal` again");
     // A harness's first look at a session hears it too, after the instructions.
     const hook = await run(dir, "inbox", "--quiet", "--session", "s-1");
-    expect(hook.out).toContain(personalInstructions());
+    expect(hook.out).toContain(unmark(personalInstructions()));
     expect(hook.out).toContain("Baesian: this clone's commit gate is off");
     expect((await run(dir, "inbox", "--quiet", "--session", "s-1")).out).toBe("");
 
     const again = await run(dir, "init", "--personal");
-    expect(again.out).toContain("git gate:    on again (it was off: the clone's .git/config no longer includes Baesian's setting");
+    expect(again.out).toMatch(/git gate: +\S+ +on again \(it was off: the clone's \.git\/config no longer includes Baesian's setting/);
     expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
     expect((await run(dir, "list")).err).toBe("");
 
@@ -346,7 +347,7 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     writeFileSync(join(commonDir(dir), "team.config"), "[core]\n\thooksPath = .githooks\n");
     writeFileSync(cloneConfig(dir), `${readFileSync(cloneConfig(dir), "utf8")}[include]\n\tpath = team.config\n`);
     expect((await run(dir, "list")).err).toContain("this clone's commit gate is off: core.hooksPath is `.githooks`, set in .git/team.config, which git reads after Baesian's setting");
-    expect((await run(dir, "init", "--personal")).out).toContain("git gate:    on again");
+    expect((await run(dir, "init", "--personal")).out).toMatch(/git gate: +\S+ +on again/);
     expect(readFileSync(cloneConfig(dir), "utf8")).toMatch(/\[include\]\n\tpath = team\.config\n\[include\]\n\tpath = baesian\/git\.config\n$/);
     expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
     expect((await run(dir, "list")).err).toBe("");
@@ -417,12 +418,12 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     await run(dir, "init", "--personal");
     expect(instructionsFor(dir)).toBe(`${MCP_INSTRUCTIONS}\n${MCP_PERSONAL}`);
     const first = await run(dir, "inbox", "--quiet", "--session", "s-1");
-    expect(first.out).toBe(personalInstructions());
+    expect(first.out).toBe(unmark(personalInstructions()));
     expect(first.out).toContain("## Decisions (Baesian)");
     expect(first.out).not.toContain("The decision record is committed with the code");
     expect((await run(dir, "inbox", "--quiet", "--session", "s-1")).out).toBe("");
     // Another session hears it at its own start; a shared repo's hooks never print it.
-    expect((await run(dir, "inbox", "--quiet", "--session", "s-2")).out).toBe(personalInstructions());
+    expect((await run(dir, "inbox", "--quiet", "--session", "s-2")).out).toBe(unmark(personalInstructions()));
     const shared = teamRepo();
     await run(shared, "init");
     expect((await run(shared, "inbox", "--quiet", "--session", "s-1")).out).toBe("");
@@ -434,7 +435,7 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     await run(dir, "init", "--personal");
     const r = await run(dir, "ci");
     expect(r.code).toBe(1);
-    expect(r.err).toContain("personal mode (B-4rwyz): nothing of Baesian's is committed, so CI has no record to verify");
+    expect(r.err).toContain("this clone uses Baesian in personal mode: nothing of Baesian's is committed, so CI has no record to verify");
     expect((await run(dir, "sync")).out).toContain("personal mode: nothing to bring into a record");
   });
 });
@@ -464,7 +465,7 @@ describe("a clone an older `baesian init --personal` set up, with core.hooksPath
     );
     const r = await run(dir, "init", "--personal");
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toContain("git gate:    moved out of the clone's core.hooksPath, which names the repo's own hooks again (.githooks), into .git/baesian/git.config");
+    expect(r.out).toMatch(/git gate: +\.git\/baesian\/hooks\/ +moved out of the clone's core\.hooksPath, which names the repo's own hooks again \(\.githooks\), into \.git\/baesian\/git\.config/);
     expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
     expect(config(dir, "baesian.repohooks")).toBe("");
     expect(readFileSync(cloneConfig(dir), "utf8")).toMatch(/\n\[include\]\n\tpath = baesian\/git\.config\n$/);
@@ -494,7 +495,7 @@ describe("a clone an older `baesian init --personal` set up, with core.hooksPath
     git(dir, "config", "core.hooksPath", ".githooks");
     expect((await run(dir, "list")).err).toContain("warning: this clone's commit gate is off: core.hooksPath is `.githooks`, not this clone's own hooks");
     const r = await run(dir, "init", "--personal");
-    expect(r.out).toContain("git gate:    on again (it was off: core.hooksPath is `.githooks`, not this clone's own hooks)");
+    expect(r.out).toMatch(/git gate: +\S+ +on again \(it was off: core\.hooksPath is `\.githooks`, not this clone's own hooks\)/);
     expect(fileConfig(cloneConfig(dir), "core.hooksPath")).toBe(".githooks");
     expect(config(dir, "baesian.repohooks")).toBe("");
     expect(config(dir, "core.hooksPath")).toBe(hooksDir(dir));
@@ -523,7 +524,7 @@ describe("switching a personal clone to shared mode: `baesian init --shared` (B-
 
     const r = await run(dir, "init", "--shared");
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toContain("shared mode (B-4rwyz)");
+    expect(r.out).toContain("switched this clone to shared mode: its Baesian goes into the repo, for you to commit");
     expect(r.out).toContain("note: 1 card filed on another branch (elsewhere) stays in the live layer: run `baesian init --shared` on that branch");
     // The record holds the card, its answer and its ledger entry; the config moved from the clone into it.
     const store = Store.open(dir);
@@ -550,7 +551,7 @@ describe("switching a personal clone to shared mode: `baesian init --shared` (B-
 
     // Nothing is committed: the command it prints commits it, and the gate lets it through (B-g6ywj).
     expect(sh(dir, "log", "-1", "--format=%s")).toBe("A feature");
-    const command = /^ {2}git add (.+) && git commit -m "([^"]+)"$/m.exec(r.out);
+    const command = /^next: git add (.+) && git commit -m "([^"]+)"$/m.exec(r.out);
     expect(command, r.out).not.toBeNull();
     sh(dir, "add", ...command![1]!.split(" "));
     const committed = commit(dir, `${command![2]}\n`);
@@ -575,8 +576,8 @@ describe("switching a personal clone to shared mode: `baesian init --shared` (B-
     const r = await run(dir, "init", "--shared");
     expect(r.code, r.err).toBe(0);
     expect(JSON.parse(readFileSync(join(dir, ".baesian", "config.json"), "utf8"))).toEqual(link);
-    expect(r.out).toContain("The commit gate asks an ack for the link, infra:.baesian/config.json (B-w4g6c)");
-    const command = /^ {2}git add (.+) && git commit -m "([^"]+)" -m "([^"]+)"$/m.exec(r.out);
+    expect(r.out).toContain("note: nothing is committed yet. The commit gate asks an ack for the link, infra:.baesian/config.json:");
+    const command = /^next: git add (.+) && git commit -m "([^"]+)" -m "([^"]+)"$/m.exec(r.out);
     expect(command, r.out).not.toBeNull();
     sh(dir, "add", ...command![1]!.split(" "));
     expect(commit(dir, `${command![2]}\n`).code).toBe(1);

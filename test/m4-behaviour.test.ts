@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WAITING_STALE_MS } from "../src/store.js";
-import { describeOutcome, waitForVerdict } from "../src/wait.js";
+import { describeOutcome as describeOutcomeLines, waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeOutcome = (...a: Parameters<typeof describeOutcomeLines>) => plain(describeOutcomeLines(...a));
 
 // M4 step 3: what a verdict does beyond its own card (D80, D81), and the waiting marker (D90).
 

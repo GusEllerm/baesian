@@ -55,6 +55,8 @@ The pre-commit hook (`runHook`, [[src-gate]]) and `baesian sync` ([[src-cli]]) c
 - **`insertLogQuery`** inserts `DECISION_LOG_SECTION`, the `base` code block from P17 §5, into the vault's `Decision Log.md` (`DECISION_LOG`), before its first second-level heading. It does it once: a log that already has the heading or a base over `Decisions` is left alone. With no log, `init` prints the section to paste.
 - **`vaultGuidance`** gives the `AGENTS.md` block its sentence (D173): the vault's routing notes that exist (`ROUTING_NOTES`, through `routingNotes`) and its `Rules/` folder. `agentsBlock` in `src/agents.ts` adds it.
 
+It returns what `init` prints of it (B-eyrt5): the `vault:` field, saying what it did, the notes for what it couldn't (no folder, no `.obsidian/`, no Decision Log, with the section to paste), and whether the config changed, so a second `init` says it was set up already.
+
 The gate never reads the vault: its rules come only from the store (`Store.rules`).
 
 ## Links from decks (P17 §8)

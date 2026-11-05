@@ -2,6 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileS
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { ApiContextNote } from "./api.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
+import { type Field, type Line, type Piece, blank, cmd, literal, note } from "./style.js";
 import { type RuleMeta, type RuleRetirement, type Verdict, newestFormat, upgradeFile } from "./schema.js";
 import { type Card, type Status, Store, normalise } from "./store.js";
 import { linkText, parseWikilink } from "./wikilinks.js";
@@ -798,25 +799,29 @@ export function vaultGuidance(store: Store): { rules: string; notes: string[] } 
  * `baesian init --vault` (P17 §5, §11): record the vault, in a config that may already exist; turn Bases on; and insert
  * the Decision Log's query, or say to paste it. Returns the lines to print. Writes no notes: the next commit does.
  */
-export function initVault(store: Store, vault: string): string[] {
-  const out: string[] = [];
+export function initVault(store: Store, vault: string): { field: Field; notes: Line[]; changed: boolean } {
   const changed = store.setVault(vault);
-  out.push(`vault:       ${vault}/  (${changed ? "recorded in" : "already in"} .baesian/config.json)`);
+  const recorded = `${changed ? "recorded in" : "already in"} .baesian/config.json`;
   const dir = resolve(store.repo.toplevel, vault);
   if (!existsSync(dir)) {
-    out.push(`note: there's no folder ${vault}/ yet. Create the vault there (\`livedocs new-vault ${vault}\`), then run this again.`);
-    return out;
+    return {
+      changed,
+      field: { label: "vault", value: `${vault}/`, why: recorded },
+      notes: [note(`there's no folder ${vault}/ yet. Create the vault there (`, cmd(`livedocs new-vault ${vault}`), "), then run this again.")],
+    };
   }
+  const done: Piece[] = [recorded];
+  const notes: Line[] = [];
   const bases = enableBases(dir);
   const where = `${vault}/.obsidian/core-plugins.json`;
-  if (bases === "enabled") out.push(`             Bases turned on in ${where}`);
-  else if (bases === "no-obsidian") out.push(`note: ${vault}/ has no .obsidian/, so Bases isn't turned on; open it in Obsidian, then run this again, or turn Bases on in Obsidian's settings.`);
-  else if (bases === "no-core-plugins" || bases === "unreadable") out.push(`note: couldn't ${bases === "unreadable" ? "read" : "find"} ${where}; turn Bases on in Obsidian's settings (Core plugins).`);
+  if (bases === "enabled") done.push(`; Bases turned on in ${where}`);
+  else if (bases === "no-obsidian") notes.push(note(`${vault}/ has no .obsidian/, so Bases isn't turned on; open it in Obsidian, then run this again, or turn Bases on in Obsidian's settings.`));
+  else if (bases === "no-core-plugins" || bases === "unreadable") notes.push(note(`couldn't ${bases === "unreadable" ? "read" : "find"} ${where}; turn Bases on in Obsidian's settings (Core plugins).`));
   const log = insertLogQuery(dir);
-  if (log === "inserted") out.push(`             the decision query added to ${vault}/${DECISION_LOG}`);
-  else if (log === "no-log") out.push(`note: ${vault}/ has no ${DECISION_LOG}. To list the decisions in a note, paste this section into it:`, "", DECISION_LOG_SECTION);
-  out.push("             notes for the decisions already made are written by the next commit, or now by `baesian sync`");
-  return out;
+  if (log === "inserted") done.push(`; the decision query added to ${vault}/${DECISION_LOG}`);
+  else if (log === "no-log") notes.push(note(`${vault}/ has no ${DECISION_LOG}. To list the decisions in a note, paste this section into it:`), blank, ...DECISION_LOG_SECTION.trimEnd().split("\n").map(literal));
+  done.push("; notes for the decisions already made are written by the next commit, or now by ", cmd("baesian sync"));
+  return { changed, field: { label: "vault", value: `${vault}/`, why: done }, notes };
 }
 
 // ---------------------------------------------------------------- links from decks (P17 §8)

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { cite } from "./cite.js";
 
 // Tier 1 (D27): plain instructions any harness can read. `baesian init` keeps this block in AGENTS.md.
 
@@ -147,7 +148,7 @@ export function personalInstructions(): string {
   const body = AGENTS_BLOCK.slice(BEGIN.length, -END.length).trim();
   if (!body.includes(RECORD_SENTENCE)) throw new Error("AGENTS_BLOCK no longer says the record is committed in the words personal mode replaces");
   return [
-    "Baesian, in personal mode (B-4rwyz): this clone uses Baesian for the person you're working with, and the repo's",
+    `Baesian, in personal mode${cite("B-4rwyz")}: this clone uses Baesian for the person you're working with, and the repo's`,
     "collaborators don't, so AGENTS.md doesn't mention it and nothing of Baesian's is committed. Its instructions still apply",
     "to you, as below. The commit gate checks your commits as usual, and takes `Baesian-Card` and `Baesian-Ack` trailers out",
     "of the message once it has, into this clone's ledger. Keep card IDs and Baesian itself out of anything others see: code,",

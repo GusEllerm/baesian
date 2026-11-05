@@ -118,26 +118,27 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(c.project).toMatch(/^p-[0-9a-z]{20}$/);
       expect(c.first_commit).toBe(sh(dir, "rev-list", "--max-parents=0", "HEAD"));
       expect(r.out).toContain(`Baesian-Ack: infra:.baesian/config.json linked this repo to ${relay.url} as project ${c.project}`);
-      expect(r.out).toContain(`signed in: laptop can now file cards and hear answers in project ${c.project}`);
+      expect(r.out).toContain("signed in: laptop can file cards and hear answers in this project, never answer them");
+      expect(r.out).toMatch(new RegExp(`project: +${c.project} +linked in \\.baesian/config\\.json`));
       const grant = readGrant(c.project!)!;
       expect(grant).toMatchObject({ type: "grant", format: 1, service: relay.url, project: c.project, machine: "laptop" });
       expect(statSync(grantPath(c.project!)).mode & 0o777).toBe(0o600);
       // No token is ever printed.
       for (const t of [grant.access_token, grant.refresh_token]) expect(`${r.out}\n${r.err}`).not.toContain(t);
       // An empty project's relay has nothing yet: its first write puts the service's key in its log.
-      expect(r.out).toContain("relay: received 0 files, sent 0");
-      expect(r.out).not.toContain("relay: sending");
+      expect(r.out).toContain("relay:    sent 0 files, received 0");
+      expect(r.out).not.toContain("sending");
       // The command it prints commits the link with its ack, which the commit gate takes as covering it (B-w4g6c).
-      const command = /^ {2}git add (\S+) && git commit -m "([^"]+)" -m "([^"]+)"$/m.exec(r.out);
+      const command = /^next: git add (\S+) && git commit -m "([^"]+)" -m "([^"]+)"  # /m.exec(r.out);
       expect(command, r.out).not.toBeNull();
       sh(dir, "add", command![1]!);
       writeFileSync(join(dir, "message.txt"), `${command![2]}\n\n${command![3]}\n`);
       const check = await run(dir, ["check", "--message", "message.txt"]);
       expect(check.code, check.out).toBe(0);
-      expect(check.out).toContain("decisions covered: infra:.baesian/config.json (ack)");
+      expect(check.out).toContain("this commit would pass: its decision is covered\n  infra:.baesian/config.json  ack");
       // Signing in again needs a sign-out first.
       const again = await run(dir, ["login"]);
-      expect(again.out).toContain("already signed in");
+      expect(again.out).toContain("signed in already");
     });
 
     it("writes nothing when the person refuses the machine", async () => {
@@ -289,7 +290,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const r = await run(dir, ["login"]);
       expect(r.code, r.err).toBe(0);
       // It says how many before it starts: a repo with a history of cards sends hundreds.
-      expect(r.out).toContain(`relay: sending ${before.length} files to ${relay.url}…`);
+      expect(r.out).toContain(`sending ${before.length} files to ${relay.url}…`);
       expect(r.out).toContain(`sent ${before.length}`);
       expect(await relayPaths("proj-4")).toEqual(expect.arrayContaining(before));
       // Decks went first, then the revisions, then the rest.
@@ -427,7 +428,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const { dir } = await signedIn("proj-7");
       const filed = await run(dir, ["file", "-"], { stdin: draftFile({ title: "Filed offline" }), fetch: offline });
       expect(filed.code).toBe(0);
-      expect(filed.out).toMatch(/^filed B-[0-9a-z]{5} \(provisional, deck branch-main\)/);
+      expect(filed.out).toMatch(/^filed B-[0-9a-z]{5} "Filed offline"\n  level:  provisional/);
       expect(filed.err).toContain("relay: couldn't reach");
       expect(filed.err).toContain("what's new goes up at the next command that reaches the relay");
       const id = /^filed (B-[0-9a-z]{5})/.exec(filed.out)![1]!;
@@ -517,7 +518,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const r = await waiting;
       expect(r.code, r.err).toBe(0);
       expect(Date.now() - answered).toBeLessThan(5000);
-      expect(r.out.split("\n")[0]).toBe(`Every card you waited on has an answer: ${a} and ${b}.`);
+      expect(r.out.split("\n")[0]).toBe(`every card you waited on has an answer: ${a} and ${b}`);
       expect(r.out).toContain(`${a} resolved by gus (a person)`);
       expect(r.out).toContain(`${b} resolved by gus (a person)`);
       expect(await waitingOnRelay("proj-14", [a, b])).toEqual({ [a]: false, [b]: false });
@@ -687,7 +688,8 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
         const store = Store.open(dir);
         const c = store.config();
         expect(c).toMatchObject({ service: relay.url, project: expect.stringMatching(/^p-/), first_commit: sh(dir, "rev-list", "--max-parents=0", "HEAD") });
-        expect(login.out).toContain(`linked this clone to ${relay.url} as project ${c.project}, in its own config, .git/baesian/config.json: personal mode commits nothing`);
+        expect(login.out).toContain(`linking this clone to ${relay.url}`);
+        expect(login.out).toMatch(new RegExp(`project: +${c.project} +linked in its own config, \\.git/baesian/config\\.json: personal mode commits nothing`));
         expect(login.out).not.toContain("git add");
         expect(JSON.parse(readFileSync(join(store.live, "config.json"), "utf8"))).toMatchObject({ project: c.project });
         expect(existsSync(join(dir, ".baesian"))).toBe(false);
@@ -705,7 +707,8 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
         // CI can't check a clone that commits nothing.
         const ci = await run(dir, ["ci"]);
         expect(ci.code).toBe(1);
-        expect(ci.err).toContain("personal mode (B-4rwyz)");
+        expect(ci.err).toContain("this clone uses Baesian in personal mode: nothing of Baesian's is committed");
+        expect(ci.err).toContain("next: baesian init --shared  # switch to shared mode");
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -759,11 +762,11 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
         },
       });
       expect(r.code, r.err).toBe(0);
-      expect(r.out).toContain(`keys read from ${relay.url}, the service .baesian/config.json names, for project proj-ci: if that isn't the service you meant, stop here`);
+      expect(r.out).toContain(`CI's pin for project proj-ci, read from ${relay.url}\n  warning: that's the service .baesian/config.json names. If it isn't the one you meant, stop here`);
       const keyName = readdirSync(join(store.live, "trust")).find((f) => /^service-.+\.json$/.test(f) && !f.endsWith("-revoked.json"))!;
       const lines = [projectLine("proj-ci"), JSON.stringify(JSON.parse(readFileSync(join(store.live, "trust", keyName), "utf8"))), JSON.stringify(passkey.keyFile(enrolled))];
       expect(r.out.split("\n").filter((l) => l.startsWith("{"))).toEqual(lines);
-      expect(r.out).toContain("Check each passkey is yours (gus's, added 2026-11-04): compare its line with the one the website showed when you added it, and with the passkeys on your account page, https://baesian.test/account.");
+      expect(r.out).toContain("Check the passkey is yours (gus's, added 2026-11-04): compare its line with the one the website showed when you added it, and with your account page, https://baesian.test/account.");
       expect(r.out).toContain("fetch-depth: 0");
       expect(r.err).toContain("left out trust/passkey-bbbbbbbbbbbb.json: it's signed by a key that isn't trusted");
       // gh gets the lines on its input, in the repo, after they're shown.
@@ -786,7 +789,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       writeFileSync(config, JSON.stringify({ ...JSON.parse(readFileSync(config, "utf8")), service: "https://elsewhere.example" }));
       const elsewhere = await run(dir, ["ci"]);
       expect(elsewhere.code).toBe(1);
-      expect(elsewhere.err).toContain("this machine isn't signed in to project proj-ci on https://elsewhere.example: run `baesian login` first");
+      expect(elsewhere.err).toContain("this machine isn't signed in to project proj-ci on https://elsewhere.example\nnext: baesian login  # first, then baesian ci");
     });
   });
 });

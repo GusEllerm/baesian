@@ -9,9 +9,13 @@ import { openRepo } from "../src/git.js";
 import { DEFAULT_SERVICE } from "../src/login.js";
 import { Config } from "../src/schema.js";
 import { SHALLOW_HISTORY, Store, recordAtLinking } from "../src/store.js";
-import { describeVerify, verify } from "../src/verify.js";
-import { REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
+import { describeVerify as describeVerifyLines, verify } from "../src/verify.js";
+import { REVIEWER, cited, cleanup, draft, repo, sh } from "./helpers.js";
 import { ORIGIN, TestService } from "./service.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeVerify = (...a: Parameters<typeof describeVerifyLines>) => plain(describeVerifyLines(...a));
 
 // M9d: what linking a repo changes on the repo's side. Changing the config's service, project or first commit is a gate
 // fact (B-w4g6c), and answers already in the record when the repo was linked count as they are (B-45xz8).
@@ -110,7 +114,7 @@ describe("answers already in the record when the repo was linked count as they a
     after.addVerdict({ card: later, revision: 1, response: "accept", ...REVIEWER });
     const again = Store.open(dir);
     expect(again.status(later)).toBe("open");
-    expect(again.uncounted().map((u) => u.why)).toEqual(["it has no signature, so the service didn't write it (D138)"]);
+    expect(cited(again.uncounted()).map((u) => u.why)).toEqual(["it has no signature, so the service didn't write it (D138)"]);
     // A file edited since it was committed isn't the one that was trusted.
     const rel = again.uncounted()[0]!.file;
     expect(rel).toMatch(/^verdicts\//);
@@ -135,7 +139,7 @@ describe("answers already in the record when the repo was linked count as they a
       const r = verify(openRepo(shallow), "HEAD", { merge: false, pinned: service.pinned() });
       expect(r.ok).toBe(false);
       expect(r.hosted?.skipped.map((s) => s.why)).toContain(SHALLOW_HISTORY);
-      expect(describeVerify(r).join("\n")).toContain("can't be checked in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)");
+      expect(describeVerify(r).join("\n")).toContain("can't be checked in a shallow clone: fetch the full history (in CI, fetch-depth: 0)");
     } finally {
       rmSync(shallow, { recursive: true, force: true });
     }
@@ -173,7 +177,7 @@ describe("`baesian login` links a repo to https://baesian.dev when no service is
     };
     const plain = await login([]);
     expect(DEFAULT_SERVICE).toBe("https://baesian.dev");
-    expect(plain.out).toContain("linking this repo to https://baesian.dev, the hosted service: to use another, run `baesian login --service <url>` instead");
+    expect(plain.out).toContain("linking this repo to https://baesian.dev, the hosted service\n  to use another, run `baesian login --service <url>` instead");
     expect(plain.asked[0]).toMatch(/^https:\/\/baesian\.dev\//);
     expect(plain.code).toBe(1);
     expect(store.config().project).toBeUndefined();
@@ -236,7 +240,7 @@ describe("CI pins the project beside the keys, and finds the linking commit once
       const r = verify(openRepo(dir), linked, { merge, pinned: service.pinned() });
       expect(r.ok).toBe(false);
       expect(r.commits.map((c) => c.ok)).toEqual([false, false]);
-      expect(r.commits[0]?.trust).toEqual([expect.stringContaining(".baesian/config.json names project p-0000000000000000000a, but CI pins project proj-test (B-mar8x)")]);
+      expect(cited(r.commits[0]?.trust)).toEqual([expect.stringContaining(".baesian/config.json names project p-0000000000000000000a, but CI pins project proj-test (B-mar8x)")]);
       expect(r.commits[1]?.report.problems.map((p) => p.problem)).toContain("hard-unresolved");
       expect(r.hosted).toMatchObject({ project: "proj-test", linked });
       if (merge) expect(r.merge?.problems[0]).toMatchObject({ card: forged, problem: "unanswered" });
@@ -276,14 +280,14 @@ describe("CI pins the project beside the keys, and finds the linking commit once
     // On its own, the branch's history holds no link: nothing unsigned counts, and verify says why.
     const alone = verify(openRepo(dir), before, { merge: false, pinned: service.pinned() });
     expect(alone.ok).toBe(false);
-    expect(alone.warnings).toContain("no commit in HEAD's history links the repo to project proj-test, so no unsigned answer counts as one from before linking (B-45xz8, B-mar8x)");
+    expect(cited(alone.warnings)).toContain("no commit in HEAD's history links the repo to project proj-test, so no unsigned answer counts as one from before linking (B-45xz8, B-mar8x)");
     // The pull request's merge, as CI checks it out: the link is in its history, and the commit from before it passes.
     sh(dir, "merge", "-q", "--no-ff", "-m", "Merge main", "main");
     const r = verify(openRepo(dir), linked, { merge: true, pinned: service.pinned() });
     expect(r.ok, describeVerify(r).join("\n")).toBe(true);
     expect(r.commits.map((c) => [c.sha, c.ok])).toEqual([[inFlight, true]]);
     expect(r.hosted).toMatchObject({ keys: "pinned", project: "proj-test", linked, skipped: [] });
-    expect(describeVerify(r).join("\n")).toContain(`checked with the keys CI pins; project proj-test, linked at ${linked.slice(0, 10)}`);
+    expect(describeVerify(r).join("\n")).toContain(`checked with the keys CI pins; project proj-test, linked at ${linked.slice(0, 7)}`);
   });
 
   it("takes the linking commit by ancestry, not date: a later commit naming the project again isn't it", () => {

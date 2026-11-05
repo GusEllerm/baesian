@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { cite } from "../src/cite.js";
 import { main } from "../src/cli.js";
 import { CONFIG_PATH, type Snapshot, detectFacts } from "../src/facts.js";
 import { DEFAULT_IGNORE, DEFAULT_INFRA, DEFAULT_SCHEMA, pathSetting, pathsLoosening } from "../src/gate-paths.js";
@@ -10,9 +11,13 @@ import { globToRegExp, uncovered } from "../src/globs.js";
 import { TODAY, loosening } from "../src/routing.js";
 import { Preferences } from "../src/schema.js";
 import { Store, ValidationError, proofPath } from "../src/store.js";
-import { describeVerify, verify } from "../src/verify.js";
+import { describeVerify as describeVerifyLines, verify } from "../src/verify.js";
 import { cleanup, repo, sh } from "./helpers.js";
 import { ORIGIN, TestPasskey, TestService } from "./service.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeVerify = (...a: Parameters<typeof describeVerifyLines>) => plain(describeVerifyLines(...a));
 
 // B-qkek1: who may change what the commit gate looks for. The gate's settings (gate_schema, gate_infra, gate_api,
 // gate_ignore) moved from the committed config, which agents edit, into the preference files, which only the client
@@ -162,7 +167,7 @@ describe("the gate reads what it looks at from the preferences in force (B-qkek1
     const check = await cli(dir, ["check"]);
     expect(check.code).toBe(1);
     expect(check.out).toContain("dep:left-pad");
-    expect(check.out).toContain(`baesian: warning: ${CONFIG_PATH} still has gate_schema and gate_ignore, which the gate no longer reads (B-qkek1)`);
+    expect(check.out).toContain(`warning: ${CONFIG_PATH} still has gate_schema and gate_ignore, which the gate no longer reads:`);
     expect(check.out).toContain('in the client (Your preferences, then "What the gate looks for")');
     // The config's own change is no fact any more: the keys do nothing.
     expect(check.out).not.toContain(`infra:${CONFIG_PATH}`);
@@ -229,7 +234,7 @@ describe("in a hosted repo, only a signed preference file sets what the gate loo
     const unsigned = ci();
     expect(unsigned.ok).toBe(false);
     expect(unsigned.commits.at(-1)?.report.uncovered.map((f) => f.id)).toEqual(["dep:left-pad"]);
-    expect(unsigned.hosted?.skipped).toContainEqual({ file: expect.stringMatching(/^preferences\//), why: "it has no signature, so the service didn't write it (D138)" });
+    expect(unsigned.hosted?.skipped).toContainEqual({ file: expect.stringMatching(/^preferences\//), why: `it has no signature, so the service didn't write it${cite("D138")}` });
 
     // Signed by the service, but without the passkey: it lets more past you, so it doesn't count either.
     reset();
@@ -238,7 +243,7 @@ describe("in a hosted repo, only a signed preference file sets what the gate loo
     commit("Ignore everything, signed, with no passkey");
     const unproved = ci();
     expect(unproved.ok).toBe(false);
-    expect(unproved.hosted?.skipped.map((s) => s.why)).toContainEqual('it lets more cards past you (it widens gate_ignore to "**"), so it takes your passkey (D163), and has no passkey proof');
+    expect(unproved.hosted?.skipped.map((s) => s.why)).toContainEqual(`it lets more cards past you (it widens gate_ignore to "**"), so it takes your passkey${cite("D163")}, and has no passkey proof`);
 
     // With the reviewer's passkey it's theirs, and the gate looks where they said.
     reset();
@@ -267,7 +272,7 @@ describe("in a hosted repo, only a signed preference file sets what the gate loo
     // And narrowing it again, signed but without the passkey, doesn't count.
     const narrower = service.preferences(store, { gate_schema: [...DEFAULT_SCHEMA] });
     expect(Store.open(dir).inForce().name).toBe(wider.name);
-    expect(Store.open(dir).uncounted()).toContainEqual({ file: narrower.rel, why: 'it lets more cards past you (it narrows gate_schema, which no longer covers "formats/**"), so it takes your passkey (D163), and has no passkey proof' });
+    expect(Store.open(dir).uncounted()).toContainEqual({ file: narrower.rel, why: `it lets more cards past you (it narrows gate_schema, which no longer covers "formats/**"), so it takes your passkey${cite("D163")}, and has no passkey proof` });
   });
 });
 

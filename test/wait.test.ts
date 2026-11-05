@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { waitAllOp } from "../src/ops.js";
 import type { Store } from "../src/store.js";
 import { PRESENCE_STALE_MS, WAIT_EXIT, WaitCancelled, describeAll, describeOutcome, exitCodeFor, exitCodeForAll, waitForAll, waitForVerdict } from "../src/wait.js";
+import { plain } from "../src/style.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo } from "./helpers.js";
 
 afterEach(cleanup);
+
+/** What the agent reads, in plain text. */
+const outcome = (o: Parameters<typeof describeOutcome>[0]) => plain(describeOutcome(o));
+const all = (o: Parameters<typeof describeAll>[0]) => plain(describeAll(o));
 
 const AGENT = { agent: "claude-code" };
 const MIN = 60_000;
@@ -51,7 +56,7 @@ describe("wait", () => {
     expect(o.kind).toBe("resolved");
     expect(exitCodeFor(o)).toBe(WAIT_EXIT.resolved);
     expect(clock.elapsed()).toBeLessThan(10_000);
-    expect(describeOutcome(o)[0]).toBe(`${id} resolved by gus (a person): "SQLite (WAL mode)"`);
+    expect(outcome(o)[0]).toBe(`${id} resolved by gus (a person): "SQLite (WAL mode)"`);
   });
 
   it("reports a returned card with the reviewer's comment", async () => {
@@ -60,7 +65,7 @@ describe("wait", () => {
     const o = await waitForVerdict(store, id, { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ kind: "answered", status: "returned" });
     expect(exitCodeFor(o)).toBe(WAIT_EXIT.answered);
-    expect(describeOutcome(o).join("\n")).toMatch(/DuckDB[\s\S]*baesian revise/);
+    expect(outcome(o).join("\n")).toMatch(/DuckDB[\s\S]*baesian revise/);
   });
 
   it("keeps waiting while a card is rerouted to another reviewer", async () => {
@@ -88,7 +93,7 @@ describe("wait", () => {
     const o = await waitForVerdict(store, id, { ...AGENT, ...fakeClock(), timeoutMs: MIN });
     expect(o).toMatchObject({ kind: "no-verdict", proceed: false, recorded: false });
     expect(exitCodeFor(o)).toBe(WAIT_EXIT.park);
-    expect(describeOutcome(o).join("\n")).toMatch(/do not proceed/);
+    expect(outcome(o).join("\n")).toMatch(/do not proceed/);
     expect(store.fallbacks(id)).toEqual([]);
   });
 
@@ -128,7 +133,7 @@ describe("wait", () => {
     const first = await waitForVerdict(store, id, { ...AGENT, ...clock });
     expect(first).toMatchObject({ kind: "again", waitedMs: 100_000 });
     expect(exitCodeFor(first)).toBe(WAIT_EXIT.again);
-    expect(describeOutcome(first).join("\n")).toMatch(/Run `baesian wait .*` again/);
+    expect(outcome(first).join("\n")).toMatch(/next: baesian wait \S+  # again/);
     // The marker stays, fresh, for the next run to pick up.
     expect(store.waitingOn(id, clock.now())).toEqual([expect.objectContaining({ stale: false })]);
     clock.at(150_000, () => store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER }));
@@ -171,7 +176,7 @@ describe("wait", () => {
     hard.store.addVerdict({ card: hard.id, revision: 1, response: "defer", comment: "After the audit.", ...REVIEWER });
     const o = await waitForVerdict(hard.store, hard.id, { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ kind: "answered", status: "deferred", level: "hard" });
-    expect(describeOutcome(o).join("\n")).toMatch(/don't proceed/);
+    expect(outcome(o).join("\n")).toMatch(/don't proceed/);
   });
 
   it("tells the agent when a card no longer applies", async () => {
@@ -179,7 +184,7 @@ describe("wait", () => {
     store.withdraw(id, "Not needed.", "claude-code");
     const o = await waitForVerdict(store, id, { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ kind: "answered", status: "withdrawn" });
-    expect(describeOutcome(o)[0]).toMatch(/no longer applies/);
+    expect(outcome(o)[0]).toMatch(/no longer applies/);
   });
 
   it("syncs fallbacks into the record", async () => {
@@ -219,8 +224,8 @@ describe("waiting on several cards (B-xnae9)", () => {
     expect(markers).toEqual([0, 1, 1]);
     expect(clock.elapsed()).toBe(30_000);
     for (const id of [a, b, c]) expect(store.waitingOn(id)).toEqual([]);
-    const lines = describeAll(o);
-    expect(lines[0]).toBe(`Every card you waited on has an answer: ${a}, ${b} and ${c}.`);
+    const lines = all(o);
+    expect(lines[0]).toBe(`every card you waited on has an answer: ${a}, ${b} and ${c}`);
     expect(lines).toContain(`${b} resolved by gus (a person): "Postgres"`);
   });
 
@@ -240,10 +245,10 @@ describe("waiting on several cards (B-xnae9)", () => {
     expect(exitCodeForAll(o)).toBe(WAIT_EXIT.answered);
     expect(clock.elapsed()).toBe(10_000);
     for (const id of [a, b, c]) expect(store.waitingOn(id)).toEqual([]);
-    const lines = describeAll(o);
-    expect(lines.slice(0, 3)).toEqual([`${b} came back to you, so the wait ended before every card was answered.`, `${b} returned (question by gus (a person)).`, '  Comment by gus (a person): "Have you considered DuckDB?"']);
+    const lines = all(o);
+    expect(lines.slice(0, 3)).toEqual([`${b} came back to you, so the wait ended before every card was answered`, `${b} returned, with a question by gus (a person)`, '  Comment by gus (a person): "Have you considered DuckDB?"']);
     expect(lines).toContain(`${a} resolved by gus (a person): "SQLite (WAL mode)"`);
-    expect(lines.at(-1)).toBe(`Still with the reviewer: ${c}. To wait on it again once you've acted on ${b}: \`baesian wait ${c} --until-answered\`, with any card you revise added.`);
+    expect(lines.slice(-2)).toEqual([`Still with the reviewer: ${c}. To wait on it again once you've acted on ${b}, with any card you revise added:`, `next: baesian wait ${c} --until-answered`]);
   });
 
   it("returns at once when a card is held back, writing no marker (8)", async () => {
@@ -259,7 +264,7 @@ describe("waiting on several cards (B-xnae9)", () => {
     expect(exitCodeForAll(o)).toBe(WAIT_EXIT.held);
     expect(clock.elapsed()).toBe(0);
     expect(told).toEqual([]);
-    expect(describeAll(o)[0]).toBe(`${held} is held back, so the wait ended before every card was answered.`);
+    expect(all(o)[0]).toBe(`${held} is held back, so the wait ended before every card was answered`);
   });
 
   it("ends a run after its slice with no answers yet, keeping the open cards' markers; the next run gives them all (7, then 0)", async () => {
@@ -271,9 +276,9 @@ describe("waiting on several cards (B-xnae9)", () => {
     clock.at(50_000, () => store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER }));
     const first = await waitAllOp(store, [a, b], { ...AGENT, ...clock });
     expect(first.data).toMatchObject({ ended: "again", next: "again", exit: WAIT_EXIT.again });
-    expect(first.lines).toEqual([
-      `No verdict yet on ${b}, and the reviewer is still there (1 of 2 answered so far; every answer comes when the wait ends).`,
-      `Run \`baesian wait ${a} ${b}\` again: the wait goes on for about 7 more minutes.`,
+    expect(plain(first.lines)).toEqual([
+      `no verdict yet on ${b}, and the reviewer is still there (1 of 2 answered so far; every answer comes when the wait ends)`,
+      `next: baesian wait ${a} ${b}  # again: the wait goes on for about 7 more minutes`,
     ]);
     expect([live(store, a, clock.now()), live(store, b, clock.now())]).toEqual([0, 1]);
     // Nothing delivered yet: the inbox still has the answer.
@@ -281,7 +286,7 @@ describe("waiting on several cards (B-xnae9)", () => {
     clock.at(150_000, () => store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER }));
     const second = await waitAllOp(store, [a, b], { ...AGENT, ...clock });
     expect(second.data).toMatchObject({ ended: "answered", next: "use", exit: WAIT_EXIT.resolved });
-    expect(second.lines.filter((l) => l.includes("resolved by gus"))).toHaveLength(2);
+    expect(plain(second.lines).filter((l) => l.includes("resolved by gus"))).toHaveLength(2);
     expect(store.waitingOn(b)).toEqual([]);
     expect(store.inbox({ advance: false })).toEqual([]);
   });
@@ -294,7 +299,7 @@ describe("waiting on several cards (B-xnae9)", () => {
     expect(exitCodeForAll(parked)).toBe(WAIT_EXIT.park);
     expect(one.store.fallbacks(blocking)).toHaveLength(1);
     expect(one.store.fallbacks(hard)).toEqual([]);
-    expect(describeAll(parked)[0]).toBe(`The wait is over with no verdict yet on ${hard} and ${blocking}.`);
+    expect(all(parked)[0]).toBe(`the wait is over with no verdict yet on ${hard} and ${blocking}`);
     const two = repo();
     const [p, b] = several(two.store, ["provisional", "blocking"]) as [string, string];
     const clock = fakeClock();
@@ -312,7 +317,7 @@ describe("waiting on several cards (B-xnae9)", () => {
     const o = await waitForAll(store, [a, b], { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ ended: "answered", waitedMs: 0 });
     expect(exitCodeForAll(o)).toBe(WAIT_EXIT.answered);
-    expect(describeAll(o)).toContain(`${b} deferred by gus (a person).`);
+    expect(all(o)).toContain(`${b} deferred by gus (a person)`);
   });
 
   it("writes no marker for a card answered before it starts, and takes away one an earlier run left", async () => {

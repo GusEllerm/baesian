@@ -116,9 +116,9 @@ describe("cli: M2 commands", () => {
   it("init writes the instructions, and --no-agents doesn't", async () => {
     const a = repo();
     const r = await run(a.dir, ["init"]);
-    expect(r.out).toMatch(/AGENTS.md: +instructions created/);
+    expect(r.out).toMatch(/agents: +AGENTS.md +instructions added/);
     // With no preferences yet, it points to the setup survey in the client (B-5na1k).
-    expect(r.out).toMatch(/preferences: none yet\. Run `baesian serve`: the client asks about a few example decisions/);
+    expect(r.out).toMatch(/preferences: +none yet +the client suggests them, from a few example decisions\nnext: baesian serve  # open the client/);
     const b = repo();
     await run(b.dir, ["init", "--no-agents"]);
     expect(existsSync(join(b.dir, "AGENTS.md"))).toBe(false);
@@ -137,7 +137,7 @@ describe("cli: M2 commands", () => {
     const { dir } = repo();
     const r = await run(dir, ["file"], draftFile({ level: "blocking" }));
     expect(r.notified).toHaveLength(1);
-    expect(r.out).toMatch(/run `baesian wait B-\w{5}` before building on it/);
+    expect(r.out).toMatch(/next: baesian wait B-\w{5}  # before building on it/);
     const p = await run(dir, ["file"], draftFile({ title: "Test runner?", topic: "tests/runner" }));
     expect(p.notified).toHaveLength(1); // the io stub sees every filing; notifyFiled filters by level
   });
@@ -145,7 +145,7 @@ describe("cli: M2 commands", () => {
   it("lists topics", async () => {
     const { dir } = repo();
     await run(dir, ["file"], draftFile());
-    expect((await run(dir, ["topics"])).out).toBe("storage/run-metadata");
+    expect((await run(dir, ["topics"])).out).toBe("1 topic in use: reuse one only for the same question\n  storage/run-metadata");
   });
 
   it("wait exits with the outcome's code", async () => {
@@ -190,7 +190,7 @@ describe("cli: wait on several cards, or a deck's (B-xnae9)", () => {
     store.addVerdict({ card: a, revision: 1, response: "reject", comment: "No.", ...REVIEWER });
     const again = await run(dir, ["wait", a, b], "", { waitClock: fakeClock() });
     expect(again.code).toBe(4);
-    expect(again.out.split("\n")[0]).toBe(`${a} came back to you, so the wait ended before every card was answered.`);
+    expect(again.out.split("\n")[0]).toBe(`${a} came back to you, so the wait ended before every card was answered`);
   });
 
   it("--deck waits on this agent's cards still with the reviewer in the deck, on this branch, until each is answered", async () => {
@@ -207,7 +207,7 @@ describe("cli: wait on several cards, or a deck's (B-xnae9)", () => {
     clock.at(2 * 60 * 60_000, () => store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER }));
     const r = await run(dir, ["--agent", "claude-code", "wait", "--deck", "plan-runs", "--until-answered", "--no-presence"], "", { waitClock: { ...clock, pollMs: 60_000 } });
     expect(r.code, r.err).toBe(0);
-    expect(r.out.split("\n")[0]).toBe(`Every card you waited on has an answer: ${a} and ${b}.`);
+    expect(r.out.split("\n")[0]).toBe(`every card you waited on has an answer: ${a} and ${b}`);
     expect(r.out).not.toContain(others);
     expect(r.out).not.toContain(elsewhere);
     expect(clock.elapsed()).toBe(2 * 60 * 60_000);
@@ -217,7 +217,7 @@ describe("cli: wait on several cards, or a deck's (B-xnae9)", () => {
 
   it("says what's wrong with no card, an unknown deck, or a deck with none of yours open", async () => {
     const { dir, store } = repo();
-    expect(await run(dir, ["wait"])).toMatchObject({ code: 1, err: "name a card to wait on, or several, or a deck with --deck" });
+    expect(await run(dir, ["wait"])).toMatchObject({ code: 1, err: "name a card to wait on, or several, or a deck with --deck\nnext: baesian list  # the cards still with the reviewer" });
     expect(await run(dir, ["wait", "--deck", "nope"])).toMatchObject({ code: 1, err: 'no deck "nope"' });
     store.createDeck({ id: "plan-runs", title: "Runs" }, "");
     await file(dir, { title: "What the API is called", topic: "area/api", deck: "plan-runs" }, "codex");

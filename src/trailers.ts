@@ -47,7 +47,7 @@ export function parseTrailers(message: string, cwd: string): Trailers {
     if (key === CARD_TRAILER.toLowerCase()) {
       for (const id of value.split(/[\s,]+/).filter(Boolean)) {
         if (CARD_ID.test(id)) result.cards.push(id);
-        else result.malformed.push(`${CARD_TRAILER}: ${value} — "${id}" isn't a card ID (B-7f3kq)`);
+        else result.malformed.push(`${CARD_TRAILER}: ${value} — "${id}" isn't a card ID, which looks like B-7f3kq`);
       }
     } else if (key === ACK_TRAILER.toLowerCase()) {
       const a = /^(\S+)\s+(.+)$/.exec(value);

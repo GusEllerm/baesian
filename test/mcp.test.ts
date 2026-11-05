@@ -242,17 +242,17 @@ describe("errors (P18 section 3)", () => {
       expect(r.text).toMatch(message);
     };
     await expectError("list_cards", { cwd: plain }, "not_a_repo", /^not inside a git repository/);
-    await expectError("show_card", { id, cwd: bare }, "not_set_up", /^Baesian is not set up in this repository: run `baesian init`$/);
-    await expectError("file_card", draft(), "possible_duplicate", /^This decision may already be on file:\n {2}B-\w{5} {2}open {2}title by claude-code on main/);
+    await expectError("show_card", { id, cwd: bare }, "not_set_up", /^Baesian is not set up in this repository\nnext: baesian init  # set it up$/);
+    await expectError("file_card", draft(), "possible_duplicate", /^not filed: this decision may already be on file\n {2}B-\w{5} {2}open {2}same topic {2}title by claude-code on main/);
     await expectError("file_card", { ...draft({ topic: "new/one", title: "Something else entirely" }), alternative: "SQLite (WAL mode)" }, "invalid_card", /the proposal and the alternative are the same option/);
-    await expectError("show_card", { id: "B-zzzzz" }, "no_card", /^no card B-zzzzz$/);
+    await expectError("show_card", { id: "B-zzzzz" }, "no_card", /^no card B-zzzzz\nnext: baesian list --all  # the cards in this repo$/);
     await expectError("revise_card", { id, ...draft() }, "not_allowed", /only a returned card takes a new revision/);
     await expectError("withdraw_card", { id: other, reason: "mine now" }, "not_allowed", /only the agent that filed it, or one attached to it, may withdraw it/);
     await expectError("file_card", { ...draft({ topic: "new/two", title: "Yet another thing" }), deck: "nope" }, "no_deck", /^no deck "nope"/);
     const dup = await call(client, "file_card", draft());
     expect((dup.data.error as { matches: unknown[] }).matches).toEqual([{ id, status: "open", title: "The run-metadata store", by: "topic", agent: "claude-code", branch: "main" }]);
     // The CLI says the same, word for word.
-    expect((await cli(dir, ["show", "B-zzzzz"])).err).toBe("no card B-zzzzz");
+    expect((await cli(dir, ["show", "B-zzzzz"])).err).toBe("no card B-zzzzz\nnext: baesian list --all  # the cards in this repo");
   });
 
   it("report a file in a newer format as a tool error with the CLI's message (D157)", async () => {
@@ -345,7 +345,7 @@ describe("waiting (D168)", () => {
       const client = await connect(dir, { waitClock: { now: clock.now, sleep: clock.sleep } }, mode);
       const first = await call(client, "wait_for_verdict", { id });
       expect(first.data).toMatchObject({ kind: "again", next: "again", exit: 7 });
-      expect(first.text).toContain(`Run \`baesian wait ${id}\` again`);
+      expect(first.text).toContain(`next: baesian wait ${id}  # again`);
       expect(store.waitingOn(id, clock.now())).toEqual([expect.objectContaining({ stale: false, marker: expect.objectContaining({ agent: "claude-code" }) })]);
       store.addVerdict({ card: id, revision: 1, response: "accept", comment: "Fine.", ...REVIEWER });
       const second = await call(client, "wait_for_verdict", { id });
@@ -456,9 +456,12 @@ describe("text others wrote (D169)", () => {
       if (line.includes('"')) expect(line).toMatch(/ by .*\((a person|an agent)\): "/);
     }
     expect(shown.text).toContain(`title by "someone\\nelse" on main (an agent): ${quoted}`);
-    expect(shown.text).toContain(`alternative by gus (a person): ${quoted}; comment: ${quoted}`);
+    expect(shown.text).toContain(`alternative by gus (a person): ${quoted}`);
+    expect(shown.text).toContain(`Comment by gus (a person): ${quoted}`);
     const listed = await call(client, "list_cards", { all: true });
-    expect(listed.text.split("\n")).toHaveLength(1);
+    // A headline, who filed them all, the header and one row: the title makes no line of its own.
+    expect(listed.text.split("\n")).toHaveLength(4);
+    expect(listed.text.split("\n")[3]).toContain(quoted);
     // The structured content keeps the texts as they were, with their authors.
     expect(shown.data).toMatchObject({ meta: { title: forged, source_agent: "someone\nelse", source_branch: "main" }, verdicts: [{ comment: forged, reviewer: "gus" }] });
     const { tools } = await client.listTools();

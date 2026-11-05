@@ -11,10 +11,14 @@ import { Config, NewerFormat, type PasskeyProof } from "../src/schema.js";
 import { NAMESPACE, parseSignature, signMessage } from "../src/sshsig.js";
 import { Store, proofPath } from "../src/store.js";
 import { BadTrust, TRUST_ENV, TRUST_FILE_ENV, checkSigned, parseTrust, pinnedTrust, projectLine } from "../src/trust.js";
-import { describeVerify, verify } from "../src/verify.js";
+import { describeVerify as describeVerifyLines, verify } from "../src/verify.js";
 import { waitForVerdict } from "../src/wait.js";
-import { BODY, REVIEWER, cleanup, draft, fakeClock, repo, sh } from "./helpers.js";
+import { BODY, REVIEWER, cited, cleanup, draft, fakeClock, repo, sh } from "./helpers.js";
 import { ORIGIN, RP_ID, TestPasskey, TestService, put } from "./service.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeVerify = (...a: Parameters<typeof describeVerifyLines>) => plain(describeVerifyLines(...a));
 
 // M9a: answers that count, checked offline (D138, D139, D142, D158–D160, D163). The service is a stand-in that signs
 // with test keys (test/service.ts); ssh-keygen checks its signatures where it's on PATH.
@@ -196,7 +200,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
     expect(store.hosted()?.pinned).toBe(false);
     expect(store.status(id)).toBe("open");
-    expect(store.uncounted()).toEqual([{ file: expect.stringMatching(/^verdicts\//), why: "it has no signature, so the service didn't write it (D138)" }]);
+    expect(cited(store.uncounted())).toEqual([{ file: expect.stringMatching(/^verdicts\//), why: "it has no signature, so the service didn't write it (D138)" }]);
     service.answer(store, { card: id, response: "alternative", choice: "Postgres" });
     expect(store.status(id)).toBe("resolved");
     expect(store.decision(id)).toBe("Postgres");
@@ -222,7 +226,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     expect(store.levelOf(id)).toBe("hard");
     service.answer(store, { card: id, response: "accept" });
     expect(store.status(id)).toBe("open");
-    expect(store.uncounted()[0]?.why).toBe(`it answers ${id}, a hard card, so it takes the reviewer's passkey (D139), and has no passkey proof`);
+    expect(cited(store.uncounted())[0]?.why).toBe(`it answers ${id}, a hard card, so it takes the reviewer's passkey (D139), and has no passkey proof`);
     service.answer(store, { card: id, response: "accept" }, { passkey });
     expect(store.status(id)).toBe("resolved");
   });
@@ -240,10 +244,10 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     service.answer(store, { card: id, response: "accept" }, { passkey: unsigned });
     service.answer(store, { card: id, response: "accept" }, { passkey: gus, proof: { flags: 0x01 } });
     expect(store.status(id)).toBe("open");
-    const why = store.uncounted().map((u) => `${u.file.split("/")[0]}: ${u.why}`);
+    const why = cited(store.uncounted()).map((u) => `${u.file.split("/")[0]}: ${u.why}`);
     expect(why).toContain(`verdicts: it answers ${id}, a hard card, so it takes the reviewer's passkey (D139), and its proof was made with a passkey that isn't trusted for account acct-gus (D159)`);
     expect(why).toContain("verdicts: its passkey proof doesn't check: the passkey didn't verify the reviewer (no face, fingerprint or PIN)");
-    expect(store.uncounted()).toContainEqual({ file: loose, why: "it has no signature, so the service didn't write it (D138)" });
+    expect(cited(store.uncounted())).toContainEqual({ file: loose, why: "it has no signature, so the service didn't write it (D138)" });
     service.answer(store, { card: id, response: "accept" }, { passkey: gus });
     expect(store.status(id)).toBe("resolved");
   });
@@ -271,7 +275,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     const rd = service.answer(store, { card: d!, response: "accept", account: "acct-eve", reviewer: "eve" });
     const rd2 = service.answer(store, { card: d!, response: "accept" });
     proveTogether(store, gus, [rd, rd2]);
-    expect(store.uncounted()).toContainEqual({ file: rd, why: `it answers ${d}, a hard card, so it takes the reviewer's passkey (D139), and its proof was made with a passkey that isn't trusted for account acct-eve (D159)` });
+    expect(cited(store.uncounted())).toContainEqual({ file: rd, why: `it answers ${d}, a hard card, so it takes the reviewer's passkey (D139), and its proof was made with a passkey that isn't trusted for account acct-eve (D159)` });
     expect(store.status(d!)).toBe("resolved");
     expect(store.verdicts(d!).map((v) => v.account)).toEqual(["acct-gus"]);
 
@@ -315,7 +319,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     expect(store.inForce().name).toBe(tighter.name);
     const looser = service.preferences(store, { row_dependency: "agent-decides" });
     expect(store.inForce().name).toBe(tighter.name);
-    expect(store.uncounted()).toContainEqual({ file: looser.rel, why: "it lets more cards past you (it moves dependency from tell-me to agent-decides), so it takes your passkey (D163), and has no passkey proof" });
+    expect(cited(store.uncounted())).toContainEqual({ file: looser.rel, why: "it lets more cards past you (it moves dependency from tell-me to agent-decides), so it takes your passkey (D163), and has no passkey proof" });
     const proved = service.preferences(store, { row_dependency: "agent-decides" }, { passkey });
     expect(store.inForce().name).toBe(proved.name);
     // Turning enforcing on lets held cards past too; a change written on the machine never counts.
@@ -399,7 +403,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     const fewer = service.preferences(store, { rate_sample: 0.1 });
     const shorter = service.preferences(store, { burn_in: 0 });
     expect(store.inForce().name).toBe(more.name);
-    expect(store.uncounted()).toEqual([
+    expect(cited(store.uncounted())).toEqual([
       { file: fewer.rel, why: "it lets more cards past you (it lowers rate_sample from 50% to 10%), so it takes your passkey (D163), and has no passkey proof" },
       { file: shorter.rel, why: "it lets more cards past you (it lowers burn_in from 20 to 0), so it takes your passkey (D163), and has no passkey proof" },
     ]);
@@ -413,7 +417,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     service.answer(store, { card: id, response: "accept", card_digest: undefined });
     service.answer(store, { card: id, response: "reject", comment: "No.", card_digest: "0".repeat(64) });
     expect(store.status(id)).toBe("open");
-    expect(store.uncounted().map((u) => u.why)).toEqual([
+    expect(cited(store.uncounted()).map((u) => u.why)).toEqual([
       "it doesn't name the digest of the card it answers, so what was answered can't be checked (B-f571v)",
       `${id} r1 has changed since it was answered: it isn't the text the answer names (B-f571v)`,
     ]);
@@ -439,7 +443,7 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     expect(store.canonicalTopic("storage/runs")).toBe("storage/runs");
     expect(store.inForce().name).toBeUndefined();
     const copied = "it's for project proj-other, not this repo's (proj-test), so it was copied from another repo";
-    expect(store.uncounted().map((u) => u.why).sort()).toEqual([copied, copied, copied, copied, "it names no project, so it could be another repo's (B-tf9fc)"].sort());
+    expect(cited(store.uncounted()).map((u) => u.why).sort()).toEqual([copied, copied, copied, copied, "it names no project, so it could be another repo's (B-tf9fc)"].sort());
     service.answer(store, { card: id, response: "accept" });
     expect(store.status(id)).toBe("resolved");
   });
@@ -495,8 +499,8 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     expect(r.commits[0]?.report.problems[0]?.problem).toBe("hard-unresolved");
     expect(r.merge?.problems[0]).toMatchObject({ card: id, problem: "unanswered" });
     const text = describeVerify(r).join("\n");
-    expect(text).toContain("hosted: only answers the service signed count (D138), checked with the keys CI pins");
-    expect(text).toMatch(/note: verdicts\/\S+ doesn't count: it has no signature, so the service didn't write it \(D138\)/);
+    expect(text).toContain("hosted:  only answers the service signed count, checked with the keys CI pins");
+    expect(text).toMatch(/note: verdicts\/\S+ doesn't count: it has no signature, so the service didn't write it$/m);
     // The same repo, with nothing pinned and no keys in the record, isn't hosted: as before, the answer counts.
     expect(verify(repo, "main", { merge: true, pinned: null })).toMatchObject({ ok: true });
   });
@@ -553,10 +557,10 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     commit(dir, store, `Use SQLite\n\nBaesian-Card: ${id}`);
     const local = verify(repo, "main", { merge: true, pinned: null });
     expect(local.ok).toBe(true);
-    expect(local.warnings?.join()).toContain("the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (BAESIAN_TRUST, D142)");
+    expect(cited(local.warnings)?.join()).toContain("the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (BAESIAN_TRUST, D142)");
     const ci = verify(repo, "main", { merge: true, pinned: service.pinned() });
     expect(ci.ok).toBe(false);
-    expect(ci.commits[0]?.trust).toEqual([expect.stringContaining("trust/service-forged.json isn't pinned in CI, or differs from the pinned copy (D142)")]);
+    expect(cited(ci.commits[0]?.trust)).toEqual([expect.stringContaining("trust/service-forged.json isn't pinned in CI, or differs from the pinned copy (D142)")]);
     expect(ci.merge?.problems[0]).toMatchObject({ card: id, problem: "unanswered" });
   });
 
@@ -565,7 +569,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     const passkey = new TestPasskey();
     service.enrol(store, passkey);
     commit(dir, store, "Enrol a passkey");
-    expect(verify(repo, "main", { merge: false, pinned: service.pinned() }).commits[0]?.trust).toEqual([expect.stringContaining("gus's passkey, isn't pinned in CI, or differs from the pinned copy (D159)")]);
+    expect(cited(verify(repo, "main", { merge: false, pinned: service.pinned() }).commits[0]?.trust)).toEqual([expect.stringContaining("gus's passkey, isn't pinned in CI, or differs from the pinned copy (D159)")]);
     expect(verify(repo, "main", { merge: false, pinned: service.pinned(passkey) }).ok).toBe(true);
   });
 
@@ -592,7 +596,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     const ungated = store.fileCard(draft({ title: "The queue", topic: "storage/queue", touches: ["dependency"] }), BODY, AGENT).card.meta.id;
     commit(dir, store, `Add the stores\n\nBaesian-Card: ${held}\nBaesian-Card: ${forged}\nBaesian-Card: ${ungated}`);
     const r = verify(repo, "main", { merge: true, pinned: service.pinned(passkey) });
-    expect(r.merge?.notes.join()).toContain(`${held} is held: the gate let its agent go ahead (D150)`);
+    expect(cited(r.merge?.notes)?.join()).toContain(`${held} is held: the gate let its agent go ahead (D150)`);
     expect(r.merge?.problems).toEqual([
       expect.objectContaining({ card: forged, problem: "gate", message: expect.stringContaining("its draw proof is signed by a key that isn't trusted") }),
       expect.objectContaining({ card: ungated, problem: "unanswered" }),
@@ -608,7 +612,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     process.env[TRUST_ENV] = service.pin();
     let r = await verifyIt();
     expect(r.code).toBe(0);
-    expect(r.out).toContain("hosted: only answers the service signed count (D138), checked with the keys CI pins");
+    expect(r.out).toContain("hosted:  only answers the service signed count, checked with the keys CI pins");
     delete process.env[TRUST_ENV];
     writeFileSync(join(dir, "..", "pin.jsonl"), `# the service's key\n${service.pin()}\n`);
     process.env[TRUST_FILE_ENV] = join(dir, "..", "pin.jsonl");
@@ -654,7 +658,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     expect(pinnedTrust({ [TRUST_ENV]: `${projectLine("proj-test")}\n${keys}` })?.project).toBe("proj-test");
     // Keys with no project: the check fails, saying how to fix it.
     expect(() => pinnedTrust({ [TRUST_ENV]: keys })).toThrow(BadTrust);
-    expect(() => pinnedTrust({ [TRUST_ENV]: keys })).toThrow("BAESIAN_TRUST pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another (B-mar8x); run `baesian ci` in the linked repo");
+    expect(() => pinnedTrust({ [TRUST_ENV]: keys })).toThrow("BAESIAN_TRUST pins no project: CI must pin the repo's project beside its keys, so a commit can't link the repo to another; run `baesian ci` in the linked repo");
     // Two projects, in one setting or across both: which is the repo's can't be told.
     expect(() => pinnedTrust({ [TRUST_ENV]: `${projectLine("proj-a")}\n${projectLine("proj-b")}\n${keys}` })).toThrow("names project proj-b, but the pin already names proj-a");
     const { dir } = repo();
@@ -670,7 +674,7 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     commit(dir, store, "Point the repo elsewhere\n\nBaesian-Ack: infra:.baesian/config.json moving it");
     const r = verify(repo, "main", { merge: false, pinned: service.pinned() });
     expect(r.ok).toBe(false);
-    expect(r.commits[0]?.trust).toEqual([expect.stringContaining(".baesian/config.json names project p-0000000000000000000a, but CI pins project proj-test (B-mar8x)")]);
+    expect(cited(r.commits[0]?.trust)).toEqual([expect.stringContaining(".baesian/config.json names project p-0000000000000000000a, but CI pins project proj-test (B-mar8x)")]);
     expect(describeVerify(r).join("\n")).toContain("run `baesian ci` and update BAESIAN_TRUST");
     // A pin given without a project stops the run too.
     expect(() => verify(repo, "main", { merge: false, pinned: { ...service.pinned(), project: undefined } as never })).toThrow("pins no project");

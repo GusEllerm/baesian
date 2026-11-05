@@ -1,7 +1,33 @@
 import { CARD_TEMPLATE } from "./agents.js";
-import { agentLabel, answerLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
+import { cite, citeIn } from "./cite.js";
+import { agentLabel, byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { POSITION_NAMES, ROW_NAMES, type AnyRow, type Position } from "./routing.js";
 import type { GateRecord, Verdict, Withdrawal } from "./schema.js";
+import {
+  type Field,
+  type Line,
+  type Piece,
+  attention,
+  blank,
+  cmd,
+  dim,
+  errorLines,
+  failure,
+  fields,
+  head,
+  id,
+  indent,
+  level,
+  lit,
+  literal,
+  next,
+  ok,
+  strong,
+  status as statusPiece,
+  table,
+  text,
+  warning,
+} from "./style.js";
 import { type Brief, type Card, type FileResult, type InboxItem, NoCard, NoDeck, NotAllowed, PENDING, type PossibleDuplicate, type Status, type Store } from "./store.js";
 import {
   type WaitAllOutcome,
@@ -20,12 +46,12 @@ import {
 
 // The agent commands' operations, shared by the CLI and the MCP server (P18), so the two never drift: each returns the
 // lines the CLI prints and what its `--json` prints, and the server returns the same as a tool's text and structured
-// content. Errors are the store's classes, which the CLI prints and the server names with a code. Text others wrote
-// is quoted with its author (D169), through `quote.ts`.
+// content, the lines in plain text (B-eyrt5, src/style.ts). Errors are the store's classes, which the CLI prints and
+// the server names with a code. Text others wrote is quoted with its author (D169), through `quote.ts`.
 
-/** What an operation gives back: the lines an agent reads, and the data `--json` prints. */
+/** What an operation gives back: the lines an agent reads (src/style.ts), and the data `--json` prints. */
 export interface Op<T> {
-  lines: string[];
+  lines: Line[];
   data: T;
 }
 
@@ -37,81 +63,131 @@ export interface Actor {
 
 // ---------------------------------------------------------------- lines
 
-/** A card on one line: its ID, status, level, title and author, topic and deck. */
-export function cardLine(s: Store, card: Card): string {
-  const m = card.meta;
-  const where = [m.topic, `deck ${m.deck}`].filter(Boolean).join("; ");
-  return `${m.id}  ${s.status(m.id).padEnd(10)} ${m.level.padEnd(11)} ${said("title", cardAuthor(m), m.title)}  [${where}]`;
-}
+/** A time as people read it: to the minute, in UTC. */
+export const when = (iso: string): string => (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(iso) ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : iso);
 
 /** The card itself: the question, the crux, the options, each text quoted with the agent that wrote it, line by line. */
-export function cardDetails(card: Card): string[] {
+export function cardDetails(card: Card): Line[] {
   const m = card.meta;
-  const by = (what: string, text: string) => `  ${said(what, cardAuthor(m), text)}`;
+  const by = (what: string, t: string) => said(what, cardAuthor(m), t);
   const undo = { cheap: "easy", moderate: "costly", "one-way": "hard" }[m.reverse];
-  const out = [
-    by("question", m.question),
-    by("doing", m.doing),
-    `  stakes: ${undo} to undo${m.touches.length ? `; touches ${m.touches.join(", ")}` : ""}`,
-    "",
-    `${by("crux", m.crux)}${m.crux_preference ? " (a preference)" : ""}`,
+  const out: Line[] = [
+    text(by("question", m.question)),
+    text(by("doing", m.doing)),
+    text(`stakes: ${undo} to undo${m.touches.length ? `; touches ${m.touches.join(", ")}` : ""}`),
+    blank,
+    text(`${by("crux", m.crux)}${m.crux_preference ? " (a preference)" : ""}`),
   ];
-  if (m.crux_fact) out.push(by("crux_fact", m.crux_fact));
-  out.push(`${by("proposal (the agent's pick)", m.proposal)}; if: ${q(m.crux_proposal)}; then: ${q(m.proposal_then)}`);
-  out.push(`${by("alternative", m.alternative)}; if: ${q(m.crux_alternative)}; then: ${q(m.alternative_then)}`);
-  if (m.premise) out.push(`${by(`premise, unverified, of the ${m.premise_option}`, m.premise)}; check: ${q(m.premise_check ?? "")}`);
-  if (m.acted) out.push(by(`acted, already built for the ${m.acted_option}`, m.acted));
-  if (m.rationale) out.push(by("rationale", m.rationale));
-  if (m.wrong_if) out.push(`${by("wrong_if", m.wrong_if)}; check: ${q(m.check ?? "")}`);
-  if (m.secret_reason) out.push(by("secret_reason (filed though it looks like it holds a secret, B-jfkv9)", m.secret_reason));
-  if (card.body.trim()) out.push(by("body", card.body.trim()));
-  return out;
+  if (m.crux_fact) out.push(text(by("crux_fact", m.crux_fact)));
+  out.push(text(`${by("proposal (the agent's pick)", m.proposal)}; if: ${q(m.crux_proposal)}; then: ${q(m.proposal_then)}`));
+  out.push(text(`${by("alternative", m.alternative)}; if: ${q(m.crux_alternative)}; then: ${q(m.alternative_then)}`));
+  if (m.premise) out.push(text(`${by(`premise, unverified, of the ${m.premise_option}`, m.premise)}; check: ${q(m.premise_check ?? "")}`));
+  if (m.acted) out.push(text(by(`acted, already built for the ${m.acted_option}`, m.acted)));
+  if (m.rationale) out.push(text(by("rationale", m.rationale)));
+  if (m.wrong_if) out.push(text(`${by("wrong_if", m.wrong_if)}; check: ${q(m.check ?? "")}`));
+  if (m.secret_reason) out.push(text(by(`secret_reason (filed though it looks like it holds a secret${citeIn("B-jfkv9")})`, m.secret_reason)));
+  if (card.body.trim()) out.push(text(by("body", card.body.trim())));
+  return indent(2, out);
 }
 
-/** One verdict, naming what it decided: an accept names the proposal it accepted, as `wait` does. */
-export function verdictLine(s: Store, v: Verdict): string {
-  const proposal = v.response === "accept" ? s.revisions(v.card).find((r) => r.meta.revision === v.revision)?.meta.proposal : undefined;
-  return `${v.card} r${v.revision}  ${answerLine(v, proposal)}  (${v.at})`;
-}
-
-/** What `baesian file` prints when the decision may already be on file (exit 3), and the server's error text. */
-export function duplicateLines(e: PossibleDuplicate): string[] {
-  const out = ["This decision may already be on file:"];
-  for (const m of e.matches) out.push(`  ${m.card.meta.id}  ${m.status}  ${said("title", cardAuthor(m.card.meta), m.card.meta.title)}  (same ${m.by})`);
-  out.push("Attach to an open card (`baesian attach <id>`), follow a resolved one,");
-  out.push("or file anyway with --new, setting `supersedes:` if you are arguing against a decision.");
-  // A topic is one question (D112): a different question on the same subject is a narrower topic, not a duplicate.
-  if (e.matches.some((m) => m.by === "topic")) {
-    out.push("If yours is a different question on the same subject, give it a narrower topic of its own");
-    out.push("(client/rule-drafts beside client/rules), and list what it builds on in `depends_on`.");
-  }
-  return out;
+/** An answer, coloured by what it does: resolves, sends the card back, or neither. */
+function response(r: Verdict["response"]): Piece {
+  if (r === "accept" || r === "alternative" || r === "correction") return ok(r);
+  if (r === "reject") return failure(r);
+  if (r === "question" || r === "need_context" || r === "see_it_run" || r === "defer") return attention(r);
+  return r;
 }
 
 /**
- * What the gate did with a card, in a line (P14): shown at a level and why, or held back, which means its agent goes
- * ahead with its pick. `filer`: the line is for the agent that filed it. Whether a held card was drawn for audit isn't
- * said: it changes nothing the agent does.
+ * One verdict, naming what it decided (an accept names the proposal it accepted, as `wait` does), and when; then the
+ * reviewer's comment on a line of its own, as `wait` gives it, and the rules it retired.
  */
-export function gateLine(g: GateRecord, filer = true): string {
+export function verdictLines(s: Store, v: Verdict): Line[] {
+  const proposal = v.response === "accept" ? s.revisions(v.card).find((r) => r.meta.revision === v.revision)?.meta.proposal : undefined;
+  const what = v.choice ?? proposal;
+  const out = [text(id(v.card), ` r${v.revision}  `, response(v.response), ` by ${byLine(reviewerOf(v))}${what !== undefined ? `: ${q(what)}` : ""}`, "  ", dim(when(v.at)))];
+  if (v.comment) out.push(indent(2, text(said("Comment", reviewerOf(v), v.comment))));
+  if (v.retire_rules?.length) out.push(indent(2, text(`It retires ${v.retire_rules.join(", ")}.`)));
+  return out;
+}
+
+/** Why a possible duplicate matched: the same topic, the same title, or a title like it. */
+function matchedBy(m: PossibleDuplicate["matches"][number], title: string | undefined): string {
+  if (m.by === "topic") return "same topic";
+  const norm = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
+  return title !== undefined && norm(title) === norm(m.card.meta.title) ? "same title" : "similar title";
+}
+
+/**
+ * What `baesian file` prints when the decision may already be on file (exit 3), and the server's error text: the cards
+ * it matched, and what to do in each case, with their IDs filled in. `title` is the draft's, to tell the same title from
+ * a similar one.
+ */
+export function duplicateLines(e: PossibleDuplicate, title?: string): Line[] {
+  const out: Line[] = [head("attention", attention("not filed"), ": this decision may already be on file")];
+  out.push(...table(undefined, e.matches.map((m) => [id(m.card.meta.id), statusPiece(m.status), matchedBy(m, title ?? e.title), said("title", cardAuthor(m.card.meta), m.card.meta.title)])));
+  const open = e.matches.find((m) => PENDING.has(m.status));
+  const decided = e.matches.find((m) => m.status === "resolved");
+  if (open) out.push(next(`baesian attach ${open.card.meta.id}`, "the same question: wait on that card instead of filing another"));
+  if (decided) out.push(next(`baesian show ${decided.card.meta.id}`, "the same question, decided already: follow that decision"));
+  // A topic is one question (D112): a different question on the same subject is a narrower topic, not a duplicate.
+  const byTopic = e.matches.find((m) => m.by === "topic" && m.card.meta.topic);
+  if (byTopic) {
+    out.push(
+      indent(
+        2,
+        text(`A different question on the same subject: give it a narrower topic of its own, such as ${byTopic.card.meta.topic}/<what it asks>, list what it builds on in depends_on, and file it again.`),
+      ),
+    );
+  }
+  const against = (decided ?? open ?? e.matches[0])!.card.meta.id;
+  out.push(indent(2, text(`An argument against that decision: set supersedes: ${against}, and file it with `, cmd("--new"), ".")));
+  return out;
+}
+
+/** The level a card is shown at, and why; or that the gate held it back, which means its agent goes ahead with its pick. */
+export function levelField(g: GateRecord, filer = true): Field {
   const row = ROW_NAMES[g.row as AnyRow];
   // No quotation marks: in an agent's lines they mean a text someone else wrote (D169).
   const at = POSITION_NAMES[g.position as Position];
   if (g.outcome === "held") {
-    if (g.mode === "shadow") return `  gate: shown; in shadow, the repo's preferences would have held it back (${row}: ${at})`;
+    if (g.mode === "shadow") return { label: "level", value: [level(g.level ?? "provisional"), `; in shadow, the repo's preferences would have held it back (${row}: ${at})`] };
     const go = filer ? "go ahead with your pick, as provisional, whatever level you asked for" : "its agent goes ahead with its pick, as provisional";
-    return `  held back (${row}: ${at}): ${go}. It counts as settled at merge; the reviewer may still answer it later`;
+    return { label: "level", value: [attention("held back"), ` (${row}: ${at}): ${go}. It counts as settled at merge; the reviewer may still answer it later`] };
   }
   const why = {
-    row: `${row}: ${at}`,
-    floor: `${row}: never without me, always`,
-    "one-way": "it's one-way, and a one-way card is never held back",
-    agent: `the level ${filer ? "you" : "its agent"} asked for; a level is a minimum when a card is shown`,
-    baesian: "a card Baesian files is always shown",
-    answer: "a revision that follows an answer is always shown",
-    error: "the gate couldn't run, so the card is shown",
+    row: `(${row}: ${at})`,
+    floor: `(${row}: never without me, always)`,
+    "one-way": "(it's one-way, and a one-way card is never held back)",
+    agent: `the level ${filer ? "you" : "its agent"} asked for`,
+    baesian: "(a card Baesian files is always shown)",
+    answer: "(a revision that follows an answer is always shown)",
+    error: "(the gate couldn't run, so the card is shown)",
   }[g.reason];
-  return `  gate: shown at ${g.level} (${why})`;
+  return { label: "level", value: [level(g.level ?? "provisional"), g.reason === "agent" ? `, ${why}` : ` ${why}`] };
+}
+
+/** The trailer a commit that builds on a card carries, at the end of its line, so it copies whole. */
+const carries = (cardId: string): Line => indent(2, text("Commits that build on it carry the trailer  ", lit(`Baesian-Card: ${cardId}`)));
+
+/** What filing or revising printed: the headline, the level, the deck, notes, and what to do next. */
+function filed(result: FileResult, title: Piece): Line[] {
+  const { id: cardId, level: lvl, deck, revision } = result.card.meta;
+  const held = result.gate.outcome === "held" && result.gate.mode === "enforce";
+  const out: Line[] = [head("done", "filed ", id(revision > 1 ? `${cardId} r${revision}` : cardId), " ", title, held ? ", held back" : "")];
+  out.push(
+    ...fields([
+      levelField(result.gate),
+      { label: "deck", value: deck },
+      result.hardBecause && { label: "raised", value: [`to `, level("hard"), ` by what it touches, ${result.hardBecause.join(", ")}: an agent can raise a card's level, never lower it${cite("D42", "D144")}`] },
+      result.nearTopics.length > 0 && { label: "topic", value: `new; did you mean ${result.nearTopics.join(" or ")}?` },
+    ]),
+  );
+  for (const w of result.warnings) out.push(indent(2, warning(w)));
+  if (!held && lvl === "blocking") out.push(next(`baesian wait ${cardId}`, "before building on it"));
+  if (!held && lvl === "hard") out.push(next(`baesian wait ${cardId}`, "don't proceed with it until this exits 0"));
+  out.push(carries(cardId));
+  return out;
 }
 
 // ---------------------------------------------------------------- filing
@@ -120,57 +196,51 @@ export function gateLine(g: GateRecord, filer = true): string {
 export function fileOp(s: Store, draft: unknown, body: string, actor: Actor & { force?: boolean }): Op<FileResult> {
   const result = s.fileCard(draft, body, { agent: actor.agent, force: actor.force ?? false });
   actor.notify(result.card);
-  const { id, level, deck } = result.card.meta;
-  const held = result.gate.outcome === "held" && result.gate.mode === "enforce";
-  const lines = [`filed ${id} (${held ? "held back" : level}, deck ${deck})`, gateLine(result.gate)];
-  if (result.hardBecause) lines.push(`  level raised to hard by: ${result.hardBecause.join(", ")} (D42; an agent can raise a card's level, never lower it: D144)`);
-  if (result.nearTopics.length) lines.push(`  new topic; did you mean: ${result.nearTopics.join(", ")}?`);
-  for (const w of result.warnings) lines.push(`  note: ${w}`);
-  if (!held && level === "blocking") lines.push(`  run \`baesian wait ${id}\` before building on it`);
-  if (!held && level === "hard") lines.push(`  don't proceed with it until \`baesian wait ${id}\` exits 0`);
-  lines.push(`  add "Baesian-Card: ${id}" to commits that build on it`);
-  return { lines, data: result };
+  return { lines: filed(result, q(result.card.meta.title)), data: result };
 }
 
 /** `baesian revise`: the next revision of a returned card. */
-export function reviseOp(s: Store, id: string, draft: unknown, body: string, actor: Actor): Op<FileResult> {
-  const result = s.reviseCard(id, draft, body, { agent: actor.agent });
+export function reviseOp(s: Store, cardId: string, draft: unknown, body: string, actor: Actor): Op<FileResult> {
+  const result = s.reviseCard(cardId, draft, body, { agent: actor.agent });
   actor.notify(result.card);
-  return { lines: [`filed ${id} r${result.card.meta.revision}`, gateLine(result.gate), ...result.warnings.map((w) => `  note: ${w}`)], data: result };
+  return { lines: filed(result, q(result.card.meta.title)), data: result };
 }
 
 /** `baesian reply`: the agent's one reply to an answer against its pick (D89, D104). */
-export function replyOp(s: Store, id: string, text: string, actor: Actor): Op<{ card: string; revision: number; level: string }> {
-  const card = s.replyToCard(id, text, { agent: actor.agent });
+export function replyOp(s: Store, cardId: string, reply: string, actor: Actor): Op<{ card: string; revision: number; level: string }> {
+  const card = s.replyToCard(cardId, reply, { agent: actor.agent });
   actor.notify(card);
   return {
     lines: [
-      `filed ${id} r${card.meta.revision}: your reply goes to the reviewer, and the card is open again`,
+      head("done", "filed ", id(`${cardId} r${card.meta.revision}`), ": your reply goes to the reviewer, and the card is open again"),
       card.meta.level === "hard"
-        ? `  it's hard: don't commit work that cites it until \`baesian wait ${id}\` exits 0`
-        : "  until they answer again, proceed with their decision; `baesian inbox` brings the new answer",
+        ? next(`baesian wait ${cardId}`, "it's hard: don't commit work that cites it until this exits 0")
+        : indent(2, text("Until they answer again, proceed with their decision; ", cmd("baesian inbox"), " brings the new answer.")),
     ],
-    data: { card: id, revision: card.meta.revision, level: card.meta.level },
+    data: { card: cardId, revision: card.meta.revision, level: card.meta.level },
   };
 }
 
 /** `baesian rule`: draft the rule the reviewer asked for, as a card (D110). */
-export function ruleOp(s: Store, id: string, text: string, covers: string[], actor: Actor): Op<{ card: string; from: string }> {
-  const card = s.draftRule(id, text, covers, { agent: actor.agent });
+export function ruleOp(s: Store, from: string, rule: string, covers: string[], actor: Actor): Op<{ card: string; from: string }> {
+  const card = s.draftRule(from, rule, covers, { agent: actor.agent });
   actor.notify(card);
-  return { lines: [`filed ${card.meta.id}: the rule goes to the reviewer as a card, and is saved once they accept it`], data: { card: card.meta.id, from: id } };
+  return { lines: [head("done", "filed ", id(card.meta.id), ": the rule goes to the reviewer as a card, and is saved once they accept it")], data: { card: card.meta.id, from } };
 }
 
 /** `baesian attach`: wait on an existing card instead of filing a duplicate. */
-export function attachOp(s: Store, id: string, agent: string): Op<{ card: string; waiting: number }> {
-  s.attach(id, agent);
-  const waiting = s.waiting(id);
-  return { lines: [`attached to ${id}; ${waiting} agents are waiting on it`], data: { card: id, waiting } };
+export function attachOp(s: Store, cardId: string, agent: string): Op<{ card: string; waiting: number }> {
+  s.attach(cardId, agent);
+  const waiting = s.waiting(cardId);
+  return {
+    lines: [head("done", "attached to ", id(cardId), `; ${waiting === 1 ? "1 agent is" : `${waiting} agents are`} waiting on it`), next(`baesian wait ${cardId}`, "for its answer")],
+    data: { card: cardId, waiting },
+  };
 }
 
 /** `baesian withdraw`: withdraw a card this agent filed or attached to. */
-export function withdrawOp(s: Store, id: string, reason: string, agent: string): Op<Withdrawal> {
-  return { lines: [`withdrew ${id}`], data: s.withdraw(id, reason, agent) };
+export function withdrawOp(s: Store, cardId: string, reason: string, agent: string): Op<Withdrawal> {
+  return { lines: [head("done", "withdrew ", id(cardId))], data: s.withdraw(cardId, reason, agent) };
 }
 
 // ---------------------------------------------------------------- waiting and the inbox
@@ -185,9 +255,9 @@ export type WaitResult = WaitOutcome & { next: Next; exit: number };
  * `baesian wait`: one run of at most `SLICE_MS` (D101, D168). An answer it gives is marked delivered, so `inbox` and
  * the hooks don't hand it over again.
  */
-export async function waitOp(s: Store, id: string, opts: WaitOptions): Promise<Op<WaitResult>> {
-  const outcome = await waitForVerdict(s, id, opts);
-  if (outcome.kind === "resolved" || outcome.kind === "answered") s.markDelivered(id, outcome);
+export async function waitOp(s: Store, cardId: string, opts: WaitOptions): Promise<Op<WaitResult>> {
+  const outcome = await waitForVerdict(s, cardId, opts);
+  if (outcome.kind === "resolved" || outcome.kind === "answered") s.markDelivered(cardId, outcome);
   const exit = exitCodeFor(outcome);
   return { lines: describeOutcome(outcome), data: { ...outcome, next: NEXT[exit as keyof typeof NEXT], exit } };
 }
@@ -224,7 +294,9 @@ export function deckWaitIds(s: Store, deck: string, agent: string): string[] {
       .sort((x, y) => x.meta.created.localeCompare(y.meta.created) || x.meta.id.localeCompare(y.meta.id))
       .map((c) => c.meta.id);
     if (!ids.length) {
-      throw new NotAllowed(`deck "${deck}" has no cards of yours still with the reviewer (filed or attached to by ${agent}, on this branch): nothing to wait on. \`baesian inbox\` has any answers you haven't seen.`);
+      throw new NotAllowed(`deck "${deck}" has no cards of yours still with the reviewer (filed or attached to by ${agent}, on this branch): nothing to wait on`, [
+        { command: "baesian inbox", why: "any answers you haven't seen" },
+      ]);
     }
     return ids;
   });
@@ -232,6 +304,9 @@ export function deckWaitIds(s: Store, deck: string, agent: string): string[] {
 
 /** An inbox item, marked with whether its answer can still take a reply or a rule draft. */
 export type InboxEntry = InboxItem & { canReply: boolean; ruleAsked: boolean };
+
+/** The headline over new verdicts: how many, on this branch's cards. */
+export const verdictsHeadline = (n: number): string => `${n === 1 ? "1 new verdict" : `${n} new verdicts`} on this branch's cards`;
 
 /** `baesian inbox`: new verdicts on this branch's cards, less those `wait` delivered, inside one view. */
 export function inboxOp(s: Store, opts: { advance: boolean; session?: string }): Op<InboxEntry[]> {
@@ -244,15 +319,16 @@ export function inboxOp(s: Store, opts: { advance: boolean; session?: string }):
       const asks = Boolean(item.verdict.make_rule) || (latest?.meta.convention !== undefined && item.verdict.response === "accept");
       return { ...item, canReply: standing && s.canReply(item.card), ruleAsked: standing && asks && s.ruleAsked(item.card) };
     });
-    const lines: string[] = [];
+    if (!entries.length) return { lines: [head("done", "no new verdicts")], data: entries };
+    const lines: Line[] = [head("attention", verdictsHeadline(entries.length))];
     for (const e of entries) {
       // A dependent returned by its parent's verdict (D80) is listed under its own ID.
-      lines.push(e.verdict.card === e.card ? verdictLine(s, e.verdict) : `${e.card}  returned, by a verdict on ${e.verdict.card}`);
+      lines.push(...(e.verdict.card === e.card ? verdictLines(s, e.verdict) : [text(id(e.card), "  ", attention("returned"), `, by a verdict on ${e.verdict.card}`)]));
       if (e.brief) lines.push(...describeBrief(e.brief));
-      if (e.ruleAsked) lines.push(...ruleHint(e.card).map((l) => `  ${l}`));
-      if (e.canReply) lines.push(...replyHint(e.card).map((l) => `  ${l}`));
+      if (e.ruleAsked) lines.push(...indent(2, ruleHint(e.card)));
+      if (e.canReply) lines.push(...indent(2, replyHint(e.card)));
     }
-    return { lines: entries.length ? lines : ["no new verdicts"], data: entries };
+    return { lines, data: entries };
   });
 }
 
@@ -270,39 +346,82 @@ export interface ShowData extends Card {
 }
 
 /** `baesian show`: the card as the client shows it, with who's waiting, its briefs and its verdicts. */
-export function showOp(s: Store, id: string): Op<ShowData> {
+export function showOp(s: Store, cardId: string): Op<ShowData> {
   s.requireInit();
   return s.view(() => {
-    const card = s.card(id);
-    if (!card) throw new NoCard(id);
-    const status = s.status(id);
-    const decision = s.decision(id);
-    const verdicts = s.verdicts(id);
-    const waiting = s.waitingOn(id).map(({ marker, stale }) => ({ agent: marker.agent, since: marker.since, at: marker.at, stale }));
-    const briefs = s.briefs(id);
-    const gate = s.gateRecord(id);
-    const lines = [cardLine(s, card)];
-    if (decision !== undefined) {
-      const by = verdicts.filter((v) => v.revision === card.meta.revision).at(-1);
-      lines.push(by ? said("decided", reviewerOf(by), decision) : `decided: ${q(decision)}`);
-    }
-    if (gate) lines.push(gateLine(gate, false));
-    lines.push("", ...cardDetails(card));
-    for (const w of waiting) lines.push(`  ${agentLabel(w.agent)} ${w.stale ? `stopped waiting (last seen ${w.at})` : `is waiting, since ${w.since}`}`);
+    const card = s.card(cardId);
+    if (!card) throw new NoCard(cardId);
+    const m = card.meta;
+    const status = s.status(cardId);
+    const decision = s.decision(cardId);
+    const verdicts = s.verdicts(cardId);
+    // Only a card still with the reviewer has agents waiting on it: a marker a wait left when its run ended (exit 7) says
+    // nothing once the card is answered.
+    const waiting = PENDING.has(status) || status === "held" ? s.waitingOn(cardId).map(({ marker, stale }) => ({ agent: marker.agent, since: marker.since, at: marker.at, stale })) : [];
+    const briefs = s.briefs(cardId);
+    const gate = s.gateRecord(cardId);
+    const by = verdicts.filter((v) => v.revision === m.revision).at(-1);
+    const lines: Line[] = [head(undefined, id(cardId), "  ", statusPiece(status), "  ", said("title", cardAuthor(m), m.title))];
+    lines.push(
+      ...fields([
+        m.topic !== undefined && { label: "topic", value: m.topic },
+        { label: "deck", value: m.deck },
+        gate ? levelField(gate, false) : { label: "level", value: level(m.level) },
+        decision !== undefined && { label: "decided", value: by ? `by ${byLine(reviewerOf(by))}: ${q(decision)}` : q(decision) },
+        ...waiting.map((w) => ({ label: "waiting", value: `${agentLabel(w.agent)}, ${w.stale ? `stopped (last seen ${when(w.at)})` : `since ${when(w.since)}`}` })),
+      ]),
+    );
+    lines.push(blank, ...cardDetails(card));
     for (const b of briefs) lines.push(...describeBrief(b));
-    if (verdicts.length) lines.push("", "verdicts:", ...verdicts.map((v) => `  ${verdictLine(s, v)}`));
+    if (verdicts.length) lines.push(blank, text("verdicts:"), ...indent(2, verdicts.flatMap((v) => verdictLines(s, v))));
     return { lines, data: { ...card, status, ...(decision !== undefined ? { decision } : {}), verdicts, waiting, briefs, ...(gate ? { gate } : {}) } };
   });
 }
 
-/** `baesian list`: the cards still with the reviewer, or all of them; this branch's, or every branch's. */
+/** Counts by status, in a fixed order: "3 resolved, 1 returned to its agent, 1 withdrawn". */
+function counts(statuses: Status[]): string {
+  const order: Status[] = ["open", "rerouted", "held", "returned", "deferred", "resolved", "withdrawn", "superseded"];
+  const say: Partial<Record<Status, string>> = { returned: "returned to its agent", rerouted: "rerouted to another reviewer" };
+  return order
+    .map((st) => [st, statuses.filter((x) => x === st).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([st, n]) => `${n} ${say[st] && n === 1 ? say[st] : st === "returned" && n > 1 ? "returned to their agents" : st}`)
+    .join(", ");
+}
+
+/**
+ * `baesian list`: the cards still with the reviewer, or all of them; this branch's, or every branch's. A headline with
+ * the counts, then a row a card, in the order they were filed. What every row shares, the author and the deck, is said
+ * once under the headline (B-gff98); the titles stay quoted, and their author named (D169).
+ */
 export function listOp(s: Store, opts: { all?: boolean; branch?: boolean }): Op<(Card["meta"] & { status: Status })[]> {
   s.requireInit();
   // A card's status reads the others: read the live layer once (Store.view), not once per card.
   return s.view(() => {
-    const cards = (opts.branch ? s.branchCards() : s.cards()).filter((c) => opts.all || PENDING.has(s.status(c.meta.id)));
-    const lines = cards.length ? cards.map((c) => cardLine(s, c)) : [opts.all ? "no cards" : "nothing waiting on the reviewer"];
-    return { lines, data: cards.map((c) => ({ ...c.meta, status: s.status(c.meta.id) })) };
+    const cards = (opts.branch ? s.branchCards() : s.cards())
+      .filter((c) => opts.all || PENDING.has(s.status(c.meta.id)))
+      .sort((x, y) => x.meta.created.localeCompare(y.meta.created) || x.meta.id.localeCompare(y.meta.id));
+    const data = cards.map((c) => ({ ...c.meta, status: s.status(c.meta.id) }));
+    if (!cards.length) return { lines: [head("done", opts.all ? "no cards" : "nothing waiting on the reviewer")], data };
+    const author = (c: Card) => byLine(cardAuthor(c.meta));
+    const oneAuthor = new Set(cards.map(author)).size === 1;
+    const oneDeck = new Set(cards.map((c) => c.meta.deck)).size === 1;
+    const n = cards.length;
+    const what = opts.all ? `${n} card${n === 1 ? "" : "s"}` : `${n} card${n === 1 ? "" : "s"} still with the reviewer`;
+    const lines: Line[] = [head(undefined, strong(what), ": ", counts(data.map((d) => d.status)))];
+    const shared = [oneAuthor ? `all filed by ${author(cards[0]!)}` : "", oneDeck ? `${oneAuthor ? "in" : "all in"} deck ${cards[0]!.meta.deck}` : ""].filter(Boolean).join(", ");
+    if (shared) lines.push(indent(2, text(dim(shared))));
+    const header = ["id", "status", "level", "topic", ...(oneDeck ? [] : ["deck"]), ...(oneAuthor ? ["title"] : ["title, by its author"])];
+    const rows = cards.map((c, i): Piece[] => [
+      id(c.meta.id),
+      statusPiece(data[i]!.status),
+      level(c.meta.level),
+      c.meta.topic ?? "",
+      ...(oneDeck ? [] : [c.meta.deck]),
+      oneAuthor ? q(c.meta.title) : `by ${author(c)}: ${q(c.meta.title)}`,
+    ]);
+    lines.push(...table(header, rows));
+    return { lines, data };
   });
 }
 
@@ -310,10 +429,22 @@ export function listOp(s: Store, opts: { all?: boolean; branch?: boolean }): Op<
 export function topicsOp(s: Store): Op<string[]> {
   s.requireInit();
   const topics = [...s.view(() => s.topics())].sort();
-  return { lines: topics.length ? topics : ["no topics yet"], data: topics };
+  if (!topics.length) return { lines: [head(undefined, "no topics yet")], data: topics };
+  return {
+    lines: [head(undefined, `${topics.length} topic${topics.length === 1 ? "" : "s"} in use: reuse one only for the same question`), ...indent(2, topics.map((t) => text(t)))],
+    data: topics,
+  };
 }
 
-/** `baesian template`: the card draft to fill in. */
+/** `baesian template`: the card draft to fill in, as it is, to save to a file. */
 export function templateOp(): Op<{ template: string }> {
-  return { lines: [CARD_TEMPLATE.trimEnd()], data: { template: CARD_TEMPLATE } };
+  return { lines: CARD_TEMPLATE.trimEnd().split("\n").map(literal), data: { template: CARD_TEMPLATE } };
+}
+
+/**
+ * An error as the CLI and the MCP server both say it, word for word: its headline and next steps (`errorLines`), and for
+ * a card that isn't there, where to see the ones that are.
+ */
+export function failureLines(e: unknown): Line[] {
+  return [...errorLines(e), ...(e instanceof NoCard ? [next("baesian list --all", "the cards in this repo")] : [])];
 }

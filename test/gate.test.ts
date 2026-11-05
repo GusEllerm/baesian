@@ -3,9 +3,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DetectedFact } from "../src/facts.js";
 import { renderDoc } from "../src/frontmatter.js";
-import { describeReport, evaluate } from "../src/gate.js";
+import { describeReport as describeReportLines, evaluate } from "../src/gate.js";
 import { cleanMessage, parseTrailers } from "../src/trailers.js";
 import { BODY, REVIEWER, cleanup, draft, repo } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeReport = (...a: Parameters<typeof describeReportLines>) => plain(describeReportLines(...a));
 
 afterEach(cleanup);
 
@@ -104,7 +108,7 @@ describe("cards a commit may not build on (D30, D46)", () => {
     expect(r.ok).toBe(false);
     const text = describeReport(r).join("\n");
     expect(text).toContain(`${id} was rejected by gus (a person): "Use Postgres."`);
-    expect(text).toContain("Commits already built on it: 0123456789");
+    expect(text).toContain("Commits already built on it: 0123456");
   });
 
   it("lets a returned-with-a-question card through: it isn't overturned", () => {

@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, closeSync, existsSync, fchmodSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
+import { citeIn } from "./cite.js";
+import { type Line, PLAIN, type Render, failed, next, note, render, text, warning } from "./style.js";
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
@@ -495,18 +497,18 @@ export function personalProblems(store: Store): string[] {
     const set = gitConfig(top, "core.hooksPath", cloneConfig(store));
     if (!pointsAtPersonal(store)) {
       out.push(
-        `this clone's commit gate is off: ${gateOff(store)}, so git runs the repo's hooks without Baesian's (personal mode, B-4rwyz). Run \`baesian init --personal\` again: the repo's hooks still run, after Baesian's.`,
+        `this clone's commit gate is off: ${gateOff(store)}, so git runs the repo's hooks without Baesian's (personal mode${citeIn("B-4rwyz")}). Run \`baesian init --personal\` again: the repo's hooks still run, after Baesian's.`,
       );
     } else if (set !== undefined && namesPersonal(store, set)) {
       out.push(
         included(store)
-          ? `this clone's core.hooksPath, in its .git/config, names Baesian's own hooks, so the repo's own hooks don't run after Baesian's (personal mode, B-4rwyz). Set it to the repo's hooks folder, or run \`baesian init --personal\` again, which takes it out.`
-          : `this clone's core.hooksPath, in its .git/config, names its own hooks, as an older \`baesian init --personal\` set it, so a setup script that sets core.hooksPath turns the commit gate off (personal mode, B-4rwyz). Run \`baesian init --personal\` again: it puts the repo's setting back, and Baesian's in a file of its own that .git/config includes.`,
+          ? `this clone's core.hooksPath, in its .git/config, names Baesian's own hooks, so the repo's own hooks don't run after Baesian's (personal mode${citeIn("B-4rwyz")}). Set it to the repo's hooks folder, or run \`baesian init --personal\` again, which takes it out.`
+          : `this clone's core.hooksPath, in its .git/config, names its own hooks, as an older \`baesian init --personal\` set it, so a setup script that sets core.hooksPath turns the commit gate off (personal mode${citeIn("B-4rwyz")}). Run \`baesian init --personal\` again: it puts the repo's setting back, and Baesian's in a file of its own that .git/config includes.`,
       );
     } else {
       const repo = repoHooks(store);
       const missing = samePath(repo.dir, dir) ? [] : hookNames(repo.dir).filter((n) => !existsSync(join(dir, n)));
-      if (missing.length) out.push(`the repo's hooks folder, ${repo.shown}, has ${missing.join(" and ")}, which this clone's own hooks don't run yet (personal mode, B-4rwyz): run \`baesian init --personal\` again`);
+      if (missing.length) out.push(`the repo's hooks folder, ${repo.shown}, has ${missing.join(" and ")}, which this clone's own hooks don't run yet (personal mode${citeIn("B-4rwyz")}): run \`baesian init --personal\` again`);
     }
   }
   if (existsSync(join(top, RECORD_DIR))) {
@@ -518,6 +520,14 @@ export function personalProblems(store: Store): string[] {
 export interface HookIo {
   out: (line: string) => void;
   err: (line: string) => void;
+  /** How standard error gets its lines: plain, unless git runs the hook at a terminal (src/style.ts). */
+  how?: Render;
+}
+
+/** What a hook says, on standard error, each line after `baesian: ` but the trailers to paste, so git's own lines can be told apart. */
+function say(io: HookIo, lines: Line | readonly Line[]): void {
+  const all = Array.isArray(lines) ? lines : [lines as Line];
+  for (const l of render(all, { ...(io.how ?? PLAIN), prefix: "baesian: " })) io.err(l);
 }
 
 function mergeInProgress(store: Store): boolean {
@@ -602,8 +612,8 @@ function stageNotes(store: Store, io: HookIo): string[] {
     return same;
   };
   const r = writeNotes(store, { mayWrite: (n) => !unstaged(n) || onlyOurs(n) });
-  for (const w of r.warnings) io.err(`baesian: ${w}`);
-  for (const path of r.skipped) io.err(`baesian: left ${path} as it is: it has changes you haven't staged. Stage them, and the next commit brings it up to date.`);
+  for (const w of r.warnings) say(io, warning(w));
+  for (const path of r.skipped) say(io, note(`left ${path} as it is: it has changes you haven't staged. Stage them, and the next commit brings it up to date.`));
   const written = new Set(r.written);
   const planned = new Map(r.planned.map((n) => [n.path, n]));
   // What this commit should carry: the notes written now, any written earlier (by `baesian sync`) and never added, and
@@ -616,10 +626,10 @@ function stageNotes(store: Store, io: HookIo): string[] {
   try {
     execFileSync("git", ["add", "--", ...toStage], { cwd: top, stdio: ["ignore", "ignore", "pipe"] });
   } catch (e) {
-    io.err(`baesian: couldn't stage the vault's notes (${e instanceof Error ? e.message.split("\n")[0] : String(e)}); they're written, so add them yourself`);
+    say(io, warning(`couldn't stage the vault's notes (${e instanceof Error ? e.message.split("\n")[0] : String(e)}); they're written, so add them yourself`));
     return [];
   }
-  io.err(`baesian: staged ${toStage.length} vault note${toStage.length === 1 ? "" : "s"} (${v.rel}/)`);
+  say(io, text(`staged ${toStage.length} vault note${toStage.length === 1 ? "" : "s"} (${v.rel}/)`));
   return toStage.filter((p) => {
     const e = before.get(p);
     return !e || e.x === " " || e.x === "?";
@@ -661,11 +671,11 @@ function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-r
     for (const f of findMerges(store, { into, from, to, ...(squashed ? { squashed } : {}), deep: hook !== "post-commit" })) {
       if (!store.writeMerge(f)) continue;
       n += 1;
-      io.err(`baesian: recorded ${f.branch} merged into ${f.into}${f.cards.length ? `, with ${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : ""} (${f.commit.slice(0, 7)})`);
+      say(io, text(`recorded ${f.branch} merged into ${f.into}${f.cards.length ? `, with ${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : ""} (${f.commit.slice(0, 7)})`));
     }
     return n;
   } catch (e) {
-    io.err(`baesian: couldn't look for merges (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`);
+    say(io, warning(`couldn't look for merges (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`));
     return 0;
   }
 }
@@ -673,7 +683,7 @@ function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-r
 /** Send new merges to the relay, in a linked repo, as briefly as `pre-commit` pulls; offline, they go at the next sync. */
 async function sendMerges(store: Store, io: HookIo, http: Http): Promise<void> {
   const r = await syncRelay(store, { ...http, signal: http.signal ?? AbortSignal.timeout(PRE_COMMIT_PULL_MS) });
-  if (r.state === "synced") for (const n of r.notes) io.err(`baesian: ${n}`);
+  if (r.state === "synced") say(io, r.notes.map((n) => text(n)));
 }
 
 /**
@@ -706,7 +716,7 @@ function moveTrailers(store: Store, path: string, raw: string, trailers: Trailer
   if (next === raw) return;
   writeFileSync(path, next);
   const what = [cards.length ? `the card${cards.length === 1 ? "" : "s"} it cites (${cards.join(", ")})` : "", trailers.acks.size ? `its ack${trailers.acks.size === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
-  io.err(`baesian: took ${what || "Baesian's trailers"} out of the commit message (personal mode, B-4rwyz): the shared history doesn't show them${cards.length ? ", and this clone's ledger records the cards" : ""}`);
+  say(io, text(`took ${what || "Baesian's trailers"} out of the commit message (personal mode${citeIn("B-4rwyz")}): the shared history doesn't show them${cards.length ? ", and this clone's ledger records the cards" : ""}`));
 }
 
 /** Write a ledger entry for each card a commit cites (D15), on the branch it was made on. */
@@ -751,14 +761,14 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       // M9d: in a linked repo, pull first, so answers given since come into the record with this commit. Briefly, and
       // never failing the commit: offline, it commits what's here.
       const pulled = await syncRelay(store, { ...http, push: false, signal: http.signal ?? AbortSignal.timeout(PRE_COMMIT_PULL_MS) });
-      for (const n of pulled.notes) io.err(`baesian: ${n}`);
+      say(io, pulled.notes.map((n) => text(n)));
       // A repo set up before D181 lacks the hooks that find merges until `baesian init` runs again.
       const missing = missingHooks(store);
-      if (missing.length) io.err(`baesian: this repo's hooks lack ${missing.join(" and ")}, which find merges: run \`baesian init\` to add ${missing.length === 1 ? "it" : "them"}`);
+      if (missing.length) say(io, [warning(`this repo's hooks lack ${missing.join(" and ")}, which find merges`), next("baesian init", `to add ${missing.length === 1 ? "it" : "them"}`)]);
       // Personal mode (B-4rwyz) commits no record and no notes: the live layer is the record. Each commit starts afresh.
       if (store.personal) {
         clearCited(top);
-        for (const p of personalProblems(store)) io.err(`baesian: ${p}`);
+        say(io, personalProblems(store).map((p) => warning(p)));
         writeStaged(top, []);
         return 0;
       }
@@ -775,7 +785,7 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       const ours = pending.filter((p) => p.x === " " || p.x === "?").map((p) => p.path);
       if (pending.length) {
         execFileSync("git", ["add", "--", rel], { cwd: top });
-        io.err(`baesian: staged ${pending.length} record file${pending.length === 1 ? "" : "s"} (${rel}/)`);
+        say(io, text(`staged ${pending.length} record file${pending.length === 1 ? "" : "s"} (${rel}/)`));
       }
       // M6 (D170): then the vault's notes, from the record just updated, staged with it.
       ours.push(...stageNotes(store, io));
@@ -785,7 +795,7 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
     case "commit-msg": {
       const file = args[0];
       if (!file) {
-        io.err("baesian: the commit-msg hook needs the message file");
+        say(io, failed("the commit-msg hook needs the message file"));
         return 1;
       }
       const path = isAbsolute(file) ? file : join(top, file);
@@ -797,7 +807,7 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
         return 0;
       }
       const report = evaluate(store, detectStaged(store, stagedSnapshot(top)), trailers);
-      for (const line of describeReport(report, verdictsSinceLastCommit(store))) io.err(line);
+      say(io, describeReport(report, { news: verdictsSinceLastCommit(store), for: "commit" }));
       if (!report.ok) unstageOurs(top);
       writeStaged(top, []);
       // Personal mode (B-4rwyz): the trailers did their work here, and go to this clone's ledger, not the shared history.
@@ -829,7 +839,7 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       if (args[0] === "rebase" && recordMerges(store, "post-rewrite", io)) await sendMerges(store, io, http);
       return 0;
     default:
-      io.err(`baesian: unknown hook "${name}"`);
+      say(io, failed(`unknown hook "${name}"`));
       return 1;
   }
 }

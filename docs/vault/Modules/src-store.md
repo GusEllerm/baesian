@@ -79,10 +79,10 @@ In a hosted repo only what the service signs counts (D138), and the store is whe
 
 ## Errors
 
-The store's errors are classes, so the MCP server can give each a code ([[src-mcp]]); the CLI prints their messages and exits 1, or 3 for a duplicate:
+The store's errors are classes, so the MCP server can give each a code ([[src-mcp]]); the CLI prints their messages and exits 1, or 3 for a duplicate. Most are `Told` errors (src/cite.ts): a message that may cite Baesian's decisions, which only `--verbose` prints, and the next steps it knows, which its `message` gives as `next:` lines ([[src-cli#What it prints: src/style.ts (B-eyrt5)]]):
 - `NotARepo` (from `openRepo`): the directory isn't in a git repository;
-- `NotSetUp` (`Store.requireInit`): there's no live layer, so `baesian init` hasn't run;
-- `ValidationError`: the card fails its schema or a filing rule;
+- `NotSetUp` (`Store.requireInit`): there's no live layer, so `baesian init` hasn't run, which is its next step;
+- `ValidationError`: the card fails its schema or a filing rule. A draft that isn't a card says how many fields need filling in or fixing, then which are missing, empty or wrong, in a few lines (`describeDraftError()`), with `baesian template` as the next step; a filing rule says `not filed:` and the rule (`filingProblems`);
 - `PossibleDuplicate`: an open card or a resolved decision may cover it, with the matches;
 - `NoCard`: no card with that ID;
 - `NotAllowed`: the card's state, or who asks, doesn't allow it: revising a card that isn't returned, a second reply, a rule nobody asked for, withdrawing another agent's card or one already withdrawn;

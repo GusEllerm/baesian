@@ -13,6 +13,7 @@ import {
   attachOp,
   deckWaitIds,
   duplicateLines,
+  failureLines,
   fileOp,
   inboxOp,
   listOp,
@@ -27,6 +28,8 @@ import {
   withdrawOp,
 } from "./ops.js";
 import { CardDraft, CardId } from "./schema.js";
+import { unmarked } from "./cite.js";
+import { type Line, plainText, text as plainLine } from "./style.js";
 import { type Card, LooksLikeSecret, NoCard, NoDeck, NotAllowed, NotSetUp, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { aroundFiling, syncRelay, waitWithRelay } from "./sync.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions } from "./wait.js";
@@ -128,11 +131,12 @@ const body = z.string().optional().describe("background, in Markdown: shown with
 
 // ---------------------------------------------------------------- results
 
-const text = (lines: string[]) => [{ type: "text" as const, text: lines.join("\n") }];
+/** A tool's text: the plain lines the command prints, which is what agents read (B-eyrt5). */
+const text = (lines: readonly Line[]) => [{ type: "text" as const, text: plainText(lines) }];
 
 function ok(op: Op<unknown>, wrap?: string): CallToolResult {
   const data = wrap ? { [wrap]: op.data } : op.data;
-  return { content: text(op.lines), structuredContent: data as Record<string, unknown> };
+  return { content: text(op.lines), structuredContent: unmarked(data) as Record<string, unknown> };
 }
 
 /** An error a model can act on: the CLI's message, word for word, and a code. Others go to the SDK, which reports them. */
@@ -144,7 +148,7 @@ function failed(e: unknown): CallToolResult {
     return { isError: true, content: text(duplicateLines(e)), structuredContent: { error: { code, message: e.message, matches } } };
   }
   const message = e instanceof Error ? e.message : String(e);
-  return { isError: true, content: text([message]), structuredContent: { error: { code, message } } };
+  return { isError: true, content: text(failureLines(e)), structuredContent: { error: { code, message } } };
 }
 
 /** The client's name, as it gave it: each request's metadata in the 2026-07-28 era, `initialize` in the 2025 one. */
@@ -183,7 +187,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
     }
   };
   /** What the relay said, after the tool's own lines; its structured content is the command's `--json`, unchanged. */
-  const withNotes = <T>(op: Op<T>, notes: string[]): Op<T> => (notes.length ? { lines: [...op.lines, ...notes], data: op.data } : op);
+  const withNotes = <T>(op: Op<T>, notes: string[]): Op<T> => (notes.length ? { lines: [...op.lines, ...notes.map((n) => plainLine(n))], data: op.data } : op);
   /**
    * A filing tool (M9d): in a linked repo it pulls first and pushes after, with the grant `baesian login` made, as its
    * command does (P18 section 8). The server never signs in itself: signed out, the card is filed here and its text says
@@ -296,7 +300,7 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       const named = [...(id === undefined ? [] : [id]), ...(ids ?? [])];
       if (!named.length && deck === undefined) {
         const message = "name a card to wait on (id), several (ids), or a deck (deck)";
-        return { isError: true, content: text([message]), structuredContent: { error: { code: "no_card", message } } };
+        return { isError: true, content: text([plainLine(message)]), structuredContent: { error: { code: "no_card", message } } };
       }
       const token = ctx.mcpReq._meta?.progressToken;
       // Progress at each beat of the marker, so a harness's idle window doesn't close on a long wait.

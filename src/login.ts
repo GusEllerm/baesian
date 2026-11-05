@@ -1,6 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
+import { Told, cite } from "./cite.js";
 import { CONFIG_PATH } from "./facts.js";
 import { isShallow, rootCommits } from "./git.js";
 import { randomSuffix } from "./ids.js";
@@ -29,13 +30,13 @@ const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 export const REQUEST_MS = 10_000;
 
 /** The service couldn't be reached: offline, refused, or too slow. Everything local goes on as before. */
-export class Offline extends Error {}
+export class Offline extends Told {}
 
 /** This machine has no grant that works for the project: never signed in, revoked, lapsed, or signed out. */
-export class SignedOut extends Error {}
+export class SignedOut extends Told {}
 
 /** Signing in didn't finish: the person refused, the code expired, or the service said no. */
-export class SignInFailed extends Error {}
+export class SignInFailed extends Told {}
 
 // ---------------------------------------------------------------- the grant file (B-gq8j1, P16 section 8)
 
@@ -304,7 +305,7 @@ export function projectPage(service: string, project: string): string {
 
 /** The ack a commit that links the repo needs, since the link is a gate fact (B-w4g6c). */
 export function linkAck(service: string, project: string): string {
-  return `Baesian-Ack: infra:${CONFIG_PATH} linked this repo to ${service} as project ${project} (baesian login, B-62qnz)`;
+  return `Baesian-Ack: infra:${CONFIG_PATH} linked this repo to ${service} as project ${project}`;
 }
 
 /**
@@ -313,9 +314,9 @@ export function linkAck(service: string, project: string): string {
  * commits has none: linking refuses both.
  */
 export function firstCommitToLink(toplevel: string): string {
-  if (isShallow(toplevel)) throw new SignInFailed("linking records the repo's first commit (B-5gnea), which a shallow clone can't see: fetch the full history (git fetch --unshallow), then run `baesian login` again");
+  if (isShallow(toplevel)) throw new SignInFailed(`linking records the repo's first commit${cite("B-5gnea")}, which a shallow clone can't see: fetch the full history (git fetch --unshallow), then run \`baesian login\` again`);
   const roots = rootCommits(toplevel);
-  if (!roots?.length) throw new SignInFailed("linking records the repo's first commit (B-5gnea), and this repo has no commits yet: commit first");
+  if (!roots?.length) throw new SignInFailed(`linking records the repo's first commit${cite("B-5gnea")}, and this repo has no commits yet: commit first`);
   return roots.at(-1)!;
 }
 

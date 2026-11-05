@@ -118,7 +118,7 @@ describe("the pre-commit hook writes the vault's notes (D170)", { timeout: 120_0
     put(dir, "README.md", "hi again\n");
     const r = commit(dir, "More docs\n");
     expect(r.code).toBe(0);
-    expect(r.err).toContain(`baesian: left ${VAULT}/Decisions/${id} The run-metadata store.md as it is: it has changes you haven't staged.`);
+    expect(r.err).toContain(`baesian: note: left ${VAULT}/Decisions/${id} The run-metadata store.md as it is: it has changes you haven't staged.`);
     expect(sh(dir, "show", `HEAD:${VAULT}/Decisions/${id} The run-metadata store.md`)).not.toContain("My own thought");
     // Once it's staged, the next commit brings it up to date, keeping the edit.
     sh(dir, "add", "--", path);
@@ -146,7 +146,7 @@ describe("the pre-commit hook writes the vault's notes (D170)", { timeout: 120_0
     store.addVerdict({ card: other, revision: 1, response: "accept", ...REVIEWER });
     const gone = commit(dir, "Drop the vault\n");
     expect(gone.code).toBe(0);
-    expect(gone.err).toContain(`baesian: the vault ${VAULT}/ that .baesian/config.json names isn't there; no vault notes written`);
+    expect(gone.err).toContain(`baesian: warning: the vault ${VAULT}/ that .baesian/config.json names isn't there; no vault notes written`);
     expect(existsSync(join(dir, VAULT))).toBe(false);
   });
 });
