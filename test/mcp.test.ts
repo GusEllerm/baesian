@@ -374,6 +374,39 @@ describe("waiting (D168)", () => {
     expect(store.fallbacks(hard)).toEqual([]);
   });
 
+  it("waits on several cards (ids, or deck), returning what `baesian wait` on them prints (B-xnae9)", async () => {
+    const fresh = () => {
+      const r = repo();
+      r.store.createDeck({ id: "plan-runs", title: "Runs" }, "");
+      const a = file(r.store, { level: "blocking", deck: "plan-runs" });
+      const b = file(r.store, { title: "Where secrets live", question: "Where do secrets live?", topic: "secrets/where", deck: "plan-runs" });
+      r.store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER });
+      r.store.addVerdict({ card: b, revision: 1, response: "question", comment: "Which machine?", ...REVIEWER });
+      return { ...r, a, b };
+    };
+    const one = fresh();
+    const tool = await call(await connect(one.dir, { waitClock: fakeClock(Date.now()) }), "wait_for_verdict", { ids: [one.a, one.b] });
+    expect(tool.data).toMatchObject({ kind: "several", ended: "returned", next: "read", exit: 4 });
+    const two = fresh();
+    const command = await cli(two.dir, ["wait", two.a, two.b, "--json"]);
+    const norm = (s: string, r: { a: string; b: string }) => s.replaceAll(r.a, "<a>").replaceAll(r.b, "<b>").replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, "<time>");
+    expect(norm(JSON.stringify(tool.data), one)).toBe(norm(JSON.stringify(JSON.parse(command.out)), two));
+    const three = fresh();
+    const text = await cli(three.dir, ["wait", three.a, three.b]);
+    expect(norm(tool.text, one)).toBe(norm(text.out, three));
+    // A deck's: this agent's cards in it, still with the reviewer.
+    const four = repo();
+    four.store.createDeck({ id: "plan-runs", title: "Runs" }, "");
+    const c = file(four.store, { level: "blocking", deck: "plan-runs" });
+    four.store.addVerdict({ card: c, revision: 1, response: "accept", ...REVIEWER });
+    const deck = await call(await connect(four.dir, { waitClock: fakeClock(Date.now()) }), "wait_for_verdict", { deck: "plan-runs" });
+    expect(deck.isError).toBe(true);
+    expect(deck.data).toMatchObject({ error: { code: "not_allowed" } });
+    // Nothing to wait on.
+    const none = await call(await connect(four.dir), "wait_for_verdict", {});
+    expect(none).toMatchObject({ isError: true, data: { error: { code: "no_card", message: "name a card to wait on (id), several (ids), or a deck (deck)" } } });
+  });
+
   it("reports progress at each beat of the marker, when the call asks for it", async () => {
     const { dir, store } = repo();
     const id = file(store, { level: "blocking" });

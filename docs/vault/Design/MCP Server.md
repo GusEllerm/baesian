@@ -144,6 +144,8 @@ Errors a model can act on come back as tool results with isError set, as the spe
 
 **The same mechanism as `baesian wait`.** wait_for_verdict runs `waitForVerdict()` with the same options. The waiting marker (D90), the 9-minute budget counted from the first wait (D101), the fallback recorded on a blocking card, and the "reviewer away" return (D41) all behave the same. A resolved or answered outcome is marked delivered (`Store.markDelivered`), so the hooks don't hand it over again.
 
+> **Since built (B-xnae9, 2026-11-05):** `waitForVerdict()` is now `waitForAll()` on one card, and wait_for_verdict takes several cards too (ids, or deck), as `baesian wait` does, within the same 100-second calls: [[src-mcp#Waiting (D168)]]. Waiting with no time limit is the CLI's alone, for a run in the background.
+
 **How long one call lasts.** *Recommendation (MCP-5):* the CLI's slice, 100 seconds (`SLICE_MS`). A call that ends with the reviewer still there returns next: again, and the agent calls again.
 - It fits every limit found, with nothing to configure. Claude Code's default limit for an MCP call is about 28 hours, with an idle window of 30 minutes for stdio servers. Codex's default is 300 seconds (tool_timeout_sec).
 - The cost: a model turn for each 100 seconds of waiting, up to six in all.

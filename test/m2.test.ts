@@ -170,6 +170,63 @@ describe("cli: M2 commands", () => {
   });
 });
 
+describe("cli: wait on several cards, or a deck's (B-xnae9)", () => {
+  const file = async (dir: string, overrides: Record<string, unknown>, agent = "claude-code") => {
+    const r = await run(dir, ["--agent", agent, "file", "--new", "--json"], draftFile(overrides));
+    expect(r.code, r.err).toBe(0);
+    return JSON.parse(r.out).card.meta.id as string;
+  };
+
+  it("takes several IDs, and prints each card's outcome, as JSON too", async () => {
+    const { dir, store } = repo();
+    const a = await file(dir, { title: "Where runs live", topic: "area/runs", level: "blocking" });
+    const b = await file(dir, { title: "Which queue carries jobs", topic: "area/queue" });
+    const clock = fakeClock();
+    clock.at(5_000, () => store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER }));
+    clock.at(9_000, () => store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER }));
+    const r = await run(dir, ["--agent", "claude-code", "wait", a, b, "--json"], "", { waitClock: clock });
+    expect(r.code, r.err).toBe(0);
+    expect(JSON.parse(r.out)).toMatchObject({ kind: "several", ended: "answered", ids: [a, b], exit: 0, next: "use", cards: [{ kind: "resolved", id: a }, { kind: "resolved", id: b }] });
+    store.addVerdict({ card: a, revision: 1, response: "reject", comment: "No.", ...REVIEWER });
+    const again = await run(dir, ["wait", a, b], "", { waitClock: fakeClock() });
+    expect(again.code).toBe(4);
+    expect(again.out.split("\n")[0]).toBe(`${a} came back to you, so the wait ended before every card was answered.`);
+  });
+
+  it("--deck waits on this agent's cards still with the reviewer in the deck, on this branch, until each is answered", async () => {
+    const { dir, store } = repo();
+    store.createDeck({ id: "plan-runs", title: "Runs" }, "");
+    const a = await file(dir, { title: "Where runs live", topic: "area/runs", deck: "plan-runs" });
+    const b = await file(dir, { title: "Which queue carries jobs", topic: "area/queue", deck: "plan-runs" });
+    const answered = await file(dir, { title: "How logs rotate", topic: "area/logs", deck: "plan-runs" });
+    const others = await file(dir, { title: "What the API is called", topic: "area/api", deck: "plan-runs" }, "codex");
+    const elsewhere = await file(dir, { title: "Who reads the metrics", topic: "area/metrics" });
+    store.addVerdict({ card: answered, revision: 1, response: "accept", ...REVIEWER });
+    const clock = fakeClock();
+    clock.at(60 * 60_000, () => store.addVerdict({ card: a, revision: 1, response: "accept", ...REVIEWER }));
+    clock.at(2 * 60 * 60_000, () => store.addVerdict({ card: b, revision: 1, response: "accept", ...REVIEWER }));
+    const r = await run(dir, ["--agent", "claude-code", "wait", "--deck", "plan-runs", "--until-answered", "--no-presence"], "", { waitClock: { ...clock, pollMs: 60_000 } });
+    expect(r.code, r.err).toBe(0);
+    expect(r.out.split("\n")[0]).toBe(`Every card you waited on has an answer: ${a} and ${b}.`);
+    expect(r.out).not.toContain(others);
+    expect(r.out).not.toContain(elsewhere);
+    expect(clock.elapsed()).toBe(2 * 60 * 60_000);
+    // Delivered: the inbox doesn't hand them over again.
+    expect((await run(dir, ["inbox"])).out).not.toContain(a);
+  });
+
+  it("says what's wrong with no card, an unknown deck, or a deck with none of yours open", async () => {
+    const { dir, store } = repo();
+    expect(await run(dir, ["wait"])).toMatchObject({ code: 1, err: "name a card to wait on, or several, or a deck with --deck" });
+    expect(await run(dir, ["wait", "--deck", "nope"])).toMatchObject({ code: 1, err: 'no deck "nope"' });
+    store.createDeck({ id: "plan-runs", title: "Runs" }, "");
+    await file(dir, { title: "What the API is called", topic: "area/api", deck: "plan-runs" }, "codex");
+    const none = await run(dir, ["--agent", "claude-code", "wait", "--deck", "plan-runs"]);
+    expect(none.code).toBe(1);
+    expect(none.err).toContain('deck "plan-runs" has no cards of yours still with the reviewer');
+  });
+});
+
 
 describe("an agent's name (D102)", () => {
   it("comes from --agent, then BAESIAN_AGENT, then the harness, then \"agent\"", () => {

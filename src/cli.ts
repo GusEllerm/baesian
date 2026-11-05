@@ -17,6 +17,7 @@ import {
   type InboxEntry,
   type Op,
   attachOp,
+  deckWaitIds,
   duplicateLines,
   fileOp,
   inboxOp,
@@ -27,6 +28,8 @@ import {
   showOp,
   templateOp,
   topicsOp,
+  waitAllOp,
+  waitOp,
   withdrawOp,
 } from "./ops.js";
 import {
@@ -237,31 +240,41 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
 
   program
     .command("wait")
-    .description("wait for the reviewer's verdict on a card; the exit code says what to do next")
-    .argument("<id>", "the card")
-    .option("--timeout <seconds>", "how long to wait in all, across runs, before falling back", seconds, DEFAULT_TIMEOUT_MS / 1000)
+    .description("wait for the reviewer's verdict on a card, or on several; the exit code says what to do next")
+    .argument("[ids...]", "the cards: with several, it returns when every one is answered, or sooner when one comes back to you (B-xnae9)")
+    .option("--deck <id>", "wait on your cards in this deck that are still with the reviewer, with any IDs given")
+    .option("--until-answered", "no time limit: return only when the cards are answered, or one comes back, for a run in the background that wakes you when it ends")
+    .option("--timeout <seconds>", "how long to wait in all, across runs, before falling back; with --until-answered, how long the reviewer sees you waiting", seconds, DEFAULT_TIMEOUT_MS / 1000)
     .option("--slice <seconds>", "how long this run lasts before it exits 7 to be run again (D101)", seconds, SLICE_MS / 1000)
     .option("--no-presence", "wait the full timeout even if the client says the reviewer is away")
     .option("--json", "print the outcome as JSON")
-    .action(async (id: string, opts: { timeout: number; slice: number; presence: boolean; json?: boolean }) => {
-      // Ctrl-C stops the wait and removes its marker, since the agent has stopped waiting (P18).
+    .action(async (ids: string[], opts: { deck?: string; untilAnswered?: boolean; timeout: number; slice: number; presence: boolean; json?: boolean }) => {
+      if (!ids.length && opts.deck === undefined) throw new Error("name a card to wait on, or several, or a deck with --deck");
+      const agent = agentName(program.opts().agent);
+      // Ctrl-C stops the wait and removes its markers, since the agent has stopped waiting (P18).
       const stop = new AbortController();
       const cancel = () => stop.abort();
       process.once("SIGINT", cancel);
       try {
-        // An answer it gives is marked delivered: `inbox` and the hooks shouldn't hand it over again. In a linked repo it
-        // listens on the relay's socket, and the waiting marker goes up as a heartbeat (M9d, B-bv49e).
-        const { op, notes } = await waitWithRelay(
-          store(),
-          id,
-          {
-            agent: agentName(program.opts().agent),
-            timeoutMs: opts.timeout * 1000,
-            sliceMs: opts.slice * 1000,
-            usePresence: opts.presence,
-            signal: stop.signal,
-            ...io.waitClock,
-          },
+        const s = store();
+        const options: WaitOptions = {
+          agent,
+          timeoutMs: opts.timeout * 1000,
+          sliceMs: opts.slice * 1000,
+          usePresence: opts.presence,
+          untilAnswered: opts.untilAnswered ?? false,
+          signal: stop.signal,
+          ...io.waitClock,
+        };
+        // One card waits as ever; several, or a deck's, wait together (B-xnae9). The deck's cards are read after the first
+        // sync, so an answer given while the agent was away is counted. An answer it gives is marked delivered: `inbox`
+        // and the hooks shouldn't hand it over again. In a linked repo it listens on the relay's socket, and the waiting
+        // markers go up as a heartbeat (M9d, B-bv49e).
+        const one = ids.length === 1 && opts.deck === undefined;
+        const { value: op, notes } = await waitWithRelay<Op<{ exit: number }>>(
+          s,
+          (o) => (one ? waitOp(s, ids[0]!, o) : waitAllOp(s, [...ids, ...(opts.deck === undefined ? [] : deckWaitIds(s, opts.deck, agent))], o)),
+          options,
           http(),
         );
         print(op, opts.json);
@@ -709,7 +722,7 @@ export async function main(argv: string[] = process.argv, io: Io = defaultIo): P
     }
     // Ctrl-C during `wait`: its marker is gone, so the reviewer no longer sees the agent waiting.
     if (e instanceof WaitCancelled) {
-      io.err(`${e.message}; run \`baesian wait ${e.id}\` again to wait on it`);
+      io.err(`${e.message}; run \`baesian wait ${e.id}\` again to wait on ${e.id.includes(" ") ? "them" : "it"}`);
       return 130;
     }
     io.err(e instanceof ValidationError || e instanceof Error ? e.message : String(e));

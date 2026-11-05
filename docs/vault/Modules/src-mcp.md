@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/mcp.ts: the local MCP server (M7, P18), baesian mcp, over stdio in both protocol eras, on the official SDK v2 (D164). Its twelve tools, one per agent command (D166), call the CLI's operations, so each returns what its command prints; it takes the card's fields with the template's notes (D167), waits in 100-second calls (D168), quotes text others wrote (D169), names errors with codes, and never answers a card. In a linked repo (M9d) it syncs through the relay with the grant `baesian login` made, never signing in itself."
 created: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-11-03
 tags: [baesian, module, mcp]
 ---
@@ -31,7 +31,7 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 | `draft_rule` | `baesian rule` | `ruleOp` | writes |
 | `attach_to_card` | `baesian attach` | `attachOp` | writes |
 | `withdraw_card` | `baesian withdraw` | `withdrawOp` | destructive |
-| `wait_for_verdict` | `baesian wait` | `waitOp` | writes (the marker, a fallback) |
+| `wait_for_verdict` | `baesian wait` | `waitOp`, or `waitAllOp` on several cards | writes (the marker, a fallback) |
 | `check_inbox` | `baesian inbox` | `inboxOp` | writes (the inbox's place) |
 | `show_card` | `baesian show` | `showOp` | read-only |
 | `list_cards` | `baesian list` | `listOp` | read-only |
@@ -63,6 +63,7 @@ The store's errors come back as tool results with `isError` set, the CLI's messa
 `wait_for_verdict` runs `waitOp`, so `waitForVerdict` with the CLI's options. A held card returns at once with `next: go` (exit 8): go ahead with the pick, as provisional (B-chq61). Otherwise one call lasts at most `SLICE_MS` (100 seconds), and a call that ends with the reviewer still there returns `next: again`. The 9-minute budget counts from the first call, through the waiting marker (D90, D101). Its result is the `WaitOutcome` with `next` and `exit` (`NEXT`).
 - **Cancelling:** the call's abort signal is `WaitOptions.signal`, so a call the harness cancels, or a closed input, stops the wait (`WaitCancelled`) and removes the marker. It records no fallback.
 - **Progress:** when the call carries a progress token, `WaitOptions.onBeat` sends progress at each beat of the marker, every 30 seconds.
+- **Several cards (B-xnae9):** `id` is optional beside `ids` (several cards) and `deck` (this agent's cards in it still with the reviewer, `deckWaitIds`); given more than one card, or a deck, it runs `waitAllOp`, as `baesian wait a b` does, and its result is the `WaitAllResult`: each card's outcome, why it ended, `next` and `exit`. None of the three is an error with the code `no_card`. It never waits with no time limit: a call can't wake an idle agent, and D168 keeps a call to 100 seconds, so `--until-answered` is the CLI's alone. The server's instructions say to leave that running in the background when a turn ends with cards open.
 
 ## Naming the agent
 

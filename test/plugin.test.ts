@@ -8,7 +8,7 @@ import { contextFor, deckFor, onPlanApproved } from "../plugins/baesian/hooks/pl
 // @ts-expect-error: plain JavaScript, as above
 import { newVerdicts } from "../plugins/baesian/hooks/new-verdicts.mjs";
 // @ts-expect-error: plain JavaScript, as above
-import { onTurnEnded } from "../plugins/baesian/hooks/turn-ended.mjs";
+import { onTurnEnded, remindedIn } from "../plugins/baesian/hooks/turn-ended.mjs";
 import { REVIEWER, cleanup, draftFile, repo } from "./helpers.js";
 
 afterEach(cleanup);
@@ -165,6 +165,64 @@ describe("the hook at the end of a turn", () => {
     expect(out.decision).toBe("block");
     expect(out.reason).toContain(`${id} r1  accept`);
     expect(await onTurnEnded({ ...codex, stop_hook_active: true }, cli)).toBeUndefined();
+  });
+
+  describe("with cards still open, in Claude Code (B-xnae9)", () => {
+    /** Claude Code's Stop input since 2.1.145, which lists the session's background tasks. */
+    const claude = (cwd: string, extra: Record<string, unknown> = {}) => ({ ...stopped(cwd), session_id: "s-1", background_tasks: [], session_crons: [], ...extra });
+    const memory = () => {
+      const kept = new Map<string, Set<string>>();
+      return { read: (s: string) => new Set(kept.get(s) ?? []), write: (s: string, keys: Set<string>) => kept.set(s, new Set(keys)) };
+    };
+
+    it("reminds the agent once that it can leave a wait running in the background, naming the cards", async () => {
+      const { dir, store } = repo();
+      const a = /filed (B-\w{5})/.exec((await cli(["--agent", "claude-code", "file"], draftFile({ level: "blocking" }), dir)).stdout)![1]!;
+      const b = /filed (B-\w{5})/.exec((await cli(["--agent", "claude-code", "file", "--new"], draftFile({ title: "Which queue carries jobs", topic: "area/queue" }), dir)).stdout)![1]!;
+      const answered = /filed (B-\w{5})/.exec((await cli(["--agent", "claude-code", "file", "--new"], draftFile({ title: "How logs rotate", topic: "area/logs" }), dir)).stdout)![1]!;
+      store.addVerdict({ card: answered, revision: 1, response: "accept", ...REVIEWER });
+      const seen = memory();
+      // The answer comes first, as before; the reminder waits for a turn with nothing new.
+      expect((await onTurnEnded(claude(dir), cli, seen)).hookSpecificOutput.additionalContext).toContain(`${answered} r1  accept`);
+      const out = await onTurnEnded(claude(dir), cli, seen);
+      expect(out.hookSpecificOutput.hookEventName).toBe("Stop");
+      const text: string = out.hookSpecificOutput.additionalContext;
+      expect(text.split("\n")[0]).toBe(`Cards on this branch are still with the reviewer: ${a} (blocking), ${b} (provisional).`);
+      expect(text).toContain(`\`baesian wait ${a} ${b} --until-answered\` running in the background`);
+      expect(text).not.toContain(answered);
+      // Once a session: not at its next turn, but a new session is told.
+      expect(await onTurnEnded(claude(dir), cli, seen)).toBeUndefined();
+      expect(await onTurnEnded(claude(dir, { session_id: "s-2" }), cli, seen)).toMatchObject({ hookSpecificOutput: { additionalContext: expect.stringContaining(a) } });
+    });
+
+    it("says nothing when a wait is running in the background, while carrying on for a Stop hook, in Codex, or in an older Claude Code", async () => {
+      const { dir } = repo();
+      await cli(["--agent", "claude-code", "file"], draftFile({ level: "blocking" }), dir);
+      const running = [{ id: "task-1", type: "shell", status: "running", description: "wait for answers", command: "baesian wait B-aaaaa B-bbbbb --until-answered" }];
+      expect(await onTurnEnded(claude(dir, { background_tasks: running }), cli, memory())).toBeUndefined();
+      expect(await onTurnEnded(claude(dir, { stop_hook_active: true }), cli, memory())).toBeUndefined();
+      expect(await onTurnEnded(claude(dir, { turn_id: "turn-1" }), cli, memory())).toBeUndefined();
+      const { background_tasks: _, ...older } = claude(dir);
+      expect(await onTurnEnded(older, cli, memory())).toBeUndefined();
+      // Another background task isn't a wait.
+      const other = [{ id: "task-2", type: "shell", status: "running", description: "tail logs", command: "tail -f server.log" }];
+      expect(await onTurnEnded(claude(dir, { background_tasks: other }), cli, memory())).toBeDefined();
+    });
+
+    it("keeps what it reminded of between runs in a file of its own, and says nothing outside a repo that uses Baesian", async () => {
+      const { dir } = repo();
+      await cli(["--agent", "claude-code", "file"], draftFile({ level: "blocking" }), dir);
+      const folder = mkdtempSync(join(tmpdir(), "baesian-reminded-"));
+      try {
+        expect(await onTurnEnded(claude(dir), cli, remindedIn(folder))).toBeDefined();
+        expect(await onTurnEnded(claude(dir), cli, remindedIn(folder))).toBeUndefined();
+        const plain = mkdtempSync(join(tmpdir(), "baesian-plain-"));
+        expect(await onTurnEnded(claude(plain, { session_id: "s-3" }), cli, remindedIn(folder))).toBeUndefined();
+        rmSync(plain, { recursive: true, force: true });
+      } finally {
+        rmSync(folder, { recursive: true, force: true });
+      }
+    });
   });
 
   it("says nothing outside a repo that uses Baesian, without the CLI, or for another event", async () => {

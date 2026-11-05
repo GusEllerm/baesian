@@ -132,4 +132,4 @@ All of these go through a private write-once helper, which writes through `Stora
 
 ## Elsewhere
 
-Waiting lives in `waitForVerdict` ([[src-cli]]), the hooks in `runHook` ([[src-gate]]), and the vault's notes, rendered from a record opened with `Store.overRecord`, in `writeNotes` ([[src-vault]]).
+Waiting lives in `waitForVerdict` and `waitForAll` ([[src-cli]]), the hooks in `runHook` ([[src-gate]]), and the vault's notes, rendered from a record opened with `Store.overRecord`, in `writeNotes` ([[src-vault]]).

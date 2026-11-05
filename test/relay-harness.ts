@@ -20,7 +20,7 @@ export const SITE = "https://baesian.test";
 
 /** The person, and the projects the stand-in lets them answer in, as a session cookie each. */
 export const PERSON = { account: "acct-gus", handle: "gus" };
-export const PROJECTS = ["proj-1", "proj-2", "proj-3", "proj-4", "proj-5", "proj-6", "proj-7", "proj-8", "proj-9", "proj-10", "proj-11", "proj-12", "proj-13"];
+export const PROJECTS = ["proj-1", "proj-2", "proj-3", "proj-4", "proj-5", "proj-6", "proj-7", "proj-8", "proj-9", "proj-10", "proj-11", "proj-12", "proj-13", "proj-14", "proj-15"];
 
 export interface D1Like {
   prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown>; first<T>(): Promise<T | null>; all<T>(): Promise<{ results: T[] }> }; run(): Promise<unknown> };

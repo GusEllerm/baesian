@@ -4,8 +4,6 @@ import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync
 import { join } from "node:path";
 import { isShallow, rootCommits } from "./git.js";
 import { type Http, Offline, REQUEST_MS, SignedOut, readGrant, reason, refreshGrant } from "./login.js";
-import type { Op, WaitResult } from "./ops.js";
-import { waitOp } from "./ops.js";
 import { CARD_ID, CardDraft, type Config, type MachineGrant, Presence, type RelayEntry, RelayState, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
 import { alreadyExists, checkPath } from "./storage.js";
 import type { Store } from "./store.js";
@@ -547,29 +545,50 @@ export async function aroundFiling<T>(store: Store, op: () => T | Promise<T>, ht
 const RECONNECT_MS = [1000, 2000, 5000, 10_000];
 
 /**
+ * How often a wait pulls without being told to (B-xnae9): a wait in the background may run for hours, over a laptop's
+ * sleep or a socket that died without closing, and a `changed` message missed then would leave it waiting on an answer
+ * already given.
+ */
+export const RESYNC_MS = 5 * 60_000;
+
+/** Several markers refreshed at one beat read the reviewer's presence once. */
+const PRESENCE_GAP_MS = 5000;
+
+/**
  * While `baesian wait` runs in a linked repo: the relay's live socket, `GET /v1/projects/{p}/live`, whose `changed`
  * messages each start a pull, so an answer reaches the live layer within a moment and the wait's own poll finds it; the
- * waiting marker, sent up with each beat and removed when the wait ends (D90); and the reviewer's presence from the
- * relay's state, written into the live layer when it's newer, so the wait knows when they're away (D41).
+ * waiting markers, sent up with each beat and removed when their cards are answered or the wait ends (D90); and the
+ * reviewer's presence from the relay's state, written into the live layer when it's newer, so the wait knows when they're
+ * away (D41). A socket opened again pulls at once, for what changed while it was closed; and it pulls every `RESYNC_MS`
+ * besides. Until a sync both ways has gone through (`unsynced`: the wait started offline), each pull pushes too, so the
+ * cards reach the reviewer.
  */
 class Listener {
   private ws: WebSocket | undefined;
   private closed = false;
+  private opened = false;
   private attempts = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private resync: ReturnType<typeof setInterval> | undefined;
   private pulling: Promise<void> | undefined;
   private again = false;
+  private presenceAt = 0;
   private queue: Promise<unknown> = Promise.resolve();
   readonly notes: string[] = [];
 
   constructor(
     private readonly store: Store,
     private readonly client: RelayClient,
+    private unsynced = false,
   ) {}
 
   /** Open the socket. A failure is retried until the wait ends; the wait goes on either way. */
   async open(): Promise<void> {
     if (this.closed) return;
+    if (!this.resync) {
+      this.resync = setInterval(() => this.pull(), RESYNC_MS);
+      this.resync.unref?.();
+    }
     let token: string;
     try {
       token = await this.client.token();
@@ -582,6 +601,9 @@ class Listener {
     this.ws = ws;
     ws.onopen = () => {
       this.attempts = 0;
+      // Opened again, after a close: what changed meanwhile sent no message here. Or the first sync didn't go through.
+      if (this.opened || this.unsynced) this.pull();
+      this.opened = true;
     };
     ws.onmessage = (m) => {
       try {
@@ -622,7 +644,9 @@ class Listener {
     this.pulling = (async () => {
       do {
         this.again = false;
-        const r = await syncWith(this.store, this.client, { pull: true, push: false });
+        const both = this.unsynced;
+        const r = await syncWith(this.store, this.client, { pull: true, push: both });
+        if (both && r.state === "synced") this.unsynced = false;
         for (const n of r.notes) if (!this.notes.includes(n)) this.notes.push(n);
       } while (this.again && !this.closed);
     })().finally(() => {
@@ -630,7 +654,7 @@ class Listener {
     });
   }
 
-  /** The waiting marker, written or refreshed (PUT, with the presence read afresh) or removed (DELETE), in order. */
+  /** A waiting marker, written or refreshed (PUT, with the presence read afresh) or removed (DELETE), in order. */
   marker(m: { path: string; removed: boolean }): void {
     this.queue = this.queue
       .then(async () => {
@@ -647,6 +671,8 @@ class Listener {
 
   /** The reviewer's presence on the relay (`GET state`), into the live layer when it's newer than what's there. */
   private async presence(): Promise<void> {
+    if (Date.now() - this.presenceAt < PRESENCE_GAP_MS) return;
+    this.presenceAt = Date.now();
     const r = await this.client.request("GET", "state");
     if (r.status !== 200) return;
     const p = Presence.safeParse((r.json as { presence?: unknown } | undefined)?.presence);
@@ -656,11 +682,13 @@ class Listener {
     this.store.storage.replace("presence.json", encode(`${JSON.stringify(p.data)}\n`));
   }
 
-  /** Close the socket and stop retrying; let the marker's removal and a pull in progress finish, for a few seconds at most. */
+  /** Close the socket and stop retrying; let the markers' removal and a pull in progress finish, for a few seconds at most. */
   async close(): Promise<void> {
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    if (this.resync) clearInterval(this.resync);
+    this.resync = undefined;
     try {
       this.ws?.close();
     } catch {
@@ -673,27 +701,30 @@ class Listener {
 }
 
 /**
- * `baesian wait` in a linked repo (B-bv49e): sync first, so the card is on the relay and any answer already given is
- * here; then wait as ever, with the relay's live socket starting a pull at each change, and the waiting marker going up
- * as a heartbeat. Offline or signed out, it waits on the live layer alone, as before.
+ * `baesian wait` in a linked repo (B-bv49e): sync first, so the cards are on the relay and any answer already given is
+ * here; then run the wait it's given (`waitOp`, or `waitAllOp` on several cards, B-xnae9), with the relay's live socket
+ * starting a pull at each change, and the waiting markers going up as a heartbeat. Offline or signed out, it waits on the
+ * live layer alone, as before; but a wait with no time limit (`WaitOptions.untilAnswered`) that starts offline listens
+ * all the same, syncing once the socket opens, since it may run for hours.
  */
-export async function waitWithRelay(store: Store, id: string, opts: WaitOptions, http: Http = {}): Promise<{ op: Op<WaitResult>; notes: string[] }> {
+export async function waitWithRelay<T>(store: Store, wait: (opts: WaitOptions) => Promise<T>, opts: WaitOptions, http: Http = {}): Promise<{ value: T; notes: string[] }> {
   const link = relayFor(store, http);
-  if (link.kind === "off") return { op: await waitOp(store, id, opts), notes: [] };
-  if (link.kind !== "on") return { op: await waitOp(store, id, opts), notes: [link.why] };
+  if (link.kind === "off") return { value: await wait(opts), notes: [] };
+  if (link.kind !== "on") return { value: await wait(opts), notes: [link.why] };
   const first = await syncWith(store, link.client, { pull: true, push: true });
-  if (first.state !== "synced") return { op: await waitOp(store, id, opts), notes: first.notes };
-  const live = new Listener(store, link.client);
+  const listen = first.state === "synced" || (first.state === "offline" && opts.untilAnswered === true);
+  if (!listen) return { value: await wait(opts), notes: first.notes };
+  const live = new Listener(store, link.client, first.state !== "synced");
   await live.open();
   try {
-    const op = await waitOp(store, id, {
+    const value = await wait({
       ...opts,
       onMarker: (m) => {
         live.marker(m);
         opts.onMarker?.(m);
       },
     });
-    return { op, notes: [...first.notes, ...live.notes] };
+    return { value, notes: [...first.notes, ...live.notes] };
   } finally {
     await live.close();
   }

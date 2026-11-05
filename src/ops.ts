@@ -2,8 +2,21 @@ import { CARD_TEMPLATE } from "./agents.js";
 import { agentLabel, answerLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { POSITION_NAMES, ROW_NAMES, type AnyRow, type Position } from "./routing.js";
 import type { GateRecord, Verdict, Withdrawal } from "./schema.js";
-import { type Brief, type Card, type FileResult, type InboxItem, NoCard, PENDING, type PossibleDuplicate, type Status, type Store } from "./store.js";
-import { type WaitOptions, type WaitOutcome, describeBrief, describeOutcome, exitCodeFor, replyHint, ruleHint, waitForVerdict } from "./wait.js";
+import { type Brief, type Card, type FileResult, type InboxItem, NoCard, NoDeck, NotAllowed, PENDING, type PossibleDuplicate, type Status, type Store } from "./store.js";
+import {
+  type WaitAllOutcome,
+  type WaitOptions,
+  type WaitOutcome,
+  describeAll,
+  describeBrief,
+  describeOutcome,
+  exitCodeFor,
+  exitCodeForAll,
+  replyHint,
+  ruleHint,
+  waitForAll,
+  waitForVerdict,
+} from "./wait.js";
 
 // The agent commands' operations, shared by the CLI and the MCP server (P18), so the two never drift: each returns the
 // lines the CLI prints and what its `--json` prints, and the server returns the same as a tool's text and structured
@@ -177,6 +190,40 @@ export async function waitOp(s: Store, id: string, opts: WaitOptions): Promise<O
   if (outcome.kind === "resolved" || outcome.kind === "answered") s.markDelivered(id, outcome);
   const exit = exitCodeFor(outcome);
   return { lines: describeOutcome(outcome), data: { ...outcome, next: NEXT[exit as keyof typeof NEXT], exit } };
+}
+
+export type WaitAllResult = WaitAllOutcome & { next: Next; exit: number };
+
+/**
+ * `baesian wait` on several cards, or a deck's (B-xnae9): one run, until every card is answered, or one comes back or is
+ * held back; or, without `untilAnswered`, until the run's slice or the wait's time is over. Each answer it gives is
+ * marked delivered; a run that ends with "again" gives none yet, so they all come when the wait ends.
+ */
+export async function waitAllOp(s: Store, ids: string[], opts: WaitOptions): Promise<Op<WaitAllResult>> {
+  const outcome = await waitForAll(s, ids, opts);
+  if (outcome.ended !== "again") for (const c of outcome.cards) if (c.kind === "resolved" || c.kind === "answered") s.markDelivered(c.id, c);
+  const exit = exitCodeForAll(outcome);
+  return { lines: describeAll(outcome), data: { ...outcome, next: NEXT[exit as keyof typeof NEXT], exit } };
+}
+
+/**
+ * The cards `baesian wait --deck` waits on (B-xnae9): the deck's cards still with the reviewer (open, or rerouted to
+ * another reviewer) that this agent filed or attached to, on this branch (`Store.branchCards`). This agent's, not every
+ * card in the deck: an agent wakes for the answers it acts on. And on this branch, since agents share names (every
+ * Claude Code session is `claude-code` unless it's named), so the branch tells them apart, as `baesian inbox` does.
+ */
+export function deckWaitIds(s: Store, deck: string, agent: string): string[] {
+  s.requireInit();
+  if (!s.deck(deck)) throw new NoDeck(`no deck "${deck}"`);
+  return s.view(() => {
+    const attached = new Set(s.attachments().filter((a) => a.agent === agent).map((a) => a.card));
+    const mine = s.branchCards().filter((c) => c.meta.deck === deck && (c.meta.source_agent === agent || attached.has(c.meta.id)));
+    const ids = mine.filter((c) => ["open", "rerouted"].includes(s.status(c.meta.id))).map((c) => c.meta.id);
+    if (!ids.length) {
+      throw new NotAllowed(`deck "${deck}" has no cards of yours still with the reviewer (filed or attached to by ${agent}, on this branch): nothing to wait on. \`baesian inbox\` has any answers you haven't seen.`);
+    }
+    return ids;
+  });
 }
 
 /** An inbox item, marked with whether its answer can still take a reply or a rule draft. */

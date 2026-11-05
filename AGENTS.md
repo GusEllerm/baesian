@@ -64,6 +64,12 @@ line.
   (proceed provisionally); 6 with no verdict on a hard card (don't proceed: park the task or stop); 7 while
   the reviewer is still there (run `baesian wait <id>` again); 8 when the card is held back (go ahead with
   your pick, as provisional). Each run lasts at most 100 seconds.
+- If you end your turn with cards still with the reviewer whose answers you'll act on (blocking or hard
+  ones, or provisional ones), and your harness wakes you when a background command finishes (Claude Code
+  does), leave `baesian wait <id> <id>… --until-answered` running in the background, or `--deck <deck>`
+  for your open cards in a deck. It has no time limit: it ends when every card is answered (0 when all are
+  resolved, else 4), or sooner when one is returned (4) or held back (8). When it ends, act on the answers
+  it printed; `baesian inbox` won't repeat them. Without that (Codex), answers come with the next message.
 - If an answer asks for a rule (`wait` and `inbox` say so), draft it, with the gate patterns it covers:
   `baesian rule <id> "<the rule>" --covers dep:pytest-*`. It goes to the reviewer as a card.
 - If you're a long-lived agent, set `BAESIAN_AGENT` to your name; otherwise your harness's name is used.

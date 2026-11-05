@@ -13,7 +13,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "plugins/baesian/hooks/turn-ended.mjs"
-sig = "364fbf96655ef81a"
+sig = "d52db638aecff70b"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -2593,7 +2593,7 @@ sig = "d532ecd41fa0a867"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/agents.ts"
-sig = "4b38a003d3d84aeb"
+sig = "1152ddbf829873a5"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -2683,7 +2683,7 @@ sig = "1fd0df270d6858a2"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/mcp.ts"
-sig = "465ed5ed250e829b"
+sig = "004119e47a6f624a"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -2693,7 +2693,7 @@ sig = "780f3927f3747da4"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/ops.ts"
-sig = "6bb33d4c55f5f422"
+sig = "df625c2364d17b2b"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -2788,7 +2788,7 @@ sig = "894f3e2691519c42"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts"
-sig = "ab08046871b43d53"
+sig = "4b58ad5dcf0d9728"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -2803,7 +2803,7 @@ sig = "3236ed4c8028b561"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "b882e1e10ecb2ca2"
+sig = "1ebada7599d6a7b9"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -2998,7 +2998,7 @@ sig = "4724db53562a6d66"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "49f9c30d4a025327"
+sig = "15c2f3e7784b36fb"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -3033,7 +3033,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "8dd78ea6f1847d54"
+sig = "a7a7c36a3354ebf6"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -3108,7 +3108,7 @@ sig = "5041f073fb26c3bc"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#WaitOptions"
-sig = "920e71c29e3eb537"
+sig = "42630de9d81f6100"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -3142,8 +3142,13 @@ sig = "0a72fcaba88453d2"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
+target = "src/wait.ts#waitForAll"
+sig = "75456fa7e9b8b10a"
+
+[[bindings]]
+doc = "docs/vault/Design/MCP Server.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "b882e1e10ecb2ca2"
+sig = "1ebada7599d6a7b9"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -4417,8 +4422,18 @@ sig = "083d8693f367e77d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "design/explorations/round3/app.js#answered"
+sig = "e551cc38bdd94395"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "design/explorations/round3/app.js#next"
 sig = "3c03519ac5431d85"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "design/explorations/round4/app.js#answered"
+sig = "e551cc38bdd94395"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4434,6 +4449,11 @@ sig = "f4d3304a8a470bad"
 doc = "docs/vault/Modules/src-cli.md"
 target = "design/explorations/round4/map.js#show"
 sig = "77f21c726a34fd5c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "design/explorations/round5/app.js#answered"
+sig = "e551cc38bdd94395"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4458,7 +4478,7 @@ sig = "0101404b91b31a70"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "49f9c30d4a025327"
+sig = "15c2f3e7784b36fb"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4538,7 +4558,7 @@ sig = "912d523b00dcd41d"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "8dd78ea6f1847d54"
+sig = "a7a7c36a3354ebf6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4613,7 +4633,7 @@ sig = "0285f459eecaca01"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts"
-sig = "6bb33d4c55f5f422"
+sig = "df625c2364d17b2b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4624,6 +4644,11 @@ sig = "1cc8ea2292c9f1c6"
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#NEXT"
 sig = "da7e46dd4dd49ccd"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/ops.ts#WaitAllResult"
+sig = "d05c0b924a603f1d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4639,6 +4664,11 @@ sig = "f1bb7cbc31ec828e"
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#cardLine"
 sig = "5a3ee01d0fd81ab3"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/ops.ts#deckWaitIds"
+sig = "8f876064a4065d6d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4702,6 +4732,11 @@ sig = "60358d0fd50e6467"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "src/ops.ts#waitAllOp"
+sig = "d8e7c267835f43f8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "src/ops.ts#waitOp"
 sig = "7e9a56831c607a8d"
 
@@ -4748,7 +4783,7 @@ sig = "5222f4af6c0b7151"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/sync.ts#Listener"
-sig = "37c1779c15ff6b70"
+sig = "737bea8ae7e9f561"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4763,7 +4798,7 @@ sig = "b36e0b6acbfa8478"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/sync.ts#waitWithRelay"
-sig = "ba1d7967550a9d8a"
+sig = "f0e374b1aa696523"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4779,6 +4814,11 @@ sig = "36358eeffb9cdb65"
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/verify.ts#verify"
 sig = "894f3e2691519c42"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#CardOutcome"
+sig = "5417fb6a56178ebd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4802,8 +4842,18 @@ sig = "5481bc5d6b9e8cb8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#StillOpen"
+sig = "bfec170f9a027c20"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#WAIT_EXIT"
 sig = "5041f073fb26c3bc"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#WaitAllOutcome"
+sig = "4a572dd81146d3ac"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4813,7 +4863,12 @@ sig = "bed96611b25079d6"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#WaitOptions"
-sig = "920e71c29e3eb537"
+sig = "42630de9d81f6100"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#describeAll"
+sig = "02efcc31c493f4c3"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4832,8 +4887,18 @@ sig = "2a9582c7144a8791"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#exitCodeForAll"
+sig = "bbd83f19faa2d62f"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/wait.ts#waitForAll"
+sig = "75456fa7e9b8b10a"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "b882e1e10ecb2ca2"
+sig = "1ebada7599d6a7b9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5108,7 +5173,7 @@ sig = "07800ec790ce3e63"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "49f9c30d4a025327"
+sig = "15c2f3e7784b36fb"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5153,12 +5218,12 @@ sig = "f7fda0f3ccc2fad2"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts"
-sig = "465ed5ed250e829b"
+sig = "004119e47a6f624a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts#MCP_INSTRUCTIONS"
-sig = "ee9f837fa4eb5d9f"
+sig = "929fe9187e7cc280"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5173,7 +5238,7 @@ sig = "4c8038dc930bea4e"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/mcp.ts#buildMcpServer"
-sig = "55e4e93c82150ac6"
+sig = "83d0a72fbbffa217"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5192,13 +5257,18 @@ sig = "a56440c199050343"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/notify.ts#NotifyPayload"
+sig = "dcb44488cded38e2"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/notify.ts#notifyFiled"
 sig = "14ae8a7c312598a2"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts"
-sig = "6bb33d4c55f5f422"
+sig = "df625c2364d17b2b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5207,8 +5277,18 @@ sig = "da7e46dd4dd49ccd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/ops.ts#WaitAllResult"
+sig = "d05c0b924a603f1d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#attachOp"
 sig = "490d885df4320ce5"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
+target = "src/ops.ts#deckWaitIds"
+sig = "8f876064a4065d6d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5257,6 +5337,11 @@ sig = "0e3085dd46e1253c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/ops.ts#waitAllOp"
+sig = "d8e7c267835f43f8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/ops.ts#waitOp"
 sig = "7e9a56831c607a8d"
 
@@ -5298,7 +5383,7 @@ sig = "b36e0b6acbfa8478"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/sync.ts#waitWithRelay"
-sig = "ba1d7967550a9d8a"
+sig = "f0e374b1aa696523"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5317,13 +5402,18 @@ sig = "5481bc5d6b9e8cb8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
+target = "src/wait.ts#WaitAllOutcome"
+sig = "4a572dd81146d3ac"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-mcp.md"
 target = "src/wait.ts#WaitCancelled"
 sig = "bed96611b25079d6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/wait.ts#WaitOptions"
-sig = "920e71c29e3eb537"
+sig = "42630de9d81f6100"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
@@ -5333,7 +5423,7 @@ sig = "f70767e1a5f5042e"
 [[bindings]]
 doc = "docs/vault/Modules/src-mcp.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "b882e1e10ecb2ca2"
+sig = "1ebada7599d6a7b9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -5348,12 +5438,12 @@ sig = "1155fe7fab06490c"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/mcp.ts"
-sig = "465ed5ed250e829b"
+sig = "004119e47a6f624a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/ops.ts"
-sig = "6bb33d4c55f5f422"
+sig = "df625c2364d17b2b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -6337,8 +6427,13 @@ sig = "36358eeffb9cdb65"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
+target = "src/wait.ts#waitForAll"
+sig = "75456fa7e9b8b10a"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-store.md"
 target = "src/wait.ts#waitForVerdict"
-sig = "b882e1e10ecb2ca2"
+sig = "1ebada7599d6a7b9"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -6587,6 +6682,16 @@ sig = "65c14c7f02d629db"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
+target = "src/ops.ts#waitAllOp"
+sig = "d8e7c267835f43f8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
+target = "src/ops.ts#waitOp"
+sig = "7e9a56831c607a8d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
 target = "src/routing.ts#ReplayRow"
 sig = "fb08c48aa43363f4"
 
@@ -6628,12 +6733,17 @@ sig = "c4d5fc1bbd0b4a4a"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "src/sync.ts#Listener"
-sig = "37c1779c15ff6b70"
+sig = "737bea8ae7e9f561"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "src/sync.ts#RELAY_STATE"
 sig = "685948b2368ef08c"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
+target = "src/sync.ts#RESYNC_MS"
+sig = "906f81aecbe9ee24"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -6708,7 +6818,7 @@ sig = "3f3be2bec114e962"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "src/sync.ts#waitWithRelay"
-sig = "ba1d7967550a9d8a"
+sig = "f0e374b1aa696523"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -6752,8 +6862,13 @@ sig = "894f3e2691519c42"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
+target = "src/wait.ts#WaitAllOutcome"
+sig = "4a572dd81146d3ac"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
 target = "src/wait.ts#WaitOptions"
-sig = "920e71c29e3eb537"
+sig = "42630de9d81f6100"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
@@ -6913,7 +7028,7 @@ sig = "50b84c6c2b06b24e"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/agents.ts"
-sig = "4b38a003d3d84aeb"
+sig = "1152ddbf829873a5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"

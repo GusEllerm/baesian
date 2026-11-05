@@ -426,6 +426,54 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const s = (await (await relay.person("proj-8", "GET", "state")).json()) as { cards: { meta: { id: string }; waiting: unknown[] }[] };
       expect(s.cards.find((c) => c.meta.id === id)?.waiting).toEqual([]);
     }, 30_000);
+
+    /** Which of the cards the website shows an agent waiting on now. */
+    const waitingOnRelay = async (project: string, ids: string[]) => {
+      const s = (await (await relay.person(project, "GET", "state")).json()) as { cards: { meta: { id: string }; waiting: { stale: boolean }[] }[] };
+      return Object.fromEntries(ids.map((id) => [id, s.cards.find((c) => c.meta.id === id)?.waiting.some((w) => !w.stale) ?? false]));
+    };
+
+    it("waits with no time limit on two cards, hearing both answers over the socket, and ends when both are in (B-xnae9)", async () => {
+      const { dir, store } = await signedIn("proj-14");
+      const a = await fileCard(dir, { title: "Where runs live", topic: "relay/runs", level: "blocking" }, ["--new"]);
+      const b = await fileCard(dir, { title: "Which queue carries jobs", topic: "relay/queue" }, ["--new"]);
+      let ended = false;
+      const waiting = run(dir, ["wait", a, b, "--until-answered"]).finally(() => (ended = true));
+      // Both markers reach the relay, as the website shows them.
+      await expect.poll(() => waitingOnRelay("proj-14", [a, b]), { timeout: 5000 }).toEqual({ [a]: true, [b]: true });
+      expect((await relay.person("proj-14", "POST", "verdicts", { card: a, revision: 1, response: "accept", client: "hosted-desktop" })).status).toBe(201);
+      // The first answer is heard: its card's marker goes, and the wait goes on for the other.
+      await expect.poll(() => waitingOnRelay("proj-14", [a, b]), { timeout: 5000 }).toEqual({ [a]: false, [b]: true });
+      expect(store.status(a)).toBe("resolved");
+      expect(ended).toBe(false);
+      const answered = Date.now();
+      expect((await relay.person("proj-14", "POST", "verdicts", { card: b, revision: 1, response: "accept", client: "hosted-desktop" })).status).toBe(201);
+      const r = await waiting;
+      expect(r.code, r.err).toBe(0);
+      expect(Date.now() - answered).toBeLessThan(5000);
+      expect(r.out.split("\n")[0]).toBe(`Every card you waited on has an answer: ${a} and ${b}.`);
+      expect(r.out).toContain(`${a} resolved by gus (a person)`);
+      expect(r.out).toContain(`${b} resolved by gus (a person)`);
+      expect(await waitingOnRelay("proj-14", [a, b])).toEqual({ [a]: false, [b]: false });
+    }, 30_000);
+
+    it("with no time limit, starts offline all the same, and sends its card and hears the answer once the relay answers (B-xnae9)", async () => {
+      const { dir, store } = await signedIn("proj-15");
+      const filed = await run(dir, ["file", "-"], { stdin: draftFile({ title: "Filed offline", topic: "relay/offline" }), fetch: offline });
+      const id = /^filed (B-[0-9a-z]{5})/.exec(filed.out)![1]!;
+      expect(await relayPaths("proj-15")).not.toContain(`cards/${id}/r1.md`);
+      // The wait's first sync can't reach the relay; everything after can.
+      let calls = 0;
+      const flaky: typeof fetch = (input, init) => (calls++ === 0 ? offline(input, init) : fetch(input, init));
+      const waiting = run(dir, ["wait", id, "--until-answered"], { fetch: flaky });
+      await expect.poll(() => relayPaths("proj-15"), { timeout: 10_000 }).toContain(`cards/${id}/r1.md`);
+      expect((await relay.person("proj-15", "POST", "verdicts", { card: id, revision: 1, response: "accept", client: "hosted-desktop" })).status).toBe(201);
+      const r = await waiting;
+      expect(r.code, r.err).toBe(0);
+      expect(r.out).toContain(`${id} resolved by gus (a person)`);
+      expect(r.err).toContain("relay: couldn't reach");
+      expect(store.status(id)).toBe("resolved");
+    }, 30_000);
   });
 
   describe("the local MCP server (D128, P18 section 8)", () => {

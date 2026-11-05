@@ -4,7 +4,7 @@ status: draft
 authority: specifies
 summary: "The Baesian design (v0.5): git as the state machine; cards, decks and responses; one client; routing on impact and reversibility; where cards come from (documents, mid-task, the commit gate); verdict delivery and the merge gate; parallel agents; two-layer storage and the vault adapter; open questions and the v1 order."
 created: 2026-10-23
-updated: 2026-11-03
+updated: 2026-11-05
 reviewed: 2026-10-23
 tags: [baesian, design]
 ---
@@ -454,6 +454,7 @@ The personal-website and live-docs vaults already run this decision process by h
 - **The plugin, for Claude Code and Codex (tier 2),** in this repo at `plugins/baesian/` (renamed from `plugins/claude-code/` by D118), with the marketplace file at the root (D114):
   - a skill that teaches the agent to file good cards, reading the project's rules;
   - hooks that bring in `baesian inbox --quiet` at natural stopping points, never mid-task (D116), passing the harness's session id so each session on a branch hears each verdict once (B-ghhym): `SessionStart`, `UserPromptSubmit`, and `Stop`, at the end of the agent's turn. When `Stop` brings in a verdict, Claude Code sends one more request on its own, so the agent acts on the answer in a turn of its own;
+  - waking on answers while idle (B-xnae9): the skill tells an agent that ends its turn with cards still open, in a harness that wakes it when a background command finishes (Claude Code), to leave `baesian wait <ids> --until-answered` running in the background, so it acts on the answers when they come, without a message from you. With nothing new, `Stop` reminds it once a session for each card (`onTurnEnded`), in Claude Code 2.1.145 and later, whose Stop input lists the session's background tasks: never when a `baesian wait` is running there already, nor while the agent carries on for a Stop hook. Codex can't be woken that way, and works as before;
   - the `ExitPlanMode` hook that calls `baesian deck --from -` (D115). A plan sent back with feedback fires no `PostToolUse`, so it makes no deck (rehearse's probe, Claude Code 2.1.316);
   - a command, `/baesian:baesian` (Claude Code names a plugin's skills after the plugin, and takes `/baesian` when no other command has the name), which is the skill run by you: it checks the inbox, or files a card for a decision you name;
   - the MCP server (D165): the plugin's `.mcp.json` runs `baesian mcp` from PATH, as the hooks run `baesian`, with no timeouts, so the one file serves both harnesses. Claude Code starts it when the plugin is enabled, and names its tools `mcp__plugin_baesian_baesian__file_card` and so on. `baesian init` never writes a `.mcp.json` into a repo ([[src-mcp]]).

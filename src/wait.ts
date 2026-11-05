@@ -53,6 +53,11 @@ export interface WaitOptions {
   pollMs?: number;
   /** Return at once when the client's heartbeat is stale. Default true. */
   usePresence?: boolean;
+  /**
+   * Wait with no slice, no time limit and no presence check, until the cards are answered or one comes back (B-xnae9):
+   * for a run in the background that wakes its agent when it ends. Its waiting markers show for `timeoutMs` only.
+   */
+  untilAnswered?: boolean;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   /**
@@ -94,97 +99,210 @@ function realSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * Block until the reviewer answers `id`, the timeout passes, or the client reports the reviewer away.
  * Rerouted cards keep waiting: another reviewer is still to answer. With no verdict, what the agent may
  * do depends on the level (D42): provisional and blocking proceed (a blocking card records a fallback,
- * D46); hard never does.
+ * D46); hard never does. It's `waitForAll()` on one card.
  */
 export async function waitForVerdict(store: Store, id: string, opts: WaitOptions): Promise<WaitOutcome> {
+  const all = await waitForAll(store, [id], opts);
+  if (all.ended === "again") return { kind: "again", id, waitedMs: all.waitedMs, leftMs: all.leftMs ?? 0 };
+  const card = all.cards[0]!;
+  // One card ends a wait only by being answered, held, or given up on: it's never still open at the end.
+  if (card.kind === "open") throw new Error(`the wait on ${id} ended with the card still open`);
+  return card;
+}
+
+/** A card still with the reviewer when a wait on several ended: its run's slice was over, or another card came back. */
+export interface StillOpen {
+  kind: "open";
+  id: string;
+  level: Level;
+}
+
+/** One card's part in a wait on several: its outcome, or still open. */
+export type CardOutcome = Exclude<WaitOutcome, { kind: "again" }> | StillOpen;
+
+/**
+ * A wait on several cards (B-xnae9): each card's outcome, in the order asked, and why the wait ended:
+ * - `answered`: every card has an answer, or is no longer the agent's to wait on (resolved, deferred, withdrawn, superseded);
+ * - `returned`: a card came back to the agent, before the rest were answered: it's to revise or withdraw;
+ * - `held`: a card is held back by the repo's preferences, so its agent goes ahead with its pick (B-chq61);
+ * - `again`: this run's slice is over, and the reviewer is still there (D101): run it again;
+ * - `no-verdict`: the wait's time ran out, or the reviewer is away: the cards still open each say what the agent may do.
+ */
+export interface WaitAllOutcome {
+  kind: "several";
+  ids: string[];
+  ended: "answered" | "returned" | "held" | "again" | "no-verdict";
+  cards: CardOutcome[];
+  /** How long the wait has gone on, from the earliest marker's start. */
+  waitedMs: number;
+  /** For `again`: how long the wait goes on. */
+  leftMs?: number;
+  /** With no time limit: it ends only when the cards are answered, or one comes back (`WaitOptions.untilAnswered`). */
+  untilAnswered: boolean;
+}
+
+/** A card's outcome now, inside a view: resolved, answered otherwise or held, or nothing while it's still open. */
+function outcomeOf(store: Store, id: string): CardOutcome | undefined {
+  const status = store.status(id);
+  if (status === "held") return { kind: "held", id };
+  if (status === "open" || status === "rerouted") return undefined;
+  const latest = store.card(id)!;
+  const verdict = store
+    .verdicts(id)
+    .filter((v) => v.revision === latest.meta.revision)
+    .at(-1);
+  if (status === "resolved") {
+    return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
+  }
+  return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
+}
+
+/** A card that comes back to its agent ends a wait on several at once: returned, so it's to revise or withdraw. */
+const cameBack = (o: CardOutcome) => o.kind === "answered" && o.status === "returned";
+
+/**
+ * Block until every card in `ids` is answered, or sooner, when one comes back to the agent (returned) or is held back
+ * (B-xnae9); or, as a wait on one card does, until this run's slice is over, the wait's time runs out, or the reviewer
+ * is away. Each card still open keeps a waiting marker (D90), removed as soon as it's answered. Rerouted cards keep
+ * waiting.
+ *
+ * With `untilAnswered` it has no slice, no time limit and no presence check, so it ends only when the cards are answered
+ * or one comes back: for a run in the background that wakes its agent when it ends (Claude Code). Its markers show for
+ * the wait's budget (`timeoutMs`, from the first wait), as a wait the agent ran itself would, and are then removed while
+ * it goes on listening: an agent that ended its turn hours ago isn't one that has just stopped for the reviewer.
+ */
+export async function waitForAll(store: Store, ids: string[], opts: WaitOptions): Promise<WaitAllOutcome> {
   const now = opts.now ?? Date.now;
   const sleep = opts.sleep ?? ((ms: number) => realSleep(ms, opts.signal));
   const pollMs = opts.pollMs ?? POLL_MS;
-  const card = store.card(id);
-  if (!card) throw new NoCard(id);
-  if (opts.signal?.aborted) throw new WaitCancelled(id);
-  // A held card answers the agent at once: go ahead, as settled at merge (B-chq61). Nobody waits, so no marker.
-  if (store.view(() => store.status(id)) === "held") return { kind: "held", id };
+  const until = opts.untilAnswered === true;
+  const wanted = [...new Set(ids)];
+  if (!wanted.length) throw new Error("no cards to wait on");
+  for (const id of wanted) if (!store.card(id)) throw new NoCard(id);
+  if (opts.signal?.aborted) throw new WaitCancelled(wanted.join(" "));
 
-  // The waiting marker (D90): while it's fresh, "stopped for you" is true. A run that ends with "again" keeps it,
-  // and the next run picks it up, so the wait's budget counts from when it first started (D101). It's removed when
-  // the wait is over; an agent killed mid-wait leaves it behind, and it goes stale.
-  const started = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
-  const told = (removed: boolean) => opts.onMarker?.({ path: started.path, removed });
-  const marker = {
-    since: started.since,
-    refresh(at: string) {
-      started.refresh(at);
-      told(false);
-    },
-    stop() {
-      started.stop();
-      told(true);
-    },
+  const settled = new Map<string, CardOutcome>();
+  const look = () =>
+    store.view(() => {
+      for (const id of wanted) {
+        if (settled.has(id)) continue;
+        const o = outcomeOf(store, id);
+        if (o) settled.set(id, o);
+      }
+    });
+  const ending = (): WaitAllOutcome["ended"] | undefined => {
+    const all = [...settled.values()];
+    if (all.some(cameBack)) return "returned";
+    if (all.some((o) => o.kind === "held")) return "held";
+    return settled.size === wanted.length ? "answered" : undefined;
   };
-  told(false);
-  const budgetEnd = Date.parse(marker.since) + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const sliceEnd = now() + (opts.sliceMs ?? SLICE_MS);
+  const started = now();
+  const result = (ended: WaitAllOutcome["ended"], extra: { waitedMs?: number; leftMs?: number } = {}): WaitAllOutcome => ({
+    kind: "several",
+    ids: wanted,
+    ended,
+    cards: wanted.map((id) => settled.get(id) ?? { kind: "open", id, level: store.card(id)!.meta.level }),
+    waitedMs: extra.waitedMs ?? now() - started,
+    ...(extra.leftMs !== undefined ? { leftMs: extra.leftMs } : {}),
+    untilAnswered: until,
+  });
+
+  // A card already answered, or held, needs no marker: nobody waits on it. A held card answers the agent at once: go
+  // ahead, as settled at merge (B-chq61). A marker this agent left on it, from a run that ended with "again", goes.
+  look();
+  for (const id of settled.keys()) {
+    if (!store.waitingOn(id, now()).some((w) => w.marker.agent === opts.agent && !w.stale)) continue;
+    const left = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+    left.stop();
+    opts.onMarker?.({ path: left.path, removed: true });
+  }
+  const first = ending();
+  if (first) return result(first, { waitedMs: 0 });
+
+  // The waiting markers (D90): while one is fresh, "stopped for you" is true of its card. A run that ends with "again"
+  // keeps them, and the next run picks them up, so the wait's budget counts from when it first started (D101). Each is
+  // removed when its card is answered, or the wait is over; an agent killed mid-wait leaves them behind, to go stale.
+  const markers = new Map<string, { since: string; refresh(at: string): void; stop(): void }>();
+  for (const id of wanted.filter((i) => !settled.has(i))) {
+    const m = store.startWaiting(id, opts.agent, new Date(now()).toISOString());
+    const told = (removed: boolean) => opts.onMarker?.({ path: m.path, removed });
+    markers.set(id, {
+      since: m.since,
+      refresh(at: string) {
+        m.refresh(at);
+        told(false);
+      },
+      stop() {
+        m.stop();
+        told(true);
+      },
+    });
+    told(false);
+  }
+  const since = Math.min(...[...markers.values()].map((m) => Date.parse(m.since)));
+  const budgetEnd = since + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const sliceEnd = until ? Number.POSITIVE_INFINITY : now() + (opts.sliceMs ?? SLICE_MS);
+  const stopMarker = (id: string) => {
+    markers.get(id)?.stop();
+    markers.delete(id);
+  };
   let beat = now();
   let keep = false;
   try {
     let reason: "timeout" | "away";
     for (;;) {
       // Each poll is one fresh view of the live layer: a card's status reads the others, once each.
-      const done = store.view((): WaitOutcome | undefined => {
-        const status = store.status(id);
-        const latest = store.card(id)!;
-        const verdict = store
-          .verdicts(id)
-          .filter((v) => v.revision === latest.meta.revision)
-          .at(-1);
-        if (status === "resolved") {
-          return { kind: "resolved", id, decision: store.decision(id)!, verdict, briefs: store.briefs(id), canReply: store.canReply(id), ruleAsked: store.ruleAsked(id) };
+      look();
+      for (const id of [...markers.keys()]) if (settled.has(id)) stopMarker(id);
+      const ended = ending();
+      if (ended) return result(ended, { waitedMs: now() - since });
+      if (until) {
+        // Past the budget, it listens on without markers: the reviewer no longer sees an agent stopped for these cards.
+        if (markers.size && now() >= budgetEnd) for (const id of [...markers.keys()]) stopMarker(id);
+      } else {
+        if (opts.usePresence !== false) {
+          const p = store.presence();
+          // No heartbeat at all means the client has never run: unknown, so keep waiting. A stale one means away.
+          if (p && now() - Date.parse(p.at) > PRESENCE_STALE_MS) {
+            reason = "away";
+            break;
+          }
         }
-        if (status !== "open" && status !== "rerouted" && status !== "held") {
-          return { kind: "answered", id, status, level: latest.meta.level, verdict, briefs: store.briefs(id), ruleAsked: store.ruleAsked(id) };
-        }
-        return undefined;
-      });
-      if (done) return done;
-      if (opts.usePresence !== false) {
-        const p = store.presence();
-        // No heartbeat at all means the client has never run: unknown, so keep waiting. A stale one means away.
-        if (p && now() - Date.parse(p.at) > PRESENCE_STALE_MS) {
-          reason = "away";
+        if (now() >= budgetEnd) {
+          reason = "timeout";
           break;
         }
+        if (now() >= sliceEnd) {
+          keep = true;
+          for (const m of markers.values()) m.refresh(new Date(now()).toISOString());
+          return result("again", { waitedMs: now() - since, leftMs: budgetEnd - now() });
+        }
       }
-      if (now() >= budgetEnd) {
-        reason = "timeout";
-        break;
-      }
-      if (now() >= sliceEnd) {
-        keep = true;
-        marker.refresh(new Date(now()).toISOString());
-        return { kind: "again", id, waitedMs: now() - Date.parse(marker.since), leftMs: budgetEnd - now() };
-      }
-      await sleep(Math.max(0, Math.min(pollMs, sliceEnd - now(), budgetEnd - now())));
-      // Cancelled: the finally below removes the marker, since the agent has stopped waiting.
-      if (opts.signal?.aborted) throw new WaitCancelled(id);
-      if (now() - beat >= WAITING_BEAT_MS) {
+      const next = until ? (markers.size ? budgetEnd - now() : pollMs) : Math.min(sliceEnd - now(), budgetEnd - now());
+      await sleep(Math.max(0, Math.min(pollMs, next)));
+      // Cancelled: the finally below removes the markers, since the agent has stopped waiting.
+      if (opts.signal?.aborted) throw new WaitCancelled(wanted.join(" "));
+      if (markers.size && now() - beat >= WAITING_BEAT_MS) {
         beat = now();
-        marker.refresh(new Date(beat).toISOString());
-        opts.onBeat?.({ waitedMs: beat - Date.parse(marker.since), leftMs: budgetEnd - beat });
+        for (const m of markers.values()) m.refresh(new Date(beat).toISOString());
+        opts.onBeat?.({ waitedMs: beat - since, leftMs: budgetEnd - beat });
       }
     }
 
     // The level in force: in a hosted repo, the relay's signed gate record may have raised it (P16 section 3).
-    const level = store.view(() => store.levelOf(id)) ?? store.card(id)!.meta.level;
-    const proceed = level !== "hard";
-    let recorded = false;
-    if (level === "blocking") {
-      store.recordFallback(id, reason, opts.agent);
-      recorded = true;
+    for (const id of wanted.filter((i) => !settled.has(i))) {
+      const level = store.view(() => store.levelOf(id)) ?? store.card(id)!.meta.level;
+      const proceed = level !== "hard";
+      let recorded = false;
+      if (level === "blocking") {
+        store.recordFallback(id, reason, opts.agent);
+        recorded = true;
+      }
+      settled.set(id, { kind: "no-verdict", id, reason, level, proceed, recorded });
     }
-    return { kind: "no-verdict", id, reason, level, proceed, recorded };
+    return result("no-verdict", { waitedMs: now() - since });
   } finally {
-    if (!keep) marker.stop();
+    if (!keep) for (const id of [...markers.keys()]) stopMarker(id);
   }
 }
 
@@ -194,6 +312,29 @@ export function exitCodeFor(outcome: WaitOutcome): number {
   if (outcome.kind === "held") return WAIT_EXIT.held;
   if (outcome.kind === "answered") return WAIT_EXIT.answered;
   return outcome.proceed ? WAIT_EXIT.proceed : WAIT_EXIT.park;
+}
+
+/**
+ * A wait on several cards' exit code (B-xnae9): 0 when every card is resolved; 4 as soon as one comes back (returned),
+ * or when every card is answered and one isn't a go-ahead; 8 as soon as one is held back; 7 when the run's slice is over;
+ * and when the time runs out, or the reviewer is away, 6 if a card still open is hard, 4 if an answered one isn't a
+ * go-ahead, and otherwise 5.
+ */
+export function exitCodeForAll(o: WaitAllOutcome): number {
+  const notGoAhead = o.cards.some((c) => c.kind === "answered");
+  switch (o.ended) {
+    case "returned":
+      return WAIT_EXIT.answered;
+    case "held":
+      return WAIT_EXIT.held;
+    case "again":
+      return WAIT_EXIT.again;
+    case "answered":
+      return notGoAhead ? WAIT_EXIT.answered : WAIT_EXIT.resolved;
+    case "no-verdict":
+      if (o.cards.some((c) => c.kind === "no-verdict" && !c.proceed)) return WAIT_EXIT.park;
+      return notGoAhead ? WAIT_EXIT.answered : WAIT_EXIT.proceed;
+  }
 }
 
 /**
@@ -310,4 +451,40 @@ export function describeOutcome(o: WaitOutcome): string[] {
       ];
     }
   }
+}
+
+/** IDs as an agent reads them in a sentence: "B-a", "B-a and B-b", "B-a, B-b and B-c". */
+const named = (ids: string[]) => (ids.length < 2 ? ids.join("") : `${ids.slice(0, -1).join(", ")} and ${ids.at(-1)}`);
+
+/**
+ * What the agent reads after a wait on several cards (B-xnae9): why it ended, then what happened to each card, in the
+ * words a wait on one card uses. A run that ends with "again" gives no answers yet: they all come when the wait ends,
+ * so the agent doesn't start on half of them.
+ */
+export function describeAll(o: WaitAllOutcome): string[] {
+  const open = o.cards.filter((c): c is StillOpen => c.kind === "open").map((c) => c.id);
+  const answered = o.cards.filter((c): c is Exclude<CardOutcome, StillOpen> => c.kind !== "open");
+  if (o.ended === "again") {
+    const min = Math.max(1, Math.round((o.leftMs ?? 0) / 60_000));
+    const sofar = answered.length ? ` (${answered.length} of ${o.cards.length} answered so far; every answer comes when the wait ends)` : "";
+    return [
+      `No verdict yet on ${named(open)}, and the reviewer is still there${sofar}.`,
+      `Run \`baesian wait ${o.ids.join(" ")}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`,
+    ];
+  }
+  // What ended it comes first: the cards that came back, or were held back.
+  const first = answered.filter((c) => (o.ended === "returned" ? cameBack(c) : o.ended === "held" ? c.kind === "held" : false));
+  const rest = answered.filter((c) => !first.includes(c));
+  const head = {
+    answered: `Every card you waited on has an answer: ${named(o.ids)}.`,
+    returned: `${named(first.map((c) => c.id))} came back to you, so the wait ended before every card was answered.`,
+    held: `${named(first.map((c) => c.id))} ${first.length === 1 ? "is" : "are"} held back, so the wait ended before every card was answered.`,
+    "no-verdict": `The wait is over with no verdict yet on ${named(o.cards.filter((c) => c.kind === "no-verdict").map((c) => c.id))}.`,
+  }[o.ended];
+  const lines = [head, ...[...first, ...rest].flatMap(describeOutcome)];
+  if (open.length) {
+    const again = `baesian wait ${open.join(" ")}${o.untilAnswered ? " --until-answered" : ""}`;
+    lines.push(`Still with the reviewer: ${named(open)}. To wait on ${open.length === 1 ? "it" : "them"} again once you've acted on ${named(first.map((c) => c.id))}: \`${again}\`, with any card you revise added.`);
+  }
+  return lines;
 }
