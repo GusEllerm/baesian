@@ -2963,7 +2963,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "671a2813af296d4b"
+sig = "dad09e16e3baa5fd"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -4357,6 +4357,11 @@ sig = "4724db53562a6d66"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
+target = "service/src/index.ts#ProjectRelay"
+sig = "0cac1c4ba1065546"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
 target = "service/src/index.ts#reply"
 sig = "0101404b91b31a70"
 
@@ -4443,7 +4448,7 @@ sig = "912d523b00dcd41d"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "671a2813af296d4b"
+sig = "dad09e16e3baa5fd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4649,6 +4654,11 @@ sig = "5222f4af6c0b7151"
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/sync.ts#Listener"
 sig = "37c1779c15ff6b70"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/sync.ts#SyncOptions"
+sig = "d821b4e9c6bfd17d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -4913,7 +4923,7 @@ sig = "a45cad00cd2bf2b8"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/sync.ts#syncRelay"
-sig = "cd1488f825a23a14"
+sig = "594e1220a2568239"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6492,6 +6502,11 @@ sig = "c4617f6201361f0d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
+target = "src/sync.ts#SyncOptions"
+sig = "d821b4e9c6bfd17d"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-sync.md"
 target = "src/sync.ts#SyncReport"
 sig = "22fe7322fb8fc612"
 
@@ -6533,7 +6548,7 @@ sig = "67e66c46ce95f80e"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "src/sync.ts#syncRelay"
-sig = "cd1488f825a23a14"
+sig = "594e1220a2568239"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"

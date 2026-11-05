@@ -117,6 +117,15 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       for (const t of [grant.access_token, grant.refresh_token]) expect(`${r.out}\n${r.err}`).not.toContain(t);
       // An empty project's relay has nothing yet: its first write puts the service's key in its log.
       expect(r.out).toContain("relay: received 0 files, sent 0");
+      expect(r.out).not.toContain("relay: sending");
+      // The command it prints commits the link with its ack, which the commit gate takes as covering it (B-w4g6c).
+      const command = /^ {2}git add (\S+) && git commit -m "([^"]+)" -m "([^"]+)"$/m.exec(r.out);
+      expect(command, r.out).not.toBeNull();
+      sh(dir, "add", command![1]!);
+      writeFileSync(join(dir, "message.txt"), `${command![2]}\n\n${command![3]}\n`);
+      const check = await run(dir, ["check", "--message", "message.txt"]);
+      expect(check.code, check.out).toBe(0);
+      expect(check.out).toContain("decisions covered: infra:.baesian/config.json (ack)");
       // Signing in again needs a sign-out first.
       const again = await run(dir, ["login"]);
       expect(again.out).toContain("already signed in");
@@ -205,6 +214,8 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       writeFileSync(config, `${JSON.stringify({ ...JSON.parse(readFileSync(config, "utf8")), service: relay.url, project: "proj-4" })}\n`);
       const r = await run(dir, ["login"]);
       expect(r.code, r.err).toBe(0);
+      // It says how many before it starts: a repo with a history of cards sends hundreds.
+      expect(r.out).toContain(`relay: sending ${before.length} files to ${relay.url}…`);
       expect(r.out).toContain(`sent ${before.length}`);
       expect(await relayPaths("proj-4")).toEqual(expect.arrayContaining(before));
       // Decks went first, then the revisions, then the rest.

@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { agentName, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
-import { stagedSnapshot } from "./facts.js";
+import { CONFIG_PATH, stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
 import { installHooks, runHook } from "./hooks.js";
@@ -579,15 +579,20 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (link) {
         linkRepo(s, link);
         io.out(`linked this repo to ${service} as project ${link.project}, in .baesian/config.json (B-62qnz, B-5gnea)`);
-        io.out("Commit it: the commit gate asks a card or an ack for where cards are sent (B-w4g6c). The ack to paste:");
-        io.out(`  ${linkAck(service, link.project)}`);
       }
       io.out(`signed in: ${grant.machine} can now file cards and hear answers in project ${project}, never answer them`);
-      // The first sync: the relay's files come down, and everything an agent wrote here goes up (B-6k0rk).
-      const relay = await syncRelay(s, http());
-      if (relay.state === "synced") io.out(`relay: received ${relay.pulled.length} file${relay.pulled.length === 1 ? "" : "s"}, sent ${relay.pushed.length}`);
+      // The first sync: the relay's files come down, and everything an agent wrote here goes up (B-6k0rk). A repo with a
+      // history of cards sends hundreds of files, so it says how many before it starts.
+      const files = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
+      const relay = await syncRelay(s, { ...http(), sending: (n) => io.out(`relay: sending ${files(n)} to ${service}…`) });
+      if (relay.state === "synced") io.out(`relay: received ${files(relay.pulled.length)}, sent ${relay.pushed.length}`);
       for (const n of relay.notes) io.err(n);
       io.out(`answer its cards at ${projectPage(service, project)}`);
+      if (link) {
+        // The link is a gate fact (B-w4g6c): a command to commit it with its ack, ready to run, the trailer its own paragraph.
+        io.out("Commit the link: the commit gate asks an ack for where cards are sent (B-w4g6c). This commits it with one:");
+        io.out(`  git add ${CONFIG_PATH} && git commit -m "Link this repo to Baesian" -m "${linkAck(service, link.project)}"`);
+      }
     });
 
   program

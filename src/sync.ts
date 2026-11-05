@@ -232,6 +232,8 @@ interface Run {
   w: Working;
   out: SyncReport;
   refiles: Refile[];
+  /** Told how many files a push is about to send, before it sends them (`SyncOptions.sending`). */
+  sending?: (count: number) => void;
   /** Files the relay had removed the text of before this machine pulled them, and which it has nowhere (M9f). */
   missing: string[];
 }
@@ -432,7 +434,10 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
   const blocked = new Set<string>();
   const removed = new Set<string>();
   let conflicted = false;
-  for (const rel of unsent(store, run.w.uploaded)) {
+  const files = unsent(store, run.w.uploaded);
+  const early = unsentBeforeLinking(store, run.w.uploaded);
+  if (files.length + early.length) run.sending?.(files.length + early.length);
+  for (const rel of files) {
     const card = cardOf(rel);
     if (card && removed.has(card)) {
       run.w.uploaded.add(rel);
@@ -460,7 +465,7 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
     if (r.status === 409) conflicted = true;
     else run.out.notes.push(`relay: refused ${rel} (${errorOf(r)}); it stays here, and is offered again at the next sync`);
   }
-  for (const rel of unsentBeforeLinking(store, run.w.uploaded)) {
+  for (const rel of early) {
     const bytes = store.storage.read(rel);
     if (!bytes) continue;
     const r = await client.request("PUT", `files/${encodePath(rel)}`, bytes);
@@ -480,9 +485,9 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
 }
 
 /** Pull, push, or both, with this client, keeping `relay.json` up to date with whatever got done. */
-async function syncWith(store: Store, client: RelayClient, o: { pull: boolean; push: boolean }): Promise<SyncReport> {
+async function syncWith(store: Store, client: RelayClient, o: { pull: boolean; push: boolean; sending?: (count: number) => void }): Promise<SyncReport> {
   const s = readRelayState(store, client.service, client.project);
-  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded) }, out: report("synced"), refiles: [], missing: [] };
+  const run: Run = { w: { service: s.service, project: s.project, pulled: s.pulled, uploaded: new Set(s.uploaded) }, out: report("synced"), refiles: [], missing: [], ...(o.sending ? { sending: o.sending } : {}) };
   try {
     if (o.pull) await pull(store, client, run);
     // A push refused for what another machine wrote first pulls the relay's copy, then pushes again: a card filed again
@@ -509,6 +514,8 @@ export interface SyncOptions extends Http {
   pull?: boolean;
   /** Then push what the relay doesn't have. Default true. */
   push?: boolean;
+  /** Told how many files a push is about to send, before it sends them: a first sync can send hundreds. */
+  sending?: (count: number) => void;
 }
 
 /**
@@ -519,7 +526,7 @@ export async function syncRelay(store: Store, o: SyncOptions = {}): Promise<Sync
   const link = relayFor(store, o);
   if (link.kind === "off") return report("off");
   if (link.kind !== "on") return report(link.kind, [link.why]);
-  return syncWith(store, link.client, { pull: o.pull ?? true, push: o.push ?? true });
+  return syncWith(store, link.client, { pull: o.pull ?? true, push: o.push ?? true, ...(o.sending ? { sending: o.sending } : {}) });
 }
 
 /**
