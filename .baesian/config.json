@@ -3,13 +3,5 @@
   "vault": "docs/vault",
   "service": "https://baesian.dev",
   "project": "p-c81yx9gdvfr9yjsfdsrp",
-  "first_commit": "fd64e0c92700de21bda61496792f11a291e6efd1",
-  "gate_schema": [
-    "**/migrations/**",
-    "**/*.sql",
-    "**/schema.prisma",
-    "**/*.schema.json",
-    "**/schema.graphql",
-    "src/schema.ts"
-  ]
+  "first_commit": "fd64e0c92700de21bda61496792f11a291e6efd1"
 }

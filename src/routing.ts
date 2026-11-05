@@ -1,8 +1,9 @@
+import { type GatePaths, pathsLoosening } from "./gate-paths.js";
 import type { Fact, Level, Response } from "./schema.js";
 
 // The gate's rules (M8, P14, P16): rows, positions, presets, and how a card's stated facts become an outcome at filing
-// (D144, D145). Pure and deterministic, with nothing from Node and no runtime import, so the CLI, CI (`baesian verify`),
-// a relay later (D158) and the client all reach the same answer. The store runs it at filing and writes its record;
+// (D144, D145). Pure and deterministic, with nothing from Node and no runtime import but the commit gate's paths, pure
+// too, so the CLI, CI (`baesian verify`), a relay later (D158) and the client all reach the same answer. The store runs it at filing and writes its record;
 // docs/vault/Modules/src-routing.md describes it.
 
 // ---------------------------------------------------------------- rows and positions
@@ -94,6 +95,8 @@ export interface Settings {
   rate_sample: number;
   /** How many of each row's first held cards are all drawn (B-fgc4y). */
   burn_in: number;
+  /** What the commit gate looks at (B-qkek1): each list left out is the built-in one. */
+  paths: GatePaths;
 }
 
 export interface Preset {
@@ -116,8 +119,9 @@ const tellMe: Record<Row, Position> = {
 
 /**
  * What a preference change loosens, against the settings in force before it (D163): each row moved toward held,
- * enforcing turned on, and a lower audit rate or burn-in (B-shndb), which brings fewer held cards back to you. Each lets
- * more cards past you, so in a hosted repo it takes your passkey; tightening doesn't.
+ * enforcing turned on, and a lower audit rate or burn-in (B-shndb), which brings fewer held cards back to you; and a
+ * commit gate that sees less, by its globs (B-qkek1, `pathsLoosening()`). Each lets more past you, so in a hosted repo it
+ * takes your passkey; tightening doesn't.
  */
 export function loosening(before: Settings, after: Settings): string[] {
   const out: string[] = [];
@@ -130,6 +134,7 @@ export function loosening(before: Settings, after: Settings): string[] {
     if (after[rate] < before[rate]) out.push(`it lowers ${rate} from ${percent(before[rate])} to ${percent(after[rate])}`);
   }
   if (after.burn_in < before.burn_in) out.push(`it lowers burn_in from ${before.burn_in} to ${after.burn_in}`);
+  out.push(...pathsLoosening(before.paths, after.paths));
   return out;
 }
 
@@ -160,7 +165,7 @@ export const LOOSEN_AFTER = 29;
 export const AUDIT_DEFAULTS = { rate_agent_decides: 0.1, rate_sample: 1 / 3, burn_in: 10 } as const;
 
 /** With no preference file, a repo runs "Today" in shadow, which routes exactly as Baesian did before the gate (P14). */
-export const TODAY: Settings = { mode: "shadow", rows: PRESETS[0]!.rows, ...AUDIT_DEFAULTS };
+export const TODAY: Settings = { mode: "shadow", rows: PRESETS[0]!.rows, ...AUDIT_DEFAULTS, paths: {} };
 
 // ---------------------------------------------------------------- the rules (rules-1)
 

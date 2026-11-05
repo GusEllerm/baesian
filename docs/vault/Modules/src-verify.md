@@ -20,13 +20,13 @@ CI has no live layer, only what was committed. `RecordAt` reads `.baesian/` from
 `checkCommit` runs once for every non-merge commit in `<base>..HEAD`, oldest first. Each run uses:
 - **the commit's own diff**, against its first parent (`commitSnapshot`);
 - **its own message**, for the trailers;
-- **its own record and config**, for the cards, verdicts and detector paths.
+- **its own record**, for the cards and verdicts, and for where the detectors look: the preference file in force there (B-qkek1, [[src-gate]]), which in a hosted repo is the newest that counts, so a commit can't make the gate see less with a file of its own.
 
 That is the same view the local `commit-msg` hook had, so CI repeats the local check rather than applying today's state to old commits. A commit from before the repo adopted Baesian has no record, and the default detectors still apply; verify from a later `--base`.
 
 ## The vault's notes (M6)
 
-With a vault in the record's config, `verify` warns, without failing, when the record at HEAD holds decisions or rules with no note in the vault at HEAD, or the vault isn't in the commit (`vaultWarnings`, [[src-vault]]). The notes are a view of the record, so a lagging vault is advice: `baesian sync`, then commit. `VerifyResult.warnings` holds them, and `describeVerify` prints them last.
+With a vault in the record's config, `verify` warns, without failing, when the record at HEAD holds decisions or rules with no note in the vault at HEAD, or the vault isn't in the commit (`vaultWarnings`, [[src-vault]]). The notes are a view of the record, so a lagging vault is advice: `baesian sync`, then commit. `VerifyResult.warnings` holds them, and `describeVerify` prints them last. It holds one more, once, for HEAD: a config that still has the keys the gate read before B-qkek1, which it reads no longer (`configWarnings()`, [[src-gate]]); the commits themselves don't repeat it.
 
 ## The merge gate
 
@@ -112,4 +112,4 @@ With no `--base`, `verify` uses `origin/$GITHUB_BASE_REF`, which pull-request ru
 
 **The pin** is a repository variable: the project's line (B-mar8x) and the trust files' JSON, one per line (D142, D159), as `baesian ci` prints them from what the service sent, never from the record. Run it again after adding a passkey. A repo that isn't hosted leaves the `env` out: `BAESIAN_TRUST` set but empty fails the run, so a misnamed variable can't turn the checks off; GitHub passes a variable that isn't set as empty, so set it before the workflow first runs. The workflow file is in the repo, and a commit could edit it to drop the pin: keep it from agents' commits, with a ruleset or code owners on `.github/`, as the pin itself is kept in the settings.
 
-**Baesian isn't published yet** (`package.json` is private until the licence and release are decided), so `npx baesian` doesn't work yet. Until it is, only this repo can run it in CI, by building itself: `npm ci && npm run build && node dist/bin.js verify --merge`. If `gate_api` is set and livedocs isn't installed in CI, the `api:` detector warns and is skipped.
+**Baesian isn't published yet** (`package.json` is private until the licence and release are decided), so `npx baesian` doesn't work yet. Until it is, only this repo can run it in CI, by building itself: `npm ci && npm run build && node dist/bin.js verify --merge`. If the preferences name public modules (`gate_api`) and livedocs isn't installed in CI, the `api:` detector warns and is skipped.

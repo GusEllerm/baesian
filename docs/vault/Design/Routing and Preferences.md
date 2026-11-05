@@ -227,6 +227,8 @@ No preset lowers security; that takes a deliberate move by you.
 
 **Where preferences live. Decision 8.** *Recommended:* in the repo, as immutable files that only the client writes, in the live layer (so a change applies at once in every worktree, as rules do) and the record. They're never in the committed config.json, which agents edit. In hosted mode each file carries the service's signature, checked by `baesian verify`, the pattern the hosted research proposes for verdicts. Locally it rests on D62's convention and audit trail, like verdicts. *Alternative:* the hosted service is the authority, settings change only in a signed-in session, and the repo keeps a signed copy for offline use. Card routing-8.
 
+> **Since (B-qkek1, 2026-11-05):** the commit gate's own settings live here too. `gate_schema`, `gate_infra`, `gate_api` and `gate_ignore` sat in the committed config, which agents edit, and a commit that widened `gate_ignore` while adding a dependency passed `baesian verify` unseen. The user decided they move into the preference files, and that a change making the gate see less (a narrower list, or more ignored, judged by comparing the globs) is loosening under D163, taking the passkey in a hosted repo. [[src-gate]] and [[File Formats#Routing]] say how it's built.
+
 ## 5. Format changes before v1
 
 All of these are candidates, under [[File Formats]]' rules: immutable files, flat keys, status computed. Each would be described in File Formats and defined in `src/schema.ts` once decided.

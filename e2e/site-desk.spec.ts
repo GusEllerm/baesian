@@ -294,6 +294,59 @@ test("a change to the preferences that lets more cards past asks for the passkey
   await expect(prompt).toBeHidden();
 });
 
+test("what the gate looks for, in your preferences: more is used at once, less asks for the passkey, and the CLI's gate reads both (B-qkek1)", async ({ page }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  const filed = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title: "Which cache", question: "Which cache should runs use?", topic: "cache/runs", reverse: "cheap", touches: [] }) });
+  expect(filed.code, filed.err).toBe(0);
+  sh(dir, "add", "-A");
+  sh(dir, "commit", "-q", "-m", "A card");
+  const project = await linkThroughPage(page, dir, "Crumb's shop");
+  await openDesk(page, project);
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which cache should runs use?");
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Your preferences" }).click();
+  const prefs = page.getByRole("complementary", { name: "Your preferences" });
+  const section = prefs.getByRole("region", { name: "What the gate looks for" });
+  await expect(section.getByRole("list", { name: "Always looked for" })).toContainText("Runtime dependencies added to or removed from package.json");
+  await expect(section).toContainText("Only you change them, here: anything that makes the gate see less asks for your passkey.");
+  const schemas = section.getByRole("textbox", { name: "Schemas and data formats" });
+  await expect(schemas).toHaveValue(/\*\*\/schema\.ts/);
+  await expect(section.getByText("The built-in list.")).toHaveCount(2);
+  const use = section.getByRole("button", { name: "Use these lists" });
+  await expect(use).toBeDisabled();
+  const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
+  const live = () => Store.open(dir).inForce().settings.paths;
+
+  // Wider: one more place to look for schemas. Used at once, with no passkey.
+  await schemas.fill(`${await schemas.inputValue()}\nformats/**`);
+  await expect(section.locator(".gate-less")).toHaveCount(0);
+  await expect(section.getByRole("button", { name: "Use the built-in list" })).toBeVisible();
+  await siteShot(page, "prefs-gate-wider");
+  await use.click();
+  await expect(section.getByText("In use.")).toBeVisible();
+  await expect(prompt).toBeHidden();
+  expect((await cli(dir, ["sync"])).code).toBe(0);
+  expect(live().schema).toContain("formats/**");
+
+  // Narrower: back to the built-in schema list, and a folder never looked at. The section says what the gate would stop
+  // seeing, and using the lists asks for the passkey (D163).
+  await section.getByRole("button", { name: "Use the built-in list" }).click();
+  await section.getByRole("textbox", { name: "Never looked at" }).fill("generated/**");
+  const less = section.locator(".gate-less");
+  await expect(less).toHaveText("With these lists the gate sees less: it would stop looking at formats/** for schemas; and it would never look at generated/**. Using them asks for your passkey.");
+  await siteShot(page, "prefs-gate-narrower");
+  await use.click();
+  await expect(prompt).toContainText("This change lets more cards past you without asking");
+  await prompt.getByRole("button", { name: "Use your passkey" }).click({ timeout: 5000 });
+  await expect(section.getByText("In use.")).toBeVisible();
+  await expect(prompt).toBeHidden();
+  expect((await cli(dir, ["sync"])).code).toBe(0);
+  expect(live()).toEqual({ ignore: ["generated/**"] });
+  const name = Store.open(dir).inForce().name!;
+  expect(readdirSync(join(Store.open(dir).live, "preferences"))).toContain(name.replace(/\.json$/, ".passkey.json"));
+});
+
 test("a project that isn't yours says so, and where yours are", async ({ page }) => {
   await signedUp(page);
   await page.goto(`${site.url}/projects/p-00000000000000000000`);

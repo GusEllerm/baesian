@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { commitSnapshot } from "./facts.js";
-import { type GateReport, describeReport, detectStaged, evaluate } from "./gate.js";
+import { type GateReport, configWarnings, describeReport, detectStaged, evaluate } from "./gate.js";
 import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { TODAY, levelInForce, route } from "./routing.js";
@@ -128,7 +128,7 @@ export function checkCommit(repo: Repo, records: RecordAt, sha: string, pinned?:
   const message = git(repo.toplevel, ["log", "-1", "--format=%B", sha]);
   const trailers = parseTrailers(message, repo.toplevel);
   return record.view(() => {
-    const report = evaluate(record, detectStaged(record, commitSnapshot(repo.toplevel, sha)), trailers);
+    const report = evaluate(record, detectStaged(record, commitSnapshot(repo.toplevel, sha), { configWarning: false }), trailers);
     const keys = record.trustFiles();
     const trust = pinned ? [...otherProject(record, pinned), ...pinProblems(pinned, [...keys.service, ...keys.passkeys])] : [];
     return { sha, subject: message.split("\n")[0] ?? "", cards: trailers.cards, report, trust, ok: report.ok && trust.length === 0 };
@@ -315,7 +315,7 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
       }
       const ok = commits.every((c) => c.ok) && (!merge || (merge.problems.length === 0 && merge.conflicts.length === 0));
       // M6: the vault's notes are a view, so a missing note or vault is a warning, never a failure.
-      const warnings = vaultWarnings(head, vaultFilesAt(repo, head, "HEAD"));
+      const warnings = [...vaultWarnings(head, vaultFilesAt(repo, head, "HEAD")), ...configWarnings(head.config())];
       const h = head.hosted();
       if (h && !h.pinned) {
         warnings.push(`the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (${TRUST_ENV}, D142)`);

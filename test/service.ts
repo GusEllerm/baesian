@@ -2,6 +2,7 @@ import { type KeyObject, createHash, generateKeyPairSync, randomBytes, sign } fr
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderDoc } from "../src/frontmatter.js";
+import { PATH_KEYS, PATH_KINDS } from "../src/gate-paths.js";
 import { randomSuffix } from "../src/ids.js";
 import { GATE_VERSION, type GateSource, TODAY, route } from "../src/routing.js";
 import type { GateRecord, PasskeyKey, PasskeyProof, Preferences, ServiceKey, Verdict } from "../src/schema.js";
@@ -210,6 +211,8 @@ export class TestService {
       rate_agent_decides: base.rate_agent_decides,
       rate_sample: base.rate_sample,
       burn_in: base.burn_in,
+      // What the commit gate looks at (B-qkek1), kept from the file in force as the relay keeps it.
+      ...Object.fromEntries(PATH_KINDS.flatMap((k) => (base.paths[k] ? [[PATH_KEYS[k], base.paths[k]]] : []))),
       ...change,
       ...(force.name ? { replaces: force.name } : {}),
       by: "gus",

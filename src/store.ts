@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { z } from "zod";
 import { FolderStorage } from "./folder-storage.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
+import { PATH_KEYS, PATH_KINDS, type PathKind, pathSetting } from "./gate-paths.js";
 import { type Repo, git, openRepo, slug } from "./git.js";
 import { newId, randomSuffix } from "./ids.js";
 import {
@@ -108,6 +109,7 @@ export function settingsOf(p: Preferences): Settings {
     rate_agent_decides: p.rate_agent_decides,
     rate_sample: p.rate_sample,
     burn_in: p.burn_in,
+    paths: Object.fromEntries(PATH_KINDS.flatMap((k) => (p[PATH_KEYS[k]] ? [[k, p[PATH_KEYS[k]]]] : []))),
   };
 }
 
@@ -1761,8 +1763,9 @@ export class Store {
   /**
    * Write a change to the preferences (D147): for the client only, through the local server, and for an accepted slider
    * proposal. The change is made over the file in force (or "Today" in shadow), from a preset if it names one, or the
-   * one the setup survey's answers suggest (B-5na1k). `replaces` must name the newest file, or be absent when there's
-   * none: a change made from an older view is refused (`StalePreferences`), so two tabs can't undo each other.
+   * one the setup survey's answers suggest (B-5na1k). What the commit gate looks at (B-qkek1) is kept from the file in
+   * force unless the change sends a list (`pathSetting()`). `replaces` must name the newest file, or be absent when
+   * there's none: a change made from an older view is refused (`StalePreferences`), so two tabs can't undo each other.
    */
   writePreferences(change: PreferenceChange, who: { by: string; account?: string; project?: string; client: string; from_card?: string; at?: string }): { name: string; file: Preferences } {
     this.requireInit();
@@ -1770,13 +1773,25 @@ export class Store {
     if ((change.replaces ?? undefined) !== force.name) {
       throw new StalePreferences(force.name ? `the preferences have changed since: preferences/${force.name} is in force now` : "there's no preference file yet: a first one replaces none");
     }
-    const { replaces: _r, preset: presetId, ...fields } = change;
+    const { replaces: _r, preset: presetId, gate_schema, gate_infra, gate_api, gate_ignore, ...fields } = change;
     const list = (v: unknown): Row[] => (Array.isArray(v) ? v.filter((r): r is Row => (ROWS as readonly unknown[]).includes(r)) : []);
     const survey = fields.survey_see || fields.survey_fine ? suggestPreset({ see: list(fields.survey_see), fine: list(fields.survey_fine) }) : undefined;
     const preset = presetId !== undefined ? PRESETS.find((p) => p.id === presetId) : survey;
     if (presetId !== undefined && !preset) throw new ValidationError(`no preset "${presetId}": the presets are ${PRESETS.map((p) => p.id).join(", ")}`);
     const base = force.file ? settingsOf(force.file) : TODAY;
     const rows = preset ? preset.rows : base.rows;
+    // What the commit gate looks at (B-qkek1): kept from the file in force unless the change sets it; a list that's the
+    // built-in one is left out, so it means the built-in list.
+    const given: Record<PathKind, unknown> = { schema: gate_schema, infra: gate_infra, api: gate_api, ignore: gate_ignore };
+    const paths = Object.fromEntries(
+      PATH_KINDS.flatMap((k) => {
+        const v = given[k];
+        if (v === undefined) return base.paths[k] ? [[PATH_KEYS[k], base.paths[k]]] : [];
+        if (!Array.isArray(v) || v.some((g) => typeof g !== "string")) throw new ValidationError(`${PATH_KEYS[k]} is a list of globs`);
+        const kept = pathSetting(k, v as string[]);
+        return kept ? [[PATH_KEYS[k], kept]] : [];
+      }),
+    );
     let at = who.at ?? now();
     const previous = force.file?.at;
     if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
@@ -1790,6 +1805,7 @@ export class Store {
         rate_agent_decides: base.rate_agent_decides,
         rate_sample: base.rate_sample,
         burn_in: base.burn_in,
+        ...paths,
         ...(preset ? { profile: preset.id } : force.file?.profile ? { profile: force.file.profile } : {}),
         ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0))),
         ...(force.name ? { replaces: force.name } : {}),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type Endpoints, postAnswer, useEndpoints } from "./endpoints";
+import { GatePathsSection } from "./GatePaths";
 import type { ApiPreferenceFile, ApiPresets, ApiRouting, RowReport } from "../../src/api";
 import type { Replay, ReplayCard, Settings } from "../../src/routing";
 import { Panel } from "./Panels";
@@ -272,6 +273,7 @@ export function PreferencesPanel(p: {
           </button>
         </p>
       </div>
+      <GatePathsSection routing={routing} onSaved={p.onSaved} />
     </Panel>
   );
 }

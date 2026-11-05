@@ -32,7 +32,7 @@ The package is `service/`, with `service/wrangler.jsonc` and its own `service/pa
 | `GET pushes` | machine or person | the machines whose cards don't notify now, after a burst (`ProjectRelay.pushes`, below): `{ paused: [{ machine, cards, minutes, until }] }` |
 | `POST verdicts` | person | an answer (`Relay.verdict`), taking the local server's fields (`VERDICT_FIELDS`) and `client`: 201 with the verdict, the card's status and the cards Baesian filed after it; or 202 when it takes the passkey, and waits (below) |
 | `POST aliases` | person | a topic merge, `{ from, to }` (`Relay.alias`) |
-| `POST preferences` | person | a preference change (`Relay.preferences`), the local server's fields (`PREFERENCE_FIELDS`); 409 when made from an older view; 202 when it lets more cards past you |
+| `POST preferences` | person | a preference change (`Relay.preferences`), the local server's fields (`PREFERENCE_FIELDS`); 409 when made from an older view; 202 when it lets more cards past you, or makes the commit gate see less (B-qkek1) |
 | `POST batches` | person | `{ pending: [ids] }`: answers waiting for the passkey, asked for together (`Relay.batch`, B-a6xpc): 202 with the batch, the answers in it, those that `expired`, and the challenge and the browser's options; 404 when none still waits |
 | `POST proofs` | person | `{ batch, response }`: the passkey's one assertion over a batch (`Relay.proveBatch`): 200 with each answer's outcome, 201 as its own address would have answered, 409 if its card changed meanwhile, 410 if it expired |
 | `POST presence` | person | the reviewer's heartbeat (`Relay.presence`), 204 |

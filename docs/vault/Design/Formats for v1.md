@@ -85,6 +85,8 @@ Every format in [[File Formats]] stays as accepted (D124), apart from the change
 - **The values** (the presets, the audit rates and the burn-in) are P14 items 10 and 14, still open. The file holds whatever they become.
 - **Does loosening take your passkey?** In a hosted repo, a change that lets more cards past you could also need your passkey, and carry its proof, as a hard-card answer does. **Decision:** card formats-8.
 
+> **Changed (B-qkek1, 2026-11-05): what the commit gate looks at moved here.** The four lists that were `gate_schema`, `gate_infra`, `gate_api` and `gate_ignore` in `Config` are optional fields of the preference file now, under the same names, so only the client writes them, and a change that makes the gate see less is loosening, which takes the passkey in a hosted repo (D163). Unlike the rows, a list left out means the built-in one, as it did in `Config`: the built-in lists are Baesian's detectors, which change with its code as the dependency detector does, and every preference file written before the move has none. [[File Formats#Routing]] has the fields, and [[src-gate]] how the gate reads them.
+
 ## 3. Gate records (D144, D145, D148, D150)
 
 > **Built (M8a, 2026-11-03),** the CLI's record only, with these changes from the table below. Three fields more: `source` (an agent's card, Baesian's own, or a revision after an answer, the last two always shown); `draw`, the number the card drew; and `held_before`, the count of the row's earlier held cards the gate saw, across branches. Those keep the draw's inputs in the record, so the relay's draw (D158, M9) can be recorded the same way, and verify rechecks the burn-in from that count rather than recounting, which one branch's record can't. A card's `level` is the level in force at filing (P14's reading): a shown card's level, and a held card's provisional, since its agent goes ahead whatever level it asked for (B-chq61); the level asked for is in the record as `asked`. So the commit gate reads the card's level as before. verify rechecks the records of the cards a branch cites, in the merge gate.
@@ -317,6 +319,8 @@ Nothing here needs the network, so CI works offline (D127). Node's own crypto ca
 | service | URL | no; set with project | the hosted service's address |
 | project | string | no; set with service | the project's random ID on the service. It's no secret, since `.baesian/config.json` is committed |
 | first_commit | commit ID | no; only with service | the repo's first commit, written when it's linked (B-5gnea, M9d) |
+
+The gate's `gate_*` keys left `Config` for the preference files (B-qkek1, section 2): an agent edits the config, and with them it could make the gate see less in the commit that needed it to see more. A config that still has them reads, and the gate warns that it ignores them.
 
 ### Relay state (new, live layer only)
 

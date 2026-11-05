@@ -119,6 +119,21 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     expect((await state()).routing.preferences?.name).toBe(tighter.body.name);
   });
 
+  it("takes what the commit gate looks at the same way: more is signed at once, less waits for the passkey (B-qkek1)", async () => {
+    const replaces = (await state()).routing.preferences?.name;
+    const wider = await json(await call("POST", "preferences", { as: "person", json: { ...(replaces ? { replaces } : {}), gate_schema: ["**/migrations/**", "**/*.sql", "**/schema.prisma", "**/*.schema.json", "**/schema.graphql", "**/schema.ts", "formats/**"] } }));
+    expect(wider.status).toBe(201);
+    expect((wider.body.file as Record<string, unknown>).gate_schema).toContain("formats/**");
+    const mine = await machineView();
+    expect(mine.inForce().settings.paths.schema).toContain("formats/**");
+    for (const change of [{ gate_schema: ["formats/**"] }, { gate_ignore: ["**"] }, { gate_infra: [] }]) {
+      const narrower = await json(await call("POST", "preferences", { as: "person", json: { replaces: wider.body.name, ...change } }));
+      expect(narrower.status, JSON.stringify(change)).toBe(202);
+      expect(narrower.body.passkey).toMatchObject({ proving: ["preferences"] });
+    }
+    expect((await state()).routing.settings.paths.schema).toContain("formats/**");
+  });
+
   it("saves the rule an accepted draft asks for, signed, naming the project (D110)", async () => {
     const laptop = machineStore();
     const id = fileCard(laptop);

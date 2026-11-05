@@ -221,14 +221,15 @@ export interface ApiPresets {
 /**
  * What the client sends to `POST /api/preferences` (D147): a change to the preferences. `replaces` names the file in
  * force it was made from, and must be the newest (otherwise 409). `preset` starts from a preset's rows; with none, the
- * survey's answers pick one (B-5na1k). Any row, the mode, the rates and the burn-in may be given too, over the file in
- * force. The server adds who wrote it, and when.
+ * survey's answers pick one (B-5na1k). Any row, the mode, the rates, the burn-in and what the commit gate looks at (B-qkek1,
+ * each a whole list) may be given too, over the file in force. The server adds who wrote it, and when.
  */
 export type ApiPreferencesInput = Partial<
   Pick<
     Preferences,
     | "mode" | "row_public_api" | "row_schema" | "row_dependency" | "row_infra" | "row_user_facing" | "row_security" | "row_privacy" | "row_other"
     | "rate_agent_decides" | "rate_sample" | "burn_in" | "reason" | "survey_see" | "survey_fine"
+    | "gate_schema" | "gate_infra" | "gate_api" | "gate_ignore"
   >
 > & { replaces?: string; preset?: string };
 
@@ -242,6 +243,7 @@ export const VERDICT_FIELDS: ReadonlySet<string> = new Set(["card", "revision", 
 /** The fields a preference change may be sent with (`ApiPreferencesInput`); anything else is refused. */
 export const PREFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "replaces", "preset", "mode", "rate_agent_decides", "rate_sample", "burn_in", "reason", "survey_see", "survey_fine",
+  "gate_schema", "gate_infra", "gate_api", "gate_ignore",
   ...["public_api", "schema", "dependency", "infra", "user_facing", "security", "privacy", "other"].map((r) => `row_${r}`),
 ]);
 

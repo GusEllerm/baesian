@@ -634,6 +634,9 @@ export const Position = z.enum(POSITIONS);
 export const Row = z.enum(ROWS);
 export const Mode = z.enum(["shadow", "enforce"]);
 
+/** A path glob for the commit gate (`globToRegExp()`), with no space at either end. */
+const Glob = z.string().regex(/^\S(?:.*\S)?$/, "a glob, with no space at either end");
+
 /** A preference file's name: `<at>-<suffix>.json`, timestamp first like a verdict's (D107), so the newest sorts last. */
 export const PREFERENCE_FILE = new RegExp(`^\\d{8}T\\d{6}\\.\\d{3}Z-${SUFFIX}{5}\\.json$`);
 const PreferenceName = z.string().regex(PREFERENCE_FILE, "a preference file is named <at>-<suffix>.json");
@@ -663,6 +666,18 @@ export const Preferences = z
     rate_sample: z.number().min(0).max(1),
     /** How many of each row's first held cards are all drawn (B-fgc4y). */
     burn_in: z.number().int().min(0),
+    /**
+     * What the commit gate looks at (B-qkek1), here rather than in the committed config so that only a person sets it,
+     * and a change that makes the gate see less takes the passkey (D163). Each is a list of globs; left out, it's the
+     * built-in list (`DEFAULT_SCHEMA`, `DEFAULT_INFRA`; no public modules; no paths ignored beyond `DEFAULT_IGNORE`). The
+     * schema and infra lists replace the built-in ones, and an empty one is kept: the gate looks for none.
+     */
+    gate_schema: z.array(Glob).optional(),
+    gate_infra: z.array(Glob).optional(),
+    /** The public modules: the `api:` detector runs only when there are some (D59). */
+    gate_api: z.array(Glob).min(1).optional(),
+    /** Paths the gate never looks at, added to `DEFAULT_IGNORE`. */
+    gate_ignore: z.array(Glob).min(1).optional(),
     /** The preset it started from (B-wwxa3). */
     profile: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
     /** The file this change was made from; absent only on the first. A change from an older view is refused (P16). */
@@ -858,16 +873,14 @@ export const Config = z
      * of the repo, not the repo, and doesn't sync with the project. Set only with `service`.
      */
     first_commit: CommitId.optional(),
-    /** Globs for the schema detector; replace the defaults (D25). */
-    gate_schema: z.array(z.string().min(1)).optional(),
-    /** Globs for the CI, infra and deploy detector; replace the defaults. */
-    gate_infra: z.array(z.string().min(1)).optional(),
-    /** Paths the gate never looks at, added to the defaults. */
-    gate_ignore: z.array(z.string().min(1)).optional(),
     /**
-     * The project's public modules, as globs. The `api:` detector is off until this is set (D59), and
-     * needs livedocs on PATH (`livedocs signatures`, D56).
+     * No longer read (B-qkek1): what the gate looks at is in the preference files now, which only the client writes, since
+     * agents edit this file. Still accepted, so a config that has them reads, and `baesian check` and `baesian verify`
+     * warn that they're ignored (`staleGateKeys()`).
      */
+    gate_schema: z.array(z.string().min(1)).optional(),
+    gate_infra: z.array(z.string().min(1)).optional(),
+    gate_ignore: z.array(z.string().min(1)).optional(),
     gate_api: z.array(z.string().min(1)).optional(),
   })
   .superRefine((c, ctx) => {

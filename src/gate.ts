@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { DEFAULT_INFRA, DEFAULT_SCHEMA, type DetectedFact, type FactKind, type Snapshot, detectFacts } from "./facts.js";
+import { CONFIG_PATH, type DetectedFact, type Detection, type FactKind, type Snapshot, detectFacts } from "./facts.js";
 import { matcher } from "./globs.js";
 import { answerLine, byLine, q, reviewerOf } from "./quote.js";
-import type { Fact, Verdict } from "./schema.js";
+import type { Config, Fact, Verdict } from "./schema.js";
 import type { Store } from "./store.js";
 import { ACK_TRAILER, CARD_TRAILER, type Trailers } from "./trailers.js";
 
@@ -121,15 +121,37 @@ function evaluateIn(store: Store, detection: { facts: DetectedFact[]; warnings: 
   };
 }
 
-/** Detect the staged facts with the repo's configured paths. */
-export function detectStaged(store: Store, snap: Snapshot) {
-  const c = store.config();
-  return detectFacts(snap, {
-    schema: c.gate_schema ?? DEFAULT_SCHEMA,
-    infra: c.gate_infra ?? DEFAULT_INFRA,
-    api: c.gate_api ?? [],
-    ignore: c.gate_ignore ?? [],
-  });
+/**
+ * Detect the staged facts where the preferences in force say to look (B-qkek1), as the gate at filing reads its rows:
+ * locally, the newest preference file in the live layer; in CI, the newest in the commit's own record; in a hosted repo,
+ * only one that counts, so a commit can't make the gate see less by writing a file of its own (D138, D163). With none,
+ * the built-in paths. Warns when the config still has the keys the gate read before, unless asked not to (`verify` says
+ * so once, for HEAD).
+ */
+export function detectStaged(store: Store, snap: Snapshot, opts: { configWarning?: boolean } = {}): Detection {
+  const force = store.inForce();
+  const found = detectFacts(snap, force.settings.paths);
+  const warnings = [
+    ...(force.problem ? [`${force.problem}, so the gate looks where it does by default`] : []),
+    ...(opts.configWarning === false ? [] : configWarnings(store.config())),
+    ...found.warnings,
+  ];
+  return { facts: found.facts, warnings };
+}
+
+/** The keys a config still has that the gate read before B-qkek1, and reads no longer. */
+export function staleGateKeys(config: Config): string[] {
+  return (["gate_schema", "gate_infra", "gate_ignore", "gate_api"] as const).filter((k) => config[k] !== undefined);
+}
+
+/** What to say when the config still has them: they're ignored, and what to do instead (B-qkek1). */
+export function configWarnings(config: Config): string[] {
+  const keys = staleGateKeys(config);
+  if (!keys.length) return [];
+  const them = keys.length === 1 ? keys[0]! : `${keys.slice(0, -1).join(", ")} and ${keys.at(-1)}`;
+  return [
+    `${CONFIG_PATH} still has ${them}, which the gate no longer reads (B-qkek1): what it looks for is in your preferences now, which only you change, in the client (Your preferences, then "What the gate looks for"). Set it there if the built-in lists don't cover it, then delete ${keys.length === 1 ? "it" : "them"} from the config.`,
+  ];
 }
 
 /** Verdicts on this branch's cards given since the branch's last commit (D30). */

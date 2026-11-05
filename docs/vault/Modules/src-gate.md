@@ -2,7 +2,7 @@
 type: module
 status: active
 authority: describes
-summary: "src/facts.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, reads the trailers, decides coverage, and installs and runs the git hooks."
+summary: "src/facts.ts, src/gate-paths.ts, src/trailers.ts, src/gate.ts and src/hooks.ts: the commit gate. It detects decisions in a diff, where the preferences in force say to look (B-qkek1), reads the trailers, decides coverage, and installs and runs the git hooks."
 created: 2026-10-23
 updated: 2026-11-05
 reviewed: 2026-10-23
@@ -19,22 +19,32 @@ The livedocs pattern applied to decisions ([[Baesian Design#The git gate]]). The
 - `stagedSnapshot` compares the index with HEAD, or with `EMPTY_TREE` before the first commit.
 - `commitSnapshot` compares a commit with its first parent, for CI.
 
-| Kind | Finds | Defaults |
+| Kind | Finds | Built in |
 |---|---|---|
 | `dep` | runtime dependencies added to or removed from `package.json`, `pyproject.toml` (PEP 621 and Poetry), `requirements*.txt`. Not dev dependencies, version bumps or lockfiles | Python names normalised (`normalisePython`) |
-| `schema` | paths matching `DEFAULT_SCHEMA`, or `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL |
-| `infra` | paths matching `DEFAULT_INFRA`, or `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135), except a change that only adds or updates Baesian's own block, exactly as `baesian init` writes it (`onlyBaesianBlock()`, B-g6ywj) |
+| `schema` | paths matching the schema list: `DEFAULT_SCHEMA`, or the preferences' `gate_schema` | migrations, `*.sql`, Prisma, JSON Schema, GraphQL, and a `schema.ts` module (Drizzle's and Convex's, and Zod schemas of files on disk, like Baesian's own `src/schema.ts`) |
+| `infra` | paths matching the infra list: `DEFAULT_INFRA`, or the preferences' `gate_infra` | workflows, Dockerfiles, compose, Terraform, wrangler, fly, vercel, netlify, and committed git hooks (`.githooks/`, `.husky/`), which run on everyone's machine (D135), except a change that only adds or updates Baesian's own block, exactly as `baesian init` writes it (`onlyBaesianBlock()`, B-g6ywj) |
 
-**`api:` facts (M3c; D56, D58, D59).** The detector is off unless `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
+**`api:` facts (M3c; D56, D58, D59).** The detector is off unless the preferences' `gate_api` lists the project's public modules. When it's on, `Snapshot.apiChanges` asks livedocs: `livedocsSignatures` runs `livedocs signatures --cached`, or `--rev <commit>` for CI, with `--json`.
 - Only breaking changes count (`BREAKING`: a changed signature, or a removed export), and only in the listed modules. A new export is additive.
 - Each one becomes `api:<qualname>`.
 - If livedocs is missing or fails, that's a warning, never a block.
 
-What counts as a signature is livedocs' rule: parameters, defaults, return types and class heritage. For constants, only a declared type annotation counts. Zod schema constants therefore aren't API facts: in this repo, format changes are caught by listing `src/schema.ts` in `gate_schema`.
+What counts as a signature is livedocs' rule: parameters, defaults, return types and class heritage. For constants, only a declared type annotation counts. Zod schema constants therefore aren't API facts: in this repo, format changes are caught by the schema detector, whose built-in list counts `src/schema.ts` (`**/schema.ts`; until B-qkek1, the config's `gate_schema` listed it).
 
-**The repo's link to the service (B-w4g6c, M9d), and the gate's own settings (B-qkek1).** A commit that changes the service, project or first commit in `.baesian/config.json` (`CONFIG_PATH`) is a fact, `infra:.baesian/config.json`, linking a repo first included, and unlinking it: changing where a repo's cards are sent takes the same sign-off as changing its CI. So is a commit that adds, changes or removes any of the gate's own settings there (`gate_schema`, `gate_infra`, `gate_ignore`, `gate_api`): the stopgap B-qkek1 asked for, since on 2026-11-05 a commit that set `gate_ignore` to `["**"]` and added a dependency passed `baesian verify` with no card or ack. `configFact()` (private) compares those fields between the two versions, and runs before anything is ignored, so neither `DEFAULT_IGNORE`'s `.baesian/**` nor a repo's own `gate_ignore` hides it; the rest of the config and of `.baesian/` stays out of sight. Its detail says which: the link, the gate's settings, or both. The first commit is among the link's fields because it's what ties a checkout to its project (B-5gnea): changing it alone would let a copy sync with the original's. `baesian login` prints the ack that covers the fact when it links a repo (`linkAck()`, [[src-sync]]). CI's `baesian verify` reports it the same way, since it detects with `detectFacts()` too.
+**The repo's link to the service (B-w4g6c, M9d).** A commit that changes the service, project or first commit in `.baesian/config.json` (`CONFIG_PATH`) is a fact, `infra:.baesian/config.json`, linking a repo first included, and unlinking it: changing where a repo's cards are sent takes the same sign-off as changing its CI. `linkFact()` (private) compares those three fields between the two versions, and runs before anything is ignored, so neither `DEFAULT_IGNORE`'s `.baesian/**` nor a repo's own ignores hide it; the rest of the config and of `.baesian/` stays out of sight. The first commit is among them because it's what ties a checkout to its project (B-5gnea): changing it alone would let a copy sync with the original's. `baesian login` prints the ack that covers the fact when it links a repo (`linkAck()`, [[src-sync]]). CI's `baesian verify` reports it the same way, since it detects with `detectFacts()` too. For a while (B-qkek1's stopgap, 2026-11-05) a change to the config's `gate_*` keys was a fact as well; the gate no longer reads them, so it isn't.
 
-`DEFAULT_IGNORE` (`node_modules`, `.baesian/`, vendor, fixtures) is never looked at. A rename counts when either the old or the new path is in scope. A manifest that doesn't parse produces a warning, not a guess. Globs come from `globToRegExp`.
+`DEFAULT_IGNORE` (`node_modules`, `.baesian/`, vendor, fixtures) is never looked at, whatever a repo sets. A rename counts when either the old or the new path is in scope. A manifest that doesn't parse produces a warning, not a guess. Globs come from `globToRegExp`.
+
+## src/gate-paths.ts: what the gate looks at, and who changes it (B-qkek1)
+
+The built-in lists (`DEFAULT_SCHEMA`, `DEFAULT_INFRA`, `DEFAULT_IGNORE`) and a repo's own, which live in its preference files ([[File Formats#Routing]]), never in the committed config: an agent edits the config, and on 2026-11-05 a commit that set the config's `gate_ignore` to `["**"]` and added a dependency passed `baesian verify` with no card or ack. The user decided B-qkek1: the settings move to the preferences, which only the client writes, and a change that makes the gate see less takes the passkey in a hosted repo, as loosening a row does (D163). The module is pure, with no Node, so the CLI, CI, the relay and the client share it; `facts.ts` re-exports the built-in lists.
+
+- **`GatePaths`** is a preference file's four lists, `schema`, `infra`, `api` and `ignore`, each left out meaning the built-in one; `Settings.paths` carries it ([[src-routing]]), and `detectFacts()` takes it as its options (`DetectOptions`). `pathsOf()` gives the list the gate applies for a kind; a repo's ignores are added to `DEFAULT_IGNORE`.
+- **`pathSetting()`** is a list as a file keeps it: trimmed, without blanks or repeats, and left out when it's the built-in one, in any order. An empty schema or infra list is kept: the gate looks for none.
+- **`pathsLoosening()`** says what a change makes the gate stop seeing: a schema, infra or API list that no longer covers every path the old one did, and paths ignored that weren't. `loosening()` includes it, so the store's judgement of a preference file and the relay's passkey prompt both take it in.
+
+**Comparing globs (`uncovered()`, in `src/globs.ts`).** Exact, not a guess from the text: each glob is read as an automaton over a path's characters, as `globToRegExp()` reads it, and walking them all together over the characters that matter (the slash, those the globs name, and one standing for every other) finds a path the first list misses, if there is one. So `**/schema.ts` covers `src/schema.ts`, `**` covers anything, and `deploy/*` with `deploy/*/**` covers `deploy/**` together, though neither does alone. It gives up after 50,000 states, and a glob it can't tell about counts as not covered: as loosening.
 
 ## src/trailers.ts (D52)
 
@@ -55,7 +65,11 @@ Separately, it checks every cited card, by the level in force (`Store.levelOf`):
 - hard and not resolved: blocked (D46);
 - returned with a question, filed as provisional or blocking, or held back by the gate (written provisional): allowed.
 
-`describeReport` prints the result, ending with trailer lines to paste. What a reviewer wrote, in a rejection or a new verdict, is quoted with their name (`answerLine`, D169). `verdictsSinceLastCommit` adds the verdicts since the branch's last commit. Commit times have one-second resolution, so a verdict given in the same second as the last commit can be shown twice; that's harmless. `detectStaged` applies the repo's configured paths.
+`describeReport` prints the result, ending with trailer lines to paste. What a reviewer wrote, in a rejection or a new verdict, is quoted with their name (`answerLine`, D169). `verdictsSinceLastCommit` adds the verdicts since the branch's last commit. Commit times have one-second resolution, so a verdict given in the same second as the last commit can be shown twice; that's harmless.
+
+**Where it looks (B-qkek1).** `detectStaged` reads the paths from the preferences in force (`Store.inForce`), as the gate at filing reads its rows: on your machine, the newest preference file in the live layer; in CI, the newest in the commit's own record; in a hosted repo, only one that counts, signed and, when it loosens, with the passkey's proof ([[src-store#The hosted service's proof (M9a)]]). With none, the built-in lists. A newest file that can't be read is a warning, and the built-in lists apply. A config that still has the old keys is a warning too (`staleGateKeys()`, `configWarnings()`): they're ignored, and it says to set them in the client's preferences panel, under "What the gate looks for", then delete them. `baesian check` and the commit gate print it every time; `baesian verify` says it once, for HEAD.
+
+**In the client,** `<GatePathsSection />` is that section of the preferences panel, after the rows: the built-in detectors nobody changes (dependencies, and the repo's link), then the four lists, one glob a line, each with "Use the built-in list" when it isn't. Before you use a draft it says what the gate would stop seeing, and it sends the four lists through the same path as every preference change, over the file in force; on the website one that loosens asks for the passkey first ([[Client Build]]).
 
 ## src/hooks.ts (D54)
 

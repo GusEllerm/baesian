@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import { parse as parseToml } from "smol-toml";
+import { DEFAULT_IGNORE, type GatePaths, pathsOf } from "./gate-paths.js";
 import { matcher } from "./globs.js";
 import { onlyBaesianBlock } from "./hookblock.js";
 
@@ -43,7 +44,7 @@ export interface Snapshot {
   changes(): Change[];
   before(path: string): string | undefined;
   after(path: string): string | undefined;
-  /** Exported-signature changes between the two trees. Only called when `gate_api` is set. */
+  /** Exported-signature changes between the two trees. Only called when the preferences name public modules (`gate_api`, B-qkek1). */
   apiChanges?(): ApiResult;
 }
 
@@ -63,7 +64,7 @@ export function livedocsSignatures(cwd: string, args: string[]): ApiResult {
   } catch (e) {
     const err = e as NodeJS.ErrnoException & { stderr?: string };
     if (err.code === "ENOENT") {
-      return { changes: [], warning: "gate_api is set, but livedocs isn't installed, so API changes weren't checked (uv tool install livedocs)" };
+      return { changes: [], warning: "your preferences name public modules (gate_api), but livedocs isn't installed, so API changes weren't checked (uv tool install livedocs)" };
     }
     const why = (err.stderr ?? err.message ?? "").toString().trim().split("\n").at(-1);
     return { changes: [], warning: `livedocs signatures failed, so API changes weren't checked: ${why}` };
@@ -133,45 +134,10 @@ export function commitSnapshot(cwd: string, commit: string): Snapshot {
   };
 }
 
-export const DEFAULT_SCHEMA = [
-  "**/migrations/**",
-  "**/*.sql",
-  "**/schema.prisma",
-  "**/*.schema.json",
-  "**/schema.graphql",
-];
+export { DEFAULT_IGNORE, DEFAULT_INFRA, DEFAULT_SCHEMA } from "./gate-paths.js";
 
-export const DEFAULT_INFRA = [
-  ".github/workflows/**",
-  // Git hooks that are committed run on everyone's machine: changing one is an infra decision (D135).
-  ".githooks/**",
-  ".husky/**",
-  ".gitlab-ci.yml",
-  "**/Dockerfile",
-  "**/Dockerfile.*",
-  "**/docker-compose*.yml",
-  "**/docker-compose*.yaml",
-  "**/compose.yml",
-  "**/compose.yaml",
-  "**/*.tf",
-  "**/wrangler.toml",
-  "**/wrangler.json",
-  "**/wrangler.jsonc",
-  "**/fly.toml",
-  "**/vercel.json",
-  "**/netlify.toml",
-];
-
-export const DEFAULT_IGNORE = ["**/node_modules/**", ".baesian/**", "**/vendor/**", "**/__fixtures__/**"];
-
-export interface DetectOptions {
-  schema?: readonly string[];
-  infra?: readonly string[];
-  /** The public modules; the `api:` detector runs only when this is non-empty (D59). */
-  api?: readonly string[];
-  /** Added to `DEFAULT_IGNORE`. */
-  ignore?: readonly string[];
-}
+/** Where the detectors look: the preference file's paths in force (B-qkek1), each list left out being the built-in one. */
+export type DetectOptions = GatePaths;
 
 /** Breaking changes only (D58): a new export is additive, so it's a two-way door. */
 const BREAKING = new Set<ApiChange["kind"]>(["signature", "removed"]);
@@ -277,7 +243,7 @@ function dependencyFacts(snap: Snapshot, change: Change, warnings: string[]): De
   return facts;
 }
 
-// ---------------------------------------------------------------- the committed config: the link (B-w4g6c), the gate's settings (B-qkek1)
+// ---------------------------------------------------------------- the repo's link to the service (B-w4g6c)
 
 /** The committed config, where a repo names the service and project it syncs with (P16 section 8). */
 export const CONFIG_PATH = ".baesian/config.json";
@@ -285,17 +251,13 @@ export const CONFIG_PATH = ".baesian/config.json";
 /** What ties a repo to a project on the service: where its cards go (B-w4g6c), and which history is the repo's (B-5gnea). */
 const LINK_FIELDS = ["service", "project", "first_commit"] as const;
 
-/** The gate's own settings in the config (B-qkek1): a commit that changes them changes what the gate sees of it. */
-const GATE_FIELDS = ["gate_schema", "gate_infra", "gate_ignore", "gate_api"] as const;
-
 /**
- * Two kinds of change to the committed config are gate facts, `infra:.baesian/config.json`, like a CI file: changing
- * where a repo's cards are sent, its service, project or first commit, linking the repo first included (B-w4g6c); and
- * changing the gate's own settings, any `gate_*` key added, changed or removed (B-qkek1), since otherwise a commit could
- * widen what the gate ignores and slip a decision past it in the same breath. The rest of `.baesian/` stays out of the
- * gate's sight (`DEFAULT_IGNORE`), and so does the rest of the config.
+ * Changing where a repo's cards are sent is a gate fact, like a CI file (B-w4g6c): `infra:.baesian/config.json` when a
+ * commit changes the config's service, project or first commit, linking the repo first included. The rest of
+ * `.baesian/` stays out of the gate's sight (`DEFAULT_IGNORE`), and so does the rest of the config: what the gate looks
+ * at is no longer there, but in the preference files, which a commit can't make count (B-qkek1).
  */
-function configFact(snap: Snapshot, change: Change, warnings: string[]): DetectedFact | undefined {
+function linkFact(snap: Snapshot, change: Change, warnings: string[]): DetectedFact | undefined {
   if (change.path !== CONFIG_PATH && change.oldPath !== CONFIG_PATH) return undefined;
   const read = (text: string | undefined, side: string): Record<string, unknown> | undefined => {
     if (text === undefined) return {};
@@ -303,7 +265,7 @@ function configFact(snap: Snapshot, change: Change, warnings: string[]): Detecte
       const v = JSON.parse(text) as unknown;
       return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
     } catch {
-      warnings.push(`couldn't parse the ${side} version of ${CONFIG_PATH}; whether it changes the repo's service, its project or the gate's settings wasn't checked`);
+      warnings.push(`couldn't parse the ${side} version of ${CONFIG_PATH}; whether it changes the repo's service or project wasn't checked`);
       return undefined;
     }
   };
@@ -312,19 +274,10 @@ function configFact(snap: Snapshot, change: Change, warnings: string[]): Detecte
   const before = read(wasThere ? snap.before(CONFIG_PATH) : undefined, "old");
   const after = read(change.path === CONFIG_PATH && change.status !== "D" ? snap.after(CONFIG_PATH) : undefined, "new");
   if (!before || !after) return undefined;
-  const differs = (k: string) => JSON.stringify(before[k]) !== JSON.stringify(after[k]);
-  const moved = LINK_FIELDS.filter(differs);
-  const gate = GATE_FIELDS.filter(differs);
-  if (!moved.length && !gate.length) return undefined;
-  const link = !moved.length
-    ? undefined
-    : after.project === undefined
-      ? `unlinked the repo from ${String(before.service)} (project ${String(before.project)})`
-      : before.project === undefined
-        ? `linked the repo to ${String(after.service)} as project ${String(after.project)}`
-        : `changed the repo's ${moved.join(", ")} in ${CONFIG_PATH}`;
-  const settings = gate.length ? `changed what the gate looks at (${gate.join(", ")}) in ${CONFIG_PATH}` : undefined;
-  return { id: `infra:${CONFIG_PATH}`, kind: "infra", path: CONFIG_PATH, detail: [link, settings].filter(Boolean).join("; and ") };
+  const moved = LINK_FIELDS.filter((k) => before[k] !== after[k]);
+  if (!moved.length) return undefined;
+  const detail = after.project === undefined ? `unlinked the repo from ${String(before.service)} (project ${String(before.project)})` : before.project === undefined ? `linked the repo to ${String(after.service)} as project ${String(after.project)}` : `changed the repo's ${moved.join(", ")} in ${CONFIG_PATH}`;
+  return { id: `infra:${CONFIG_PATH}`, kind: "infra", path: CONFIG_PATH, detail };
 }
 
 // ---------------------------------------------------------------- detection
@@ -332,19 +285,18 @@ function configFact(snap: Snapshot, change: Change, warnings: string[]): Detecte
 const VERB: Record<string, string> = { A: "added", M: "changed", D: "deleted", R: "renamed", C: "copied", T: "changed" };
 
 export function detectFacts(snap: Snapshot, opts: DetectOptions = {}): Detection {
-  const ignored = matcher([...DEFAULT_IGNORE, ...(opts.ignore ?? [])]);
-  const isSchema = matcher(opts.schema ?? DEFAULT_SCHEMA);
-  const isInfra = matcher(opts.infra ?? DEFAULT_INFRA);
+  const ignored = matcher([...DEFAULT_IGNORE, ...pathsOf(opts, "ignore")]);
+  const isSchema = matcher(pathsOf(opts, "schema"));
+  const isInfra = matcher(pathsOf(opts, "infra"));
   const warnings: string[] = [];
   const facts = new Map<string, DetectedFact>();
   const add = (f: DetectedFact) => {
     if (!facts.has(f.id)) facts.set(f.id, f);
   };
   for (const change of snap.changes()) {
-    // Checked before what's ignored: `.baesian/` is, and a repo's own gate_ignore mustn't hide where its cards go
-    // (B-w4g6c), nor a change to the gate_ignore itself (B-qkek1).
-    const config = configFact(snap, change, warnings);
-    if (config) add(config);
+    // Checked before what's ignored: `.baesian/` is, and a repo's own ignores mustn't hide where its cards go (B-w4g6c).
+    const link = linkFact(snap, change, warnings);
+    if (link) add(link);
     if (ignored(change.path)) continue;
     const verb = VERB[change.status] ?? "changed";
     const what = change.oldPath ? `${verb} ${change.oldPath} → ${change.path}` : `${verb} ${change.path}`;
@@ -356,8 +308,9 @@ export function detectFacts(snap: Snapshot, opts: DetectOptions = {}): Detection
     const ownBlock = (change.status === "A" || change.status === "M") && onlyBaesianBlock(change.path, snap.before(change.path), snap.after(change.path));
     if (either(isInfra) && !ownBlock) add({ id: `infra:${change.path}`, kind: "infra", path: change.path, detail: what });
   }
-  if (opts.api?.length && snap.apiChanges) {
-    const isApi = matcher(opts.api);
+  const api = pathsOf(opts, "api");
+  if (api.length && snap.apiChanges) {
+    const isApi = matcher(api);
     const result = snap.apiChanges();
     if (result.warning) warnings.push(result.warning);
     for (const c of result.changes) {
