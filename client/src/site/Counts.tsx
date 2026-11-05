@@ -20,7 +20,7 @@ function values(v: UsageValue) {
 
 export function Counts({ who }: { who?: string | undefined }) {
   return (
-    <Shell who={who} wide>
+    <Shell who={who}>
       <Sheet
         title="What the service counts"
         lead="Baesian's hosted service counts how it's used, to know whether it works and what it costs: counts and timings, never what your cards say. Every account is counted unless it opts out. This is the whole list."

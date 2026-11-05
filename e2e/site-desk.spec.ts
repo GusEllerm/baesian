@@ -194,6 +194,31 @@ test("the project's desk: the CLI's cards answered on the website and heard back
   expect(readdirSync(join(Store.open(dir).live, "verdicts")).some((f) => f.includes(hardId) && f.endsWith(".passkey.json"))).toBe(true);
 });
 
+test("a change to the preferences that lets more cards past asks for the passkey over the panel, and saves", async ({ page }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  const filed = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title: "Which cache", question: "Which cache should runs use?", topic: "cache/runs", reverse: "cheap", touches: [] }) });
+  expect(filed.code, filed.err).toBe(0);
+  sh(dir, "add", "-A");
+  sh(dir, "commit", "-q", "-m", "A card");
+  const project = await linkThroughPage(page, dir, "Crumb's shop");
+  await openDesk(page, project);
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which cache should runs use?");
+
+  // Turning holding back on lets more cards past you (D163). The prompt sits over the wide panel, not under it: a click
+  // on its button reaches it only if nothing covers it.
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Your preferences" }).click();
+  const prefs = page.getByRole("complementary", { name: "Your preferences" });
+  await prefs.getByRole("radiogroup", { name: "Holding back" }).getByRole("radio", { name: "On" }).check();
+  await prefs.getByRole("button", { name: "Save" }).click();
+  const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
+  await expect(prompt).toContainText("This change lets more cards past you without asking");
+  await prompt.getByRole("button", { name: "Use your passkey" }).click({ timeout: 5000 });
+  await expect(prefs.getByText("Saved.")).toBeVisible();
+  await expect(prompt).toBeHidden();
+});
+
 test("a project that isn't yours says so, and where yours are", async ({ page }) => {
   await signedUp(page);
   await page.goto(`${site.url}/projects/p-00000000000000000000`);

@@ -373,12 +373,12 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Counts.tsx"
-sig = "b44b75b17b504210"
+sig = "5150e010fcec7eab"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -393,12 +393,12 @@ sig = "7476218bd3cd1b97"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Page.tsx"
-sig = "da4bec0e054aac85"
+sig = "052785ed660c9edf"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Privacy.tsx"
-sig = "1034545658c1ff1d"
+sig = "07650211930a67a1"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -953,7 +953,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1873,7 +1873,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2238,7 +2238,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2248,7 +2248,7 @@ sig = "213385323054c627"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/Privacy.tsx"
-sig = "1034545658c1ff1d"
+sig = "07650211930a67a1"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2763,7 +2763,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -3088,7 +3088,7 @@ sig = "de6a8263773b5276"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "client/src/site/Privacy.tsx"
-sig = "1034545658c1ff1d"
+sig = "07650211930a67a1"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -3578,7 +3578,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5503,7 +5503,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/site/Account.tsx"
-sig = "ef581e6d3396e42c"
+sig = "8f47d0cb333e8def"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

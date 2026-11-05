@@ -5,7 +5,7 @@ import { follow } from "./nav";
 // The frame every page of the website shares (M9e): the client's own header, then the page on a card-coloured sheet in
 // the middle of the desk. Round 5's type, colours and spacing (client/src/style.css), nothing new.
 
-export function Shell({ who, children, wide, prose }: { who?: string | undefined; children: ReactNode; wide?: boolean; prose?: boolean }) {
+export function Shell({ who, children }: { who?: string | undefined; children: ReactNode }) {
   return (
     <>
       <header className="bar">
@@ -31,7 +31,7 @@ export function Shell({ who, children, wide, prose }: { who?: string | undefined
         </nav>
       </header>
       <main className="site-main">
-        <div className={["site-page", wide && "wide", prose && "prose"].filter(Boolean).join(" ")}>{children}</div>
+        <div className="site-page">{children}</div>
         {/* On every page of the site (M9f): what the service keeps, and what it counts. */}
         <nav className="site-foot" aria-label="About the service">
           <a href="/privacy" onClick={follow("/privacy")}>

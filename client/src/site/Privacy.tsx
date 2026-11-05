@@ -41,7 +41,7 @@ const KEPT: [string, string][] = [
 export function Privacy({ who }: { who?: string | undefined }) {
   const changed = new Date(`${POLICY_CHANGED}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   return (
-    <Shell who={who} prose>
+    <Shell who={who}>
       <Sheet
         title="Privacy"
         lead="Baesian's hosted service, at baesian.dev, passes your coding agents' design decisions to you as cards, and your answers back to them. This page says what it keeps about you and your projects, why, for how long, who else handles it, and how to have it corrected or deleted."

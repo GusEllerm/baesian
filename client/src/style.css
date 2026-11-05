@@ -274,7 +274,7 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .card-link { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 /* A deck's briefing card (B-j6b75): plain card stock, no rarity, before the deck's first card */
 .briefing-card { --c: var(--ink); background: #c9c2b1; }
-.briefing-card .briefing { font: var(--t-body); font-size: 16.5px; max-width: 62ch; }
+.briefing-card .briefing { font: var(--t-body); font-size: 16.5px; }
 .briefing-card .briefing p, .briefing-card .briefing ul { margin: 0 0 10px; }
 .briefing-card .briefing ul { padding-left: 20px; }
 .briefing-card .context-notes h5 { margin-top: 0; }
@@ -366,7 +366,7 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 /* The setup survey (B-5na1k): plain card stock, as a deck's briefing card is */
 .setup-card { --c: var(--ink); background: #c9c2b1; }
 .setup-card .stakes .gone { margin-left: auto; }
-.setup-text { font: var(--t-body); font-size: 16.5px; max-width: 60ch; }
+.setup-text { font: var(--t-body); font-size: 16.5px; }
 .setup-text.soft { font-size: 15px; color: var(--ink-soft); }
 .example { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: -4px 0 -2px; }
 .example p { padding: 2px 0 2px 10px; border-left: 2px solid var(--line); font: var(--t-body); font-size: 14.5px; color: var(--ink-soft); }
@@ -504,22 +504,19 @@ a.wordmark { color: inherit; text-decoration: none; }
 .site-nav a { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); text-decoration: none; }
 .site-nav a:hover { background: #ffffff60; color: var(--ink); }
 .site-main { min-height: 0; overflow-y: auto; padding: 18px 28px 56px; }
+/* Every page is one width, set for its reading: about 73 characters of body text a line. Text spans its sheet, never
+   capped short of it; a page that needs a longer line would need a wider page, not a narrower text. */
 .site-page { display: flex; flex-direction: column; gap: 26px; max-width: 580px; margin: 0 auto; }
-.site-page.wide { max-width: 680px; }
-/* A page of reading, such as the privacy policy: the sheet is as wide as its lines, about 70 characters, so the text fills it. */
-.site-page.prose { max-width: 540px; }
-.site-page.prose .site-sheet .lead, .site-page.prose .site-sheet > p, .site-page.prose .site-list { max-width: none; }
 .site-sheet, .panel.proof { --c: var(--ink); }
 .site-sheet { display: flex; flex-direction: column; gap: 14px; padding: 24px 30px 26px; border-radius: 13px; background: var(--face); box-shadow: 0 0 0 5px #cdbe8c, 0 24px 36px -24px #2e234380; }
 .site-sheet h1 { margin: 0; font: var(--t-question); text-wrap: balance; }
 .site-sheet h2 { margin: 0; font: var(--t-question); font-size: 24px; text-wrap: balance; }
-.site-sheet .lead { font: var(--t-body); font-size: 17px; max-width: 48ch; text-wrap: pretty; }
-.site-sheet > p:not(.lead, .small, .problem, .site-notice) { font: var(--t-body); font-size: 16px; max-width: 52ch; }
-.site-sheet .small { max-width: 56ch; }
+.site-sheet .lead { font: var(--t-body); font-size: 17px; text-wrap: pretty; }
+.site-sheet > p:not(.lead, .small, .problem, .site-notice) { font: var(--t-body); font-size: 16px; }
 .site-sheet .small code, .site-sheet p code, .shown-once .hint code { font: 600 0.92em/1 var(--ui); }
 .site-field { display: flex; flex-direction: column; gap: 5px; }
 .site-field .lbl, .shown-once .lbl { font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; }
-.site-field .hint, .shown-once .hint { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); max-width: 56ch; }
+.site-field .hint, .shown-once .hint { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .site-field input { width: 100%; min-height: 46px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: var(--t-body); font-size: 17px; }
 .site-field input.mono { font: 600 17px/1.2 var(--ui); letter-spacing: .06em; }
 .site-go { align-self: flex-start; min-width: 230px; padding: 0 22px; text-decoration: none; }
@@ -556,7 +553,7 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 .turnstile { min-height: 65px; }
 /* notifications and installing the app (M9e step 2) */
 .push-here, .push-install { display: flex; flex-direction: column; gap: 8px; }
-.push-here > p:not(.small) { font: var(--t-body); font-size: 16px; max-width: 52ch; }
+.push-here > p:not(.small) { font: var(--t-body); font-size: 16px; }
 .push-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; font: var(--t-body); font-size: 16px; }
 .push-install .switch { align-self: flex-start; }
 .site-sheet h3.site-sub { margin: 4px 0 0; font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; }
@@ -572,7 +569,7 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 .count-kind dd code { font: 600 0.86em/1 var(--ui); }
 .counts-never { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font: var(--t-body); font-size: 16px; }
 /* the privacy policy (/privacy): lists in a sheet, as /counts has them, and the site's footer on every page */
-.site-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 56ch; font: var(--t-body); font-size: 16px; }
+.site-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font: var(--t-body); font-size: 16px; }
 .site-list code, .site-sheet p a, .site-list a { overflow-wrap: anywhere; }
 .site-list code { font: 600 0.92em/1 var(--ui); }
 .site-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; max-width: 580px; margin: 30px auto 0; }
@@ -581,9 +578,10 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 /* the project's page, when a machine's cards don't notify for a while (a burst) */
 .desk-notice { margin: 0 0 6px; padding: 8px 12px; border-radius: 8px; background: #fbecc8; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink); }
 
-/* the passkey on an answer: over the desk, dimmed */
-.proof-backdrop { position: fixed; inset: 0; z-index: 74; background: #2e234359; }
-.panel.proof { display: flex; flex-direction: column; gap: 8px; }
+/* the passkey on an answer: over the desk, dimmed, and over any panel open on it (a preference change asks from the
+   preferences panel) and the menu */
+.proof-backdrop { position: fixed; inset: 0; z-index: 84; background: #2e234359; }
+.panel.proof { z-index: 85; display: flex; flex-direction: column; gap: 8px; }
 /* On a desktop it's a dialog in the middle of the window, not a panel at its edge over the end of a line (M9e step 2). */
 @media (min-width: 761px) {
   .panel.proof { top: 50%; left: 50%; right: auto; width: min(440px, calc(100vw - 48px)); transform: translate(-50%, -50%); }

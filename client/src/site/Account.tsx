@@ -121,7 +121,7 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
     });
 
   return (
-    <Shell who={account.handle} wide>
+    <Shell who={account.handle}>
       <Sheet title="Your account" lead={<>Signed in as <b>{account.handle}</b>{account.emails.length ? <>, with {account.emails.map((e) => e.address).join(", ")}</> : null}.</>}>
         <Problem text={problem} />
         <Notice text={notice} />
