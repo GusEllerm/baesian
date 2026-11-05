@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-0cy62",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "schema"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "schema",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T23:53:44.392Z"
+}

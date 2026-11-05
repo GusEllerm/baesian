@@ -4,6 +4,7 @@ import { relative } from "node:path";
 import { parseDoc } from "./frontmatter.js";
 import { CARD_ID, type MergeEvent } from "./schema.js";
 import type { Store } from "./store.js";
+import { citedIn } from "./trailers.js";
 
 // D181: finding merges. A branch B merged into a branch A is found by the git hooks of the machine that saw A move (a
 // merge, a pull, a squash commit, a rebase), and recorded as a file of its own (`Store.writeMerge`), which goes up to the
@@ -459,10 +460,12 @@ export function detectorFor(store: Store, commit: string): MergeDetector {
 
 /**
  * What came in, as branches: the names of the branches, local or remote-tracking, whose tips the movement made reachable
- * and that no other such tip contains. Undefined when it names none but A itself (a pull of A's own upstream) or none at
- * all: then each merge on A's line says what it merged by the cards it brought.
+ * and that no other such tip contains; and a branch one of those began from (D8: its tip on that one's first-parent line,
+ * and no merge recorded of it into that one, which a fast-forward into it would have), since its whole tip came in with it.
+ * A's own upstream among them (`upstream`) is a pull: it's left out, and if it's the only one, this is undefined, as it is
+ * when nothing is named; then each merge on A's line says what it merged by the cards it brought.
  */
-function cameIn(top: string, m: Moved): { names: Set<string>; tips: Map<string, string> } | undefined {
+function cameIn(top: string, m: Moved, recorded: readonly { branch: string; into: string }[]): { names: Set<string>; tips: Map<string, string>; upstream: boolean } | undefined {
   const refs = (run(top, ["for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/remotes"]) ?? "").split("\n").filter(Boolean);
   const range = new Set((run(top, ["rev-list", `${m.from}..${m.to}`]) ?? "").split("\n").filter(Boolean));
   if (m.squashed) for (const c of m.squashed.commits) range.add(c);
@@ -471,16 +474,43 @@ function cameIn(top: string, m: Moved): { names: Set<string>; tips: Map<string, 
     .filter(([sha, ref]) => range.has(sha) && ref !== `refs/heads/${m.into}` && !ref.endsWith("/HEAD"));
   if (!inRange.length) return undefined;
   const independent = new Set((run(top, ["merge-base", "--independent", ...new Set(inRange.map(([sha]) => sha))]) ?? "").split("\n").filter(Boolean));
+  const nameOf = (ref: string) => (ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref.split("/").slice(3).join("/"));
   const names = new Set<string>();
   const tips = new Map<string, string>();
   for (const [sha, ref] of inRange) {
     if (!independent.has(sha)) continue;
-    const name = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref.split("/").slice(3).join("/");
-    names.add(name);
-    tips.set(name, sha);
+    names.add(nameOf(ref));
+    tips.set(nameOf(ref), sha);
   }
-  if (!names.size || names.has(m.into)) return undefined;
-  return { names, tips };
+  const lines = new Map<string, Set<string>>();
+  const lineOf = (tip: string) => lines.get(tip) ?? lines.set(tip, new Set((run(top, ["rev-list", "--first-parent", tip, "--not", m.from]) ?? "").split("\n").filter(Boolean))).get(tip)!;
+  for (const [sha, ref] of inRange) {
+    const name = nameOf(ref);
+    if (independent.has(sha) || names.has(name) || name === m.into) continue;
+    const from = [...tips].find(([n, tip]) => n !== m.into && lineOf(tip).has(sha) && !recorded.some((r) => r.branch === name && r.into === n));
+    if (from) names.add(name), tips.set(name, sha);
+  }
+  const upstream = names.delete(m.into);
+  if (!names.size) return undefined;
+  return { names, tips, upstream };
+}
+
+/**
+ * Which branches a merge commit on A's line merged itself, of those whose cards or citing commits it brought (D7): those
+ * with a card filed, or a citing commit made, on its other parent's first-parent line, the merged branch's own. One that
+ * came only through a merge on that line was merged into the merged branch first: that merge is its own, as the named
+ * path has it. With none on that line to tell by, every one.
+ */
+function mergedHere(store: Store, top: string, a: Arrival): Set<string> {
+  const all = new Set(a.by.keys());
+  if (all.size < 2 || a.parents.length < 2) return all;
+  const line = (run(top, ["rev-list", "--first-parent", a.parents[1]!, "--not", a.parents[0]!]) ?? "").split("\n").filter(Boolean);
+  if (!line.length) return all;
+  const onLine = new Set(line);
+  const added = run(top, ["log", "--stdin", "--no-walk=unsorted", "--no-merges", "--name-only", "--diff-filter=A", `--relative=${recordDir(store, top)}/`, "--format="], `${line.join("\n")}\n`) ?? "";
+  const filed = new Set(added.split("\n").flatMap((n) => /^cards\/(B-[^/]+)\/r1\.md$/.exec(n.trim())?.[1] ?? []));
+  const direct = new Set([...a.by].filter(([, got]) => [...got.cards].some((c) => filed.has(c)) || [...got.cited].some((c) => onLine.has(c))).map(([b]) => b));
+  return direct.size ? direct : all;
 }
 
 /** The first commit on A's line that made `tip` reachable: the tip itself, or the merge that brought it. */
@@ -516,7 +546,11 @@ interface Draft {
 function landed(top: string, into: string, d: Draft, byCommit: Map<string, Cite[]>, citedCards: boolean): Found {
   const range = run(top, ["rev-list", "--reverse", "--topo-order", d.tip, "--not", d.base]);
   const reachable = range === undefined ? [...d.got.cited] : range.split("\n").filter(Boolean);
-  const mine = (c: string) => (byCommit.get(c) ?? []).filter((e) => e.branch === d.branch);
+  // The tip's own ledger entry is written by post-commit, after it: no later commit on the branch carried it into the
+  // record, so a machine that didn't make the tip has none (D5). Its trailers say what it cites, as the gate reads them.
+  const tipCites = byCommit.has(d.tip) || !reachable.includes(d.tip) ? undefined : citedIn(top, d.tip);
+  const entries = (c: string): Cite[] => (c === d.tip && tipCites ? tipCites.cards.map((card) => ({ card, branch: d.branch, at: iso(tipCites.at) })) : (byCommit.get(c) ?? []));
+  const mine = (c: string) => entries(c).filter((e) => e.branch === d.branch);
   const commits = reachable.filter((c) => mine(c).length);
   const cards = new Set(d.got.cards);
   if (citedCards) for (const c of commits) for (const e of mine(c)) cards.add(e.card);
@@ -565,10 +599,13 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
   });
   if (!arrivals.length) return [];
   const now = (m.now ?? new Date()).toISOString();
-  const named = cameIn(top, m);
+  const named = cameIn(top, m, store.merges());
+  // A pull of A's own upstream that also brought a branch named at the tip (D1: v1/next, pushed to the remote's main,
+  // and main brought up to it) is that branch's merge, if it brought anything; otherwise the pull is read merge by merge.
+  const names = named && (named.upstream ? [...named.names].filter((b) => arrivals.some((a) => a.by.has(b))) : [...named.names]);
   const drafts: Draft[] = [];
-  if (named) {
-    for (const branch of named.names) {
+  if (named && names?.length) {
+    for (const branch of names) {
       let got: Got | undefined;
       for (const a of arrivals) {
         const g = a.by.get(branch);
@@ -577,21 +614,38 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
         fold(got, g);
       }
       if (!got) continue;
-      const at = whereReached(top, chain, named.tips.get(branch)!, m.squashed ? m.to : undefined) ?? chain.at(-1)!;
-      // A merge or squash commit says when; a fast-forward or a rebase onto the branch happened now.
-      const byGit = at.parents.length > 1 || !!m.squashed;
-      drafts.push({ branch, commit: at.commit, at: byGit ? at.at : now, dated: byGit ? "git" : "now", got, tip: m.squashed?.tip ?? named.tips.get(branch)!, base: m.from });
+      const tip = named.tips.get(branch)!;
+      const at = whereReached(top, chain, tip, m.squashed ? m.to : undefined) ?? chain.at(-1)!;
+      // A merge or squash commit this movement made says when; a fast-forward or a rebase onto the branch happened now,
+      // even onto a merge commit made earlier elsewhere (D4, G-6), which is the tip itself.
+      const byGit = (at.parents.length > 1 && at.commit !== tip) || !!m.squashed;
+      drafts.push({ branch, commit: at.commit, at: byGit ? at.at : now, dated: byGit ? "git" : "now", got, tip: m.squashed?.tip ?? tip, base: m.from });
     }
   } else {
+    // A run of commits bringing one branch ends where the next run, or a merge, begins, or at A's tip: commits on A's line
+    // that brought nothing after its last arrival came with it (D6: a fast-forward's plain last commit), so the merge is
+    // at the tip the merging machine fast-forwarded to, and in the same file.
+    const index = new Map(chain.map((c, i) => [c.commit, i]));
+    const arrived = new Set(arrivals.map((a) => a.commit));
+    const runEnd = (last: Arrival): Chain => {
+      let i = index.get(last.commit)!;
+      while (i + 1 < chain.length && !arrived.has(chain[i + 1]!.commit) && chain[i + 1]!.parents.length < 2) i++;
+      return chain[i]!;
+    };
     let span: { branch: string; first: Arrival; last: Arrival; got: Got } | undefined;
     const flush = () => {
-      if (span) drafts.push({ branch: span.branch, commit: span.last.commit, at: span.last.at, dated: "commit", got: span.got, tip: span.got.tip ?? span.last.commit, base: span.first.parents[0] ?? m.from });
+      if (span) {
+        const end = runEnd(span.last);
+        drafts.push({ branch: span.branch, commit: end.commit, at: end.at, dated: "commit", got: span.got, tip: span.got.tip ?? end.commit, base: span.first.parents[0] ?? m.from });
+      }
       span = undefined;
     };
     for (const a of arrivals) {
       if (a.parents.length > 1) {
         flush();
-        for (const [branch, got] of a.by) drafts.push({ branch, commit: a.commit, at: a.at, dated: "git", got, tip: got.tip ?? a.parents[1]!, base: a.parents[0]! });
+        // Each branch the merge brought, but one merged into the merged branch first (D7): that one's merge is its own.
+        const direct = mergedHere(store, top, a);
+        for (const [branch, got] of a.by) if (direct.has(branch)) drafts.push({ branch, commit: a.commit, at: a.at, dated: "git", got, tip: got.tip ?? a.parents[1]!, base: a.parents[0]! });
         continue;
       }
       if (a.by.size !== 1 || (span && !a.by.has(span.branch))) flush();

@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-dezkk",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "user-facing",
+    "schema"
+  ],
+  "reverse": "cheap",
+  "asked": "provisional",
+  "source": "agent",
+  "row": "schema",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-05T23:54:29.608Z"
+}

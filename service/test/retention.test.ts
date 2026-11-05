@@ -264,7 +264,7 @@ describe("the commits that cite a card, and merges (D181)", () => {
     const commit = "c".repeat(40);
     const ledger = `ledger/${id}-abcde.md`;
     await put(ledger, renderDoc({ type: "ledger", format: 1, card: id, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, id)));
-    const merge = (sha: string, cards: string[]) => ({ path: mergeFile(sha, "feat/x"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, at: new Date(now).toISOString(), cards }) });
+    const merge = (sha: string, cards: string[]) => ({ path: mergeFile(sha, "feat/x", "main"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, at: new Date(now).toISOString(), cards }) });
     const both = merge("d".repeat(40), [id, other]);
     const mine = merge("e".repeat(40), [id]);
     const none = merge("f".repeat(40), []);
@@ -307,7 +307,7 @@ describe("the commits that cite a card, and merges (D181)", () => {
     for (const [card, commit] of Object.entries(cites)) {
       await put(`ledger/${card}-abcde.md`, renderDoc({ type: "ledger", format: 1, card, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, card)));
     }
-    const merge = (sha: string, cards: string[], commits: string[]) => ({ path: mergeFile(sha, "feat/x"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, tip: sha, at: new Date(now).toISOString(), cards, commits }) });
+    const merge = (sha: string, cards: string[], commits: string[]) => ({ path: mergeFile(sha, "feat/x", "main"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, tip: sha, at: new Date(now).toISOString(), cards, commits }) });
     // A later fast-forward that brought only the commit citing the answered card; one that brought both commits; and one
     // that brought the answered card and the commit citing the waiting one.
     const followUp = merge("a".repeat(40), [], [cites[id]!]);
@@ -322,6 +322,40 @@ describe("the commits that cite a card, and merges (D181)", () => {
     expect(files).not.toContain(followUp.path);
     expect(files).toEqual(expect.arrayContaining([both.path, crossed.path]));
     expect((await state(o)).merges?.map((m) => m.commit).sort()).toEqual(["9".repeat(40), "b".repeat(40)]);
+  });
+
+  it("a merge of commits whose ledger entries go in two sweeps goes once the last of its commits' has", async () => {
+    const o = await owner();
+    const t0 = now;
+    const a = await file(o);
+    const b = await file(o);
+    await answer(o, { card: a });
+    await pull(o);
+    expect(await sweep(o)).toEqual([]);
+    const put = async (path: string, text: string) => {
+      const r = await inObject(o, (relay) => relay.upload(o.project, path, new TextEncoder().encode(text), "laptop"));
+      expect(r.status, `${path}: ${JSON.stringify(r.body)}`).toBe(201);
+    };
+    const cites = { [a]: "3".repeat(40), [b]: "4".repeat(40) };
+    for (const [card, commit] of Object.entries(cites)) await put(`ledger/${card}-abcde.md`, renderDoc({ type: "ledger", format: 1, card, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, card)));
+    const path = mergeFile("5".repeat(40), "feat/x", "main");
+    await put(path, JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: "5".repeat(40), tip: "5".repeat(40), at: new Date(now).toISOString(), cards: [], commits: [cites[a], cites[b]] }));
+    // b is answered twenty days on, and delivered.
+    at(t0 + 20 * DAY);
+    await keepSignedIn(o);
+    await answer(o, { card: b });
+    await pull(o);
+    expect(await sweep(o)).toEqual([]);
+    // a's text goes first: b's commit is still cited, so the merge stays.
+    at(t0 + 30 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([a]);
+    expect((await state(o)).merges?.map((m) => m.commit)).toEqual(["5".repeat(40)]);
+    // b's text goes 30 days after it was delivered: both commits' entries were here and went, so the merge goes too.
+    at(t0 + 50 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([b]);
+    expect((await state(o)).merges ?? []).toEqual([]);
   });
 });
 

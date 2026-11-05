@@ -105,8 +105,8 @@ export const AGENT_KINDS: readonly AgentKind[] = [
     check: ([path, commit], f) => {
       if (f.commit !== commit) return `it's for commit ${String(f.commit)}, but its path names ${commit}`;
       if (f.branch === f.into) return "a merge is of one branch into another";
-      const named = mergeFile(commit!, String(f.branch));
-      return path === named ? undefined : `its path isn't named for its branch: it would be ${named}`;
+      const named = mergeFile(commit!, String(f.branch), String(f.into));
+      return path === named ? undefined : `its path isn't named for its branch and its target: it would be ${named}`;
     },
   },
   {

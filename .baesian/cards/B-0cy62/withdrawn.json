@@ -1,0 +1,8 @@
+{
+  "type": "withdrawal",
+  "format": 1,
+  "card": "B-0cy62",
+  "reason": "Refiled as hard: keeping such a merge outlasts the public privacy page's promise ('until the text of every card they cite is removed'), so it's a privacy decision, not a fix to make on my own; the code is back as it was.",
+  "by": "claude-code",
+  "at": "2026-11-05T23:55:54.144Z"
+}

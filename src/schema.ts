@@ -492,7 +492,8 @@ export const isLedgerBody = (body: string, commit: string, card: string) => body
 
 /**
  * A branch merged into another (D181): `merges/<commit>-<key>.json` in the live layer, where `key` is the first 12 hex
- * digits of the SHA-256 of `branch` (`mergeFile()`), so two machines that find the same merge write the same path. Found
+ * digits of the SHA-256 of `branch` and `into` (`mergeFile()`), so two machines that find the same merge write the same
+ * path, and one branch fast-forwarded into two branches at one commit is two files. Found
  * by the CLI's hooks (src/merges.ts), never in the record; it goes up to the relay and comes down to the project's other
  * machines. `commit` is where it landed on `into`: the merge commit, the squash commit, or for a fast-forward the commit
  * the branch moved to; `tip`, the commit that landed from the merged side (B-w41p7): a merge commit's other parent, the

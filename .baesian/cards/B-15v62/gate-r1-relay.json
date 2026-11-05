@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-15v62",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "privacy",
+    "schema",
+    "data-loss"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "data_loss",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T23:56:26.889Z"
+}
