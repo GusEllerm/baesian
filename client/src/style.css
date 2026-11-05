@@ -462,7 +462,10 @@ body.drawer-open .drawer { transform: none; visibility: visible; transition: tra
 .drawer-wider svg { flex: 0 0 auto; }
 .drawer-wider[aria-pressed="true"] { background: var(--ink); color: var(--paper); box-shadow: none; }
 .drawer-wider:disabled { opacity: .45; cursor: default; }
-.drawer-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 22px 28px; scrollbar-width: thin; }
+.drawer-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 22px 28px; scrollbar-width: thin; }
+/* The space above the list is its first child's, not the scroller's padding: a sticky day header sticks inside the
+   scroller's padding, so padding on top left a band above it where rows scrolling past showed through. */
+.drawer-scroll > :first-child { margin-top: 14px; }
 .drawer-keys { margin-top: 10px; font: 500 12px/1.7 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
 .drawer-keys kbd { min-width: 16px; font-size: 10.5px; }
 
@@ -719,7 +722,8 @@ body.drawer-open .drawer { transform: none; visibility: visible; transition: tra
   .drawer-veil, .drawer-grip, .drawer-wider, .drawer-keys { display: none; }
   .drawer { width: 100vw; box-shadow: none; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
   .drawer-head { padding: 4px max(6px, env(safe-area-inset-right)) 4px max(16px, env(safe-area-inset-left)); }
-  .drawer-scroll { padding: 12px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); }
+  .drawer-scroll { padding: 0 max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); }
+  .drawer-scroll > :first-child { margin-top: 12px; }
   .br-status { font-size: 16.5px; }
   .br-chips { display: none; }
   .br-fsel { display: inline-flex; width: 100%; }

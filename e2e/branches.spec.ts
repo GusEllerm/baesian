@@ -146,6 +146,24 @@ test.describe("the local desk", () => {
     await expect(page.getByRole("complementary", { name: "Keyboard shortcuts" })).toContainText("Your decisions, by branch: opens them beside the desk, and closes them");
   });
 
+  test("a day's header sticks flush to the top of the list as it scrolls, with nothing showing above it", async ({ page }) => {
+    await open(page);
+    await page.setViewportSize({ width: 1440, height: 420 });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".br-row.is-day").first()).toBeVisible();
+    // Scrolled past the opening, the first day's header is stuck: its top is the scroller's, with no band between.
+    const gap = await d.evaluate((el) => {
+      const sc = el.querySelector(".drawer-scroll")!;
+      sc.scrollTop = sc.scrollHeight;
+      const top = sc.getBoundingClientRect().top;
+      const stuck = [...sc.querySelectorAll(".br-row.is-day")].map((h) => h.getBoundingClientRect().top).filter((t) => t <= top + 40);
+      return stuck.length ? Math.min(...stuck.map((t) => Math.abs(t - top))) : null;
+    });
+    expect(gap).not.toBeNull();
+    expect(gap!).toBeLessThan(1);
+  });
+
   test("lists the history from the live layer, newest first, with one tab stop and the arrow keys between rows", async ({ page }) => {
     const { h } = await open(page);
     await page.keyboard.press("b");
