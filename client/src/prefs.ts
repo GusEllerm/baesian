@@ -1,6 +1,9 @@
 import type { ApiCard, ApiPreferencesInput, ApiRouting, RowReport } from "../../src/api";
 import {
+  ALL_ROWS,
+  type AnyRow,
   FIXED_ROWS,
+  LOOSEN_AFTER,
   type Mode,
   POSITIONS,
   POSITION_NAMES,
@@ -20,11 +23,11 @@ import {
 } from "../../src/routing";
 
 // M8b: the client's side of the preferences (D147: only the client writes them). A draft of the rows and the mode,
-// what it would have held of past cards (`replay()`, the rules the gate runs), the change it sends, and the report's
-// rows in words. Pure, so it's tested on its own (prefs.test.ts).
+// what it would have held of past cards (`replay()`, the rules the gate runs), the change it sends, and what each stop
+// does, in words (D180). Pure, so it's tested on its own (prefs.test.ts).
 
-export { FIXED_ROWS, POSITIONS, POSITION_NAMES, PRESETS, ROWS, ROW_FLOOR, ROW_NAMES };
-export type { Mode, Position, Row };
+export { ALL_ROWS, FIXED_ROWS, LOOSEN_AFTER, POSITIONS, POSITION_NAMES, PRESETS, ROWS, ROW_FLOOR, ROW_NAMES };
+export type { AnyRow, Mode, Position, Row };
 
 /** The setup survey's answers (B-5na1k): the rows whose example you'd want to see, and those you'd be fine not seeing. */
 export interface SurveyAnswers {
@@ -121,46 +124,126 @@ export function heldWords(r: { held: number; cards: number; heldMissed: number }
   return `${would} have held back ${r.held} of your ${plural(r.cards, "past card")}.${missed}`;
 }
 
-/** One row's past cards at a stop, in a few words, for the row in the panel. */
-export function rowHeldWords(r: { held: number; cards: number } | undefined): string {
-  if (!r?.cards) return "No past cards";
-  if (!r.held) return `${plural(r.cards, "past card")}, all reach you`;
-  return `${r.held} of ${plural(r.cards, "past card")} held back`;
+// ---------------------------------------------------------------- what each stop does, in words (D180)
+
+/** What falls in each row, from the D11 facts its cards state (`Fact` in src/schema.ts, and the gate's detectors). */
+export const ROW_WHAT: Record<AnyRow, string> = {
+  public_api: "A public API, a URL scheme, or where one module ends and another begins.",
+  schema: "A schema, a migration, or how something is stored on disk.",
+  dependency: "A package the code needs to run, added or removed.",
+  infra: "CI, infrastructure, or how the code is deployed.",
+  user_facing: "Anything the product's users see or do.",
+  security: "Who can get in, what they can reach, and the secrets that guard it.",
+  privacy: "What's kept about people, and who sees it.",
+  other: "Costly to reverse, and none of the above.",
+  data_loss: "Deleting or overwriting what's stored.",
+  money: "Anything that costs money.",
+  publishes: "Releasing or posting something others will see.",
+};
+
+/** Each stop's name on its button, short enough for five in a row on a phone; the full name is its tooltip. */
+export const STOP_SHORT: Record<Position, string> = {
+  "agent-decides": "Agent decides",
+  sample: "Sample after",
+  "tell-me": "Tell me, carry on",
+  "stop-and-ask": "Stop and ask",
+  "never-without-me": "Never without me",
+};
+
+/** A stop's name as a heading: "Never without me". */
+export const stopTitle = (p: Position): string => POSITION_NAMES[p].charAt(0).toUpperCase() + POSITION_NAMES[p].slice(1);
+
+/** How long a blocking card's agent waits for you, in words: `baesian wait`'s budget (`DEFAULT_TIMEOUT_MS`, src/wait.ts). */
+const WAIT_WORDS = "about 9 minutes";
+
+/** An audit rate in words: "about 1 in 3", "every one" or "none". */
+export function rateWords(r: number): string {
+  if (r >= 1) return "every one";
+  if (r <= 0) return "none";
+  return `about 1 in ${Math.round(1 / r)}`;
+}
+
+/** How a held stop's cards come back to you as audits, in a sentence for the table: the rate, and the row's burn-in. */
+function auditWords(rate: number, burnIn: number): string {
+  const first = burnIn === 1 ? "a row's first one" : `a row's first ${burnIn}`;
+  if (rate >= 1) return "Every one comes to you anyway, to check.";
+  if (rate <= 0) return burnIn ? `Only ${first} ${burnIn === 1 ? "comes" : "come"} to you, to check.` : "None comes to you to check.";
+  return `About 1 in ${Math.round(1 / rate)} comes to you anyway, at random, to check${burnIn ? `; so does ${burnIn === 1 ? first : `each of ${first}`}` : ""}.`;
+}
+
+export interface StopRow {
+  position: Position;
+  /** Its level when shown, or "held" for the two lowest stops. */
+  chip: string;
+  card: string;
+  agent: string;
 }
 
 /**
- * The upper bound on a miss rate with no misses in `n` answers, in words (P14: under about 3 in n, at 95% confidence),
- * as Baesian's slider proposals word it: "under about 1 in 9". Too few answers bound nothing worth saying.
+ * The five stops, top to bottom from "never without me" (D180): what each does to a card, and what the agent does
+ * meanwhile. The audit rates and burn-in come from the settings in force; the passkey is the website's (D139).
  */
-export function boundWords(n: number): string {
-  const one = Math.floor(n / 3);
-  return one >= 2 ? `under about 1 in ${one}` : "too few answers to bound it yet";
+export function stopRows(s: Pick<Settings, "rate_agent_decides" | "rate_sample" | "burn_in">, hosted: boolean): StopRow[] {
+  return [
+    { position: "never-without-me", chip: "hard", card: `Reaches you.${hosted ? " Answering it takes your passkey." : ""}`, agent: "Stops. It never goes ahead without your answer." },
+    { position: "stop-and-ask", chip: "blocking", card: "Reaches you.", agent: `Waits for you while you're here, up to ${WAIT_WORDS}, then goes ahead with its pick until you answer.` },
+    { position: "tell-me", chip: "provisional", card: "Reaches you.", agent: "Goes ahead with its pick at once, and hears your answer at its next stopping point. If you choose otherwise, it reworks." },
+    { position: "sample", chip: "held", card: `Goes to your Held back list, not your queue. ${auditWords(s.rate_sample, s.burn_in)}`, agent: "Goes ahead with its pick. Its branch can merge without your answer, and you can still answer it later." },
+    { position: "agent-decides", chip: "held", card: `Goes to your Held back list. ${auditWords(s.rate_agent_decides, s.burn_in)}`, agent: "Goes ahead with its pick, as above." },
+  ];
 }
 
-/** One row of the report, or every row pooled, in short lines: what reached you, the audits, and the misses. */
-export function reportLines(r: RowReport): string[] {
-  const out: string[] = [];
-  const counts = [
-    r.shown ? `${r.shown} reached you` : "",
-    r.held ? `${r.held} held back` : "",
-    r.wouldHold ? `${r.wouldHold} would have been held back` : "",
-  ].filter(Boolean);
-  if (!counts.length) return ["No cards yet."];
-  out.push(`${counts.join(", ")}.`);
-  if (r.drawn) out.push(`${plural(r.drawn, "audit")}: ${r.auditsAnswered} answered${r.auditsUnanswered ? `, ${r.auditsUnanswered} waiting for you` : ""}.`);
-  if (r.answered) {
-    out.push(r.misses ? `${plural(r.misses, "miss", "misses")} in ${plural(r.answered, "answer")}.` : `No misses in ${plural(r.answered, "answer")}: ${boundWords(r.answered)}.`);
-  } else if (r.misses) {
-    out.push(`${plural(r.misses, "miss", "misses")}.`);
+/** The Holding back switch, in two sentences: what the mode does now, and what to know about it. */
+export function holdingWords(mode: Mode, hosted: boolean): { now: string; more: string } {
+  if (mode === "shadow") {
+    return {
+      now: "Shadow: your settings are tried out, not applied. Every card still reaches you.",
+      more: "Baesian notes which cards the two lowest stops would have held back, so a row set to one of them shows what holding back would have cost you before you turn it on.",
+    };
   }
-  return out;
+  return {
+    now: "On: cards on rows at the two lowest stops skip your queue. Their agents carry on, and a random sample comes back to you.",
+    more: `${hosted ? "Turning it on takes your passkey, because it lets cards past you. " : ""}Rows at the three upper stops are unchanged.`,
+  };
 }
 
-/** The pooled line about your blind choices (P14: how often it matched the agent's pick), and switches. */
-export function blindWords(r: RowReport): string | undefined {
-  if (!r.blind) return undefined;
-  const switched = r.switched ? ` ${plural(r.switched, "time")} you switched to the agent's pick once you'd seen its case.` : "";
-  return `Your blind choice matched the agent's pick on ${r.matched} of ${r.blind}.${switched}`;
+/**
+ * What a row's stop means now, in a sentence (D180). For the two lowest stops it depends on the mode, and says how its
+ * held cards come back: the rest of the row's burn-in (`held`, the row's cards held back so far), then the stop's rate.
+ */
+export function stopMeans(position: Position, mode: Mode, s: Pick<Settings, "rate_agent_decides" | "rate_sample" | "burn_in">, opts: { hosted: boolean; held: number }): string {
+  if (position === "never-without-me") return `These cards reach you, and the agent stops until you answer${opts.hosted ? ", with your passkey" : ""}.`;
+  if (position === "stop-and-ask") return `These cards reach you, and the agent waits for your answer while you're here, up to ${WAIT_WORDS}, before going ahead with its pick.`;
+  if (position === "tell-me") return "These cards reach you, and the agent carries on with its pick meanwhile, so you never hold it up. It hears your answer at its next stopping point.";
+  const rate = position === "sample" ? s.rate_sample : s.rate_agent_decides;
+  const left = Math.max(0, s.burn_in - opts.held);
+  const shadow = mode === "shadow";
+  const some = rate > 0 && rate < 1 ? rateWords(rate) : undefined;
+  const come = (one: boolean) => (shadow ? "would come" : one ? "comes" : "come");
+  const random = some && !shadow ? ", at random" : "";
+  let back: string;
+  if (rate >= 1) back = `every one ${come(true)} back to you`;
+  else if (left) back = `the row's ${opts.held ? "next" : "first"} ${left === 1 ? "one" : left} ${come(left === 1)} back to you, then ${some ?? "none"}${random}`;
+  else back = `${some ?? "none"} ${come(true)} back to you${random}`;
+  if (shadow) return `In shadow, these cards still reach you. With holding back on, they'd go to your Held back list and the agent would carry on with its pick; ${back}.`;
+  return `These cards skip your queue: the agent carries on with its pick, and the card waits on your Held back list. ${back.charAt(0).toUpperCase()}${back.slice(1)}.`;
+}
+
+/**
+ * A row's evidence (D180): its cards so far and the misses on them, from the report; and at a stop that holds cards
+ * back, how many of its past cards that stop would have held, replayed under the draft (`replay()`).
+ */
+export function rowEvidence(r: RowReport | undefined, replayed: { cards: number; held: number; heldMissed: number } | undefined, holdsBack: boolean): string {
+  const cards = r ? r.shown + r.held + r.wouldHold : 0;
+  if (!cards) return "No cards in this row yet.";
+  const said = r!.misses ? `${plural(cards, "card")} so far: you overturned the agent on ${r!.misses}.` : `${plural(cards, "card")} so far: you haven't overturned the agent here.`;
+  if (!holdsBack || !replayed?.cards) return said;
+  const n = replayed.cards;
+  const one = n === 1 && cards === 1;
+  const of = n === cards ? "them" : `its ${plural(n, "past card")}`;
+  const which = one ? (replayed.held ? "it would" : "it wouldn't") : !replayed.held ? `none of ${of} would` : replayed.held === n && of === "them" ? "all of them would" : `${replayed.held} of ${of} would`;
+  const missed = replayed.heldMissed ? (one ? ", and you overturned it" : `, including ${replayed.heldMissed} you overturned`) : "";
+  return `${said} At this stop, ${which} have been held back${missed}.`;
 }
 
 /** A row's name in a sentence: "runtime dependencies". */

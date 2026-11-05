@@ -1,5 +1,5 @@
 import type { ApiCard, ApiContextNote, ApiPreferenceFile, ApiPresets, ApiRouting, ApiState } from "./api.js";
-import { countedCards, replayCards, routingReport } from "./report.js";
+import { blankRow, countedCards, replayCards, routingReport } from "./report.js";
 import { ALL_ROWS, LEVEL_AT, POSITIONS, POSITION_NAMES, PRESETS, ROW_FLOOR, ROW_NAMES, SURVEY, SURVEY_QUESTION, type Row, isFixed, replay } from "./routing.js";
 import type { Store } from "./store.js";
 import { linkText } from "./wikilinks.js";
@@ -89,7 +89,7 @@ function routingState(store: Store, problems: ApiState["problems"]): ApiRouting 
     report = routingReport(store, force);
   } catch (e) {
     problems.push({ path: "preferences", error: e instanceof Error ? e.message : String(e) });
-    report = { rows: {}, pooled: { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 }, beforeGate: 0 };
+    report = { rows: {}, pooled: blankRow(), beforeGate: 0 };
   }
   return {
     ...(force.name && force.file ? { preferences: { name: force.name, file: force.file } } : {}),

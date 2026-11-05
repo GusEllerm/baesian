@@ -184,6 +184,19 @@ export interface RowReport {
   since?: string;
   streak: number;
   recentMisses: number;
+  /**
+   * Your calibration's bar (D180): each card once, by its answers. `agreed`: a final accept whose blind choice was the
+   * agent's pick. `cameRound`: a blind choice against it that the final answer kept (`switched`). Overturned is
+   * `misses`, and a miss counts only there, so the three don't overlap.
+   */
+  agreed: number;
+  cameRound: number;
+  /** Left out of the bar: final accepts with no blind choice recorded, which can't say whether you chose as the agent did. */
+  unblind: number;
+  /** Left out of the bar: cards with no final answer and no miss: waiting, held back, deferred, passed on or returned. */
+  unanswered: number;
+  /** Of `unanswered`, the cards held back now, enforcing; the audits among them are `auditsUnanswered`. */
+  heldWaiting: number;
 }
 
 export interface RoutingReport {

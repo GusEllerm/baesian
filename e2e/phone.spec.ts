@@ -4,6 +4,7 @@ import { type Page, expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { fileAnswered } from "./answers.js";
 import { layoutProblems, smallTargets } from "./layout.js";
 import { fileRound5 } from "./round5.js";
 import { skipSetup } from "./setup.js";
@@ -255,11 +256,69 @@ for (const size of PHONES) {
 
       await menu(page, "Your calibration");
       const calibration = page.getByRole("complementary", { name: "Your calibration" });
-      await expect(calibration.locator(".record h5")).toHaveText("What reached you, row by row");
-      await check(page, problems, "your calibration and the record");
-      await calibration.locator(".record").scrollIntoViewIfNeeded();
-      await check(page, problems, "the record, row by row");
-      await shot(page, "22-record");
+      await expect(calibration.locator(".cal-row")).toHaveCount(12);
+      await check(page, problems, "your calibration");
+      await calibration.locator(".cal-chart").scrollIntoViewIfNeeded();
+      await check(page, problems, "your calibration, row by row");
+      await shot(page, "22-calibration");
+      expect(problems).toEqual([]);
+    });
+
+    test("your preferences and your calibration with a long record fit the phone: what each stop does in blocks, the bar under a row's name, a tap for a segment's count (D180)", async ({ page }) => {
+      await open(page, (s) => {
+        fileAnswered(s);
+        file(s, { touches: ["schema"] });
+      });
+      const problems: string[] = [];
+      await menu(page, "Your preferences");
+      const prefs = page.getByRole("complementary", { name: "Your preferences" });
+      // What each stop does: a block per stop, each line saying what it is; nothing scrolls sideways.
+      const stop = prefs.locator(".stops-table tbody tr").nth(1);
+      await expect(stop.locator("td").first()).toHaveCSS("display", "block");
+      expect(await stop.locator("td").nth(1).evaluate((e) => getComputedStyle(e, "::before").content)).toBe('"The agent, meanwhile: "');
+      await check(page, problems, "your preferences, opening");
+      await shot(page, "23-preferences-opening", true);
+      await prefs.locator(".stops-table").scrollIntoViewIfNeeded();
+      await check(page, problems, "what each stop does");
+      await shot(page, "24-preferences-stops", true);
+      const product = prefs.locator('.pref-row[data-row="user_facing"]');
+      await product.getByRole("radio", { name: "Sample after" }).tap();
+      await expect(product.locator(".means")).toContainText("In shadow, these cards still reach you.");
+      await product.scrollIntoViewIfNeeded();
+      await check(page, problems, "your preferences, a row");
+      await shot(page, "25-preferences-row", true);
+      await prefs.getByRole("button", { name: "Close" }).tap();
+
+      await menu(page, "Your calibration");
+      const calibration = page.getByRole("complementary", { name: "Your calibration" });
+      await check(page, problems, "your calibration, opening");
+      await shot(page, "26-calibration-opening", true);
+      // The counts beside the row's name, and its bar under both, as wide as the panel.
+      const security = calibration.locator('.cal-row[data-row="security"]');
+      await security.scrollIntoViewIfNeeded();
+      const name = (await security.locator(".nm").boundingBox())!;
+      const num = (await security.locator(".num").boundingBox())!;
+      const track = (await security.locator(".cal-track").boundingBox())!;
+      expect(num.y).toBeGreaterThanOrEqual(name.y - 1);
+      expect(num.y + num.height).toBeLessThanOrEqual(name.y + name.height + 1);
+      expect(num.x).toBeGreaterThan(name.x + name.width - 1);
+      expect(track.y).toBeGreaterThan(name.y + name.height - 1);
+      expect(track.width).toBeGreaterThan(size.width - 40);
+      // A tap on a segment names its count.
+      await security.locator(".seg.a").tap();
+      await expect(page.getByRole("tooltip")).toHaveText("Security: you chose as the agent did, blind, on 23 of 43 cards");
+      await shot(page, "27-calibration-tooltip", true);
+      await calibration.locator("h4").tap();
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
+      await check(page, problems, "your calibration, row by row");
+      await shot(page, "28-calibration-rows", true);
+      await calibration.getByText("Show the numbers as a table").tap();
+      await calibration.locator(".cal-table table").scrollIntoViewIfNeeded();
+      await check(page, problems, "your calibration, the table");
+      await shot(page, "29-calibration-table", true);
+      await calibration.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await check(page, problems, "your calibration, at its foot");
+      await shot(page, "30-calibration-foot", true);
       expect(problems).toEqual([]);
     });
 

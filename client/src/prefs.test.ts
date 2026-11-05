@@ -2,28 +2,34 @@ import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiRouting, RowReport } from "../../src/api";
 import { PRESETS, TODAY } from "../../src/routing";
 import {
+  FIXED_ROWS,
+  ROWS,
+  ROW_WHAT,
+  STOP_SHORT,
   allowed,
-  blindWords,
-  boundWords,
   changeOf,
   dirty,
   draftOf,
   heldRows,
   heldWords,
+  holdingWords,
   listWords,
   pastCards,
   presetOf,
+  rateWords,
   replacesOf,
   replayDraft,
-  reportLines,
-  rowHeldWords,
+  rowEvidence,
   rowInSentence,
+  stopMeans,
+  stopRows,
+  stopTitle,
   surveyAnswersOf,
   surveyChange,
 } from "./prefs";
 
-// The client's side of the preferences (M8b, D147): drafts, the change it sends, what a draft would have held, and the
-// report in words.
+// The client's side of the preferences (M8b, D147): drafts, the change it sends, what a draft would have held, and what
+// each stop does, in words (D180).
 
 const T0 = Date.parse("2026-11-03T12:00:00.000Z");
 const at = (s: number) => new Date(T0 + s * 1000).toISOString();
@@ -43,7 +49,10 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
   };
 }
 const verdict = (response: "accept" | "alternative", over = {}) => ({ type: "verdict" as const, format: 1, card: "B-x", revision: 1, response, reviewer: "gus", client: "web", at: at(100), ...over });
-const blank: RowReport = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 };
+const blank: RowReport = {
+  shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0,
+  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0,
+};
 const fewer = PRESETS.find((p) => p.id === "fewer-interruptions")!;
 
 describe("a draft of the preferences", () => {
@@ -109,34 +118,85 @@ describe("what a draft would have held", () => {
     expect(heldWords({ cards: 4, held: 1, heldMissed: 0 }, "It")).toBe("It would have held back 1 of your 4 past cards.");
     expect(heldWords({ cards: 4, held: 0, heldMissed: 0 }, "These settings")).toBe("These settings would have shown you all 4 of your past cards.");
     expect(heldWords({ cards: 0, held: 0, heldMissed: 0 })).toBe("No past cards to try it on yet.");
-    expect(rowHeldWords(undefined)).toBe("No past cards");
-    expect(rowHeldWords({ cards: 1, held: 0 })).toBe("1 past card, all reach you");
-    expect(rowHeldWords({ cards: 3, held: 2 })).toBe("2 of 3 past cards held back");
   });
 });
 
-describe("the report in words (P14 section 3)", () => {
-  it("says what reached you and what was held back, the audits, and the misses with their bound", () => {
-    expect(reportLines(blank)).toEqual(["No cards yet."]);
-    expect(reportLines({ ...blank, shown: 6, answered: 6 })).toEqual(["6 reached you.", "No misses in 6 answers: under about 1 in 2."]);
-    expect(reportLines({ ...blank, shown: 1, held: 4, drawn: 4, auditsAnswered: 3, auditsUnanswered: 1, answered: 4, misses: 2 })).toEqual([
-      "1 reached you, 4 held back.",
-      "4 audits: 3 answered, 1 waiting for you.",
-      "2 misses in 4 answers.",
+describe("what each stop does, in words (D180)", () => {
+  it("lists the five stops from \"never without me\" down, with the audit rates and burn-in in force, and the passkey only on the website", () => {
+    const rows = stopRows(TODAY, false);
+    expect(rows.map((r) => [r.position, r.chip])).toEqual([
+      ["never-without-me", "hard"],
+      ["stop-and-ask", "blocking"],
+      ["tell-me", "provisional"],
+      ["sample", "held"],
+      ["agent-decides", "held"],
     ]);
-    expect(reportLines({ ...blank, shown: 3, wouldHold: 2 })).toEqual(["3 reached you, 2 would have been held back."]);
-    expect(reportLines({ ...blank, held: 1, misses: 1 })).toEqual(["1 held back.", "1 miss."]);
+    expect(rows[0]!.card).toBe("Reaches you.");
+    expect(stopRows(TODAY, true)[0]!.card).toBe("Reaches you. Answering it takes your passkey.");
+    expect(rows[1]!.agent).toBe("Waits for you while you're here, up to about 9 minutes, then goes ahead with its pick until you answer.");
+    expect(rows[3]!.card).toBe("Goes to your Held back list, not your queue. About 1 in 3 comes to you anyway, at random, to check; so does each of a row's first 10.");
+    expect(rows[3]!.agent).toBe("Goes ahead with its pick. Its branch can merge without your answer, and you can still answer it later.");
+    expect(rows[4]!.card).toBe("Goes to your Held back list. About 1 in 10 comes to you anyway, at random, to check; so does each of a row's first 10.");
+    // Other settings say other numbers.
+    expect(stopRows({ rate_sample: 0.5, rate_agent_decides: 0, burn_in: 0 }, false).slice(3).map((r) => r.card)).toEqual([
+      "Goes to your Held back list, not your queue. About 1 in 2 comes to you anyway, at random, to check.",
+      "Goes to your Held back list. None comes to you to check.",
+    ]);
+    expect(stopRows({ rate_sample: 1, rate_agent_decides: 0, burn_in: 4 }, false).slice(3).map((r) => r.card)).toEqual([
+      "Goes to your Held back list, not your queue. Every one comes to you anyway, to check.",
+      "Goes to your Held back list. Only a row's first 4 come to you, to check.",
+    ]);
+    expect(rateWords(0.1)).toBe("about 1 in 10");
   });
 
-  it("bounds a rate only when the answers bound it usefully: under about 3 in n", () => {
-    expect(boundWords(29)).toBe("under about 1 in 9");
-    expect(boundWords(6)).toBe("under about 1 in 2");
-    expect(boundWords(5)).toBe("too few answers to bound it yet");
+  it("says what holding back does in each mode, with the passkey only on the website", () => {
+    expect(holdingWords("shadow", true).now).toBe("Shadow: your settings are tried out, not applied. Every card still reaches you.");
+    expect(holdingWords("enforce", false)).toEqual({
+      now: "On: cards on rows at the two lowest stops skip your queue. Their agents carry on, and a random sample comes back to you.",
+      more: "Rows at the three upper stops are unchanged.",
+    });
+    expect(holdingWords("enforce", true).more).toBe("Turning it on takes your passkey, because it lets cards past you. Rows at the three upper stops are unchanged.");
   });
 
-  it("says how often your blind choice matched the agent's, and the switches", () => {
-    expect(blindWords(blank)).toBeUndefined();
-    expect(blindWords({ ...blank, blind: 7, matched: 6, switched: 1 })).toBe("Your blind choice matched the agent's pick on 6 of 7. 1 time you switched to the agent's pick once you'd seen its case.");
+  it("says what a row's stop means now: by the mode for the two that hold back, with the rest of the row's burn-in", () => {
+    const opts = { hosted: false, held: 0 };
+    expect(stopMeans("tell-me", "shadow", TODAY, opts)).toBe("These cards reach you, and the agent carries on with its pick meanwhile, so you never hold it up. It hears your answer at its next stopping point.");
+    expect(stopMeans("stop-and-ask", "enforce", TODAY, opts)).toBe("These cards reach you, and the agent waits for your answer while you're here, up to about 9 minutes, before going ahead with its pick.");
+    expect(stopMeans("never-without-me", "enforce", TODAY, opts)).toBe("These cards reach you, and the agent stops until you answer.");
+    expect(stopMeans("never-without-me", "enforce", TODAY, { hosted: true, held: 0 })).toBe("These cards reach you, and the agent stops until you answer, with your passkey.");
+    expect(stopMeans("sample", "shadow", TODAY, opts)).toBe(
+      "In shadow, these cards still reach you. With holding back on, they'd go to your Held back list and the agent would carry on with its pick; the row's first 10 would come back to you, then about 1 in 3.",
+    );
+    expect(stopMeans("sample", "enforce", TODAY, opts)).toBe(
+      "These cards skip your queue: the agent carries on with its pick, and the card waits on your Held back list. The row's first 10 come back to you, then about 1 in 3, at random.",
+    );
+    expect(stopMeans("agent-decides", "enforce", TODAY, { hosted: false, held: 9 })).toBe(
+      "These cards skip your queue: the agent carries on with its pick, and the card waits on your Held back list. The row's next one comes back to you, then about 1 in 10, at random.",
+    );
+    expect(stopMeans("agent-decides", "enforce", TODAY, { hosted: false, held: 12 })).toBe(
+      "These cards skip your queue: the agent carries on with its pick, and the card waits on your Held back list. About 1 in 10 comes back to you, at random.",
+    );
+    expect(stopMeans("agent-decides", "shadow", { ...TODAY, rate_agent_decides: 0, burn_in: 0 }, opts)).toMatch(/; none would come back to you\.$/);
+  });
+
+  it("gives a row's evidence from the report, and at a stop that holds back, what it would have held of the row's past cards", () => {
+    expect(rowEvidence(undefined, undefined, false)).toBe("No cards in this row yet.");
+    expect(rowEvidence({ ...blank, shown: 17, misses: 1 }, undefined, false)).toBe("17 cards so far: you overturned the agent on 1.");
+    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 0, heldMissed: 0 }, false)).toBe("2 cards so far: you haven't overturned the agent here.");
+    expect(rowEvidence({ ...blank, shown: 4, misses: 1 }, { cards: 4, held: 3, heldMissed: 1 }, true)).toBe(
+      "4 cards so far: you overturned the agent on 1. At this stop, 3 of them would have been held back, including 1 you overturned.",
+    );
+    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 2, heldMissed: 0 }, true)).toBe("2 cards so far: you haven't overturned the agent here. At this stop, all of them would have been held back.");
+    expect(rowEvidence({ ...blank, shown: 1 }, { cards: 1, held: 0, heldMissed: 0 }, true)).toBe("1 card so far: you haven't overturned the agent here. At this stop, it wouldn't have been held back.");
+    expect(rowEvidence({ ...blank, held: 1, misses: 1 }, { cards: 1, held: 1, heldMissed: 1 }, true)).toBe("1 card so far: you overturned the agent on 1. At this stop, it would have been held back, and you overturned it.");
+    // The replay puts a card with several facts on its strictest row under the draft, which can differ from the record's.
+    expect(rowEvidence({ ...blank, shown: 3 }, { cards: 2, held: 1, heldMissed: 0 }, true)).toBe("3 cards so far: you haven't overturned the agent here. At this stop, 1 of its 2 past cards would have been held back.");
+  });
+
+  it("describes every row, and names each stop short enough for a phone", () => {
+    for (const row of [...ROWS, ...FIXED_ROWS]) expect(ROW_WHAT[row]).toMatch(/\.$/);
+    expect(Object.values(STOP_SHORT)).toEqual(["Agent decides", "Sample after", "Tell me, carry on", "Stop and ask", "Never without me"]);
+    expect(stopTitle("tell-me")).toBe("Tell me but carry on");
   });
 });
 

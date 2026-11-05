@@ -1,15 +1,16 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import type { ApiCard, ApiRemovedCard, ApiRouting, ApiState } from "../../src/api";
+import { AnswerBars } from "./AnswerBars";
 import { type Spent, seconds, timeSpent } from "./calibration";
 import { agentOf, dayOf } from "./model";
 import type { NotifyStatus } from "./notify";
-import { ROWS, ROW_NAMES, POSITION_NAMES, type Position, blindWords, reportLines, rowInSentence } from "./prefs";
+import { rowInSentence } from "./prefs";
 import { Prose } from "./Prose";
 
 // M4 step 5e: the menu in the header, its two panels (your calibration, and the keys), and the empty desk.
 // Round 5's, ported: design/explorations/round5/app.js (renderKeys, renderMirror, the menu, next()). M6 adds the
 // deck's panel, opened from the breadcrumbs: its briefing, and its context notes from the vault. M8b adds the held-back
-// list, the record row by row beside your calibration, and your preferences (Preferences.tsx).
+// list and your preferences (Preferences.tsx); D180 redraws your calibration as a bar per row (AnswerBars.tsx).
 
 /** "path" is the path's sheet, on a phone (D130): it opens and closes as a panel does. */
 export type PanelKind = "calibration" | "keys" | "deck" | "held" | "preferences" | "path";
@@ -169,95 +170,33 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
 }
 
 /**
- * Your calibration, from what can be stood behind (D71): how long you spend by stakes, and the decisions you
- * settled that were later superseded. Practice cards join it when they exist (D83).
+ * Your calibration (D180): your answers row by row against the agents' picks (`<AnswerBars />`), then, from what can be
+ * stood behind (D71), how long you spend by stakes, and the decisions you settled that were later superseded. Practice
+ * cards join it when they exist (D83).
  */
 export function CalibrationPanel({ spent, superseded, routing, onClose }: { spent: Spent[]; superseded: string[]; routing: ApiRouting; onClose: () => void }) {
   const t = timeSpent(spent);
   return (
-    <Panel label="Your calibration" onClose={onClose} wide>
-      <div className="panel-cols">
-        <section>
-          <p className="sub">Judged by what happened afterwards, not by how often you agreed with the agents.</p>
-          <dl>
-            <dt>Time spent</dt>
-            <dd className="tiers">
-              <span>The median on a card, by its stakes:</span>
-              <span>
-                Mythic and rare: <b>{seconds(t.high)}</b>
-              </span>
-              <span>
-                Uncommon: <b>{seconds(t.uncommon)}</b>
-              </span>
-              <span>
-                Common: <b>{seconds(t.common)}</b>
-              </span>
-            </dd>
-            <dt>Later superseded</dt>
-            <dd>
-              {superseded.length
-                ? `${superseded.map((s) => `“${s}”`).join(", ")}: settled here, then superseded by a later decision.`
-                : "None of the decisions you settled here has been superseded."}
-            </dd>
-          </dl>
-          <p className="sub after">Time spent is counted in this browser only.</p>
-        </section>
-        <RowRecord routing={routing} />
+    <Panel label="Your calibration" onClose={onClose} id="calibration-panel" wide>
+      <AnswerBars routing={routing} />
+      <div className="cal-time">
+        <span>
+          Median time on a card, in this browser: mythic and rare <b>{seconds(t.high)}</b>, uncommon <b>{seconds(t.uncommon)}</b>, common <b>{seconds(t.common)}</b>
+        </span>
+        <span>
+          Later superseded:{" "}
+          {superseded.length ? (
+            <>
+              <b>{superseded.length}</b> of the decisions you settled here: {superseded.map((s) => `“${s}”`).join(", ")}
+            </>
+          ) : (
+            <>
+              <b>none</b> of the decisions you settled here
+            </>
+          )}
+        </span>
       </div>
     </Panel>
-  );
-}
-
-/**
- * What your settings did, row by row (P14 section 3), beside your calibration: pooled first, then each row, with what
- * reached you and what was held back, the audits, and the misses with their upper bound (B-87tkc). From the record.
- */
-export function RowRecord({ routing }: { routing: ApiRouting }) {
-  const r = routing.report;
-  const rows = Object.keys(r.rows).sort((a, b) => order(a) - order(b));
-  const blind = blindWords(r.pooled);
-  return (
-    <section className="record" aria-labelledby="record-h">
-      <h5 id="record-h">What reached you, row by row</h5>
-      <p className="sub">
-        {routing.settings.mode === "shadow" ? "In shadow, nothing is held back: “would have been held back” is what your settings would hold." : "Holding back is on."} A miss is an
-        answer that overturned the agent, or “you should have asked me”.
-      </p>
-      <dl>
-        <dt>All rows</dt>
-        <dd className="lines">
-          {reportLines(r.pooled).map((l) => (
-            <span key={l}>{l}</span>
-          ))}
-          {blind && <span>{blind}</span>}
-        </dd>
-        {rows.map((row) => (
-          <RowLines key={row} row={row} report={r.rows[row]!} />
-        ))}
-      </dl>
-      {r.beforeGate > 0 && <p className="sub after">{r.beforeGate === 1 ? "One card was" : `${r.beforeGate} cards were`} filed before this record began, and count as reaching you.</p>}
-    </section>
-  );
-}
-
-const order = (row: string) => {
-  const i = (ROWS as readonly string[]).indexOf(row);
-  return i < 0 ? ROWS.length + row.charCodeAt(0) : i;
-};
-
-function RowLines({ row, report }: { row: string; report: ApiRouting["report"]["rows"][string] }) {
-  return (
-    <>
-      <dt>
-        {(ROW_NAMES as Record<string, string>)[row] ?? row}
-        {report.position && <span className="pos">{POSITION_NAMES[report.position as Position]}</span>}
-      </dt>
-      <dd className="lines">
-        {reportLines(report).map((l) => (
-          <span key={l}>{l}</span>
-        ))}
-      </dd>
-    </>
   );
 }
 

@@ -1,6 +1,8 @@
-import type { ApiState } from "../../src/api";
+import type { ApiState, RowReport } from "../../src/api";
+import { LOOSEN_AFTER } from "../../src/routing";
 import type { Answer } from "./answer";
 import type { Rarity } from "./model";
+import { listWords } from "./prefs";
 
 // M4 step 5e: the calibration panel and the recap, from what can be stood behind (D71, Client Data Contract):
 // time spent comes from this browser's own log; "later reversed" from the store, worded as superseded, never
@@ -39,9 +41,73 @@ export const seconds = (ms: number | undefined) => (ms === undefined ? "none yet
  */
 export function laterSuperseded(state: ApiState): string[] {
   return state.cards
-    .filter((c) => c.status === "superseded" && c.verdicts.some((v) => v.client === "web" && (v.response === "accept" || v.response === "alternative" || v.response === "correction")))
+    .filter((c) => c.status === "superseded" && c.verdicts.some((v) => CLIENTS.has(v.client) && (v.response === "accept" || v.response === "alternative" || v.response === "correction")))
     .map((c) => c.meta.title);
 }
+
+/** The clients a verdict names when it was given here: the local desk, and the website's desktop and phone layouts. */
+const CLIENTS: ReadonlySet<string> = new Set(["web", "hosted-desktop", "hosted-phone"]);
+
+// ---------------------------------------------------------------- your answers, row by row (D180)
+
+/** A row with fewer answers than this is faded: too few to say anything about it yet. */
+export const THIN = 10;
+/** The answers it takes to judge a row: Baesian proposes a lower stop after this many in a row without a miss (B-y6jn6). */
+export const ENOUGH = LOOSEN_AFTER;
+
+/** A row's bar, from the report: each card once, by how its answers compare with the agent's pick. */
+export interface Bar {
+  agreed: number;
+  cameRound: number;
+  overturned: number;
+  total: number;
+}
+
+export const barOf = (r: RowReport): Bar => ({ agreed: r.agreed, cameRound: r.cameRound, overturned: r.misses, total: r.agreed + r.cameRound + r.misses });
+
+/**
+ * The rows' one scale: the longest row's answers, so it fills the track, or the answers it takes to judge a row while
+ * no row has that many, so the mark at `ENOUGH` is always on the track.
+ */
+export const scaleOf = (bars: readonly Bar[]): number => Math.max(ENOUGH, ...bars.map((b) => b.total));
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const times = (n: number) => (n === 1 ? "once" : `${n} times`);
+
+/**
+ * What a row's bar leaves out, in short phrases: cards not answered yet, held back and not answered (D150), audits
+ * waiting for you (D151), and final accepts with no blind choice recorded.
+ */
+export function leftOut(r: RowReport): string[] {
+  const audits = Math.min(r.auditsUnanswered, r.heldWaiting);
+  const waiting = r.unanswered - r.heldWaiting;
+  const held = r.heldWaiting - audits;
+  return [
+    waiting ? `${waiting} not answered` : "",
+    held ? `${held} held back` : "",
+    audits ? `${plural(audits, "audit")} waiting` : "",
+    r.unblind ? `${r.unblind} kept without a blind choice` : "",
+  ].filter(Boolean);
+}
+
+/** All your answers in a sentence (D180), and what the bars leave out, if anything. */
+export function summaryWords(pooled: RowReport): string {
+  const b = barOf(pooled);
+  const left = leftOut(pooled);
+  const more = pooled.unanswered + pooled.unblind;
+  if (!b.total) return more ? `No answers to count yet: ${listWords(left)}.` : "No answers yet: each row's bar fills in as you answer its cards.";
+  const said = `Of ${plural(b.total, "card")}, you chose as the agent did ${times(b.agreed)} without seeing its pick, came round to it ${times(b.cameRound)} after reading its case, and overturned it ${times(b.overturned)}.`;
+  return more ? `${said} ${more}\u00a0more ${more === 1 ? "isn't" : "aren't"} counted: ${listWords(left)}.` : said;
+}
+
+/** A segment's tooltip: "Security: you chose as the agent did, blind, on 23 of 43 cards". */
+export function segmentWords(row: string, kind: keyof Omit<Bar, "total">, n: number, total: number): string {
+  const what = { agreed: "chose as the agent did, blind", cameRound: "came round to its pick", overturned: "overturned it" }[kind];
+  return `${row}: you ${what}, on ${n} of ${plural(total, "card")}`;
+}
+
+/** Where the mark sits on a row's track, as a fraction of it. */
+export const markAt = (scale: number): number => ENOUGH / scale;
 
 /** This session's answers, in a sentence (round 5's recap). */
 export function recap(answers: Answer[]): string {

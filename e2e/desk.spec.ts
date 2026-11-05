@@ -119,8 +119,9 @@ test("the keys and your calibration open from the menu; ? and Esc open and close
 
   await menu(page, "Your calibration");
   const panel = page.getByRole("complementary", { name: "Your calibration" });
-  await expect(panel).toContainText("Mythic and rare: none yetUncommon: none yetCommon: none yet");
-  await expect(panel).toContainText("None of the decisions you settled here has been superseded.");
+  await expect(panel.locator(".cal-time")).toHaveText(
+    "Median time on a card, in this browser: mythic and rare none yet, uncommon none yet, common none yetLater superseded: none of the decisions you settled here",
+  );
 });
 
 test("your calibration counts the time you spend, and names a decision you settled that was later superseded", async ({ page }) => {
@@ -135,8 +136,8 @@ test("your calibration counts the time you spend, and names a decision you settl
   await choose(page, "proposal");
   await menu(page, "Your calibration");
   const panel = page.getByRole("complementary", { name: "Your calibration" });
-  await expect(panel).toContainText(/Uncommon: none yetCommon: \d+\.\d\u00a0s/);
-  await expect(panel).toContainText("“Keep runs in SQLite”: settled here, then superseded by a later decision.");
+  await expect(panel.locator(".cal-time")).toContainText(/uncommon none yet, common \d+\.\d\u00a0s/);
+  await expect(panel.locator(".cal-time")).toContainText("Later superseded: 1 of the decisions you settled here: “Keep runs in SQLite”");
 });
 
 test("the empty desk recaps your session, lists what you put aside, and offers notifications", async ({ page }) => {

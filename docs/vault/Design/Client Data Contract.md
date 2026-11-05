@@ -97,7 +97,10 @@ What the client shows of the gate ([[Routing and Preferences]], [[src-routing]])
 | "You should have asked me" | `should_have_asked` on the verdict, offered only where the gate record says held | Reliable |
 | Your preferences, the presets, and which rows are fixed or have a floor | `routing` in the state (`ApiRouting`), and `GET /api/presets` (`ApiPresets`) | Reliable |
 | What a preset, or your draft, would have held of past cards | The rules re-run over past cards (`replay()`), on the server for the presets and in the client for a draft | Reliable: the same rules the gate runs. The audits it would have drawn are an expectation, so they're not shown |
-| The record row by row: shown, held, would-have-held, audits, misses and the bound | `routing.report` (`RoutingReport`) | Reliable. The bound is a statistical upper bound, and says so ("under about 1 in 9") |
+| Your calibration's bar per row (D180): chose as the agent did without seeing its pick, came round after its case, overturned | `routing.report` (`RoutingReport`): each `RowReport`'s `agreed`, `cameRound` and `misses`, every card once, by its final answer and its blind choice (`calibrationOf()`) | Reliable. A blind choice is recorded with every choice made in the client (D88) |
+| What a bar leaves out, said beside it: not answered, held back, audits waiting, kept with no blind choice | The same report's `unanswered`, `heldWaiting`, `auditsUnanswered` and `unblind` | Reliable |
+| What each stop does, and what a row's stop means now | The settings in force (`ApiRouting.settings`: the audit rates and burn-in), the row's held cards so far (`RowReport.held`), and the agent's wait (`DEFAULT_TIMEOUT_MS`, about 9 minutes), in words the client keeps | Reliable, except the wait, which an agent can set otherwise with `--timeout`: the words say "about" |
+| A row's evidence: its cards so far, how many you overturned, and what its stop would have held | The report's counts, and the rules re-run over past cards (`replay()`) | Reliable |
 | A slider proposal's evidence | Its `crux_fact`, which Baesian writes from the record, with card IDs turned into titles | Reliable |
 | The setup survey's example decisions | `GET /api/presets` (`survey`), example cards, not your own | Reliable: they're labelled as examples |
 
