@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ApiState } from "../../src/api";
-import { laterSuperseded, median, recap, seconds, timeSpent } from "./calibration";
+import type { ApiState, RowReport } from "../../src/api";
+import { ENOUGH, barOf, laterSuperseded, leftOut, markAt, median, recap, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
 
-// The calibration panel and the recap (M4 step 5e).
+// The calibration panel and the recap (M4 step 5e), and your answers row by row (D180).
 
 describe("time spent", () => {
   it("is a median, by stakes", () => {
@@ -21,6 +21,9 @@ describe("later superseded (Client Data Contract: partial)", () => {
     const card = (title: string, status: string, client: string, response = "accept") => ({ meta: { title }, status, verdicts: [{ client, response }] });
     const state = { cards: [card("Kept", "resolved", "web"), card("Overturned", "superseded", "web"), card("Not yours", "superseded", "cli"), card("Only asked", "superseded", "web", "question")] } as unknown as ApiState;
     expect(laterSuperseded(state)).toEqual(["Overturned"]);
+    // Answered on the website, from either layout (D130).
+    const site = { cards: [card("On a phone", "superseded", "hosted-phone"), card("On a desktop", "superseded", "hosted-desktop", "alternative")] } as unknown as ApiState;
+    expect(laterSuperseded(site)).toEqual(["On a phone", "On a desktop"]);
   });
 });
 
@@ -36,5 +39,42 @@ describe("the recap", () => {
         { kind: "pass", reason: "see_it_run", text: "" },
       ]),
     ).toBe("You answered 3 cards: 1 took the agent's pick, 1 chose the alternative and 1 couldn't judge.");
+  });
+});
+
+const blank: RowReport = {
+  shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0,
+  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0,
+};
+
+describe("your answers, row by row (D180)", () => {
+  it("reads each row's bar from the report: overturned is its misses", () => {
+    expect(barOf({ ...blank, agreed: 23, cameRound: 19, misses: 1 })).toEqual({ agreed: 23, cameRound: 19, overturned: 1, total: 43 });
+  });
+
+  it("puts every row on one scale, the longest filling the track, or the answers it takes to judge a row until one has them", () => {
+    const bar = (total: number) => ({ agreed: total, cameRound: 0, overturned: 0, total });
+    expect(scaleOf([bar(17), bar(43), bar(2)])).toBe(43);
+    expect(scaleOf([bar(5), bar(2)])).toBe(ENOUGH);
+    expect(ENOUGH).toBe(29);
+    expect(markAt(43)).toBeCloseTo(29 / 43);
+  });
+
+  it("sums up every card, and says what the bars leave out", () => {
+    expect(summaryWords({ ...blank, agreed: 75, cameRound: 46, misses: 8 })).toBe(
+      "Of 129 cards, you chose as the agent did 75 times without seeing its pick, came round to it 46 times after reading its case, and overturned it 8 times.",
+    );
+    expect(summaryWords({ ...blank, agreed: 1, misses: 1, unanswered: 4, heldWaiting: 3, auditsUnanswered: 1, unblind: 1 })).toBe(
+      "Of 2 cards, you chose as the agent did once without seeing its pick, came round to it 0 times after reading its case, and overturned it once. 5\u00a0more aren't counted: 1 not answered, 2 held back, 1 audit waiting and 1 kept without a blind choice.",
+    );
+    expect(summaryWords(blank)).toBe("No answers yet: each row's bar fills in as you answer its cards.");
+    expect(summaryWords({ ...blank, unanswered: 1 })).toBe("No answers to count yet: 1 not answered.");
+    expect(leftOut({ ...blank, unanswered: 2, heldWaiting: 2, auditsUnanswered: 2 })).toEqual(["2 audits waiting"]);
+  });
+
+  it("names a segment's count in its tooltip", () => {
+    expect(segmentWords("Security", "agreed", 23, 43)).toBe("Security: you chose as the agent did, blind, on 23 of 43 cards");
+    expect(segmentWords("Privacy", "overturned", 1, 5)).toBe("Privacy: you overturned it, on 1 of 5 cards");
+    expect(segmentWords("Spending", "cameRound", 1, 1)).toBe("Spending: you came round to its pick, on 1 of 1 card");
   });
 });

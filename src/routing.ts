@@ -150,6 +150,12 @@ export const PRESETS: readonly Preset[] = [
   },
 ];
 
+/**
+ * Final answers in a row without a miss before Baesian proposes loosening a row (B-y6jn6): the count that bounds a miss
+ * rate under 10% (P14). The calibration panel marks it on each row's bar, as what it takes to judge a row (D180).
+ */
+export const LOOSEN_AFTER = 29;
+
 /** The audit rates and burn-in every preset starts with (B-fgc4y): 1 in 10, 1 in 3, and each row's first 10 held cards. */
 export const AUDIT_DEFAULTS = { rate_agent_decides: 0.1, rate_sample: 1 / 3, burn_in: 10 } as const;
 

@@ -125,17 +125,49 @@ export function rowWindows(store: Store, counted: readonly Counted[], force: InF
   });
 }
 
-const blank = (): RowReport => ({ shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0 });
+/** A row of the report with nothing counted yet. */
+export const blankRow = (): RowReport => ({
+  shown: 0,
+  held: 0,
+  wouldHold: 0,
+  drawn: 0,
+  auditsAnswered: 0,
+  auditsUnanswered: 0,
+  answered: 0,
+  misses: 0,
+  switched: 0,
+  blind: 0,
+  matched: 0,
+  streak: 0,
+  recentMisses: 0,
+  agreed: 0,
+  cameRound: 0,
+  unblind: 0,
+  unanswered: 0,
+  heldWaiting: 0,
+});
+
+/**
+ * Where a card falls in your calibration's bar (D180), by its answers: overturned (a miss), came round (switched), chose
+ * as the agent did (a final accept whose blind choice was its pick); or, left out of the bar, a final accept with no
+ * blind choice, or no final answer at all. Each card falls in exactly one.
+ */
+export function calibrationOf(answers: Outcome): "agreed" | "cameRound" | "overturned" | "unblind" | "unanswered" {
+  if (answers.miss) return "overturned";
+  if (answers.switched) return "cameRound";
+  if (!answers.final) return "unanswered";
+  return answers.final.response === "accept" && answers.final.first_choice === "proposal" ? "agreed" : "unblind";
+}
 
 /** The report (P14 section 3): per row, and pooled first, as the client shows it. */
 export function routingReport(store: Store, force: InForce = store.inForce()): RoutingReport {
   return store.view(() => {
     const counted = countedCards(store);
     const rows: Record<string, RowReport> = {};
-    const pooled = blank();
-    for (const row of ROWS) rows[row] = { position: force.settings.rows[row], ...blank() };
+    const pooled = blankRow();
+    for (const row of ROWS) rows[row] = { position: force.settings.rows[row], ...blankRow() };
     for (const c of counted) {
-      const r = (rows[c.row] ??= { position: (FIXED_ROWS as readonly string[]).includes(c.row) ? "never-without-me" : force.settings.rows[c.row as Row], ...blank() });
+      const r = (rows[c.row] ??= { position: (FIXED_ROWS as readonly string[]).includes(c.row) ? "never-without-me" : force.settings.rows[c.row as Row], ...blankRow() });
       for (const t of [r, pooled]) {
         if (c.outcome === "shown") t.shown++;
         else if (c.mode === "enforce") t.held++;
@@ -154,6 +186,14 @@ export function routingReport(store: Store, force: InForce = store.inForce()): R
             if (c.answers.final.first_choice === "proposal") t.matched++;
           }
         } else if (c.answers.miss) t.misses++;
+        const where = calibrationOf(c.answers);
+        if (where === "agreed") t.agreed++;
+        else if (where === "cameRound") t.cameRound++;
+        else if (where === "unblind") t.unblind++;
+        else if (where === "unanswered") {
+          t.unanswered++;
+          if (c.held) t.heldWaiting++;
+        }
       }
     }
     for (const w of rowWindows(store, counted, force)) {

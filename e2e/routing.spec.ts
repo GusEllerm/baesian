@@ -1,9 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { type Page, expect, test } from "@playwright/test";
+import { type Locator, type Page, expect, test } from "@playwright/test";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, cleanup, draft, repo } from "../test/helpers.js";
+import { fileAnswered } from "./answers.js";
 import { layoutProblems } from "./layout.js";
 import { skipSetup } from "./setup.js";
 
@@ -220,15 +221,15 @@ test("your preferences: five stops a row, fixed rows locked, floors kept, preset
   await expect(panel).toContainText("None saved yet, so “Today” applies, in shadow.");
   const row = (name: string) => panel.getByRole("radiogroup", { name });
   await expect(row("Runtime dependencies").getByRole("radio")).toHaveCount(5);
-  await expect(row("Runtime dependencies").getByRole("radio", { name: "tell me but carry on" })).toBeChecked();
+  await expect(row("Runtime dependencies").getByRole("radio", { name: "Tell me, carry on" })).toBeChecked();
   for (const fixed of ["Publishing", "Spending", "Destroying data"]) {
     await expect(row(fixed).getByRole("radio", { name: "never without me" })).toBeChecked();
     for (const r of await row(fixed).getByRole("radio").all()) await expect(r).toBeDisabled();
   }
   for (const floor of ["Security", "Privacy"]) {
-    await expect(row(floor).getByRole("radio", { name: "let the agent decide" })).toBeDisabled();
-    await expect(row(floor).getByRole("radio", { name: "check a sample afterwards" })).toBeDisabled();
-    await expect(row(floor).getByRole("radio", { name: "tell me but carry on" })).toBeEnabled();
+    await expect(row(floor).getByRole("radio", { name: "Agent decides" })).toBeDisabled();
+    await expect(row(floor).getByRole("radio", { name: "Sample after" })).toBeDisabled();
+    await expect(row(floor).getByRole("radio", { name: "Tell me, carry on" })).toBeEnabled();
   }
   // Each preset, with what it would have held of the four past cards; picking one shows the same of the draft.
   const fewer = panel.getByRole("button", { name: /^Fewer interruptions/ });
@@ -237,7 +238,7 @@ test("your preferences: five stops a row, fixed rows locked, floors kept, preset
   await fewer.click();
   await expect(fewer).toHaveAttribute("aria-pressed", "true");
   await expect(panel.locator(".pref-total")).toHaveText("These settings would have held back 2 of your 4 past cards. You answered 1 of those against the agent.");
-  await expect(row("Runtime dependencies").getByRole("radio", { name: "check a sample afterwards" })).toBeChecked();
+  await expect(row("Runtime dependencies").getByRole("radio", { name: "Sample after" })).toBeChecked();
   await panel.getByRole("radiogroup", { name: "Holding back" }).getByRole("radio", { name: "On" }).check();
   await panel.getByPlaceholder("One line").fill("Trying it.");
   // A long panel scrolls: checked, and seen, at its top and at its foot.
@@ -263,30 +264,182 @@ test("your preferences: five stops a row, fixed rows locked, floors kept, preset
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(panel.getByRole("alert")).toHaveText("Your preferences changed while this was open, so nothing was saved. They're shown as they are now: make your change again.");
   expect(store.preferenceNames()).toHaveLength(2);
-  await expect(row("Delivery and infrastructure").getByRole("radio", { name: "tell me but carry on" })).toBeChecked();
-  await expect(row("Data formats").getByRole("radio", { name: "tell me but carry on" })).toBeChecked();
+  await expect(row("Delivery and infrastructure").getByRole("radio", { name: "Tell me, carry on" })).toBeChecked();
+  await expect(row("Data formats").getByRole("radio", { name: "Tell me, carry on" })).toBeChecked();
   await layout(page);
 });
 
-test("the record row by row sits beside your calibration, pooled first, with misses and their upper bound (P14 section 3)", async ({ page }) => {
+const width = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().width);
+
+test("your calibration: a stacked bar per row at its true length, on one scale, with the mark at 29, faded rows, tooltips and the table (D180)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await open(page, (s) => {
-    for (let i = 0; i < 6; i++) answer(s, file(s, { touches: ["user-facing"] }), { first_choice: "proposal" });
-    answer(s, file(s, { touches: ["dependency"] }), { response: "alternative", choice: "Postgres", first_choice: "alternative" });
-    file(s, { touches: ["schema"] });
+    fileAnswered(s);
+    file(s, { touches: ["schema"] }); // waiting: left out of the bar, and said beside it
   });
   await menu(page, "Your calibration");
   const panel = page.getByRole("complementary", { name: "Your calibration" });
-  const record = panel.locator(".record");
-  await expect(record.locator("h5")).toHaveText("What reached you, row by row");
-  await expect(record.locator("dt").first()).toHaveText("All rows");
-  await expect(record.locator("dd").first()).toHaveText("8 reached you.1 miss in 7 answers.Your blind choice matched the agent's pick on 6 of 7.");
-  const product = record.locator("dt", { hasText: "Product behaviour" });
-  await expect(product).toContainText("tell me but carry on");
-  await expect(record.locator("dt:has-text('Product behaviour') + dd")).toHaveText("6 reached you.No misses in 6 answers: under about 1 in 2.");
-  await expect(record.locator("dt:has-text('Runtime dependencies') + dd")).toHaveText("1 reached you.1 miss in 1 answer.");
-  await expect(record.locator("dt:has-text('Data formats') + dd")).toHaveText("1 reached you.");
+  await expect(panel.locator(".cal-summary")).toHaveText(
+    "Of 129 cards, you chose as the agent did 75 times without seeing its pick, came round to it 46 times after reading its case, and overturned it 8 times. 1 more isn't counted: 1 not answered.",
+  );
+  await expect(panel.locator(".cal-legend span")).toHaveText(["Chose as the agent did, without seeing its pick", "Came round to its pick, after reading its case", "Overturned it, or said you should have been asked"]);
+  const row = (r: string) => panel.locator(`.cal-row[data-row="${r}"]`);
+  await expect(panel.locator(".cal-row")).toHaveCount(12);
+
+  // The segments are the report's counts, in order, and the row's stop is under its name.
+  const security = row("security");
+  await expect(security.locator(".nm")).toHaveText("Securitynever without me");
+  expect(await security.locator(".seg").evaluateAll((els) => els.map((e) => [(e as HTMLElement).dataset.kind, Number((e as HTMLElement).dataset.count)]))).toEqual([
+    ["agreed", 23],
+    ["cameRound", 19],
+    ["overturned", 1],
+  ]);
+  await expect(security.locator(".num")).toHaveText("1 overturned of 43");
+  await expect(row("infra").locator(".seg")).toHaveCount(1);
+
+  // True lengths: the longest row fills the track, the rest in proportion; the segments share a bar by their counts.
+  const track = await width(security.locator(".cal-track"));
+  expect(await width(security.locator(".cal-bar"))).toBeCloseTo(track, 0);
+  expect((await width(row("schema").locator(".cal-bar"))) / track).toBeCloseTo(23 / 43, 2);
+  expect((await width(row("dependency").locator(".cal-bar"))) / track).toBeCloseTo(2 / 43, 2);
+  const segs = await security.locator(".seg").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+  expect(segs[0]! / segs[1]!).toBeCloseTo(23 / 19, 1);
+  // "All rows" is scaled to its own width.
+  const all = row("all");
+  expect(await width(all.locator(".cal-bar"))).toBeCloseTo(await width(all.locator(".cal-track")), 0);
+  await expect(all.locator(".nm")).toHaveText("All rowsscaled to its own width");
+  await expect(all.locator(".num")).toHaveText("8 overturned of 129and 1 not answered");
+
+  // The mark at 29 answers, on every row's track, labelled once.
+  const at = await security.locator(".cal-enough").evaluate((e) => e.getBoundingClientRect().left - e.parentElement!.getBoundingClientRect().left);
+  expect(at / track).toBeCloseTo(29 / 43, 2);
+  await expect(panel.locator(".cal-enough")).toHaveCount(11);
+  await expect(panel.locator(".cal-axis")).toHaveText(["29: enough to judge"]);
+
+  // Fewer than 10 answers: faded. What the bar leaves out is said beside it.
+  await expect(row("privacy")).toHaveClass(/\bthin\b/);
+  await expect(row("security")).not.toHaveClass(/\bthin\b/);
+  await expect(row("schema").locator(".num")).toHaveText("1 overturned of 23and 1 not answered");
+
+  // A tooltip names a segment's count: on hover, and on focus, where the arrows step through them.
+  const tip = page.getByRole("tooltip");
+  await security.locator(".seg.r").hover();
+  await expect(tip).toHaveText("Security: you came round to its pick, on 19 of 43 cards");
+  await page.mouse.move(5, 5);
+  await expect(tip).toHaveCount(0);
+  await row("schema").focus();
+  await expect(tip).toHaveText("Data formats: you chose as the agent did, blind, on 16 of 23 cards");
+  await page.keyboard.press("ArrowRight");
+  await expect(tip).toHaveText("Data formats: you came round to its pick, on 6 of 23 cards");
+  await page.keyboard.press("ArrowRight");
+  await expect(tip).toHaveText("Data formats: you overturned it, on 1 of 23 cards");
+  await shot(page, "calibration-tooltip");
+  await panel.locator("h4").click();
+  await expect(tip).toHaveCount(0);
+  await expect(panel.locator(".cal-reading")).toContainText("Baesian will suggest a lower stop after 29 answers in a row with no miss, where the row can go lower.");
+  await expect(panel.locator(".cal-time")).toContainText("Later superseded: none of the decisions you settled here");
   await layout(page);
-  await shot(page, "calibration-record");
+  await shot(page, "calibration");
+
+  // The same numbers as a table.
+  await panel.getByText("Show the numbers as a table").click();
+  const table = panel.locator(".cal-table table");
+  await expect(table.locator("thead th")).toHaveText(["Row", "Stop", "As the agent", "Came round", "Overturned", "Cards", "Not counted"]);
+  await expect(table.locator("tbody tr", { hasText: "Security" }).locator("td")).toHaveText(["never without me", "23", "19", "1", "43", "0"]);
+  await expect(table.locator("tbody tr.all td")).toHaveText(["", "75", "46", "8", "129", "1"]);
+  await panel.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await layout(page);
+  await shot(page, "calibration-table");
+});
+
+test("your calibration says what's held back and the audits waiting beside a row's bar, and doesn't count them in it (D180)", async ({ page }) => {
+  await open(page, (s) => {
+    handsOff(s, { rate_agent_decides: 1, rate_sample: 0, burn_in: 0 });
+    answer(s, file(s, { touches: ["dependency"] }), { first_choice: "proposal" }); // an audit, answered blind
+    file(s, { touches: ["dependency"] }); // an audit, waiting
+    file(s, { touches: ["infra"] }); // held back, and not drawn
+    file(s, { touches: ["user-facing"] }); // reaches you, not answered yet
+  });
+  await menu(page, "Your calibration");
+  const panel = page.getByRole("complementary", { name: "Your calibration" });
+  await expect(panel.locator(".cal-summary")).toHaveText(
+    "Of 1 card, you chose as the agent did once without seeing its pick, came round to it 0 times after reading its case, and overturned it 0 times. 3 more aren't counted: 1 not answered, 1 held back and 1 audit waiting.",
+  );
+  const row = (r: string) => panel.locator(`.cal-row[data-row="${r}"]`);
+  await expect(row("dependency").locator(".num")).toHaveText("0 overturned of 1and 1 audit waiting");
+  await expect(row("dependency").locator(".nm span")).toHaveText("let the agent decide");
+  await expect(row("infra").locator(".num")).toHaveText("1 held back");
+  await expect(row("infra").locator(".seg")).toHaveCount(0);
+  await expect(row("user_facing").locator(".num")).toHaveText("1 not answered");
+  await expect(row("money").locator(".num")).toHaveText("no cards");
+  await layout(page);
+});
+
+test("your preferences say what each stop does, and what each row's stop means now, by the mode and the stop (D180)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, (s) => {
+    fileAnswered(s);
+    s.writePreferences({ rate_sample: 0.5 }, WHO);
+    file(s, { touches: ["schema"] });
+  });
+  await menu(page, "Your preferences");
+  const panel = page.getByRole("complementary", { name: "Your preferences" });
+  await expect(panel.locator(".lede")).toHaveText(
+    "Agents file a card for each decision that's hard to undo, and each card falls in a row by what it changes. A row's stop decides two things: whether its cards reach you, and what the agent does while it waits for your answer.",
+  );
+
+  // What each stop does, top to bottom, with a cut above the two that hold back, and the audit rates in force.
+  const stops = panel.locator(".stops-table tbody tr");
+  await expect(stops.locator(".stop-name")).toHaveText(["Never without me", "Stop and ask", "Tell me but carry on", "Check a sample afterwards", "Let the agent decide"]);
+  await expect(stops.locator(".lvl")).toHaveText(["hard", "blocking", "provisional", "held", "held"]);
+  await expect(stops.nth(3)).toHaveClass("cut");
+  await expect(stops.nth(3).locator(".cut-label")).toHaveText("Held back, when holding back is on");
+  await expect(stops.nth(0).locator("td")).toHaveText(["Reaches you.", "Stops. It never goes ahead without your answer."]);
+  await expect(stops.nth(1).locator("td").nth(1)).toHaveText("Waits for you while you're here, up to about 9 minutes, then goes ahead with its pick until you answer.");
+  await expect(stops.nth(3).locator("td")).toHaveText([
+    "Goes to your Held back list, not your queue. About 1 in 2 comes to you anyway, at random, to check; so does each of a row's first 10.",
+    "Goes ahead with its pick. Its branch can merge without your answer, and you can still answer it later.",
+  ]);
+  await expect(stops.nth(4).locator("td").first()).toHaveText("Goes to your Held back list. About 1 in 10 comes to you anyway, at random, to check; so does each of a row's first 10.");
+
+  // Each row: what falls in it, its floor or "always", five stops, what its stop means, and its evidence.
+  const row = (r: string) => panel.locator(`.pref-row[data-row="${r}"]`);
+  await expect(panel.locator(".pref-row")).toHaveCount(11);
+  const product = row("user_facing");
+  await expect(product.locator(".what")).toHaveText("Anything the product's users see or do.");
+  await expect(product.getByRole("radio")).toHaveCount(5);
+  await expect(product.getByRole("radio", { name: "Tell me, carry on" })).toHaveAttribute("title", "Tell me but carry on");
+  await expect(product.locator(".means")).toHaveText(
+    "These cards reach you, and the agent carries on with its pick meanwhile, so you never hold it up. It hears your answer at its next stopping point.23 cards so far: you overturned the agent on 2.",
+  );
+  await expect(row("security").locator(".limit")).toHaveText("No lower than “tell me but carry on”.");
+  await expect(row("security").locator(".means")).toHaveText("These cards reach you, and the agent stops until you answer.43 cards so far: you overturned the agent on 1.");
+  await expect(row("money").locator(".limit")).toHaveText("Always “never without me”.");
+  await expect(row("dependency").locator(".evidence")).toHaveText("2 cards so far: you haven't overturned the agent here.");
+  await layout(page);
+  await shot(page, "preferences-stops");
+
+  // The sentence follows the row's stop, and for the two that hold back, the mode.
+  const hold = panel.locator(".pref-hold");
+  await expect(hold.locator(".now")).toHaveText("Shadow: your settings are tried out, not applied. Every card still reaches you.");
+  await product.getByRole("radio", { name: "Sample after" }).check();
+  await expect(product.locator(".means")).toHaveText(
+    "In shadow, these cards still reach you. With holding back on, they'd go to your Held back list and the agent would carry on with its pick; the row's first 10 would come back to you, then about 1 in 2." +
+      "23 cards so far: you overturned the agent on 2. At this stop, all of them would have been held back, including 2 you overturned.",
+  );
+  await hold.getByRole("radio", { name: "On" }).check();
+  await expect(hold.locator(".now")).toHaveText("On: cards on rows at the two lowest stops skip your queue. Their agents carry on, and a random sample comes back to you.");
+  await expect(hold.locator(".more")).toHaveText("Rows at the three upper stops are unchanged.");
+  await expect(product.locator(".means")).toContainText(
+    "These cards skip your queue: the agent carries on with its pick, and the card waits on your Held back list. The row's first 10 come back to you, then about 1 in 2, at random.",
+  );
+  await product.getByRole("radio", { name: "Agent decides" }).check();
+  await expect(product.locator(".means")).toContainText("The row's first 10 come back to you, then about 1 in 10, at random.");
+  await product.getByRole("radio", { name: "Stop and ask" }).check();
+  await expect(product.locator(".means")).toContainText("These cards reach you, and the agent waits for your answer while you're here, up to about 9 minutes, before going ahead with its pick.");
+  await product.scrollIntoViewIfNeeded();
+  await layout(page);
+  await shot(page, "preferences-rows");
 });
 
 test("with no preference file, the setup survey is offered once, as cards answered with the card's gestures, and its suggestion is used (B-5na1k)", async ({ page }) => {

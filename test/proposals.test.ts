@@ -60,6 +60,38 @@ describe("the report per row (P14 section 3)", () => {
     expect(r.rows.schema).toMatchObject({ position: "tell-me", shown: 3, answered: 3, misses: 0, bound: 1, streak: 3 });
   });
 
+  it("counts your calibration's bar per row (D180): chose as the agent did blind, came round, overturned, and what it leaves out", () => {
+    const { store } = repo();
+    store.writePreferences({ preset: "hands-off", mode: "enforce", row_user_facing: "tell-me", rate_agent_decides: 1, rate_sample: 0, burn_in: 0 }, WHO);
+    const ux = (over = {}) => file(store, { touches: ["user-facing"], ...over });
+    answer(store, ux(), { first_choice: "proposal" }); // chose as the agent did, blind
+    answer(store, ux(), { first_choice: "proposal" });
+    answer(store, ux(), { first_choice: "alternative" }); // came round
+    answer(store, ux(), { response: "alternative", choice: "Postgres", first_choice: "alternative" }); // overturned
+    answer(store, ux(), { response: "correction", choice: "Neither" }); // overturned, with its own answer
+    answer(store, ux()); // kept, with no blind choice recorded
+    answer(store, ux(), { response: "need_context" }); // can't judge: no final answer
+    ux(); // waiting
+    // Held back, enforcing: audits answered blind, one of them came round but asked to be asked (a miss, so overturned
+    // only); an audit waiting; and on another row, a card held back and waiting.
+    const dep = () => file(store, { touches: ["dependency"] });
+    answer(store, dep(), { first_choice: "proposal" });
+    answer(store, dep(), { first_choice: "alternative", should_have_asked: true });
+    dep();
+    const notDrawn = file(store, { touches: ["infra"] });
+    expect(store.status(notDrawn)).toBe("held");
+
+    const r = routingReport(store);
+    expect(r.rows.user_facing).toMatchObject({ agreed: 2, cameRound: 1, misses: 2, unblind: 1, unanswered: 2, heldWaiting: 0, answered: 6, switched: 1 });
+    expect(r.rows.dependency).toMatchObject({ agreed: 1, cameRound: 0, misses: 1, switched: 1, unanswered: 1, heldWaiting: 1, auditsUnanswered: 1, auditsAnswered: 2 });
+    expect(r.rows.infra).toMatchObject({ unanswered: 1, heldWaiting: 1, auditsUnanswered: 0 });
+    expect(r.pooled).toMatchObject({ agreed: 3, cameRound: 1, misses: 3, unblind: 1, unanswered: 4, heldWaiting: 2 });
+    // Every card falls in exactly one place: the three in the bar, or left out of it.
+    for (const row of [...Object.values(r.rows), r.pooled]) {
+      expect(row.agreed + row.cameRound + row.misses + row.unblind + row.unanswered).toBe(row.shown + row.held + row.wouldHold);
+    }
+  });
+
   it("leaves out Baesian's own cards and withdrawn ones", () => {
     const { store } = repo();
     const id = file(store);

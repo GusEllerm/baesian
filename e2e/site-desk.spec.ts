@@ -210,7 +210,11 @@ test("a change to the preferences that lets more cards past asks for the passkey
   await page.getByRole("button", { name: "More" }).click();
   await page.getByRole("menuitem", { name: "Your preferences" }).click();
   const prefs = page.getByRole("complementary", { name: "Your preferences" });
+  // On the website, the panel says where the passkey comes in (D180): a hard card's answer, and turning holding back on.
+  await expect(prefs.locator(".stops-table tbody tr").first().locator("td").first()).toHaveText("Reaches you. Answering it takes your passkey.");
+  await expect(prefs.locator('.pref-row[data-row="security"] .means')).toContainText("the agent stops until you answer, with your passkey.");
   await prefs.getByRole("radiogroup", { name: "Holding back" }).getByRole("radio", { name: "On" }).check();
+  await expect(prefs.locator(".pref-hold .more")).toHaveText("Turning it on takes your passkey, because it lets cards past you. Rows at the three upper stops are unchanged.");
   await prefs.getByRole("button", { name: "Save" }).click();
   const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
   await expect(prompt).toContainText("This change lets more cards past you without asking");

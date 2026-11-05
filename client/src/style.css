@@ -259,8 +259,6 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .panel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font: var(--t-body); font-size: 15px; }
 .panel dt { font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); padding-top: 1px; }
 .panel dd { margin: 0; }
-.panel .tiers { display: flex; flex-direction: column; gap: 1px; }
-.panel .tiers b { font-weight: 700; }
 .panel dt kbd { margin-right: 3px; }
 .panel .briefing { font: var(--t-body); font-size: 15px; max-height: 40vh; overflow-y: auto; }
 .panel .briefing p, .panel .briefing ul { margin: 0 0 8px; }
@@ -303,16 +301,17 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .facet.held { background: #e7e4f3; }
 .facet.held b { background: var(--ink); color: #fff; }
 
-/* Wide panels: your calibration beside the record by row, and your preferences. They scroll when the window is short. */
-.panel.wide { width: min(880px, calc(100vw - 48px)); max-height: calc(100vh - 74px); overflow-y: auto; }
+/* Wide panels: your preferences and your calibration (D180). They scroll when the window is short. Text spans its box:
+   the panel's width, and the columns in it, set the line length. The calibration's three colours pass the dataviz
+   validator against the panel's paper (lightness, chroma, colour-blind separation, contrast). */
+.panel.wide { width: min(880px, calc(100vw - 48px)); max-height: calc(100vh - 74px); overflow-y: auto; --agreed: #4652b0; --round: #8a84dc; --overturned: #c0406a; --held: #b9ab7c; --rule: #e8dfc2; }
 .panel h5 { margin: 14px 0 6px; font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink-soft); }
+.panel.wide h5 { margin: 24px 0 8px; font-size: 15px; color: var(--ink); }
 .panel .problem { margin: 6px 0; }
-.panel-cols { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 0 28px; align-items: start; }
-.panel .record h5 { margin-top: 0; }
-.panel .record dl { grid-template-columns: minmax(130px, auto) 1fr; gap: 7px 12px; font-size: 14px; }
-.panel .record dt { display: flex; flex-direction: column; gap: 1px; }
-.panel .record dt .pos { font: var(--t-small); font-stretch: 88%; color: var(--ink-faint); }
-.panel .lines { display: flex; flex-direction: column; gap: 1px; }
+/* A wide panel's opening: its text in a column sized for reading, beside what belongs with it. */
+.panel-head { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px 28px; align-items: start; margin-top: 8px; }
+.panel-head-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel .lede { font: var(--t-body); font-size: 16.5px; line-height: 1.45; color: var(--ink); }
 
 /* The held-back list, in its panel and on the empty desk */
 .held-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
@@ -328,35 +327,96 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .held-list.held-gone .parked-row:hover { background: none; }
 .empty .more-held { align-self: flex-start; border: 0; background: none; padding: 4px 2px; cursor: pointer; font: var(--t-meta); font-stretch: 88%; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
 
-/* Your preferences: each row as five stops in words (P14), the two lowest holding cards back */
-.pref-mode { display: grid; grid-template-columns: auto minmax(0, 260px) 1fr; gap: 6px 14px; align-items: center; padding: 10px 12px; border-radius: 9px; background: #ffffff70; }
-.pref-label { font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; }
-.pref-mode .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
-.stops { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-radius: 8px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); overflow: hidden; }
-.stops.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.stop { position: relative; display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 4px 6px; border-left: 1.5px solid var(--line); text-align: center; font: var(--t-small); font-stretch: 88%; line-height: 1.15; color: var(--ink-soft); cursor: pointer; }
-.stop:first-child { border-left: 0; }
+/* Your preferences (D180): what each stop does, the Holding back switch beside the lede, and each row as five stops in
+   words (P14), the two lowest hatched, since they hold cards back */
+.stops-table { width: 100%; border-collapse: separate; border-spacing: 0; font: var(--t-body); font-size: 15px; }
+.stops-table thead th { padding: 0 12px 8px 0; text-align: left; vertical-align: bottom; font: 600 12.5px/1.3 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+.stops-table tbody th, .stops-table td { padding: 10px 12px 10px 0; border-top: 1px solid var(--rule); text-align: left; vertical-align: top; font-weight: 400; }
+.stops-table tbody th { white-space: nowrap; }
+.stops-table .stop-name { display: block; font: 700 14.5px/1.25 var(--ui); font-stretch: 88%; }
+.stops-table .lvl { display: inline-block; margin-top: 4px; padding: 1px 7px 2px; border-radius: 4px; background: var(--face); font: 700 11.5px/1.4 var(--ui); font-stretch: 90%; color: var(--ink); }
+.stops-table .lvl.held { background: transparent; box-shadow: inset 0 0 0 1.5px var(--held); color: var(--ink-soft); }
+.stops-table tr.cut > * { border-top: 2px dashed var(--held); }
+.stops-table .cut-label { display: block; margin-bottom: 2px; font: 600 11.5px/1.3 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+.pref-hold { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; border-radius: 10px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); }
+.pref-label { font: 700 13.5px/1.3 var(--ui); font-stretch: 88%; }
+.pref-hold .now { font: var(--t-body); font-size: 16px; }
+.pref-hold .more { font: var(--t-body); font-size: 14.5px; color: var(--ink-soft); }
+.stop { position: relative; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 .stop input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: inherit; }
-.stop:hover { color: var(--ink); background: #fffaf0; }
-.stop.holds { background: #ece3c6; }
-.stop[data-on] { background: var(--ink); color: #fff; font-weight: 700; }
-.stop[data-off] { color: var(--ink-faint); cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 6px, #2e234312 6px 7px); }
-.stop[data-on][data-off] { background: var(--ink-soft); color: #fff; }
-.stop:has(input:focus-visible) { outline: 2px solid var(--right); outline-offset: -3px; }
+.stop:has(input:focus-visible) { outline: 2px solid var(--right); outline-offset: 2px; }
+.stops.two { display: inline-grid; grid-template-columns: repeat(2, minmax(84px, auto)); border-radius: 9px; box-shadow: inset 0 0 0 1.5px var(--line); overflow: hidden; }
+.stops.two .stop { min-height: 40px; padding: 0 14px; font: 650 14px/1 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+.stops.two .stop:has(input:focus-visible) { outline-offset: -3px; }
+.stops.five { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.stops.five .stop { min-height: 40px; padding: 4px 6px; border-radius: 7px; box-shadow: inset 0 0 0 1.5px var(--line); font: 600 12px/1.15 var(--ui); font-stretch: 86%; color: var(--ink-soft); }
+.stops.five .stop.holds { box-shadow: inset 0 0 0 1.5px var(--held); background-image: repeating-linear-gradient(135deg, transparent 0 6px, #b9ab7c22 6px 8px); }
+.stop:not([data-on]):not([data-off]):hover { color: var(--ink); background-color: #fffaf0; }
+.stops .stop[data-on], .stops.five .stop.holds[data-on] { background: var(--ink); color: #fffbea; box-shadow: none; }
+.stops.five .stop[data-off] { opacity: .35; cursor: not-allowed; }
+.stops.five .stop[data-on][data-off] { opacity: .8; }
 .presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .preset { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 0; border-radius: 9px; background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); text-align: left; cursor: pointer; font: var(--t-body); font-size: 14px; }
 .preset b { font: var(--t-option); font-size: 16.5px; }
 .preset .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .preset:hover { background: #fffaf0; }
 .preset[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--ink); }
-.pref-rows { display: flex; flex-direction: column; gap: 6px; }
-.pref-row { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; align-items: center; }
-.pref-name { display: flex; flex-direction: column; gap: 1px; }
-.pref-name b { font: var(--t-meta); font-stretch: 88%; font-size: 14px; color: var(--ink); }
-.pref-name .soft { font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
-.pref-row.legend { margin-bottom: -2px; }
-.stops-legend { display: grid; grid-template-columns: 2fr 3fr; font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-faint); }
-.stops-legend span + span { padding-left: 8px; border-left: 1.5px solid var(--line); }
+.pref-rows { display: flex; flex-direction: column; }
+.pref-row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 6px 22px; padding: 14px 0; border-top: 1px solid var(--rule); }
+.pref-name { display: flex; flex-direction: column; gap: 3px; }
+.pref-name b { font: 700 15px/1.25 var(--ui); font-stretch: 88%; color: var(--ink); }
+.pref-name .what { font: var(--t-small); font-stretch: 92%; line-height: 1.35; color: var(--ink-soft); }
+.pref-name .limit { margin-top: 3px; font: var(--t-small); font-stretch: 92%; line-height: 1.35; color: var(--ink-faint); }
+.pref-stops { min-width: 0; }
+.pref-row .means { margin-top: 8px; font: var(--t-body); font-size: 15px; }
+.pref-row .evidence { display: block; margin-top: 3px; font: var(--t-small); font-stretch: 92%; line-height: 1.35; color: var(--ink-soft); }
+
+/* Your calibration (D180): a stacked bar per row at its true length, all rows on one scale, with a dashed mark at the
+   answers it takes to judge a row, and rows with too few answers faded */
+.cal-summary { font: var(--t-body); font-size: 17px; line-height: 1.45; }
+.cal-legend { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; background: var(--face-light); font: 600 13px/1.3 var(--ui); font-stretch: 90%; }
+.cal-legend span { display: flex; align-items: flex-start; gap: 7px; }
+.cal-legend .sw { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; border-radius: 3px; }
+:is(.sw, .seg).a { background: var(--agreed); }
+:is(.sw, .seg).r { background: var(--round); }
+:is(.sw, .seg).o { background: var(--overturned); }
+.cal-chart { display: flex; flex-direction: column; margin-top: 20px; }
+.cal-row { display: grid; grid-template-columns: minmax(0, 13.5rem) minmax(0, 1fr) 9.5rem; gap: 4px 16px; align-items: center; padding: 9px 0; border-top: 1px solid var(--rule); }
+.cal-row.all { border-top: 0; padding-bottom: 14px; }
+.cal-row.first { padding-top: 28px; }
+.cal-row:focus-visible { outline: 2px solid var(--right); outline-offset: 2px; border-radius: 4px; }
+.cal-row .nm b { display: block; font: 700 14px/1.2 var(--ui); font-stretch: 88%; }
+.cal-row .nm span { display: block; margin-top: 2px; font: 500 12px/1.2 var(--ui); font-stretch: 90%; color: var(--ink-faint); }
+.cal-track { position: relative; height: 22px; }
+.cal-bar { position: absolute; inset: 0 auto 0 0; display: flex; gap: 2px; }
+.cal-bar .seg { display: block; flex-basis: 0; min-width: 3px; height: 100%; }
+.cal-bar .seg:first-child { border-radius: 4px 0 0 4px; }
+.cal-bar .seg:last-child { border-radius: 0 4px 4px 0; }
+.cal-bar .seg:only-child { border-radius: 4px; }
+.cal-bar .seg[data-tipped] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cal-row.thin .cal-bar { opacity: .55; }
+.cal-enough { position: absolute; top: -6px; bottom: -6px; width: 0; border-left: 1.5px dashed var(--ink-faint); pointer-events: none; }
+.cal-axis { position: absolute; top: -21px; transform: translateX(-50%); font: 600 11px/1 var(--ui); font-stretch: 90%; color: var(--ink-soft); white-space: nowrap; }
+.cal-axis[data-anchor="end"] { transform: translateX(-100%); }
+.cal-axis[data-anchor="start"] { transform: none; }
+.cal-row .num { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; font: 500 13px/1.3 var(--ui); font-stretch: 90%; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.cal-row .num b { font-weight: 700; color: var(--ink); }
+.cal-row .num .left { font-size: 12px; color: var(--ink-faint); }
+.cal-tip { position: fixed; z-index: 90; max-width: 260px; padding: 7px 10px; border-radius: 7px; background: var(--ink); color: #fffbea; font: 600 12.5px/1.35 var(--ui); font-stretch: 92%; pointer-events: none; }
+.cal-table { margin-top: 14px; }
+.cal-table summary { cursor: pointer; font: 600 13px/1.3 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+.cal-table table { margin-top: 8px; border-collapse: collapse; font: 500 13px/1.35 var(--ui); font-stretch: 92%; font-variant-numeric: tabular-nums; }
+.cal-table th, .cal-table td { padding: 4px 14px 4px 0; border-top: 1px solid var(--rule); text-align: right; font-weight: 500; }
+.cal-table thead th { vertical-align: bottom; font-weight: 600; color: var(--ink-soft); }
+.cal-table tbody th, .cal-table thead th:first-child, .cal-table .col-stop { text-align: left; }
+.cal-table tbody th { font-weight: 600; }
+.cal-table tr.all > * { font-weight: 700; }
+.cal-table .in-row { display: none; }
+.cal-reading { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; margin-top: 18px; }
+.cal-reading div { padding: 10px 12px; border-radius: 8px; background: var(--face-light); font: var(--t-body); font-size: 14.5px; }
+.cal-reading b { display: block; margin-bottom: 2px; font: 700 13px/1.3 var(--ui); font-stretch: 90%; }
+.cal-time { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 18px; font: 500 13.5px/1.35 var(--ui); font-stretch: 92%; color: var(--ink-soft); }
+.cal-time b { color: var(--ink); }
 .pref-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
 .pref-total { font: var(--t-body); font-size: 16px; }
 .pref-foot .why-line input { max-width: 460px; }
@@ -441,13 +501,32 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
   .panel h4 { min-height: 30px; padding-right: 96px; }
   .panel-close { top: calc(6px + env(safe-area-inset-top)); right: max(6px, env(safe-area-inset-right)); justify-content: center; min-width: 44px; min-height: 44px; padding: 0 10px; }
   .panel .briefing, .held-list { max-height: none; overflow: visible; }
-  .panel-cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .panel .record dl { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
-  .pref-mode, .presets, .pref-row { grid-template-columns: minmax(0, 1fr); }
-  .pref-rows { gap: 14px; }
-  .pref-row { gap: 6px; }
-  .pref-row.legend > span:first-child { display: none; }
-  .stop { min-height: 44px; padding: 4px 3px; font-size: 11.5px; }
+  .panel-head, .presets, .pref-row { grid-template-columns: minmax(0, 1fr); }
+  .pref-row { gap: 8px; }
+  .stops.five .stop { min-height: 44px; padding: 4px 3px; font-size: 11.5px; }
+  .stops.two .stop { min-height: 44px; }
+  /* What each stop does: a block per stop, each line saying what it is, so nothing is squeezed into narrow columns */
+  .stops-table thead { display: none; }
+  .stops-table, .stops-table tbody, .stops-table tr, .stops-table tbody th, .stops-table td { display: block; }
+  .stops-table tr { padding: 10px 0; border-top: 1px solid var(--rule); }
+  .stops-table tr.cut { border-top: 2px dashed var(--held); }
+  .stops-table tbody th, .stops-table td, .stops-table tr.cut > * { padding: 0; border: 0; white-space: normal; }
+  .stops-table tbody th { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 4px; }
+  .stops-table .cut-label { flex-basis: 100%; }
+  .stops-table .lvl { margin-top: 0; }
+  .stops-table td + td { margin-top: 4px; }
+  .stops-table td::before { content: attr(data-label) ": "; font: 600 12.5px/1.3 var(--ui); font-stretch: 90%; color: var(--ink-soft); }
+  /* Your calibration: the counts beside the row's name, its bar under them */
+  .cal-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .cal-row .cal-track { grid-column: 1 / -1; grid-row: 2; margin-top: 4px; }
+  .cal-row.first { padding-top: 9px; }
+  .cal-row.first .cal-track { margin-top: 24px; }
+  .cal-reading { grid-template-columns: minmax(0, 1fr); }
+  .cal-table summary { padding: 13px 0; line-height: 18px; }
+  .cal-table table { width: 100%; }
+  .cal-table th, .cal-table td { padding-right: 8px; }
+  .cal-table .col-stop { display: none; }
+  .cal-table .in-row { display: block; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); }
 
   /* the path's bar, at the foot of the screen (Sheet.tsx) */
   .sheet-bar { padding: 0 max(var(--gutter), env(safe-area-inset-right)) env(safe-area-inset-bottom) max(var(--gutter), env(safe-area-inset-left)); background: var(--desk-deep); box-shadow: 0 -10px 18px -16px #2e234380; }

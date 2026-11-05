@@ -1,5 +1,5 @@
 import { type Counted, countedCards, replayCards, rowWindows } from "./report.js";
-import { LEVEL_AT, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
+import { LEVEL_AT, LOOSEN_AFTER, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
 import type { Verdict } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, tokens } from "./similarity.js";
 import { type Card, PENDING, type Store } from "./store.js";
@@ -23,8 +23,8 @@ export const PREFERENCES_DECK = {
 /** A comment that states a rule (P16 section 6). The word list is a guess, to tune while dogfooding. */
 export const RULE_WORDS = /\b(always|never|from now on|in general)\b/i;
 
-/** Final answers in a row without a miss before Baesian proposes loosening a row: the count that bounds a miss rate under 10% (P14). */
-export const LOOSEN_AFTER = 29;
+/** Final answers in a row without a miss before Baesian proposes loosening a row, kept in src/routing.ts so the client can mark it. */
+export { LOOSEN_AFTER };
 
 /** After the client records a verdict: the convention cards and slider proposals the record now calls for, filed. */
 export function afterVerdict(store: Store, verdict: Verdict): Card[] {
