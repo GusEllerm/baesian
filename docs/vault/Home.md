@@ -22,8 +22,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
   - The custom domain is attached, all five migrations are applied, the daily job is scheduled, and Workers Logs are off.
   - Sign-up is open (B-mz6qc), but others can't link a repo yet: the CLI isn't published and the repo is private.
   - **`v0.1.1`** fixed Globus sign-in (the client's credentials weren't sent as Globus reads them) and the privacy page's width. The user has signed up.
+  - **This repo is linked (2026-11-05)**, as project `p-c81yx9gdvfr9yjsfdsrp`: its cards are on the service and answered at baesian.dev. CI's verify steps read the keys pinned in the repo variable `BAESIAN_TRUST` (`.github/workflows/ci.yml`).
   - **Next:**
-    - link this repo: add `BAESIAN_TRUST` to `ci.yml` and as a repo variable, then run `baesian login` here;
+    - set the repo variable `BAESIAN_TRUST` before `v1/next` next merges into `main`: CI fails while it's unset;
+    - make setting up a repo easier, from what linking this one showed;
     - confirm Globus sign-in;
     - the checks on real devices;
     - then M10.

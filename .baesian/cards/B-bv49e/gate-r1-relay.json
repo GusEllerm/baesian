@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-bv49e",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "money",
+    "user-facing",
+    "public-api"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "money",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:41:53.711Z"
+}

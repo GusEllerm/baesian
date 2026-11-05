@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-8xxrc",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "publishes",
+    "privacy",
+    "infra",
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "publishes",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:41:51.125Z"
+}

@@ -39,12 +39,18 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
 
       # The commit gate, again, for every pushed commit: catches --no-verify and machines without the
-      # hooks (D24). Baesian isn't on npm yet, so this repo runs its own build.
+      # hooks (D24). Baesian isn't on npm yet, so this repo runs its own build. The repo is linked to the hosted
+      # service, so answers count only with the service's signature, checked against the keys pinned in the repo
+      # variable BAESIAN_TRUST, outside the repo, where a commit can't change them (D142, D159).
       - name: baesian verify (pushed commits)
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
         run: node dist/bin.js verify --base "${{ github.event.before }}"
+        env:
+          BAESIAN_TRUST: ${{ vars.BAESIAN_TRUST }}
 
       # Pull requests also get the merge gate: every cited card resolved or deferred (D31).
       - name: baesian verify --merge (pull request)
         if: github.event_name == 'pull_request'
         run: node dist/bin.js verify --merge
+        env:
+          BAESIAN_TRUST: ${{ vars.BAESIAN_TRUST }}

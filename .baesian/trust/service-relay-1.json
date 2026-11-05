@@ -1,0 +1,9 @@
+{
+  "type": "service-key",
+  "format": 1,
+  "key": "relay-1",
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEjj1ghhJ2du4A4nvYy+I+m3/6kxVwGi5KGl0hHP00Jk",
+  "origin": "https://baesian.dev",
+  "rp_id": "baesian.dev",
+  "valid_after": "2026-11-01T00:00:00.000Z"
+}

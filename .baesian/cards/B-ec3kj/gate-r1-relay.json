@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-ec3kj",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "security",
+    "data-loss",
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "data_loss",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:41:54.957Z"
+}

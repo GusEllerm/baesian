@@ -1,0 +1,21 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-f8k47",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "schema"
+  ],
+  "reverse": "one-way",
+  "source": "agent",
+  "row": "schema",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:41:55.831Z"
+}

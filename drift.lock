@@ -918,7 +918,7 @@ sig = "0db65b1e7176cff7"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = ".baesian/config.json"
-sig = "c72ade2acc7ce999"
+sig = "23837cc9a3848c01"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3482,11 +3482,6 @@ sig = "0a89772213b8f642"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
-target = ".github/workflows/ci.yml"
-sig = "44c3d3f6e5c54179"
-
-[[bindings]]
-doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
 sig = "b99bc95584cd500c"
 
@@ -5828,7 +5823,7 @@ sig = "0e7e5affcea6939e"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = ".baesian/config.json"
-sig = "c72ade2acc7ce999"
+sig = "23837cc9a3848c01"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"

@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-w4g6c",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "security",
+    "privacy",
+    "infra"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "security",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:42:07.164Z"
+}

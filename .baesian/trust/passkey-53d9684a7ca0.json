@@ -1,0 +1,10 @@
+{
+  "type": "passkey-key",
+  "format": 1,
+  "account": "acct-d4wpc6m1gy02",
+  "handle": "GusEllerm",
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgxvY06eHuvD0nfazLvC_j5KamoJ1LmPbjChvRgwQaRFqOy-qJ7hph4ARX0sKkFEmfc2fCuVpj1oTEfYKth0s_g",
+  "alg": -7,
+  "enrolled": "2026-11-04T21:12:44.285Z"
+}

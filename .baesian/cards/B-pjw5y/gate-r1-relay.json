@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-pjw5y",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "touches": [
+    "public-api",
+    "infra"
+  ],
+  "reverse": "moderate",
+  "source": "agent",
+  "row": "public_api",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-05T12:42:01.708Z"
+}
