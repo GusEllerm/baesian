@@ -373,7 +373,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -393,7 +393,7 @@ sig = "7476218bd3cd1b97"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Page.tsx"
-sig = "052785ed660c9edf"
+sig = "5b9f9426d3e5e503"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -413,7 +413,7 @@ sig = "9d78e661503ec0b0"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Recover.tsx"
-sig = "5bbe2929a65165d6"
+sig = "43592542aa525825"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -423,7 +423,7 @@ sig = "aa8afe186112d4b6"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/SignUp.tsx"
-sig = "309c1ef1362f1ceb"
+sig = "7e97a929e3dc026f"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -439,6 +439,11 @@ sig = "b8238e07a45f2ef4"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/api.ts#PREPARED_MS"
 sig = "963566b6e3d474da"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/site/api.ts#Passkey"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -953,7 +958,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -978,7 +983,7 @@ sig = "b0e1776fc4a3975b"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/site/api.ts#Passkey"
-sig = "63972fcb06af3b07"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1273,7 +1278,7 @@ sig = "3375193c60cfd196"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/signin.ts#enrolled"
-sig = "23fa3379132e48f0"
+sig = "753faca99659585d"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1873,7 +1878,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -1883,7 +1888,7 @@ sig = "213385323054c627"
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
 target = "client/src/site/api.ts#Passkey"
-sig = "63972fcb06af3b07"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Design/Formats for v1.md"
@@ -2238,7 +2243,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2253,7 +2258,7 @@ sig = "07650211930a67a1"
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
 target = "client/src/site/api.ts#Passkey"
-sig = "63972fcb06af3b07"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Design/Hosted Service.md"
@@ -2763,7 +2768,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -2773,7 +2778,7 @@ sig = "213385323054c627"
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
 target = "client/src/site/api.ts#Passkey"
-sig = "63972fcb06af3b07"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Design/Local Server.md"
@@ -3578,7 +3583,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -3843,7 +3848,7 @@ sig = "12e47282ce2fbc29"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/mail.ts"
-sig = "26d7bffc2b029d75"
+sig = "69ed1f32a153c568"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -3853,7 +3858,7 @@ sig = "fb1f95284492630e"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/mail.ts#mails"
-sig = "6d389f29892f1f61"
+sig = "2ad1a77958da7170"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -4057,6 +4062,16 @@ sig = "3375193c60cfd196"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/signin.ts#enrolled"
+sig = "753faca99659585d"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/signin.ts#listed"
+sig = "d98b45dabdfaaafe"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/signin.ts#signInRoute"
 sig = "d0f02f3fe67f4b74"
 
@@ -4134,6 +4149,11 @@ sig = "fc2bdcecff47f67b"
 doc = "docs/vault/Modules/service.md"
 target = "service/src/usage.ts#routeOf"
 sig = "b1982f7470a5b709"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/webauthn.ts#NewPasskey"
+sig = "9ddf6bc4f7e87292"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5513,7 +5533,7 @@ sig = "583001c8d83ea19c"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/site/Account.tsx"
-sig = "8f47d0cb333e8def"
+sig = "13147208969f5399"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -5523,7 +5543,7 @@ sig = "213385323054c627"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/site/api.ts#Passkey"
-sig = "63972fcb06af3b07"
+sig = "941ee7166ebfc8f5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"

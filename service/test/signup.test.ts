@@ -32,13 +32,15 @@ describe("signing up with an email and a passkey (D153)", () => {
     expect(done.status).toBe(201);
     expect(done.body.account).toEqual({ id: expect.stringMatching(/^acct-/), handle });
     expect(done.body.recovery_code).toMatch(/^[0-9A-Z]{5}(-[0-9A-Z]{5}){3}$/);
-    const pin = JSON.parse(done.body.passkey.pin);
-    expect(pin).toMatchObject({ type: "passkey-key", format: 1, account: done.body.account.id, handle, credential: passkey.id, public_key: passkey.spki.toString("base64url"), alg: -7 });
+    // Sign-up gives only the recovery code to keep: the passkey's line for CI is on the account, any time (B-yj5d5).
+    expect(done.body.passkey).toEqual({ credential: passkey.id, name: expect.any(String) });
 
     const cookie = done.response.headers.getSetCookie().find((c) => c.startsWith(`${SESSION_COOKIE}=`))!;
     expect(cookie).toMatch(/; Path=\/; Secure; HttpOnly; SameSite=Strict; Max-Age=7776000$/);
     const me = await b.get("/v1/account");
     expect(me.status).toBe(200);
+    const pin = JSON.parse(me.body.passkeys[0].pin);
+    expect(pin).toMatchObject({ type: "passkey-key", format: 1, account: done.body.account.id, handle, credential: passkey.id, public_key: passkey.spki.toString("base64url"), alg: -7 });
     expect(me.body).toMatchObject({ id: done.body.account.id, handle, emails: [{ address: email, verified: expect.any(String) }], passkeys: [{ credential: passkey.id }], globus: null, projects: [] });
 
     // Nothing secret is stored as it is: the cookie, the code and the recovery code are hashes in the database.

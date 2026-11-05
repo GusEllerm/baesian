@@ -93,7 +93,7 @@ export interface Person {
   handle: string;
   account: string;
   recovery: string;
-  /** The line to pin in CI for this passkey (D159). */
+  /** The line to pin in CI for this passkey (D159), as the account lists it (B-yj5d5). */
   pin: string;
 }
 
@@ -110,7 +110,8 @@ export async function signUp(over: { email?: string; handle?: string; alg?: -7 |
   const passkey = new WebPasskey("-", handle, over.alg ?? -7);
   const done = await browser.post("/v1/signup/finish", { flow: sent.body.flow, response: passkey.register(verified.body.options.challenge) });
   expect(done.status, JSON.stringify(done.body)).toBe(201);
-  return { browser, passkey, email, handle, account: done.body.account.id, recovery: done.body.recovery_code, pin: done.body.passkey.pin };
+  const me = await browser.get("/v1/account");
+  return { browser, passkey, email, handle, account: done.body.account.id, recovery: done.body.recovery_code, pin: me.body.passkeys[0].pin };
 }
 
 /** Sign in with a passkey, in a browser of its own. */

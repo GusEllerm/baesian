@@ -7,9 +7,9 @@ import { codeIn, handOver, type LocalSite, siteAvailable, siteShot, signUpOnPage
 import { PHONES, phone } from "./touch.js";
 
 // The website's own pages (M9e), against the service's Worker run locally (e2e/site.ts), in a real Chromium with a
-// virtual passkey authenticator: signing up (an emailed code, Turnstile, a handle, a passkey), the recovery code and CI's
-// line shown once, signing in with a passkey or through Globus, getting back in with the recovery code, the account
-// (passkeys, sign-ins, machines, Globus, signing out), at a desktop's size and at both phones'. The machines' approval
+// virtual passkey authenticator: signing up (an emailed code, Turnstile, a handle, a passkey), the recovery code shown
+// once, signing in with a passkey or through Globus, getting back in with the recovery code, the account (passkeys, each
+// with its line for CI on request, sign-ins, machines, Globus, signing out), at a desktop's size and at both phones'. The machines' approval
 // page, the projects and the project's desk are in site-desk.spec.ts.
 
 let site: LocalSite;
@@ -45,7 +45,7 @@ async function secondBrowser(browser: Browser, from: Awaited<ReturnType<typeof v
 
 const heading = (page: Page, name: string) => page.getByRole("heading", { name, exact: true });
 
-test("signs up: an emailed code behind Turnstile, a handle, then a passkey; the recovery code and CI's line are shown once", async ({ page }) => {
+test("signs up: an emailed code behind Turnstile, a handle, then a passkey; only the recovery code, shown once, and the passkey's line for CI on the account any time", async ({ page }) => {
   await standInTurnstile(page);
   await virtualAuthenticator(page);
   const who = somebody();
@@ -73,9 +73,10 @@ test("signs up: an emailed code behind Turnstile, a handle, then a passkey; the 
   await page.getByRole("button", { name: "Make a passkey" }).click();
   await expect(heading(page, "Save your recovery code")).toBeVisible();
   const recovery = await page.getByLabel("Your recovery code", { exact: true }).textContent();
-  const pin = await page.getByLabel("Your passkey's line for CI", { exact: true }).textContent();
   expect(recovery).toMatch(/^[0-9A-Z]{5}(-[0-9A-Z]{5}){3}$/);
-  expect(pin).toContain("passkey-key");
+  // Only the recovery code is there to keep (B-yj5d5).
+  await expect(page.locator("main")).not.toContainText("line for CI");
+  await expect(page.locator("code")).toHaveCount(1);
   const go = page.getByRole("button", { name: "Go to your projects" });
   await expect(go).toBeDisabled();
   await page.getByLabel("I've saved my recovery code").check();
@@ -83,12 +84,34 @@ test("signs up: an emailed code behind Turnstile, a handle, then a passkey; the 
   await expect(heading(page, "Your projects")).toBeVisible();
   await expect(page.getByText("No projects yet.")).toBeVisible();
   await expect(page.getByText(`Signed in as ${who.handle}`)).toBeVisible();
-  // Shown once: neither the recovery code nor the passkey's line appears again.
+  // Shown once: the recovery code doesn't appear again.
   await page.goto(`${site.url}/account`);
-  await expect(page.getByRole("region", { name: "Your passkeys" }).getByRole("listitem")).toHaveCount(1);
-  const text = await page.locator("main").innerText();
-  expect(text).not.toContain(recovery!);
-  expect(text).not.toContain(pin!.slice(0, 40));
+  const passkey = page.getByRole("region", { name: "Your passkeys" }).getByRole("listitem");
+  await expect(passkey).toHaveCount(1);
+  expect(await page.locator("main").innerText()).not.toContain(recovery!);
+  // The passkey's line for CI is beside it, on request, whenever you come for it (B-yj5d5): its key file on one line.
+  const open = passkey.getByRole("button", { name: /^Line for CI, for / });
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByLabel(/^The line for CI, for /)).toHaveCount(0);
+  await open.click();
+  await expect(open).toHaveAttribute("aria-expanded", "true");
+  const line = passkey.getByLabel(/^The line for CI, for /);
+  await expect(line).toBeVisible();
+  await expect(passkey).toContainText("BAESIAN_TRUST");
+  await expect(passkey).toContainText("baesian ci");
+  const pin = (await line.textContent())!;
+  expect(pin).not.toContain("\n");
+  expect(JSON.parse(pin)).toMatchObject({ type: "passkey-key", format: 1, handle: who.handle, alg: expect.any(Number) });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await passkey.getByRole("button", { name: "Copy" }).click();
+  await expect(passkey.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(pin);
+  await open.click();
+  await expect(page.getByLabel(/^The line for CI, for /)).toHaveCount(0);
+  // Any time: the same line, after the page is read again.
+  await page.reload();
+  await passkey.getByRole("button", { name: /^Line for CI, for / }).click();
+  await expect(passkey.getByLabel(/^The line for CI, for /)).toHaveText(pin);
 });
 
 test("signs in with a passkey; each sign-in is listed and can be ended; signing out here, or everywhere", async ({ page, browser }) => {
@@ -166,7 +189,10 @@ test("gets back in with an emailed code and the recovery code: a new passkey, a 
   await expect(heading(lost, "You're back in")).toBeVisible();
   const fresh = await lost.getByLabel("Your new recovery code", { exact: true }).textContent();
   expect(fresh).not.toBe(recovery);
-  await expect(lost.getByLabel("Your new passkey's line for CI", { exact: true })).toContainText("passkey-key");
+  // Only the new recovery code is shown; the new passkey's line for CI is on the account page (B-yj5d5).
+  await expect(lost.getByLabel(/line for CI/i)).toHaveCount(0);
+  await expect(lost.getByText("Your account page has it, beside the passkey.")).toBeVisible();
+  await siteShot(lost, "recover-done");
   await lost.getByLabel("I've saved my new recovery code").check();
   await lost.getByRole("button", { name: "Go to your projects" }).click();
   await expect(heading(lost, "Your projects")).toBeVisible();
@@ -175,11 +201,14 @@ test("gets back in with an emailed code and the recovery code: a new passkey, a 
   await expect(heading(page, "Answer your agents' decisions")).toBeVisible();
   await site.email("got back into the Baesian account", since);
   await lost.goto(`${site.url}/account`);
-  await expect(lost.getByRole("region", { name: "Your passkeys" }).getByRole("listitem")).toHaveCount(2);
+  const passkeys = lost.getByRole("region", { name: "Your passkeys" }).getByRole("listitem");
+  await expect(passkeys).toHaveCount(2);
+  await passkeys.nth(1).getByRole("button", { name: /^Line for CI, for / }).click();
+  await expect(passkeys.nth(1).getByLabel(/^The line for CI, for /)).toContainText("passkey-key");
   await context.close();
 });
 
-test("the account: another passkey, its CI line shown once; Globus linked and unlinked", async ({ page }) => {
+test("the account: another passkey, its line for CI opened for you, and each passkey's on request; Globus linked and unlinked", async ({ page }) => {
   const { who, auth } = await signedUp(page);
   await page.goto(`${site.url}/account`);
   await expect(heading(page, "Your account")).toBeVisible();
@@ -187,11 +216,24 @@ test("the account: another passkey, its CI line shown once; Globus linked and un
   await auth.cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId: auth.id });
   await virtualAuthenticator(page);
   await page.getByRole("button", { name: "Add a passkey" }).click();
-  const line = page.getByLabel(/^The line for CI, for /);
-  await expect(line).toContainText("passkey-key");
-  await expect(page.getByRole("region", { name: "Your passkeys" }).getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("status")).toHaveText("The new passkey is added, with its line for CI open in the list below.");
+  const passkeys = page.getByRole("region", { name: "Your passkeys" }).getByRole("listitem");
+  await expect(passkeys).toHaveCount(2);
+  // The new one's line is open, under it; the first's isn't.
+  await expect(page.getByLabel(/^The line for CI, for /)).toHaveCount(1);
+  const second = (await passkeys.nth(1).getByLabel(/^The line for CI, for /).textContent())!;
+  expect(JSON.parse(second)).toMatchObject({ type: "passkey-key", handle: who.handle });
+  await page.getByRole("region", { name: "Your passkeys" }).scrollIntoViewIfNeeded();
+  await siteShot(page, "account-added");
+  // Read again, every line is closed, and each opens on request: two passkeys, two lines.
   await page.reload();
   await expect(page.getByLabel(/^The line for CI, for /)).toHaveCount(0);
+  for (const i of [0, 1]) await passkeys.nth(i).getByRole("button", { name: /^Line for CI, for / }).click();
+  await expect(passkeys.nth(1).getByLabel(/^The line for CI, for /)).toHaveText(second);
+  const first = (await passkeys.nth(0).getByLabel(/^The line for CI, for /).textContent())!;
+  expect(JSON.parse(first).credential).not.toBe(JSON.parse(second).credential);
+  await page.getByRole("region", { name: "Your passkeys" }).scrollIntoViewIfNeeded();
+  await siteShot(page, "account-lines");
 
   // Globus: linking goes there, and comes back linked (a recent passkey check covers it).
   await standInGlobus(page, site, { sub: `globus-${who.handle}`, email: who.email });
@@ -279,6 +321,11 @@ async function everyPage(page: Page, touch: boolean): Promise<string[]> {
   await page.goto(`${site.url}/account`);
   await expect(page.getByRole("region", { name: "Your sign-ins" }).getByRole("listitem")).toHaveCount(1);
   await check(page, problems, "account", touch);
+  // A passkey's line for CI, open under its row (B-yj5d5).
+  await page.getByRole("button", { name: /^Line for CI, for / }).click();
+  await expect(page.getByLabel(/^The line for CI, for /)).toBeVisible();
+  await page.getByRole("region", { name: "Your passkeys" }).scrollIntoViewIfNeeded();
+  await check(page, problems, "account-line", touch);
   await page.goto(`${site.url}/device`);
   await expect(heading(page, "Approve a machine")).toBeVisible();
   await check(page, problems, "device-code", touch);

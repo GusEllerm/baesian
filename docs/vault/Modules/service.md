@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "service/: the hosted service. The relay (M9b), a Cloudflare Worker with one Durable Object per project on SQLite (D140), in this repo with its own package (B-pjw5y), running Baesian's own store over each project's files (B-0ag7h), taking uploads, keeping the append-only log, serving the state (B-17wn9), live updates (B-bv49e), and writing what a person answers, signed (D138, D160). Accounts and sign-in (M9c) in one D1 database (B-ytdt2): sign-up with an email and a passkey or through Globus (D153, D176), passkey sign-in (SimpleWebAuthn, B-jp22m), recovery with an emailed code and a saved recovery code (B-jzgy4), sign-ins that last 30 days unused (B-vtr1r), machine grants by OAuth's device flow (B-84e0d, B-t5wxr), Turnstile and limits (B-1a03b, B-mz6qc), and answers proved by the reviewer's passkey (D139, D163). M9e: the website served as its assets; in step 2, web push built on Web Crypto (B-nk97q) and sent when B-advkh's rules say, counts and levels only (B-mjf3g), subscriptions in D1, and usage counts with an opt-out (D141, B-7nq85). M9f: retention, each card's text removed on the decided schedule (B-9jqt4, B-ec3kj, B-dsqyd) with its log entries kept; deleting an account, closed for 14 days then deleted with its projects by a daily job (B-b46z3)."
 created: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-11-04
 tags: [baesian, module, hosted]
 ---
@@ -117,14 +117,14 @@ JSON for the website's pages (M9e) to call; `signInRoute()`. Every one refuses a
 | `GET /v1/config` | the origin, the relying party, Turnstile's site key, whether Globus is on, and `vapid_public_key`, web push's key for browsers to subscribe with (null without the secret) |
 | `POST /v1/signup/email` | `{ email, turnstile }`: Turnstile (B-1a03b), the limits per address (`LIMIT_EMAIL`, 3 a minute, and the hourly cap), then a code by email; an address with an account gets a notice instead, and the reply is the same: `{ flow, expires_in }`, 202 |
 | `POST /v1/signup/verify` | `{ flow, code, handle }`: the code (unless Globus vouched), and a free handle; the passkey's registration options |
-| `POST /v1/signup/finish` | `{ flow, response }`: the passkey enrolled (`verifyRegistration()`); the account, a recovery code shown once, the line to pin, and a sign-in |
+| `POST /v1/signup/finish` | `{ flow, response }`: the passkey enrolled (`verifyRegistration()`); the account, a recovery code shown once, the passkey (`credential`, `name`), and a sign-in |
 | `POST /v1/signin/start`, `/finish` | a passkey sign-in, with any of the site's passkeys (discoverable) |
 | `POST /v1/recover/email` | `{ email, turnstile }`: a code to an address with an account; nothing to one without, and the same reply |
 | `POST /v1/recover/verify` | `{ flow, code, recovery_code }`: both together, 5 tries in all (B-jzgy4); a new passkey's options |
-| `POST /v1/recover/finish` | `{ flow, response }`: the new passkey; a new recovery code, every other sign-in ended, a notice by email, signed in |
-| `GET /v1/account` | the account: handle, emails, passkeys with their pin lines, Globus, projects, and until when it's fresh |
+| `POST /v1/recover/finish` | `{ flow, response }`: the new passkey (`credential`, `name`); a new recovery code, every other sign-in ended, a notice by email, signed in |
+| `GET /v1/account` | the account: handle, emails, passkeys, Globus, projects, and until when it's fresh. Each passkey (`listed()`) has its `pin`, the line CI's `BAESIAN_TRUST` pins for it (D159): its key file on one line (`pinLine()`), made from what's stored whenever it's asked, so the account page shows it any time (B-yj5d5) |
 | `POST /v1/account/reauth/start`, `/finish` | the passkey checked afresh |
-| `POST /v1/account/passkeys/start`, `/finish` | another passkey enrolled (fresh only); a notice; its key file put in every project; its pin line |
+| `POST /v1/account/passkeys/start`, `/finish` | another passkey enrolled (fresh only); a notice; its key file put in every project; the passkey (`credential`, `name`) |
 | `GET /v1/account/sessions`, `DELETE /v1/account/sessions/{id}` | the sign-ins, and ending one |
 | `POST /v1/account/signout` | `{ everywhere? }`: this sign-in ended, or all of them |
 | `GET /v1/account/machines`, `DELETE /v1/account/machines/{id}` | the machines, each with its project's name (`project_name`), and revoking one |
@@ -139,9 +139,11 @@ JSON for the website's pages (M9e) to call; `signInRoute()`. Every one refuses a
 | `POST /v1/signin/restore` | `{ restore }`: a closed account restored, with the flow its passkey's sign-in gave (`/v1/signin/finish` answers a closed account 409, `{ closed: { handle, deletes }, restore }`); a notice sent, signed in |
 | `GET /v1/globus/start?purpose=signin\|link`, `GET /v1/globus/callback` | through Globus (below) |
 
+Enrolling a passkey answers with its ID and name only (`enrolled()`), at sign-up, at recovery and on the account: since B-yj5d5 nothing shows a passkey's line for CI once, so the line comes from the account alone.
+
 **Globus** (`service/src/globus.ts`, D153, D176, B-s76hg): `authorizationUrl()` sends the browser to Globus with state, a nonce and PKCE, asking for `openid email`; the round trip's secrets are in a flow found by its state, and the browser holds a binding cookie, `__Host-baesian-globus`, SameSite=Lax, for 10 minutes, so the redirect back carries it and no other site can finish a round trip in your browser. `identityFrom()` checks the state, exchanges the code with the client secret and the verifier, as `client_secret_basic` with the ID and secret not form-encoded (`globusBasic()`: Globus doesn't decode them, and a base64 secret's `+`, `/` or `=` made it answer invalid_client on baesian.dev), checks the ID token's claims and nonce, and its signature against Globus's published keys (`validateApplicationLevelSignature`). Then: an identity linked to an account signs it in; an unknown one starts a sign-up, which still enrols a passkey (D153), its email kept unverified; an email an account already has is never matched, and the person is told to sign in with their passkey and link Globus. Linking takes a session with a fresh check. An identity is its `sub`. The callback sends the browser to the website's `/`, `/sign-up` or `/account`, with what happened in the URL's fragment.
 
-**Email** (`service/src/mail.ts`): `bindingMailer()` sends through Email Sending's binding (B-pvye0), from `EMAIL_FROM`, plain text with an HTML copy (`mails`): the sign-up code, the notice to an address that has an account, the recovery code, the notice of a recovery, and the notice of a new passkey. Locally the binding is simulated: logged, and saved to a file under `service/.wrangler/tmp/email/`.
+**Email** (`service/src/mail.ts`): `bindingMailer()` sends through Email Sending's binding (B-pvye0), from `EMAIL_FROM`, plain text with an HTML copy (`mails`): the sign-up code, the notice to an address that has an account, the recovery code, the notice of a recovery, and the notice of a new passkey, which says where its line for CI is: the account page. Locally the binding is simulated: logged, and saved to a file under `service/.wrangler/tmp/email/`.
 
 **Turnstile** (`service/src/turnstile.ts`, B-1a03b): `turnstile()` checks a token with Cloudflare's siteverify, with the address in passing. Cloudflare's published test secrets (`TEST_SECRETS`) are answered locally with no network, and refused in production; a missing secret refuses everything.
 

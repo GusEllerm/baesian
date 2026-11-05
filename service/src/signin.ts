@@ -62,8 +62,11 @@ async function spreadKeys(s: SignIn, account: Account): Promise<void> {
   }
 }
 
-/** What a new passkey's enrolment answers: its ID, its name and the line to pin in CI (D159). */
-const enrolled = (p: Pick<StoredPasskey, "credential" | "spki" | "alg" | "enrolled" | "name">, account: Account) => ({ credential: p.credential, name: p.name, pin: pinLine(keyFile(p, account.id, account.handle)) });
+/** What a new passkey's enrolment answers: its ID and its name. Its line for CI is on the account, any time (B-yj5d5). */
+const enrolled = (p: Pick<StoredPasskey, "credential" | "name">) => ({ credential: p.credential, name: p.name });
+
+/** A passkey as the account lists it: with the line CI pins for it (D159), from what's stored, any time (B-yj5d5). */
+const listed = (p: StoredPasskey, account: Account) => ({ ...enrolled(p), pin: pinLine(keyFile(p, account.id, account.handle)), enrolled: p.enrolled, last_used: p.last_used });
 
 /** A new sign-in, as a reply with its cookie. */
 async function signedIn(s: SignIn, request: Request, account: Account, status: number, body: Record<string, unknown>): Promise<Response> {
@@ -212,7 +215,7 @@ async function signupFinish(s: SignIn, request: Request): Promise<Response> {
   const account = (await s.accounts.account(f.account))!;
   const stored = (await s.accounts.passkey(p.credential))!;
   await s.usage?.record({ account: account.id }, "account_created", { via: f.globus_sub ? "globus" : "email" });
-  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored, account) });
+  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored) });
 }
 
 /** Sign-in, step 1: a challenge for any passkey of this site's (a discoverable credential). */
@@ -299,7 +302,7 @@ async function recoverFinish(s: SignIn, request: Request): Promise<Response> {
   await s.accounts.db.batch([s.accounts.replaceRecovery(account.id, hashOf(recovery)), s.accounts.endSessions(account.id)]);
   for (const e of await s.accounts.emails(account.id)) await s.mail.send(mails.recovered(e.address, account.handle, s.rp.origin));
   await spreadKeys(s, account);
-  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored, account) });
+  return signedIn(s, request, account, 201, { recovery_code: recovery, passkey: enrolled(stored) });
 }
 
 // ---------------------------------------------------------------- signed in: the account
@@ -321,7 +324,7 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
         handle: account.handle,
         created: account.created,
         emails: await s.accounts.emails(account.id),
-        passkeys: passkeys.map((p) => ({ ...enrolled(p, account), enrolled: p.enrolled, last_used: p.last_used })),
+        passkeys: passkeys.map((p) => listed(p, account)),
         globus: globus ? { linked: globus.linked } : null,
         projects: await s.accounts.projectsOf(account.id),
         fresh_until: new Date(Date.parse(ses.verified) + LIMITS.freshMs).toISOString(),
@@ -365,7 +368,7 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     }
     for (const e of await s.accounts.emails(account.id)) await s.mail.send(mails.passkeyAdded(e.address, account.handle, s.rp.origin));
     await spreadKeys(s, account);
-    return respond({ status: 201, body: { passkey: enrolled(stored, account) } });
+    return respond({ status: 201, body: { passkey: enrolled(stored) } });
   }
   if (route === "GET /sessions") {
     const list = await s.accounts.sessions(account.id);

@@ -66,7 +66,7 @@ export const mails = {
     to,
     kind: "passkey-added",
     subject: "A passkey was added to your Baesian account",
-    text: `A new passkey was added to the Baesian account ${handle} at ${origin}.\n\nIf this was you, there's nothing to do: to answer hard cards with it, add its line to your CI's BAESIAN_TRUST, as the website shows. If it wasn't, sign in and remove it.`,
+    text: `A new passkey was added to the Baesian account ${handle} at ${origin}.\n\nIf this was you, the hard cards you answer with it count in CI once its line, on your account page at ${origin}/account, is in your CI's BAESIAN_TRUST. If it wasn't, sign in and remove it.`,
   }),
   accountClosed: (to: string, handle: string, origin: string, deletes: string): Mail => ({
     to,

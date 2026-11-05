@@ -62,6 +62,7 @@ export function useConfig(): SiteConfig | undefined {
 export interface Passkey {
   credential: string;
   name: string;
+  /** Its line for CI's `BAESIAN_TRUST` (D159): its key file as JSON on one line, shown on the account page (B-yj5d5). */
   pin: string;
   enrolled: string;
   last_used: string | null;
