@@ -670,6 +670,48 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
     });
   });
 
+  describe("a personal clone (B-4rwyz)", () => {
+    it("is linked in its own config, with nothing to commit; its answers from before linking count, and go up at first link", async () => {
+      // A repo whose collaborators don't use Baesian: nothing of it is committed, and nothing ever is.
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "baesian-personal-")));
+      try {
+        sh(dir, "init", "-q", "-b", "main");
+        sh(dir, "commit", "-q", "--allow-empty", "-m", "The team's repo");
+        expect((await run(dir, ["init", "--personal", "--no-hooks"])).code).toBe(0);
+        const AGENT = { agent: "claude-code", force: true };
+        const answered = Store.open(dir).fileCard(draftFileFields({ title: "Answered before linking", topic: "early/answered" }), "", AGENT).card.meta.id;
+        Store.open(dir).addVerdict({ card: answered, revision: 1, response: "accept", reviewer: "gus", client: "test" });
+
+        const login = await run(dir, ["login", "--service", relay.url, "--machine", "laptop"]);
+        expect(login.code, login.err).toBe(0);
+        const store = Store.open(dir);
+        const c = store.config();
+        expect(c).toMatchObject({ service: relay.url, project: expect.stringMatching(/^p-/), first_commit: sh(dir, "rev-list", "--max-parents=0", "HEAD") });
+        expect(login.out).toContain(`linked this clone to ${relay.url} as project ${c.project}, in its own config, .git/baesian/config.json: personal mode commits nothing`);
+        expect(login.out).not.toContain("git add");
+        expect(JSON.parse(readFileSync(join(store.live, "config.json"), "utf8"))).toMatchObject({ project: c.project });
+        expect(existsSync(join(dir, ".baesian"))).toBe(false);
+        expect(sh(dir, "status", "--porcelain", "--untracked-files=all")).toBe("");
+
+        // The answer given here before linking still counts, as the record at a linking commit would make it, and went up
+        // with the cards, as from before linking; one written here after linking doesn't count.
+        expect(store.status(answered)).toBe("resolved");
+        const paths = await relayPaths(c.project!);
+        expect(paths).toContainEqual(expect.stringMatching(new RegExp(`^verdicts/.*-${answered}-r1-`)));
+        const later = await fileCard(dir, { title: "Answered here after linking", topic: "late/local" });
+        Store.open(dir).addVerdict({ card: later, revision: 1, response: "accept", reviewer: "gus", client: "test" });
+        expect(Store.open(dir).status(later)).toBe("open");
+
+        // CI can't check a clone that commits nothing.
+        const ci = await run(dir, ["ci"]);
+        expect(ci.code).toBe(1);
+        expect(ci.err).toContain("personal mode (B-4rwyz)");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("a copy of a repo isn't the repo (B-5gnea)", () => {
     it("stops a template-style copy from syncing with the original's project, and `baesian login` links it to its own", async () => {
       const original = await signedIn("proj-1x");

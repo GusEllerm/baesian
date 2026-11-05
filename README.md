@@ -104,6 +104,15 @@ Codex installs the same plugin, with `codex plugin marketplace add /path/to/baes
 interactive mode once and accept its "Hooks need review" prompt. `codex exec` skips untrusted hooks without a
 warning, and any update to the plugin needs trusting again. In Codex, type `$baes` to pick the skill.
 
+**In a repo you share with people who don't use Baesian,** `baesian init --personal` sets it up for your clone alone,
+and commits nothing: your cards, answers and config stay in `.git/baesian/`, the repo's hooks and `AGENTS.md` are left
+as they are, and your clone's own hooks run Baesian's gate before the repo's. The gate still checks your commits, and
+takes its `Baesian-Card` and `Baesian-Ack` trailers out of the message once it has, so the shared history never shows
+them. Your agents hear about Baesian from the plugin, which you need here. `baesian login` links your clone the same
+way, but CI can't check decisions that aren't committed. If the repo's setup script points `core.hooksPath` back at its
+own hooks, `baesian` says so: run `baesian init --personal` again. Once the team wants the record, `baesian init
+--shared` writes it into the repo, with the hooks' block and `AGENTS.md`, for you to commit.
+
 ## Status
 
 Baesian is in development, and not released. The CLI, the commit gate, the CI check, the client and the Claude

@@ -20,29 +20,48 @@ export const FALLBACK_KEY = "baesian.fallback";
 /** What `writeHook` writes for a hook that didn't exist: a shebang, then the block. */
 export const NEW_HOOK = (block: string) => `#!/bin/sh\n${block}\n`;
 
+/** Personal mode (B-4rwyz): the block in this clone's own hooks, which nobody else runs. */
+export interface PersonalBlock {
+  /** The command that points this clone's git back at the repo's own hooks, for the message when Baesian is missing. */
+  restore: string;
+}
+
+/** Text quoted for a double-quoted shell string. */
+const dq = (s: string) => s.replace(/[\\"$`]/g, (c) => `\\${c}`);
+
 /**
  * The marked block for one hook. It's the same on every machine, because `.githooks/` is committed:
  * the machine-specific fallback lives in the clone's own git config, never in the file.
+ *
+ * In personal mode (B-4rwyz) it's in the clone's own hooks instead, written by `baesian init --personal`, before the line
+ * that runs the repo's hook. There `post-rewrite`'s standard input has been read into `$baesian_input` first, and Baesian
+ * gets a copy of it (it carries the ledger over to the rewritten commits), as the repo's hook does; and a missing Baesian
+ * says how to stop using it in this clone, rather than to commit with `--no-verify`.
  */
-export function hookBlock(name: HookName): string {
+export function hookBlock(name: HookName, personal?: PersonalBlock): string {
   // commit-msg gets the message file; post-merge whether it was a squash; post-rewrite what rewrote (D181). post-rewrite's
   // standard input (the commits rewritten) is left for the repo's own lines after the block: Baesian doesn't read it.
   const withArg = name === "commit-msg" || name === "post-merge" || name === "post-rewrite";
-  const stdin = name === "post-rewrite" ? " </dev/null" : "";
+  const stdin = name === "post-rewrite" && !personal ? " </dev/null" : "";
+  const pipe = name === "post-rewrite" && personal ? `printf '%s' "$baesian_input" | ` : "";
   const args = withArg ? ` ${name} "$1"${stdin}` : ` ${name}`;
   const evalArgs = withArg ? ` ${name} \\"\\$1\\"${stdin}` : ` ${name}`;
   // The hooks after the fact can't stop anything: they record the ledger and merges, so a missing binary is skipped quietly.
   const missing =
     name === "post-commit" || name === "post-merge" || name === "post-rewrite"
       ? "  :"
-      : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
+      : personal
+        ? `  echo "baesian: not on PATH; this clone's hooks run Baesian's gate (personal mode). Install it, or stop using it here: ${dq(personal.restore)}" >&2\n  exit 1`
+        : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
   return [
     BEGIN,
-    "# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.",
+    personal
+      ? "# Baesian's commit gate, for this clone only (B-4rwyz). Managed by `baesian init --personal`."
+      : "# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.",
     "if command -v baesian >/dev/null 2>&1; then",
-    `  baesian hook${args} || exit $?`,
+    `  ${pipe}baesian hook${args} || exit $?`,
     `elif baesian_fallback="$(git config --get ${FALLBACK_KEY})" && [ -n "$baesian_fallback" ]; then`,
-    `  eval "$baesian_fallback hook${evalArgs}" || exit $?`,
+    `  ${pipe}eval "$baesian_fallback hook${evalArgs}" || exit $?`,
     "else",
     missing,
     "fi",

@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
-import { agentName, claudeMdMissesAgents, harnessSession, writeAgentsBlock } from "./agents.js";
+import { agentName, harnessSession, personalInstructions } from "./agents.js";
 import { ciPin, runProgram, workflowSteps } from "./ci.js";
 import { CONFIG_PATH, stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
-import { installHooks, runHook } from "./hooks.js";
+import { personalProblems, runHook } from "./hooks.js";
+import { initShared, setUpPersonal, setUpShared } from "./modes.js";
 import { notifyFiled } from "./notify.js";
 import { openRepo } from "./git.js";
 import { parseTrailers } from "./trailers.js";
@@ -54,7 +55,7 @@ import { aroundFiling, linkProblem, syncRelay, waitWithRelay } from "./sync.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import { type Card, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { TRUST_ENV } from "./trust.js";
-import { cleanVaultPath, initVault, vaultGuidance, vaultPathProblem, writeNotes } from "./vault.js";
+import { cleanVaultPath, vaultPathProblem, writeNotes } from "./vault.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, WaitCancelled, type WaitOptions } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
@@ -185,45 +186,43 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     for (const n of notes) io.err(n);
   };
 
+  // Personal mode (B-4rwyz): every command but the hooks', the MCP server's, `init` (which fixes it) and a harness's quiet
+  // inbox (which says it once a session) says what's wrong with the clone's setup, such as a gate a setup script turned off.
+  program.hook("preAction", (_program, command) => {
+    const name = command.name();
+    if (name === "hook" || name === "mcp" || name === "init" || (name === "inbox" && command.opts().quiet)) return;
+    let problems: string[] = [];
+    try {
+      problems = personalProblems(store());
+    } catch {
+      // not a repo, or not set up: the command says so itself
+    }
+    for (const p of problems) io.err(`warning: ${p}`);
+  });
+
   program
     .command("init")
-    .description("set up the live layer (.git/baesian/), the record (.baesian/) and the AGENTS.md instructions")
-    .option("--vault <path>", "an Obsidian vault for the vault adapter, relative to the repo root")
+    .description("set up Baesian in this repo: the live layer (.git/baesian/), the record (.baesian/), the gate's block in the repo's hooks and the AGENTS.md instructions; or with --personal, for this clone alone, committing nothing")
+    .option("--personal", "use Baesian in this clone alone, in a repo whose collaborators don't (B-4rwyz): nothing is committed, and the repo's hooks and AGENTS.md are left as they are")
+    .option("--shared", "shared mode, which plain init sets up; in a personal clone, switch to it: this branch's record, the hooks' block and AGENTS.md are written into the repo, for you to commit")
+    .option("--vault <path>", "an Obsidian vault for the vault adapter, relative to the repo root (shared mode)")
     .option("--no-agents", "don't write the instructions block in AGENTS.md")
     .option("--no-hooks", "don't install the git gate")
-    .action((opts: { vault?: string; agents: boolean; hooks: boolean }) => {
+    .action((opts: { personal?: boolean; shared?: boolean; vault?: string; agents: boolean; hooks: boolean }) => {
+      if (opts.personal && opts.shared) throw new ValidationError("--personal and --shared: choose one");
       const s = store();
       const vault = opts.vault === undefined ? undefined : cleanVaultPath(opts.vault);
       if (vault !== undefined) {
         const problem = vaultPathProblem(s.repo.toplevel, vault);
         if (problem) throw new ValidationError(problem);
       }
-      const created = s.init();
-      if (created.length) {
-        io.out(`live layer:  ${relative(s.repo.toplevel, s.live)}/  (shared by every worktree, not committed)`);
-        io.out(`record:      ${relative(s.repo.toplevel, s.record)}/  (commit this)`);
-      } else {
-        io.out("already set up");
-      }
-      // M6: the vault adapter. An existing config gains the vault; Bases is turned on, and the Decision Log gets its query.
-      if (vault !== undefined) for (const line of initVault(s, vault)) io.out(line);
-      if (opts.hooks) {
-        const r = installHooks(s, io.hookFallback ?? selfCommand());
-        const changed = Object.entries(r.files).filter(([, v]) => v !== "unchanged");
-        const where = relative(s.repo.toplevel, r.dir) || r.dir;
-        if (changed.length) io.out(`git gate:    ${changed.map(([k, v]) => `${k} ${v}`).join(", ")} in ${where}/`);
-        if (r.setHooksPath) io.out("             core.hooksPath set to .githooks (each clone runs `baesian init` once)");
-        if (!r.versioned) io.out(`note: ${where} isn't versioned, so other clones won't get the gate; CI still checks.`);
-      }
-      if (opts.agents) {
-        const result = writeAgentsBlock(s.repo.toplevel, vaultGuidance(s));
-        if (result !== "unchanged") io.out(`AGENTS.md:   instructions ${result}`);
-        if (claudeMdMissesAgents(s.repo.toplevel)) {
-          io.out("note: CLAUDE.md doesn't import AGENTS.md. Add a line `@AGENTS.md` so Claude Code reads the instructions.");
-        }
-      }
+      const o = { ...(vault !== undefined ? { vault } : {}), agents: opts.agents, hooks: opts.hooks, fallback: io.hookFallback ?? selfCommand() };
+      // B-4rwyz: a personal clone stays personal, unless --shared switches it; plain init in any other clone is shared mode.
+      const personal = opts.personal || (!opts.shared && s.personal);
+      const lines = personal ? setUpPersonal(s, o) : opts.shared ? initShared(store, o) : setUpShared(s, o).lines;
+      for (const line of lines) io.out(line);
       // The first preferences are chosen in the client, from example decisions (B-5na1k): only the client writes them (D147).
-      if (!s.inForce().name) io.out("preferences: none yet. Run `baesian serve`: the client asks about a few example decisions and suggests how much should reach you.");
+      if (!store().inForce().name) io.out("preferences: none yet. Run `baesian serve`: the client asks about a few example decisions and suggests how much should reach you.");
     });
 
   program
@@ -400,6 +399,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .action(async (opts: { peek?: boolean; json?: boolean; quiet?: boolean; session?: string }) => {
       // A session starting in a repo without Baesian, or one not set up, isn't an error for a hook.
       let op: Op<InboxEntry[]>;
+      let starting: string[] = [];
       try {
         const s = store();
         // M9d: in a linked repo, pull first, and push what's waiting to go up. A hook's run is brief and silent.
@@ -410,12 +410,18 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
         }
         // A hook names its session; an agent's own command runs in one too, which the harness says (B-ghhym).
         const session = opts.session ?? harnessSession(io.env ?? process.env);
+        // Personal mode (B-4rwyz): AGENTS.md says nothing of Baesian, so a harness's hook hands the agent its instructions
+        // at a session's first read, with anything wrong with the clone's setup.
+        if (opts.quiet && !opts.json && session && s.isInitialised() && s.personal && !s.sessionKnown(session)) {
+          starting = [personalInstructions(), ...personalProblems(s).map((p) => `Baesian: ${p}`)];
+        }
         op = inboxOp(s, { advance: !opts.peek, ...(session ? { session } : {}) });
       } catch (e) {
         if (opts.quiet) return;
         throw e;
       }
       if (opts.json) return json(op.data);
+      for (const line of starting) io.out(line);
       if (!op.data.length && opts.quiet) return;
       if (opts.quiet) io.out("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
       for (const line of op.lines) io.out(line);
@@ -480,6 +486,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const relay = await syncRelay(s, http());
       if (relay.state === "synced") io.out(`relay: received ${relay.pulled.length} file${relay.pulled.length === 1 ? "" : "s"}, sent ${relay.pushed.length}`);
       for (const n of relay.notes) io.err(n);
+      // Personal mode (B-4rwyz) has no record and no vault: the live layer is all there is.
+      if (s.personal) return io.out("personal mode: nothing to bring into a record, since this clone commits none (B-4rwyz)");
       const added = s.syncRecord();
       io.out(added.length ? `added to the record:\n${added.map((p) => `  ${p}`).join("\n")}` : "record is up to date");
       // M6 (D170): the vault's notes too, for verdicts that came after the branch's last commit. Not staged.
@@ -500,6 +508,11 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .action((opts: { base?: string; merge?: boolean; fileConflicts?: boolean; json?: boolean }) => {
       const base = opts.base ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : undefined);
       if (!base) throw new Error("pass --base <ref>, e.g. --base origin/main");
+      try {
+        if (store().personal) io.err("note: this clone uses Baesian in personal mode (B-4rwyz): its decisions aren't committed, so verify, which reads each commit's own record, sees none of them");
+      } catch {
+        // CI's checkout has no live layer: it's never personal
+      }
       const repo = openRepo(io.cwd);
       const result = verify(repo, base, { merge: Boolean(opts.merge || opts.fileConflicts) });
       if (opts.json) json(result);
@@ -528,15 +541,26 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (opts.json) return json(report);
       if (!report.facts.length && report.ok) return io.out("no decisions detected in the staged changes");
       for (const line of describeReport(report)) io.out(line.replace("commit blocked.", "this commit would be blocked."));
+      if (s.personal) io.out("personal mode (B-4rwyz): the commit-msg hook takes these trailers out of the message once it has checked them, into this clone's ledger");
     });
 
   program
     .command("hook", { hidden: true })
     .description("run a git hook (called by the hooks `baesian init` installs)")
-    .argument("<name>", "pre-commit, commit-msg or post-commit")
+    .argument("<name>", "pre-commit, commit-msg, post-commit, post-merge or post-rewrite")
     .argument("[args...]", "the hook's arguments")
     .action(async (name: string, args: string[]) => {
-      state.code = await runHook(store(), name, args, io, http());
+      const s = store();
+      // Personal mode's post-rewrite hands Baesian the commits it rewrote, on standard input (B-4rwyz); shared mode's doesn't.
+      let input = "";
+      if (name === "post-rewrite" && s.personal) {
+        try {
+          input = await io.stdin();
+        } catch {
+          // no input
+        }
+      }
+      state.code = await runHook(s, name, args, io, http(), input);
     });
 
   program
@@ -551,7 +575,11 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       const asked = opts.service ?? (c.service ? undefined : (io.env ?? process.env).BAESIAN_SERVICE);
       if (asked !== undefined && !Origin.safeParse(asked).success) throw new ValidationError(`--service: the service's address, an origin such as https://baesian.example, with no path (got ${JSON.stringify(asked)})`);
       if (c.service && asked && asked !== c.service) {
-        throw new ValidationError(`this repo is linked to ${c.service}, not ${asked}: to move it, change the service and project in .baesian/config.json, a change the commit gate asks a card or an ack for (B-w4g6c)`);
+        throw new ValidationError(
+          s.personal
+            ? `this clone is linked to ${c.service}, not ${asked}: to move it, change the service and project in its config, .git/baesian/config.json (personal mode, B-4rwyz)`
+            : `this repo is linked to ${c.service}, not ${asked}: to move it, change the service and project in .baesian/config.json, a change the commit gate asks a card or an ack for (B-w4g6c)`,
+        );
       }
       // B-f2mfb: with none named, the hosted service. Its approval page names it, and takes a passkey, before any card
       // leaves this machine; someone running their own names it once, and the config keeps it.
@@ -598,7 +626,11 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       writeGrant(grant);
       if (link) {
         linkRepo(s, link);
-        io.out(`linked this repo to ${service} as project ${link.project}, in .baesian/config.json (B-62qnz, B-5gnea)`);
+        io.out(
+          s.personal
+            ? `linked this clone to ${service} as project ${link.project}, in its own config, .git/baesian/config.json: personal mode commits nothing, so there's nothing to commit (B-62qnz, B-4rwyz)`
+            : `linked this repo to ${service} as project ${link.project}, in .baesian/config.json (B-62qnz, B-5gnea)`,
+        );
       }
       io.out(`signed in: ${grant.machine} can now file cards and hear answers in project ${project}, never answer them`);
       // The first sync: the relay's files come down, and everything an agent wrote here goes up (B-6k0rk). A repo with a
@@ -608,7 +640,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
       if (relay.state === "synced") io.out(`relay: received ${files(relay.pulled.length)}, sent ${relay.pushed.length}`);
       for (const n of relay.notes) io.err(n);
       io.out(`answer its cards at ${projectPage(service, project)}`);
-      if (link) {
+      if (link && !s.personal) {
         // The link is a gate fact (B-w4g6c): a command to commit it with its ack, ready to run, the trailer its own paragraph.
         io.out("Commit the link: the commit gate asks an ack for where cards are sent (B-w4g6c). This commits it with one:");
         io.out(`  git add ${CONFIG_PATH} && git commit -m "Link this repo to Baesian" -m "${linkAck(service, link.project)}"`);
@@ -623,6 +655,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }):
     .action(async (opts: { github?: boolean; json?: boolean }) => {
       const s = store();
       s.requireInit();
+      // B-4rwyz: CI checks each commit against its committed record, and personal mode commits none.
+      if (s.personal) {
+        throw new ValidationError(
+          "this clone uses Baesian in personal mode (B-4rwyz): nothing of Baesian's is committed, so CI has no record to verify, and no pin to set. To have CI check the repo's decisions, switch it to shared mode with `baesian init --shared`, commit, then run `baesian ci`.",
+        );
+      }
       const c = s.config();
       if (!c.service || !c.project) throw new ValidationError("this repo isn't linked to the hosted service: run `baesian login` first, then `baesian ci`");
       // The keys come from the service, through this pull, never from the committed record, which a commit can change.

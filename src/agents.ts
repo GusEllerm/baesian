@@ -135,6 +135,28 @@ export function writeAgentsBlock(toplevel: string, vault?: { rules: string; note
   return "updated";
 }
 
+/** In personal mode, what the block says about the record, which isn't committed there. */
+const RECORD_SENTENCE = "The decision record is committed with the code, so don't paste\nsecrets, credentials or private output into a card.";
+
+/**
+ * What an agent is told in a clone that uses Baesian in personal mode (B-4rwyz), where AGENTS.md says nothing of it: the
+ * plugin's session-start hook hands it over once a session (`baesian inbox --quiet`). It's `AGENTS_BLOCK`'s instructions,
+ * after a paragraph on what personal mode changes for the agent.
+ */
+export function personalInstructions(): string {
+  const body = AGENTS_BLOCK.slice(BEGIN.length, -END.length).trim();
+  if (!body.includes(RECORD_SENTENCE)) throw new Error("AGENTS_BLOCK no longer says the record is committed in the words personal mode replaces");
+  return [
+    "Baesian, in personal mode (B-4rwyz): this clone uses Baesian for the person you're working with, and the repo's",
+    "collaborators don't, so AGENTS.md doesn't mention it and nothing of Baesian's is committed. Its instructions still apply",
+    "to you, as below. The commit gate checks your commits as usual, and takes `Baesian-Card` and `Baesian-Ack` trailers out",
+    "of the message once it has, into this clone's ledger. Keep card IDs and Baesian itself out of anything others see: code,",
+    "comments, commit messages, pull requests. `baesian inbox` says when this clone's setup needs fixing.",
+    "",
+    body.replace(RECORD_SENTENCE, "The decision record stays in this clone, but a card reaches the reviewer's\nwebsite in a linked repo, so don't paste secrets, credentials or private output into a card."),
+  ].join("\n");
+}
+
 /** Claude Code reads CLAUDE.md, not AGENTS.md. Warn when CLAUDE.md exists and doesn't import it. */
 export function claudeMdMissesAgents(toplevel: string): boolean {
   const path = join(toplevel, "CLAUDE.md");

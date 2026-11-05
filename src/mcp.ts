@@ -83,6 +83,23 @@ export const MCP_INSTRUCTIONS = [
   "Only a person answers a card, or sets the repo's preferences, in the Baesian client; none of these tools can, and never write preference files yourself.",
 ].join("\n");
 
+/**
+ * The line the instructions gain in a clone that uses Baesian in personal mode (B-4rwyz), where AGENTS.md says nothing of
+ * it: fixed text, chosen by the mode of the repo the server starts in.
+ */
+export const MCP_PERSONAL =
+  "This clone uses Baesian in personal mode: the repo's collaborators don't, so AGENTS.md doesn't mention it and nothing of Baesian's is committed. Everything above still applies; the commit gate takes Baesian-Card and Baesian-Ack trailers out of the message once it has checked them, into this clone's ledger. Keep card IDs and Baesian itself out of anything others see: code, comments, commit messages, pull requests.";
+
+/** The server's instructions for the repo it starts in: `MCP_INSTRUCTIONS`, and in personal mode `MCP_PERSONAL`. */
+export function instructionsFor(cwd: string): string {
+  try {
+    if (Store.open(cwd).personal) return `${MCP_INSTRUCTIONS}\n${MCP_PERSONAL}`;
+  } catch {
+    // not a repo: the tools say so when called
+  }
+  return MCP_INSTRUCTIONS;
+}
+
 const VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 // ---------------------------------------------------------------- schemas
@@ -145,7 +162,7 @@ const READS = { readOnlyHint: true, openWorldHint: false } as const;
 /** The server, with its twelve tools. `serveStdio` makes one per connection. */
 export function buildMcpServer(opts: McpOptions): McpServer {
   const env = opts.env ?? process.env;
-  const server = new McpServer({ name: "baesian", version: VERSION }, { instructions: MCP_INSTRUCTIONS });
+  const server = new McpServer({ name: "baesian", version: VERSION }, { instructions: instructionsFor(opts.cwd) });
   const store = (dir: string | undefined) => Store.open(dir === undefined ? opts.cwd : isAbsolute(dir) ? dir : resolve(opts.cwd, dir));
   const agentOf = (ctx: ServerContext) => agentName(opts.agent, env, clientName(server, ctx));
   const notify = (card: Card) => {

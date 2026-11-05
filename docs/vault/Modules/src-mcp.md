@@ -48,7 +48,7 @@ The server syncs as the CLI does, through the same code ([[src-sync]]) and the s
 - **It never signs in itself,** and no tool starts a sign-in, returns a token or takes one. Signed out, a filing tool files the card here, and its text says to ask the person to run `baesian login`: the card is written, so the tool doesn't fail (P18 section 8 had it return `signed_out`; an error would have read as the card not being filed).
 - **The tools list doesn't change:** the same twelve, with the same fixed descriptions. `file_card` and `revise_card` take one more field, `secret_reason`, with its note from `CARD_FIELDS`.
 - **A card that looks like it holds a secret,** in a hosted repo, is refused with its own code, `looks_like_secret` (`LooksLikeSecret`), unless `secret_reason` says why it's filed anyway (B-jfkv9).
-- **The descriptions and the instructions (`MCP_INSTRUCTIONS`, a short form of `AGENTS_BLOCK`) are fixed text,** never built from cards and never fetched. A snapshot test shows any change in review.
+- **The descriptions and the instructions (`MCP_INSTRUCTIONS`, a short form of `AGENTS_BLOCK`) are fixed text,** never built from cards and never fetched. A snapshot test shows any change in review. In a clone that uses Baesian in personal mode (B-4rwyz), where AGENTS.md says nothing of it, `instructionsFor()` adds one more fixed line, `MCP_PERSONAL`, chosen by the mode of the repo the server starts in: that the clone uses Baesian, that the gate takes its trailers out of the message, and that card IDs stay out of what the collaborators see.
 
 ## The card's fields (D167)
 

@@ -1,6 +1,6 @@
 ---
 name: baesian
-description: Use when you're about to make a design decision in a repo that uses Baesian (an AGENTS.md with a "Decisions (Baesian)" section, or a .baesian/ folder). Decide whether it needs a card, write one the reviewer can answer quickly, file it, and wait for or follow the verdict. Also run as /baesian (Claude Code) or $baesian (Codex) to check for new verdicts, or to put a decision to the reviewer.
+description: Use when you're about to make a design decision in a repo that uses Baesian (an AGENTS.md with a "Decisions (Baesian)" section, a .baesian/ folder, or Baesian's own note that this clone uses it in personal mode). Decide whether it needs a card, write one the reviewer can answer quickly, file it, and wait for or follow the verdict. Also run as /baesian (Claude Code) or $baesian (Codex) to check for new verdicts, or to put a decision to the reviewer.
 argument-hint: "[a decision to put to the reviewer]"
 ---
 
@@ -20,6 +20,10 @@ Run `baesian inbox` first: an earlier verdict may already decide it.
 
 If `AGENTS.md` points to the repo's vault, read the notes it names (a Working Agreement, the rules in force in `Rules/`) when deciding: they're guidance, and only rules accepted in the client change what the gate lets through.
 
+## In personal mode
+
+A clone can use Baesian for one person in a repo whose collaborators don't (`baesian init --personal`). Then `AGENTS.md` says nothing about Baesian and nothing of it is committed; Baesian tells you so when a session starts, with the instructions `AGENTS.md` would have given. Everything here still applies. Cite cards with trailers as usual: the commit gate checks them, then takes them out of the message, into the clone's ledger. Keep card IDs and Baesian itself out of anything the collaborators see: code, comments, commit messages, pull requests. If `baesian` warns that the clone's commit gate is off, tell the person: `baesian init --personal` puts it back.
+
 ## Write it for someone choosing before they see your pick
 
 The reviewer chooses between your two options before seeing which is yours, your reasoning, or the card's body. So:
@@ -29,7 +33,7 @@ The reviewer chooses between your two options before seeing which is yours, your
 - **The crux is the one question the choice turns on,** with the answer that leads to each option (`crux_proposal`, `crux_alternative`). If the answers don't point at different options, it isn't the crux.
 - **`crux_fact` is the only context they see first.** Put there what they need in order to choose: when the situation arises, what goes wrong, what's already true. Keep it neutral: a fact, not an argument for your pick.
 - **The body is background,** shown with your case once they've chosen. Your reasoning goes in `rationale`, and what would show you're wrong in `wrong_if` and `check`.
-- **The decision record is committed with the code,** so don't paste secrets, credentials or private output into a card.
+- **The decision record is committed with the code,** so don't paste secrets, credentials or private output into a card. In personal mode it stays in the clone, but a linked repo's cards still reach the reviewer's website.
 
 Start from `baesian template`, which lists every field.
 

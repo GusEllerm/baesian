@@ -321,7 +321,8 @@ export function firstCommitToLink(toplevel: string): string {
 
 /**
  * Link a repo to a project (B-62qnz): the service, the project and its first commit in `.baesian/config.json`, keeping
- * the rest. A gate fact when it's committed (B-w4g6c): `linkAck()` is the trailer that covers it.
+ * the rest. A gate fact when it's committed (B-w4g6c): `linkAck()` is the trailer that covers it. In personal mode
+ * (B-4rwyz), in the clone's own config, `.git/baesian/config.json`, with nothing to commit (`Store.setLink`).
  */
 export function linkRepo(store: Store, link: { service: string; project: string; first_commit: string }): void {
   store.setLink(link);

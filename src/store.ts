@@ -29,6 +29,7 @@ import {
 } from "./routing.js";
 import {
   Attachment,
+  BeforeLinkingSnapshot,
   CardDraft,
   CardMeta,
   Config,
@@ -74,6 +75,13 @@ import { type TrustRoot, checkSigned, pinnedTrust, readTrustFile } from "./trust
 export const LIVE_DIR = "baesian";
 /** The record layer, committed on the branch (D34). */
 export const RECORD_DIR = ".baesian";
+/**
+ * Personal mode (B-4rwyz): the clone's own config, in the live layer, in place of the record's. Its being there is what
+ * makes a clone personal: nothing of Baesian's is committed, and the live layer plays the record's part.
+ */
+export const PERSONAL_CONFIG = "config.json";
+/** Personal mode: what the clone held of what a person writes when it was linked (`BeforeLinkingSnapshot`), in the live layer. */
+export const BEFORE_LINKING = "before-linking.json";
 
 const KINDS = ["cards", "verdicts", "ledger", "decks", "rules", "topics", "attachments", "waiting", "merges"] as const;
 
@@ -333,7 +341,8 @@ export const SHALLOW_HISTORY =
 /**
  * What was in the record at the commit that linked the repo (B-45xz8): its files' blob IDs by their path in the layer, or
  * why that can't be told. Before the link is committed, the record at the commit being checked stands in for it, on your
- * machine.
+ * machine. In personal mode (B-4rwyz) it's the clone's snapshot from when it was linked, whose `commit` is empty: none
+ * linked it.
  */
 export type BeforeLinking = { commit: string; blobs: Map<string, string>; objectFormat: string } | { problem: string };
 
@@ -441,6 +450,9 @@ const encode = (text: string): Uint8Array => encoder.encode(text);
 /** A file's bytes as a Buffer, without copying them: signatures and digests read them this way. */
 const asBuffer = (bytes: Uint8Array): Buffer => (Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
 const decode = (bytes: Uint8Array): string => asBuffer(bytes).toString("utf8");
+/** A file's git blob ID, as `git hash-object` gives it, in the repo's object format. */
+const blobId = (bytes: Uint8Array, objectFormat: string): string =>
+  createHash(objectFormat === "sha256" ? "sha256" : "sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
 
 /** With no git to search, no commit is found by its trailers, and none is said to be rewritten. */
 const NO_HISTORY: History = { citing: new Map(), onBranch: () => true };
@@ -541,8 +553,34 @@ export class Store {
     return this.local ? existsSync(this.local.live) : true;
   }
 
-  /** Create both layers. Safe to run again. Returns the paths it created. */
-  init(config: Config = {}): string[] {
+  /**
+   * Whether this clone uses Baesian in personal mode (B-4rwyz): its config is the clone's own, in the live layer, and
+   * nothing of Baesian's is committed. The live layer plays the record's part; no record is written. A read-only view of a
+   * committed record, and a store over storage alone, never are.
+   */
+  get personal(): boolean {
+    return this.local !== undefined && !this.readOnly && existsSync(join(this.local.live, PERSONAL_CONFIG));
+  }
+
+  /** Where the config is: the worktree's record, or in personal mode the clone's live layer. */
+  private configPath(): string {
+    const local = this.need("the config");
+    return this.personal ? join(local.live, PERSONAL_CONFIG) : join(local.record, "config.json");
+  }
+
+  /** Write the config whole, in the newest format, where `configPath()` says. */
+  private writeConfig(config: Config): void {
+    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
+    const path = this.configPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
+  }
+
+  /**
+   * Create both layers. Safe to run again. Returns the paths it created. In personal mode (B-4rwyz), the live layer only,
+   * with the config in it: nothing is written in the worktree.
+   */
+  init(config: Config = {}, opts: { personal?: boolean } = {}): string[] {
     const { live, record } = this.need("setting up (`baesian init`)");
     const created: string[] = [];
     for (const kind of KINDS) {
@@ -552,19 +590,19 @@ export class Store {
         created.push(dir);
       }
     }
-    const configPath = join(record, "config.json");
+    const configPath = opts.personal || this.personal ? join(live, PERSONAL_CONFIG) : join(record, "config.json");
     if (!existsSync(configPath)) {
-      mkdirSync(record, { recursive: true });
+      mkdirSync(dirname(configPath), { recursive: true });
       writeFileSync(configPath, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
       created.push(configPath);
     }
     return created;
   }
 
-  /** The repo's config, from the record; for a store over storage alone, the one it was given. */
+  /** The repo's config, from the record, or the clone's in personal mode; for a store over storage alone, the one it was given. */
   config(): Config {
     if (!this.local) return this.options.config ?? {};
-    const path = join(this.local.record, "config.json");
+    const path = this.configPath();
     return existsSync(path) ? readAs("config", Config, JSON.parse(readFileSync(path, "utf8")), "config.json") : {};
   }
 
@@ -573,25 +611,61 @@ export class Store {
    * `init --vault` in a repo already set up comes here. Returns whether it changed anything.
    */
   setVault(vault: string): boolean {
-    const { record } = this.need("recording the vault");
-    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
+    this.need("recording the vault");
     const { vault: was, ...rest } = this.config();
     if (was === vault) return false;
-    mkdirSync(record, { recursive: true });
-    writeFileSync(join(record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), vault }, "config"), null, 2)}\n`);
+    this.writeConfig({ ...rest, vault });
     return true;
   }
 
   /**
    * Link the repo to a project on the hosted service (M9d, B-5gnea): the service, the project and the repo's first commit,
-   * in this worktree's config, keeping its other keys. A gate fact when committed (B-w4g6c).
+   * in this worktree's config, keeping its other keys. A gate fact when committed (B-w4g6c). In personal mode (B-4rwyz),
+   * in the clone's config, and what the clone holds of what a person wrote is kept, as the record at the linking commit
+   * would have kept it (`snapshotBeforeLinking()`).
    */
   setLink(link: { service: string; project: string; first_commit: string }): void {
-    const { record } = this.need("linking the repo");
-    if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
+    this.need("linking the repo");
     const { service: _s, project: _p, first_commit: _f, ...rest } = this.config();
-    mkdirSync(record, { recursive: true });
-    writeFileSync(join(record, "config.json"), `${JSON.stringify(parse(Config, { ...rest, format: newestFormat("config"), ...link }, "config"), null, 2)}\n`);
+    if (this.personal) this.snapshotBeforeLinking(link.project);
+    this.writeConfig({ ...rest, ...link });
+    this.linkCache = undefined;
+  }
+
+  /**
+   * Personal mode (B-4rwyz): keep the blob ID of each unsigned file a person wrote, as the clone holds them when it's
+   * linked to `project`, unless that's kept already: those are the answers from before linking (B-45xz8), which count as
+   * they are, and go up at first link (B-3zjjx). Linking again to the same project keeps the first snapshot, so nothing
+   * written since counts.
+   */
+  private snapshotBeforeLinking(project: string): void {
+    if (this.snapshotFor(project)) return;
+    const top = this.repo.toplevel;
+    let objectFormat: "sha1" | "sha256" = "sha1";
+    try {
+      if (git(top, ["rev-parse", "--show-object-format"]) === "sha256") objectFormat = "sha256";
+    } catch {
+      // an older git: SHA-1
+    }
+    const files: Record<string, string> = {};
+    for (const dir of ["verdicts", "rules", "topics", "preferences"]) {
+      for (const f of this.storage.list(dir).sort()) {
+        const rel = `${dir}/${f}`;
+        if (f.endsWith(".sig") || this.storage.read(`${rel}.sig`) !== undefined) continue;
+        const bytes = this.storage.read(rel);
+        if (bytes) files[rel] = blobId(bytes, objectFormat);
+      }
+    }
+    const snapshot = parse(BeforeLinkingSnapshot, { type: "before-linking", format: newestFormat("before-linking"), project, at: now(), object_format: objectFormat, files }, "the before-linking snapshot");
+    this.storage.replace(BEFORE_LINKING, encode(`${JSON.stringify(snapshot, null, 2)}\n`));
+  }
+
+  /** The snapshot personal mode took when the clone was linked to `project` (B-4rwyz), if it took one. */
+  private snapshotFor(project: string): BeforeLinkingSnapshot | undefined {
+    const bytes = this.storage.read(BEFORE_LINKING);
+    if (!bytes) return undefined;
+    const s = readAs("before-linking", BeforeLinkingSnapshot, JSON.parse(decode(bytes)), BEFORE_LINKING);
+    return s.project === project ? s : undefined;
   }
 
   /** Throws `NotSetUp` unless the live layer exists. */
@@ -610,7 +684,8 @@ export class Store {
    * to copy it: the record is your machine's, and it pulls what the relay holds (P15).
    */
   private toRecord(rel: string): boolean {
-    if (!this.local) return false;
+    // Personal mode (B-4rwyz) writes no record: the live layer plays its part.
+    if (!this.local || this.personal) return false;
     const target = join(this.local.record, ...rel.split("/"));
     if (existsSync(target)) return false;
     const bytes = this.storage.read(rel);
@@ -770,7 +845,12 @@ export class Store {
     else if (this.local) {
       const pinned = this.pinnedRoot();
       const project = pinned?.project ?? this.config().project;
-      if (project) value = recordAtLinking(this.local.repo.toplevel, this.options.commit ?? "HEAD", project, { standIn: !pinned });
+      // Personal mode (B-4rwyz) commits no record: what the clone held when it was linked plays its part. A clone that
+      // switched to shared mode keeps that in its place until the link is committed.
+      const snapshot = project && !pinned && !this.readOnly ? this.snapshotFor(project) : undefined;
+      const atSnapshot = (s: BeforeLinkingSnapshot): BeforeLinking => ({ commit: "", blobs: new Map(Object.entries(s.files)), objectFormat: s.object_format });
+      if (snapshot && this.personal) value = atSnapshot(snapshot);
+      else if (project) value = recordAtLinking(this.local.repo.toplevel, this.options.commit ?? "HEAD", project, { standIn: !pinned && !snapshot }) ?? (snapshot && atSnapshot(snapshot));
     }
     this.linkCache = { value };
     return value;
@@ -802,8 +882,7 @@ export class Store {
     if (!blob) return undefined;
     const bytes = this.storage.read(rel);
     if (!bytes) return undefined;
-    const id = createHash(b.objectFormat === "sha256" ? "sha256" : "sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
-    return id === blob ? COUNTS : undefined;
+    return blobId(bytes, b.objectFormat) === blob ? COUNTS : undefined;
   }
 
   /**
@@ -2167,6 +2246,11 @@ export class Store {
     this.writeCursor({ at: cursor.at, delivered: [...new Set([...cursor.delivered, ...keys])] });
   }
 
+  /** Whether a harness's session has read this branch's inbox before: its own cursor is written at its first read. */
+  sessionKnown(session: string): boolean {
+    return this.storage.read(this.cursorPath(session)) !== undefined;
+  }
+
   /** The branch's cursor, or a session's own: `cursors/<branch>.json`, `cursors/<branch>/<session>.json`. */
   private cursorPath(session?: string): string {
     const branch = slug(this.branch);
@@ -2262,16 +2346,22 @@ export class Store {
   /**
    * Copy verdicts and ledger entries for the cards this worktree's record holds (D37), and every rule, retirement,
    * topic alias and preference file, which apply to the whole repo. Run by `baesian sync`, and by the pre-commit hook. Returns the
-   * files it added.
+   * files it added. `also` names cards the record doesn't hold yet, to copy in with their decks: a clone switching from
+   * personal mode to shared writes its branch's record so (B-4rwyz). Personal mode writes no record, so nothing here.
    */
-  syncRecord(): string[] {
+  syncRecord(also: readonly string[] = []): string[] {
     this.requireInit();
     const recordCards = join(this.need("syncing the record").record, "cards");
-    const held = existsSync(recordCards) ? readdirSync(recordCards) : [];
+    if (this.personal) return [];
+    const held = [...new Set([...(existsSync(recordCards) ? readdirSync(recordCards) : []), ...also])];
     const added: string[] = [];
     const copy = (rel: string) => {
       if (this.toRecord(rel)) added.push(rel);
     };
+    for (const id of also) {
+      const deck = this.card(id)?.meta.deck;
+      if (deck && this.storage.read(`decks/${deck}.md`) !== undefined) copy(`decks/${deck}.md`);
+    }
     // A file a person writes goes with its signature and passkey proof, if it has them; in a hosted repo, only once it
     // counts, so an answer written on the machine never reaches the record (D138, P15).
     const hosted = this.hosted() !== undefined;
