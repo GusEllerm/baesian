@@ -6,6 +6,7 @@ import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ApiPreferencesInput, type ApiState, type ApiVerdictInput, PREFERENCE_FIELDS, VERDICT_FIELDS } from "./api.js";
+import { unmarkJson } from "./cite.js";
 import { afterVerdict } from "./proposals.js";
 import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
 import { presets, snapshot } from "./state.js";
@@ -215,7 +216,8 @@ function cookieValue(req: IncomingMessage, name: string): string | undefined {
 const HEADERS = { "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
 
 function send(res: ServerResponse, status: number, body: unknown, type = "application/json") {
-  const text = type === "application/json" ? `${JSON.stringify(body)}\n` : String(body);
+  // Messages the store wrote may mark citations of Baesian's decisions (src/cite.ts): the client never shows them.
+  const text = type === "application/json" ? `${JSON.stringify(body, unmarkJson)}\n` : String(body);
   res.writeHead(status, { ...HEADERS, "content-type": `${type}; charset=utf-8` });
   res.end(text);
 }

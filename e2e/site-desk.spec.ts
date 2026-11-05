@@ -92,7 +92,7 @@ test("approves a machine: a new project is named, the passkey checked afresh; th
   const r = await login.done;
   expect(r.code, r.err).toBe(0);
   const project = Store.open(dir).config().project!;
-  expect(r.out).toContain(`answer its cards at ${site.url}/projects/${project}`);
+  expect(r.out).toContain(`answer:   ${site.url}/projects/${project}`);
   expect(r.out).toContain("It asks you to name the project, then for your passkey.");
 
   // The projects, by name; renamed.

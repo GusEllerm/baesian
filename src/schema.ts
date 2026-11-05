@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cite } from "./cite.js";
 import { ALL_ROWS, POSITIONS, ROWS, ROW_FLOOR, rank } from "./routing.js";
 
 // The file formats. docs/vault/Design/File Formats.md describes them for people; this module is the
@@ -312,7 +313,7 @@ export function filingProblems(d: CardDraft): string[] {
   const out: string[] = [];
   if (same(d.proposal, d.alternative)) out.push("the proposal and the alternative are the same option: a card needs two real options");
   if (same(d.crux_proposal, d.crux_alternative)) {
-    out.push("crux_proposal and crux_alternative give the same answer, so the crux doesn't decide between the options (D74)");
+    out.push(`crux_proposal and crux_alternative give the same answer, so the crux doesn't decide between the options${cite("D74")}`);
   }
   const asks = [
     ...(d.reverse === "one-way" ? ["it's one-way"] : []),
@@ -321,11 +322,11 @@ export function filingProblems(d: CardDraft): string[] {
     ...(d.premise ? ["it rests on an unchecked premise"] : []),
   ];
   if (asks.length && !(d.wrong_if && d.check)) {
-    out.push(`wrong_if and check are required because ${asks.join(" and ")} (D77): say what would show the pick is wrong, and where to look`);
+    out.push(`wrong_if and check are required because ${asks.join(" and ")}${cite("D77")}: say what would show the pick is wrong, and where to look`);
   }
   const partial = (name: string, fields: (string | undefined)[]) => {
     const set = fields.filter((f) => f !== undefined).length;
-    if (set > 0 && set < fields.length) out.push(`the ${name} facet needs all of its fields (D75)`);
+    if (set > 0 && set < fields.length) out.push(`the ${name} facet needs all of its fields${cite("D75")}`);
   };
   partial("premise (premise, premise_option, premise_check)", [d.premise, d.premise_option, d.premise_check]);
   partial("acted (acted, acted_option)", [d.acted, d.acted_option]);
@@ -1047,4 +1048,41 @@ export type MachineGrant = z.infer<typeof MachineGrant>;
 /** Format a Zod error for a person reading a terminal. */
 export function describeError(error: z.ZodError): string {
   return z.prettifyError(error);
+}
+
+/**
+ * Why a draft isn't a card, in a few lines rather than the schema library's message for each field (B-eyrt5): the
+ * headline, then the fields that are missing, those left empty, and those whose value isn't one it takes.
+ */
+export function describeDraftError(error: z.ZodError, draft?: unknown): string {
+  const missing: string[] = [];
+  const empty: string[] = [];
+  const invalid: string[] = [];
+  const unknown: string[] = [];
+  for (const issue of error.issues) {
+    const field = issue.path.map(String).join(".") || "the card";
+    if (issue.code === "invalid_type" && /received undefined$/.test(issue.message)) missing.push(field);
+    else if (issue.code === "too_small" && issue.origin === "string") empty.push(field);
+    else if (issue.code === "invalid_value") invalid.push(`${field} must be ${listOf(issue.values.map(String), "or")}`);
+    else if (issue.code === "unrecognized_keys") unknown.push(...issue.keys);
+    else invalid.push(`${field}: ${issue.message}`);
+  }
+  const fields = new Set(error.issues.map((i) => i.path.map(String).join(".")));
+  // Unfilled: every field is missing, or empty, or one of a list left as the template has it, "".
+  const valueAt = (path: PropertyKey[]) => path.reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<PropertyKey, unknown>)[k] : undefined), draft);
+  const unfilled = !unknown.length && error.issues.every((i) => i.code !== "invalid_value" || [undefined, ""].includes(valueAt(i.path) as string)) && invalid.length === error.issues.filter((i) => i.code === "invalid_value").length;
+  const n = fields.size;
+  const head = `not filed: ${n === 1 ? "1 of the card's fields needs" : `${n} of the card's fields need`} ${unfilled ? "filling in" : "fixing"}`;
+  return [
+    head,
+    ...(missing.length ? [`  missing:  ${missing.join(", ")}`] : []),
+    ...(empty.length ? [`  empty:    ${empty.join(", ")}`] : []),
+    ...invalid.map((i) => `  invalid:  ${i}`),
+    ...(unknown.length ? [`  unknown:  ${unknown.join(", ")}, which a card doesn't have`] : []),
+  ].join("\n");
+}
+
+/** "a, b or c". */
+function listOf(items: string[], last: string): string {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} ${last} ${items.at(-1)}`;
 }

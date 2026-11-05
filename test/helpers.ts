@@ -3,6 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "vitest";
+import { unmark } from "../src/cite.js";
 import { renderDoc } from "../src/frontmatter.js";
 import { MemoryStorage } from "../src/storage.js";
 import { Store, type StorageOptions } from "../src/store.js";
@@ -120,3 +121,11 @@ export function draftFile(overrides: Record<string, unknown> = {}, body = BODY):
 }
 
 export const REVIEWER = { reviewer: "gus", client: "test" };
+
+/**
+ * A value with the citations Baesian marks in its messages put back where they are, as `--verbose` prints them
+ * (src/cite.ts): for tests that read the data a check returns, before anything prints it.
+ */
+export function cited<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_key, v: unknown) => (typeof v === "string" ? unmark(v, true) : v))) as T;
+}

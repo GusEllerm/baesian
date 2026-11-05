@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { cite } from "../src/cite.js";
 import { main } from "../src/cli.js";
 import { openRepo } from "../src/git.js";
 import {
@@ -20,8 +21,13 @@ import {
 import { Fact, HARD_BY_DEFAULT, Preferences } from "../src/schema.js";
 import { StalePreferences, Store, drawOf } from "../src/store.js";
 import { checkMerge, verify } from "../src/verify.js";
-import { WAIT_EXIT, describeBrief, describeOutcome, exitCodeFor, waitForVerdict } from "../src/wait.js";
+import { WAIT_EXIT, describeBrief as describeBriefLines, describeOutcome as describeOutcomeLines, exitCodeFor, waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, draftFile, fakeClock, repo, sh, worktree } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeBrief = (...a: Parameters<typeof describeBriefLines>) => plain(describeBriefLines(...a));
+const describeOutcome = (...a: Parameters<typeof describeOutcomeLines>) => plain(describeOutcomeLines(...a));
 
 afterEach(cleanup);
 
@@ -344,7 +350,7 @@ describe("waiting on a held card (B-chq61)", () => {
   it("through the CLI: file says held back, wait exits 8 with next: go", async () => {
     const { dir } = enforcing();
     const filed = await run(dir, ["--agent", "claude-code", "file"], draftFile({ touches: ["dependency"], level: "blocking" }));
-    expect(filed.out).toMatch(/^filed (B-\w{5}) \(held back, deck branch-main\)/);
+    expect(filed.out).toMatch(/^filed (B-\w{5}) "The run-metadata store", held back/);
     expect(filed.out).toContain("held back (Runtime dependencies: let the agent decide): go ahead with your pick, as provisional");
     expect(filed.out).not.toContain("baesian wait");
     const id = /filed (B-\w{5})/.exec(filed.out)![1]!;
@@ -358,7 +364,7 @@ describe("waiting on a held card (B-chq61)", () => {
   it("prints the outcome of a shown card too", async () => {
     const { dir } = repo();
     const filed = await run(dir, ["file"], draftFile({ level: "blocking" }));
-    expect(filed.out).toContain("gate: shown at blocking (the level you asked for; a level is a minimum when a card is shown)");
+    expect(filed.out).toContain("level:  blocking, the level you asked for");
   });
 });
 
@@ -383,7 +389,7 @@ describe("the merge gate and verify (D150, P16 section 3)", () => {
     commit(dir, store, `Use SQLite\n\nBaesian-Card: ${id}`);
     const r = verify(openRepo(dir), "main", { merge: true });
     expect(r.merge?.problems).toEqual([]);
-    expect(r.merge?.notes.join()).toContain(`${id} is held: the gate let its agent go ahead (D150)`);
+    expect(r.merge?.notes.join()).toContain(`${id} is held: the gate let its agent go ahead${cite("D150")}`);
     expect(r.ok).toBe(true);
   });
 

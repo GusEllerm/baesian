@@ -107,11 +107,11 @@ describe("`baesian ci` says what to run first (B-pt52b)", () => {
     const { dir } = repo();
     const unlinked = await run(dir, ["ci"]);
     expect(unlinked.code).toBe(1);
-    expect(unlinked.err).toContain("this repo isn't linked to the hosted service: run `baesian login` first, then `baesian ci`");
+    expect(unlinked.err).toBe("this repo isn't linked to the hosted service\nnext: baesian login  # first, then baesian ci");
     const { dir: other } = linked();
     const signedOut = await run(other, ["ci"]);
     expect(signedOut.code).toBe(1);
-    expect(signedOut.err).toContain("this machine isn't signed in to project proj-test on https://baesian.test: run `baesian login` first, then `baesian ci`");
+    expect(signedOut.err).toContain("this machine isn't signed in to project proj-test on https://baesian.test\nnext: baesian login  # first, then baesian ci");
     expect(signedOut.out).toBe("");
   });
 });

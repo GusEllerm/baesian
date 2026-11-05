@@ -4,8 +4,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 import { openRepo } from "../src/git.js";
 import { Store } from "../src/store.js";
-import { describeVerify, fileConflicts, verify } from "../src/verify.js";
+import { describeVerify as describeVerifyLines, fileConflicts, verify } from "../src/verify.js";
 import { BODY, REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeVerify = (...a: Parameters<typeof describeVerifyLines>) => plain(describeVerifyLines(...a));
 
 afterEach(cleanup);
 
@@ -45,7 +49,7 @@ describe("per-commit checks against each commit's own record", () => {
     expect(r.ok).toBe(false);
     expect(r.commits.map((c) => c.report.ok)).toEqual([false, true]);
     const text = describeVerify(r).join("\n");
-    expect(text).toContain(`FAIL ${bad.slice(0, 10)} Add hono`);
+    expect(text).toContain(`FAIL ${bad.slice(0, 7)} Add hono`);
     expect(text).toContain("Baesian-Ack: dep:hono <why this is fine>");
   });
 
@@ -206,7 +210,7 @@ describe("cli: verify", () => {
     const { dir } = branched();
     const missing = await run(dir, ["verify"], { GITHUB_BASE_REF: undefined });
     expect(missing.code).toBe(1);
-    expect(missing.out).toMatch(/pass --base/);
+    expect(missing.out).toMatch(/next: baesian verify --base/);
     sh(dir, "update-ref", "refs/remotes/origin/main", "main");
     const r = await run(dir, ["verify", "--merge"], { GITHUB_BASE_REF: "main" });
     expect(r.code).toBe(0);

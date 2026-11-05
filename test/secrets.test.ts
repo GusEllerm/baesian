@@ -82,7 +82,7 @@ describe("a warning on likely secrets at filing (B-vqn69)", () => {
     const io = { out: (l: string) => out.push(l), err: (l: string) => out.push(l), stdin: () => draftFile({ topic: "storage/other", title: "Another store" }, `Background: ${FAKE.github}\n`), cwd: dir };
     expect(await main(["node", "baesian", "--agent", "claude-code", "file"], io)).toBe(0);
     const text = out.join("\n");
-    expect(text).toContain("note: the body looks like it holds a secret (a GitHub token)");
+    expect(text).toContain("warning: the body looks like it holds a secret (a GitHub token)");
     expect(text).not.toContain(FAKE.github);
   });
 });
@@ -109,8 +109,8 @@ describe("in a hosted repo, a card that looks like it holds a secret is refused 
     expect(store.cards()).toEqual([]);
     const r = await cli(dir, ["file"], draftFile({}, `Background: ${FAKE.github}\n`));
     expect(r.code).toBe(1);
-    expect(r.err).toContain("nothing filed: in a hosted repo a card goes to the service as it's filed, and this one looks like it holds a secret (B-jfkv9)");
-    expect(r.err).toContain("  - the body looks like it holds a GitHub token");
+    expect(r.err).toContain("not filed: in a hosted repo a card goes to the service as it's filed, and this one looks like it holds a secret\n");
+    expect(r.err).toContain("\n  the body looks like it holds a GitHub token\n");
     expect(r.err).toContain('--secret-reason "<why>"');
     expect(r.err).not.toContain(FAKE.github);
     expect(store.cards()).toEqual([]);
@@ -124,7 +124,7 @@ describe("in a hosted repo, a card that looks like it holds a secret is refused 
     const id = JSON.parse(r.out).card.meta.id as string;
     expect(store.card(id)?.meta.secret_reason).toBe("a made-up key, from the docs' example");
     const shown = await cli(dir, ["show", id], "");
-    expect(shown.out).toContain('secret_reason (filed though it looks like it holds a secret, B-jfkv9) by claude-code on main (an agent): "a made-up key, from the docs\' example"');
+    expect(shown.out).toContain('secret_reason (filed though it looks like it holds a secret) by claude-code on main (an agent): "a made-up key, from the docs\' example"');
     // A revision is refused the same way, and takes the same reason.
     store.addVerdict({ card: id, revision: 1, response: "reject", comment: "Say more.", ...REVIEWER });
     const refused = await cli(dir, ["revise", id], draftFile({ proposal: `use ${FAKE.slack}` }));
@@ -139,7 +139,7 @@ describe("in a hosted repo, a card that looks like it holds a secret is refused 
     const { store, dir } = repo();
     const r = await cli(dir, ["file"], draftFile({ crux_fact: `the key is ${FAKE.aws}` }));
     expect(r.code).toBe(0);
-    expect(r.out).toContain("note: crux_fact looks like it holds a secret (an AWS access key ID)");
+    expect(r.out).toContain("warning: crux_fact looks like it holds a secret (an AWS access key ID)");
     expect(store.cards()).toHaveLength(1);
     expect(store.cards()[0]!.meta.secret_reason).toBeUndefined();
   });

@@ -351,7 +351,7 @@ describe("baesian serve", () => {
     c.stdout!.on("data", (d) => (out += d));
     expect(await exited(c)).toBe(0);
     expect(out).toContain("its cards are answered on the website, signed in with your passkey, not here");
-    expect(out).toContain("the project's page: https://baesian.example/projects/p-0123456789abcdefghjk");
+    expect(out).toContain("page:  https://baesian.example/projects/p-0123456789abcdefghjk");
     expect(existsSync(join(store.live, "server.json"))).toBe(false);
 
     // A copy of another repo (B-5gnea) has no page of its own yet: nothing opens, and it says why.

@@ -2,8 +2,12 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { readHistory } from "../src/trailers.js";
-import { describeBrief } from "../src/wait.js";
+import { describeBrief as describeBriefLines } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeBrief = (...a: Parameters<typeof describeBriefLines>) => plain(describeBriefLines(...a));
 
 // B-9v5xj: a card's commits are found by their `Baesian-Card` trailers in the history, so a rebase, or a squash that
 // keeps the trailer, doesn't lose them; ledger entries whose commit is on no branch now are marked rewritten.

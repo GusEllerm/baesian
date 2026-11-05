@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { cite } from "./cite.js";
 import { isShallow, rootCommits } from "./git.js";
 import { type Http, Offline, REQUEST_MS, SignedOut, readGrant, reason, refreshGrant } from "./login.js";
 import { parseDoc } from "./frontmatter.js";
@@ -157,13 +158,13 @@ export type Link = { kind: "off" } | { kind: "stopped" | "signed-out"; why: stri
  */
 export function linkProblem(store: Store, c: Config = store.config()): string | undefined {
   if (!c.project || !store.hasRepo) return undefined;
-  if (!c.first_commit) return `\`${store.personal ? ".git/baesian/config.json" : ".baesian/config.json"}\` names project ${c.project} but not the repo's first commit, so this checkout can't be told from a copy (B-5gnea): run \`baesian login\` to link it again`;
+  if (!c.first_commit) return `\`${store.personal ? ".git/baesian/config.json" : ".baesian/config.json"}\` names project ${c.project} but not the repo's first commit, so this checkout can't be told from a copy${cite("B-5gnea")}: run \`baesian login\` to link it again`;
   const top = store.repo.toplevel;
   if (isShallow(top)) return undefined;
   const roots = rootCommits(top);
-  if (!roots) return `this checkout has no commits yet, so it can't be checked against project ${c.project}'s first commit (B-5gnea): it doesn't sync until it has one`;
+  if (!roots) return `this checkout has no commits yet, so it can't be checked against project ${c.project}'s first commit${cite("B-5gnea")}: it doesn't sync until it has one`;
   if (roots.includes(c.first_commit)) return undefined;
-  return `this checkout's history doesn't start at project ${c.project}'s first commit (${c.first_commit.slice(0, 12)}), so it's a copy of that repo, such as one made from a template, not the repo itself: it doesn't sync with that project (B-5gnea). Run \`baesian login\` to link it to a project of its own.`;
+  return `this checkout's history doesn't start at project ${c.project}'s first commit (${c.first_commit.slice(0, 12)}), so it's a copy of that repo, such as one made from a template, not the repo itself: it doesn't sync with that project${cite("B-5gnea")}. Run \`baesian login\` to link it to a project of its own.`;
 }
 
 /** Whether this repo syncs, and if it does, the client to sync with: the config's service and project, and this machine's grant. */
@@ -391,7 +392,7 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
   if (missing.length) {
     const cards = [...new Set(missing.map((p) => /(B-[0-9a-hjkmnp-tv-z]{5})/.exec(p)?.[1]).filter((c): c is string => c !== undefined))];
     run.out.notes.push(
-      `relay: ${missing.length === 1 ? "a file" : `${missing.length} files`}${cards.length ? ` of ${cards.join(", ")}` : ""} had been sent to the project's other machines and then removed from the relay, after the time it keeps them (B-9jqt4, B-ec3kj), before this machine pulled ${missing.length === 1 ? "it" : "them"}: ${missing.length === 1 ? "it isn't" : "they aren't"} here or in this branch's record; a branch where another machine committed ${missing.length === 1 ? "it" : "them"} has ${missing.length === 1 ? "it" : "them"}`,
+      `relay: ${missing.length === 1 ? "a file" : `${missing.length} files`}${cards.length ? ` of ${cards.join(", ")}` : ""} had been sent to the project's other machines and then removed from the relay, after the time it keeps them${cite("B-9jqt4", "B-ec3kj")}, before this machine pulled ${missing.length === 1 ? "it" : "them"}: ${missing.length === 1 ? "it isn't" : "they aren't"} here or in this branch's record; a branch where another machine committed ${missing.length === 1 ? "it" : "them"} has ${missing.length === 1 ? "it" : "them"}`,
     );
   }
   for (const r of run.refiles.splice(0)) {
@@ -485,7 +486,7 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
       // stay here and in the record, and aren't offered again.
       run.w.uploaded.add(rel);
       if (card) removed.add(card);
-      run.out.notes.push(`relay: ${card ?? rel}'s text was removed from the relay after the time it keeps it (B-9jqt4, B-ec3kj), so what's new for it stays here and in the repo's record, and the website won't show it`);
+      run.out.notes.push(`relay: ${card ?? rel}'s text was removed from the relay after the time it keeps it${cite("B-9jqt4", "B-ec3kj")}, so what's new for it stays here and in the repo's record, and the website won't show it`);
       continue;
     }
     if (card) blocked.add(card);
@@ -504,7 +505,7 @@ async function push(store: Store, client: RelayClient, run: Run): Promise<boolea
     }
     if (r.status === 503) throw new RelayError(`the relay can't take files just now (${errorOf(r)})`);
     if ((r.json as { before_linking?: unknown } | undefined)?.before_linking === "closed") {
-      run.out.notes.push("relay: someone has answered on the website, so the answers from before linking that hadn't gone up stay in git, where they still count (B-45xz8); the website shows their cards as waiting (B-3zjjx)");
+      run.out.notes.push(`relay: someone has answered on the website, so the answers from before linking that hadn't gone up stay in git, where they still count${cite("B-45xz8")}; the website shows their cards as waiting${cite("B-3zjjx")}`);
       break;
     }
     run.out.notes.push(`relay: refused ${rel}, from before linking (${errorOf(r)}); it stays here, and is offered again at the next sync`);

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
-import { describeOutcome, waitForVerdict } from "../src/wait.js";
+import { describeOutcome as describeOutcomeLines, waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeOutcome = (...a: Parameters<typeof describeOutcomeLines>) => plain(describeOutcomeLines(...a));
 
 // The agent's one reply to an answer that went against its pick (D89, D104).
 
@@ -109,7 +113,7 @@ describe("baesian reply", () => {
   it("tells the agent on a hard card not to commit work that cites it until the new answer", async () => {
     const { dir, id } = disagreed({ touches: ["security"], reverse: "one-way", wrong_if: "a page script reads it", check: "the client's scripts" });
     const r = await run(dir, ["reply", id, FACT]);
-    expect(r.out).toContain(`it's hard: don't commit work that cites it until \`baesian wait ${id}\` exits 0`);
+    expect(r.out).toContain(`next: baesian wait ${id}  # it's hard: don't commit work that cites it until this exits 0`);
   });
 
   it("is in the instructions agents get", async () => {

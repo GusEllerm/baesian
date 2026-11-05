@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { cite } from "./cite.js";
+import { type Line, cmd, dim, failed, failure, head, id, indent, next, note, table, text, trailer, warning } from "./style.js";
 import { CONFIG_PATH, type DetectedFact, type Detection, type FactKind, type Snapshot, detectFacts } from "./facts.js";
 import { matcher } from "./globs.js";
 import { answerLine, byLine, q, reviewerOf } from "./quote.js";
@@ -61,7 +63,7 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
   }
   const last = lastVerdict(store, id);
   if (status === "returned" && last?.response === "reject") {
-    const built = store.ledger(id).map((e) => e.meta.commit?.slice(0, 10)).filter(Boolean);
+    const built = store.ledger(id).map((e) => e.meta.commit?.slice(0, 7)).filter(Boolean);
     return {
       card: id,
       problem: "rejected",
@@ -77,7 +79,7 @@ function cardProblem(store: Store, id: string): CardProblem | undefined {
     return {
       card: id,
       problem: "hard-unresolved",
-      lines: [`${id} is hard and isn't resolved yet: nothing can build on it until it is (D46). Run \`baesian wait ${id}\`.`],
+      lines: [`${id} is hard and isn't resolved yet: nothing can build on it until it is${cite("D46")}.`],
     };
   }
   return undefined;
@@ -150,7 +152,7 @@ export function configWarnings(config: Config): string[] {
   if (!keys.length) return [];
   const them = keys.length === 1 ? keys[0]! : `${keys.slice(0, -1).join(", ")} and ${keys.at(-1)}`;
   return [
-    `${CONFIG_PATH} still has ${them}, which the gate no longer reads (B-qkek1): what it looks for is in your preferences now, which only you change, in the client (Your preferences, then "What the gate looks for"). Set it there if the built-in lists don't cover it, then delete ${keys.length === 1 ? "it" : "them"} from the config.`,
+    `${CONFIG_PATH} still has ${them}, which the gate no longer reads${cite("B-qkek1")}: what it looks for is in your preferences now, which only you change, in the client (Your preferences, then "What the gate looks for"). Set it there if the built-in lists don't cover it, then delete ${keys.length === 1 ? "it" : "them"} from the config.`,
   ];
 }
 
@@ -174,40 +176,82 @@ export function verdictsSinceLastCommit(store: Store): Verdict[] {
     .sort((a, b) => a.at.localeCompare(b.at));
 }
 
-/** What the gate prints. Agents read this, so it ends with exactly what to do. */
-export function describeReport(r: GateReport, news: Verdict[] = []): string[] {
-  const out: string[] = [];
-  if (news.length) {
-    out.push("baesian: new verdicts since this branch's last commit:");
-    for (const v of news) {
-      // What the reviewer wrote is quoted, with their name (D169).
-      out.push(`  ${v.card} ${answerLine(v)}`);
-    }
+/** IDs in a sentence: "B-a", "B-a and B-b", "B-a, B-b and B-c". */
+export const named = (ids: readonly string[]): string => (ids.length < 2 ? ids.join("") : `${ids.slice(0, -1).join(", ")} and ${ids.at(-1)}`);
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** Why the gate blocks, in a clause: what isn't covered, the cards it can't build on, the trailers it can't read. */
+export function blockedBecause(r: GateReport): string {
+  const parts: string[] = [];
+  if (r.uncovered.length) parts.push(`${plural(r.uncovered.length, "decision")} in it ${r.uncovered.length === 1 ? "isn't" : "aren't"} covered by a card or an ack`);
+  if (r.problems.length) parts.push(`it cites ${named(r.problems.map((p) => p.card))}, which it can't build on`);
+  if (r.malformed.length) parts.push(`${plural(r.malformed.length, "trailer")} can't be read`);
+  return parts.join("; ");
+}
+
+/** What to run for a card a commit can't build on: wait on a hard one, revise a rejected one. */
+function problemStep(p: CardProblem): Line[] {
+  if (p.problem === "hard-unresolved") return [next(`baesian wait ${p.card}`, "until it's resolved")];
+  if (p.problem === "rejected") return [next(`baesian revise ${p.card} card.md`, "or withdraw it")];
+  return [];
+}
+
+/**
+ * Why a commit is blocked, and how to cover what isn't: the body of the gate's report, and of each failing commit in
+ * `verify`. The trailers to paste are lines of their own, at the start of the line, never styled (B-eyrt5).
+ */
+export function blockedBody(r: GateReport, opts: { steps?: boolean } = {}): Line[] {
+  const out: Line[] = [];
+  for (const m of r.malformed) out.push(indent(2, text("unreadable trailer: ", m)));
+  for (const p of r.problems) {
+    out.push(...indent(2, p.lines.map((l) => text(l))));
+    if (opts.steps !== false) out.push(...problemStep(p));
   }
-  for (const w of r.warnings) out.push(`baesian: warning: ${w}`);
-  for (const a of r.unusedAcks) out.push(`baesian: note: ${ACK_TRAILER} ${a} matches nothing in this commit`);
-  if (r.ok) {
-    if (r.covered.length) {
-      const parts = r.covered.map(({ fact, cover }) =>
-        cover.by === "card" ? `${fact.id} (${cover.card})` : cover.by === "rule" ? `${fact.id} (rule ${cover.rule})` : `${fact.id} (ack)`,
-      );
-      out.push(`baesian: decisions covered: ${parts.join(", ")}`);
-    }
-    return out;
-  }
-  out.push("baesian: commit blocked.");
-  for (const m of r.malformed) out.push(`  unreadable trailer: ${m}`);
-  for (const p of r.problems) for (const [i, line] of p.lines.entries()) out.push(`${i === 0 ? "  " : "    "}${line}`);
   if (r.uncovered.length) {
-    out.push("  These decisions aren't covered by a card or an ack:");
-    const width = Math.max(...r.uncovered.map((f) => f.id.length));
-    for (const f of r.uncovered) out.push(`    ${f.id.padEnd(width)}  ${f.detail}`);
-    out.push("  For each one, either file a card whose `touches` include it (`baesian file`) and add");
-    out.push(`    ${CARD_TRAILER}: <id>`);
-    out.push("  or, if it's a two-way door, acknowledge it with a reason:");
-    for (const f of r.uncovered) out.push(`    ${ACK_TRAILER}: ${f.id} <why this is fine>`);
+    out.push(...table(undefined, r.uncovered.map((f) => [f.id, dim(f.detail)])));
+    out.push(indent(2, text("Cover each one with a trailer at the end of the message, after a blank line: a card whose touches include it (", cmd("baesian file"), "),")));
+    out.push(trailer(`${CARD_TRAILER}: <id>`));
+    out.push(indent(2, text("or, for a two-way door, an ack with a reason:")));
+    for (const f of r.uncovered) out.push(trailer(`${ACK_TRAILER}: ${f.id} <why this is fine>`));
   }
-  out.push("  Trailers go at the end of the message, after a blank line. `baesian check` previews this.");
-  out.push("  To bypass in an emergency: git commit --no-verify (CI runs the same check).");
+  return out;
+}
+
+/** The decisions a passing commit has, each with what covers it. */
+function coveredRows(r: GateReport): Line[] {
+  return table(
+    undefined,
+    r.covered.map(({ fact, cover }) => [fact.id, cover.by === "card" ? id(cover.card) : cover.by === "rule" ? ["rule ", id(cover.rule)] : "ack"]),
+  );
+}
+
+/**
+ * What the gate prints: at commit time (`for: "commit"`, from the hooks, which prefix each line), or as `baesian check`
+ * previews it. Agents read this, so it ends with exactly what to do. New verdicts since the branch's last commit come
+ * after, the reviewer's words quoted with their name (D169).
+ */
+export function describeReport(r: GateReport, opts: { news?: Verdict[]; for?: "commit" | "check"; message?: boolean } = {}): Line[] {
+  const commit = opts.for !== "check";
+  const out: Line[] = [];
+  if (!r.ok) {
+    out.push(failed(failure(commit ? "commit blocked" : "this commit would be blocked"), ": ", blockedBecause(r)));
+    out.push(...blockedBody(r));
+    if (commit) out.push(indent(2, text(dim("To bypass it in an emergency: git commit --no-verify. CI runs the same check."))));
+    else if (!opts.message && r.uncovered.length) out.push(next("baesian check --message <file>", "check a message's trailers before you commit"));
+  } else if (r.covered.length) {
+    const n = r.covered.length;
+    const covered = n === 1 ? "its decision is covered" : `its ${n} decisions are covered`;
+    out.push(head("done", commit ? covered : `this commit would pass: ${covered}`));
+    out.push(...coveredRows(r));
+  } else if (!commit) out.push(head("done", "no decisions detected in the staged changes"));
+  for (const w of r.warnings) out.push(warning(w));
+  for (const a of r.unusedAcks) out.push(note(`${ACK_TRAILER} ${a} matches nothing in this commit`));
+  const news = opts.news ?? [];
+  if (news.length) {
+    out.push(head("attention", plural(news.length, "new verdict"), " since this branch's last commit"));
+    // What the reviewer wrote is quoted, with their name (D169).
+    for (const v of news) out.push(indent(2, text(id(v.card), " ", answerLine(v))));
+  }
   return out;
 }

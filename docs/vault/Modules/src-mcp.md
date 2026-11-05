@@ -38,7 +38,7 @@ The design is [[MCP Server]] (P18, decided as D164–D169). The server is a tier
 | `list_topics` | `baesian topics` | `topicsOp` | read-only |
 | `card_template` | `baesian template` | `templateOp` | read-only |
 
-- **A tool's text is the lines its command prints, and its structured content what `--json` prints.** A list comes wrapped, since structured content is an object: `items` for the inbox, `cards`, `topics`. A test runs each tool and its command on the same fixture and compares both.
+- **A tool's text is the lines its command prints, in plain text, as an agent reads them through a pipe, and its structured content what `--json` prints** (B-eyrt5, [[src-cli#What it prints: src/style.ts (B-eyrt5)]]): no colour, symbols or wrapping, and no citations of Baesian's own decisions, which are unmarked from the structured content too (`unmarked`). A list comes wrapped, since structured content is an object: `items` for the inbox, `cards`, `topics`. A test runs each tool and its command on the same fixture and compares both.
 - **Each call opens the store afresh** (`Store.open`), as each command does, so a checkout mid-session files on the new branch. Every tool but `card_template` takes an optional `cwd`, for an agent working in another worktree; by default it's the directory the harness started the server in.
 - **No tool is open-world:** what a tool reaches beyond the machine, in a linked repo, is that repo's own relay, with the grant `baesian login` made (below).
 
@@ -56,7 +56,7 @@ The server syncs as the CLI does, through the same code ([[src-sync]]) and the s
 
 ## Errors
 
-The store's errors come back as tool results with `isError` set, the CLI's message word for word, and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `looks_like_secret` (B-jfkv9), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message: a file in a newer format than this Baesian reads, say (`NewerFormat`, D157), whose message is the CLI's.
+The store's errors come back as tool results with `isError` set, the CLI's text word for word (`failureLines`: the headline, then any next steps), and a code in the structured content (`errorCode`): `not_a_repo`, `not_set_up`, `possible_duplicate` (with the matches: ID, status, title, whether by topic or title, and the agent and branch that filed it), `looks_like_secret` (B-jfkv9), `invalid_card`, `no_card`, `not_allowed` and `no_deck`. Only an unknown tool is a protocol error. Any other failure is reported by the SDK as an error result with its message: a file in a newer format than this Baesian reads, say (`NewerFormat`, D157), whose message is the CLI's.
 
 ## Waiting (D168)
 

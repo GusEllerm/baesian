@@ -59,11 +59,13 @@ import {
   filingProblems,
   filingWarnings,
   secretsIn,
+  describeDraftError,
   describeError,
   type FileKindName,
   newestFormat,
   upgradeFile,
 } from "./schema.js";
+import { Told, cite } from "./cite.js";
 import { proofProblem } from "./passkey.js";
 import { byLine, cardAuthor } from "./quote.js";
 import { SIMILAR_TITLE, jaccard, nearTopics, tokens } from "./similarity.js";
@@ -259,7 +261,7 @@ export interface InForce {
 // exits 1, as it always has; `PossibleDuplicate` exits 3.
 
 /** The card fails its schema or a filing rule. */
-export class ValidationError extends Error {}
+export class ValidationError extends Told {}
 
 /**
  * In a hosted repo, a draft that looks like it holds a secret, with no `secret_reason` (B-jfkv9): nothing is written. The
@@ -269,40 +271,41 @@ export class LooksLikeSecret extends ValidationError {
   constructor(readonly secrets: Map<string, string>) {
     super(
       [
-        "nothing filed: in a hosted repo a card goes to the service as it's filed, and this one looks like it holds a secret (B-jfkv9):",
-        ...[...secrets].map(([field, kind]) => `  - ${field} looks like it holds ${kind}`),
-        "Take it out and file again. If it isn't a secret, file it anyway with a reason, kept on the card: --secret-reason \"<why>\" (secret_reason in the MCP tools).",
+        `not filed: in a hosted repo a card goes to the service as it's filed, and this one looks like it holds a secret${cite("B-jfkv9")}`,
+        ...[...secrets].map(([field, kind]) => `  ${field} looks like it holds ${kind}`),
+        "Take it out and file again. If it isn't a secret, file it anyway, with a reason that's kept on the card (secret_reason in the MCP tools):",
       ].join("\n"),
+      [{ command: 'baesian file --secret-reason "<why>"', why: "only if it isn't a secret" }],
     );
   }
 }
 
 /** Raised by `fileCard` when the decision may already be open or decided (D36, D38). */
 export class PossibleDuplicate extends Error {
-  constructor(readonly matches: Match[]) {
+  constructor(readonly matches: Match[], readonly title?: string) {
     super("this decision may already be on file");
   }
 }
 
 /** Baesian isn't set up in the repository. */
-export class NotSetUp extends Error {
+export class NotSetUp extends Told {
   constructor() {
-    super("Baesian is not set up in this repository: run `baesian init`");
+    super("Baesian is not set up in this repository", [{ command: "baesian init", why: "set it up" }]);
   }
 }
 
 /** No card with that ID. */
-export class NoCard extends Error {
+export class NoCard extends Told {
   constructor(readonly id: string) {
     super(`no card ${id}`);
   }
 }
 
 /** The card's state, or who is asking, doesn't allow it: revising a card that isn't returned, a second reply. */
-export class NotAllowed extends Error {}
+export class NotAllowed extends Told {}
 
 /** The card names a deck that doesn't exist. */
-export class NoDeck extends Error {}
+export class NoDeck extends Told {}
 
 /** A preference change made from an older view: its `replaces` isn't the newest file (P16 section 2). The server says 409. */
 export class StalePreferences extends Error {}
@@ -336,7 +339,7 @@ export interface StoreTrust {
  * linked the repo may be beyond its history.
  */
 export const SHALLOW_HISTORY =
-  "it isn't signed, and whether it was in the record when the repo was linked can't be told in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)";
+  `it isn't signed, and whether it was in the record when the repo was linked can't be told in a shallow clone${cite("B-45xz8")}: fetch the full history (in CI, fetch-depth: 0)`;
 
 /**
  * What was in the record at the commit that linked the repo (B-45xz8): its files' blob IDs by their path in the layer, or
@@ -348,7 +351,7 @@ export type BeforeLinking = { commit: string; blobs: Map<string, string>; object
 
 /** Why the commit that linked the repo can't be told (B-mar8x): two or more commits link it, none descending from another. */
 export function unclearLink(project: string, commits: string[]): string {
-  return `${commits.length} commits in this history link the repo to project ${project}, none descending from another (${commits.map((c) => c.slice(0, 12)).join(", ")}), so which one linked it can't be told, and nothing unsigned counts as from before linking (B-mar8x). One was made on a branch from before the link, or the link was committed again, by a cherry-pick or a rebase.`;
+  return `${commits.length} commits in this history link the repo to project ${project}, none descending from another (${commits.map((c) => c.slice(0, 12)).join(", ")}), so which one linked it can't be told, and nothing unsigned counts as from before linking${cite("B-mar8x")}. One was made on a branch from before the link, or the link was committed again, by a cherry-pick or a rebase.`;
 }
 
 /**
@@ -464,9 +467,16 @@ export function normalise(text: string): string {
 
 function parse<T extends z.ZodType>(schema: T, value: unknown, what: string): z.infer<T> {
   const result = schema.safeParse(value);
-  if (!result.success) throw new ValidationError(`${what} is not valid:\n${describeError(result.error)}`);
+  if (!result.success) {
+    // A draft an agent filed is summarised, with where to see its fields (B-eyrt5); a file Baesian reads is named.
+    if (what === "the card") throw new ValidationError(describeDraftError(result.error, value), [TEMPLATE_STEP]);
+    throw new ValidationError(`${what} is not valid:\n${describeError(result.error)}`);
+  }
   return result.data;
 }
+
+/** Where to see a card's fields, with a note on each. */
+const TEMPLATE_STEP = { command: "baesian template", why: "the draft, with a note on each field" };
 
 /**
  * A file read from disk, in the newest format of its kind (D156): upgraded in memory, then checked by its schema. One in a
@@ -826,7 +836,7 @@ export class Store {
   /** Whether a file has its signature, by a key in `root` that was valid at `at` (D160). */
   private signedBy(rel: string, at: string, root: Pick<TrustRoot, "service" | "revoked">): Judgement & { key?: ServiceKey } {
     const sig = this.text(`${rel}.sig`);
-    if (sig === undefined) return doesnt("it has no signature, so the service didn't write it (D138)");
+    if (sig === undefined) return doesnt(`it has no signature, so the service didn't write it${cite("D138")}`);
     const r = checkSigned(root, this.bytes(rel), sig, at, rel);
     return "problem" in r ? doesnt(r.problem) : { ok: true, key: r.key };
   }
@@ -960,7 +970,7 @@ export class Store {
         account: v.account,
         project: v.project,
         answers: { card: v.card, revision: v.revision, digest: v.card_digest },
-        proof: hard ? `it answers ${v.card}, a hard card, so it takes the reviewer's passkey (D139)` : undefined,
+        proof: hard ? `it answers ${v.card}, a hard card, so it takes the reviewer's passkey${cite("D139")}` : undefined,
       };
     } else if (dir === "rules" && a?.endsWith("-retired.json")) {
       const r = this.retirementFile(a);
@@ -996,16 +1006,16 @@ export class Store {
     const signed = this.signedBy(rel, claim.at, h.root);
     if (!signed.ok) return signed;
     if (claim.project !== h.project) {
-      if (!claim.project) return doesnt("it names no project, so it could be another repo's (B-tf9fc)");
+      if (!claim.project) return doesnt(`it names no project, so it could be another repo's${cite("B-tf9fc")}`);
       return doesnt(h.project ? `it's for project ${claim.project}, not this repo's (${h.project}), so it was copied from another repo` : `it's for project ${claim.project}, and .baesian/config.json names no project`);
     }
     if (claim.answers) {
       const { card, revision, digest } = claim.answers;
-      if (!digest) return doesnt("it doesn't name the digest of the card it answers, so what was answered can't be checked (B-f571v)");
+      if (!digest) return doesnt(`it doesn't name the digest of the card it answers, so what was answered can't be checked${cite("B-f571v")}`);
       const cardRel = `cards/${card}/r${revision}.md`;
       const answered = this.storage.read(cardRel);
       if (!answered) return doesnt(`${card} r${revision} isn't here, so what was answered can't be checked`);
-      if (createHash("sha256").update(answered).digest("hex") !== digest) return doesnt(`${card} r${revision} has changed since it was answered: it isn't the text the answer names (B-f571v)`);
+      if (createHash("sha256").update(answered).digest("hex") !== digest) return doesnt(`${card} r${revision} has changed since it was answered: it isn't the text the answer names${cite("B-f571v")}`);
     }
     if (!claim.proof) return COUNTS;
     const proofRel = proofPath(rel);
@@ -1021,7 +1031,7 @@ export class Store {
     if (proof.file !== rel.slice(rel.lastIndexOf("/") + 1)) return doesnt(`its passkey proof is for ${proof.file}`);
     if (!claim.account) return doesnt(`${claim.proof}, but names no account to check its passkey against`);
     const key = h.root.passkeys.find((k) => k.account === claim.account && k.credential === proof.credential);
-    if (!key) return doesnt(`${claim.proof}, and its proof was made with a passkey that isn't trusted for account ${claim.account} (D159)`);
+    if (!key) return doesnt(`${claim.proof}, and its proof was made with a passkey that isn't trusted for account ${claim.account}${cite("D159")}`);
     const why = proofProblem(proof, this.bytes(rel), key, signed.key!);
     return why ? doesnt(`its passkey proof doesn't check: ${why}`) : COUNTS;
   }
@@ -1053,7 +1063,7 @@ export class Store {
         continue;
       }
       const loose = loosening(before, settingsOf(file));
-      const j = this.fromBeforeLinking(`preferences/${name}`) ?? this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, project: file.project, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey (D163)` : undefined }, h);
+      const j = this.fromBeforeLinking(`preferences/${name}`) ?? this.signedClaim(`preferences/${name}`, { at: file.at, account: file.account, project: file.project, proof: loose.length ? `it lets more cards past you (${loose.join("; ")}), so it takes your passkey${cite("D163")}` : undefined }, h);
       out.set(name, j);
       if (j.ok) before = settingsOf(file);
     }
@@ -1138,7 +1148,8 @@ export class Store {
   private prepare(draft: unknown, body = "", agentDraft = false): { draft: CardDraft; nearTopics: string[]; warnings: string[] } {
     const parsed = readAs("card-draft", CardDraft, draft, "the card");
     const problems = [...filingProblems(parsed), ...this.unknownRefs(parsed)];
-    if (problems.length) throw new ValidationError(`the card can't be filed:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
+    if (problems.length === 1) throw new ValidationError(`not filed: ${problems[0]}`);
+    if (problems.length) throw new ValidationError([`not filed: ${problems.length} things about the card need fixing`, ...problems.map((p) => `  ${p}`)].join("\n"));
     let near: string[] = [];
     let topic = parsed.topic;
     if (topic) {
@@ -1337,7 +1348,7 @@ export class Store {
       const prep = this.prepare(draft, body, true);
       return { prep, matches: opts.force ? [] : this.matches(prep.draft) };
     });
-    if (matches.length > 0) throw new PossibleDuplicate(matches);
+    if (matches.length > 0) throw new PossibleDuplicate(matches, prep.draft.title);
     const id = this.freeCardId();
     // Baesian's own cards always reach you; the store files them under its name (conflict cards, D35).
     const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : "agent");
@@ -1400,7 +1411,7 @@ export class Store {
     this.requireInit();
     const latest = this.card(id);
     if (!latest) throw new NoCard(id);
-    if (this.revisions(id).some((r) => r.meta.reply !== undefined)) throw new NotAllowed(`${id} has had its reply: an agent replies once to a card (D89)`);
+    if (this.revisions(id).some((r) => r.meta.reply !== undefined)) throw new NotAllowed(`${id} has had its reply: an agent replies once to a card${cite("D89")}`);
     if (!this.canReply(id)) {
       throw new NotAllowed(`${id} is ${this.status(id)}; only a card answered against your pick (the alternative, or the reviewer's own answer) takes a reply`);
     }
@@ -1442,7 +1453,7 @@ export class Store {
     const from = this.card(id);
     if (!from) throw new NoCard(id);
     if (this.ruleDrafts(id).length) throw new NotAllowed(`a rule from ${id} is already drafted: it's one card per decision`);
-    if (!this.asksForRule(from)) throw new NotAllowed(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one (D109)`);
+    if (!this.asksForRule(from)) throw new NotAllowed(`the reviewer didn't ask for a rule from ${id}: only an answer marked "make this a rule" takes one${cite("D109")}`);
     const text = rule.trim();
     if (!text) throw new ValidationError("the rule is empty: give it in a line");
     const bad = covers.filter((p) => !FACT_PATTERN.test(p));

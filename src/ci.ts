@@ -65,9 +65,13 @@ export function ciPin(store: Store, service: string, project: string): CiPin | {
  * pushed commits on a push, and the merge gate on a pull request (D31). The CLI comes from npm, where it's to be published.
  */
 export function workflowSteps(): string[] {
+  return ["# In a workflow that runs on pushes to your main branch and on pull requests, as one job's steps.", ...workflowBody()];
+}
+
+/** The steps alone, for `baesian ci`, which says where they go in a sentence of its own. */
+export function workflowBody(): string[] {
   const env = ["  env:", `    ${TRUST_ENV}: \${{ vars.${TRUST_ENV} }}`];
   return [
-    "# In a workflow that runs on pushes to your main branch and on pull requests, as one job's steps.",
     "# Keep agents' commits from editing it, with a ruleset or code owners on .github/: it passes the pin to verify.",
     "- uses: actions/checkout@v7",
     "  with:",

@@ -1,5 +1,6 @@
 import { byLine, q, reviewerOf, said } from "./quote.js";
 import type { Level, Verdict } from "./schema.js";
+import { type Line, type Piece, attention, cmd, failed, head, id, indent, lit, next, ok, text } from "./style.js";
 import { type Brief, type BriefCommit, NoCard, type Status, type Store, WAITING_BEAT_MS } from "./store.js";
 
 /** The client beats every 30 s; three missed beats means the reviewer has stepped away (D41). */
@@ -341,113 +342,134 @@ export function exitCodeForAll(o: WaitAllOutcome): number {
  * A brief in the words an agent reads: what changed, and what to do about it (D80, D81). The texts others wrote are
  * quoted with their authors (D169).
  */
-export function describeBrief(b: Brief): string[] {
+export function describeBrief(b: Brief): Line[] {
   if (b.kind === "parent-decided-otherwise") {
     const parent = { agent: b.parentAgent, branch: b.parentBranch };
-    return [
-      `  ${b.parent}, which ${b.card} builds on, was decided the other way. ${said("Its title", parent, b.parentTitle)}`,
-      `  ${said("Decided", reviewerOf(b), b.decided)}; ${said("not the proposal", parent, b.assumed)}`,
-      `  Re-propose ${b.card} on that basis with \`baesian revise ${b.card} <card.md>\`, or withdraw it.`,
-    ];
+    return indent(2, [
+      text(id(b.parent), `, which ${b.card} builds on, was decided the other way. ${said("Its title", parent, b.parentTitle)}`),
+      text(`${said("Decided", reviewerOf(b), b.decided)}; ${said("not the proposal", parent, b.assumed)}`),
+      next(`baesian revise ${b.card} card.md`, "re-propose it on that basis, or withdraw it"),
+    ]);
   }
   const name = (c: BriefCommit) => `${c.commit?.slice(0, 7) ?? "uncommitted"} (${c.branch})`;
   const live = b.commits.filter((c) => !c.rewritten);
   const gone = b.commits.filter((c) => c.rewritten);
   const commits = live.length
-    ? `  Commits that cite ${b.card}, built on the old answer: ${live.map(name).join(", ")}. Rework them to match. Only commits that cite the card are listed: check for other work built on it.`
+    ? `Commits that cite ${b.card}, built on the old answer: ${live.map(name).join(", ")}. Rework them to match. Only commits that cite the card are listed: check for other work built on it.`
     : gone.length
-      ? `  No commit on a branch cites ${b.card} now; check for work built on the old answer all the same.`
-      : `  No commit cites ${b.card} yet; check for work built on the old answer all the same.`;
+      ? `No commit on a branch cites ${b.card} now; check for work built on the old answer all the same.`
+      : `No commit cites ${b.card} yet; check for work built on the old answer all the same.`;
   // B-9v5xj: the ledger's commits that a rebase or a squash took off every branch.
   const rewritten = gone.length
-    ? [`  Rewritten since, and on no branch now: ${gone.map(name).join(", ")}. Their work may be in ${live.length ? "the commits above, or in ones" : "commits"} that don't cite ${b.card}.`]
+    ? [text(`Rewritten since, and on no branch now: ${gone.map(name).join(", ")}. Their work may be in ${live.length ? "the commits above, or in ones" : "commits"} that don't cite ${b.card}.`)]
     : [];
   const now = b.now !== undefined ? said(b.kind === "held-answered" ? "decided" : "one", reviewerOf(b), b.now) : `not a go-ahead (${b.response} by ${byLine(reviewerOf(b))})`;
   if (b.kind === "held-answered") {
     // D150, D151: the gate held it back, so the agent went ahead with its pick; the reviewer answered it later.
     const pick = said("the pick", { agent: b.agent, branch: b.branch }, b.assumed);
-    return [`  ${b.card} was held back, so its agent went ahead with ${pick}. The reviewer has answered it since: ${now}.`, commits, ...rewritten];
+    return indent(2, [text(id(b.card), ` was held back, so its agent went ahead with ${pick}. The reviewer has answered it since: ${now}.`), text(commits), ...rewritten]);
   }
   const was = said("an answer", { person: b.wasReviewer }, b.was);
-  return [`  The answer on ${b.card} changed. It was ${was}; now it's ${now}.`, commits, ...rewritten];
+  return indent(2, [text("The answer on ", id(b.card), ` changed. It was ${was}; now it's ${now}.`), text(commits), ...rewritten]);
 }
 
 /** What an agent is told when the reviewer asked for a rule from a decision (D16, D109, D110). */
-export const ruleHint = (id: string) => [
-  "The reviewer asked for a rule from this decision. Draft it in a line, with the gate patterns it covers, if any (as gate reports name them: dep:pytest-*, schema:migrations/*):",
-  `  baesian rule ${id} "<the rule>" --covers <pattern>…`,
-  "It goes to them as a card; accepting it saves the rule.",
+export const ruleHint = (cardId: string): Line[] => [
+  text(
+    "They asked for a rule from this decision: draft it in a line, with the gate patterns it covers, if any (such as dep:pytest-* or schema:migrations/*). It goes to them as a card:",
+  ),
+  next(`baesian rule ${cardId} "<the rule>" --covers <pattern>`),
 ];
 
 /** What an agent is told when an answer went against its pick and it may still reply (D89, D104). */
-export const replyHint = (id: string) => [
-  `It went against your pick. If you hold a fact the reviewer lacked, or a check that would settle it, you may reply once:`,
-  `  baesian reply ${id} "<the fact or check>"`,
-  "Not your pick again. Until they answer again, proceed with their decision.",
+export const replyHint = (cardId: string): Line[] => [
+  text(
+    "It went against your pick: proceed with their decision. If you hold a fact they lacked, or a check that would settle it, you may reply once (not with your pick again):",
+  ),
+  next(`baesian reply ${cardId} "<the fact or check>"`),
 ];
 
+/** How a returned card came back: "rejected by …", "with a question by …". */
+function returnedHow(v: Verdict | undefined): string {
+  if (!v) return "";
+  const by = byLine(reviewerOf(v));
+  const how: Partial<Record<Verdict["response"], string>> = {
+    reject: "rejected",
+    question: "with a question",
+    need_context: "asking for more context,",
+    see_it_run: "asking to see it run,",
+  };
+  return `, ${how[v.response] ?? v.response} by ${by}`;
+}
+
+/** The trailer a commit that builds on a card carries, at the end of a sentence, so it copies whole. */
+const carries = (cardId: string): Piece[] => ["Commits that build on it carry the trailer  ", lit(`Baesian-Card: ${cardId}`)];
+
 /** What the agent should read: what happened, and what to do next. What the reviewer wrote is quoted (D169). */
-export function describeOutcome(o: WaitOutcome): string[] {
-  const comment = (v: Verdict | undefined) => (v?.comment ? [`  ${said("Comment", reviewerOf(v), v.comment)}`] : []);
+export function describeOutcome(o: WaitOutcome): Line[] {
+  const comment = (v: Verdict | undefined): Line[] => (v?.comment ? [indent(2, text(said("Comment", reviewerOf(v), v.comment)))] : []);
   const by = (v: Verdict | undefined) => (v ? ` by ${byLine(reviewerOf(v))}` : "");
   if (o.kind === "held") {
     return [
-      `${o.id} is held back: this repo's preferences let the agent decide this kind of decision, whatever level the card asked for.`,
-      `Go ahead with your pick, as provisional. Commits that build on it carry \`Baesian-Card: ${o.id}\`, and it counts as settled at merge.`,
-      "The reviewer may still answer it later; `baesian inbox` brings that answer if they do.",
+      head("done", id(o.id), " is held back: this repo's preferences let the agent decide this kind of decision, whatever level the card asked for."),
+      text("Go ahead with your pick, as provisional: it counts as settled at merge. ", ...carries(o.id)),
+      text("The reviewer may still answer it later; ", cmd("baesian inbox"), " brings that answer if they do."),
     ];
   }
   if (o.kind === "again") {
     const min = Math.max(1, Math.round(o.leftMs / 60_000));
-    return [`No verdict on ${o.id} yet, and the reviewer is still there.`, `Run \`baesian wait ${o.id}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`];
+    return [head("next", "no verdict on ", id(o.id), " yet, and the reviewer is still there"), next(`baesian wait ${o.id}`, `again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}`)];
   }
   const briefs = o.kind === "no-verdict" ? [] : o.briefs.flatMap(describeBrief);
   switch (o.kind) {
     case "resolved":
+      // Word for word what it has always said: agents and their tests read it.
       return [
-        `${o.id} resolved${by(o.verdict)}: ${q(o.decision)}`,
+        head("done", id(o.id), " ", ok("resolved"), `${by(o.verdict)}: ${q(o.decision)}`),
         ...comment(o.verdict),
-        ...(o.verdict?.retire_rules?.length ? [`  The reviewer retired the rule${o.verdict.retire_rules.length === 1 ? "" : "s"} it breaks, ${o.verdict.retire_rules.join(", ")}: don't cite ${o.verdict.retire_rules.length === 1 ? "it" : "them"} again.`] : []),
+        ...(o.verdict?.retire_rules?.length
+          ? [indent(2, text(`The reviewer retired the rule${o.verdict.retire_rules.length === 1 ? "" : "s"} it breaks, ${o.verdict.retire_rules.join(", ")}: don't cite ${o.verdict.retire_rules.length === 1 ? "it" : "them"} again.`))]
+          : []),
         ...briefs,
-        "Proceed with that decision.",
+        text("Proceed with that decision."),
         ...(o.ruleAsked ? ruleHint(o.id) : []),
         ...(o.canReply ? replyHint(o.id) : []),
       ];
     case "answered":
       if (o.status === "returned" && o.briefs.some((b) => b.kind === "parent-decided-otherwise")) {
-        return [`${o.id} returned: what it builds on was decided the other way.`, ...briefs];
+        return [head("attention", id(o.id), " ", attention("returned"), ": what it builds on was decided the other way"), ...briefs];
       }
       if (o.status === "returned") {
         return [
-          `${o.id} returned (${o.verdict?.response ?? "reject"}${by(o.verdict)}).`,
+          head("attention", id(o.id), " ", attention("returned"), returnedHow(o.verdict)),
           ...comment(o.verdict),
           ...briefs,
-          `Reply with \`baesian revise ${o.id} <card.md>\`, or withdraw it with \`baesian withdraw ${o.id} --reason …\`.`,
+          next(`baesian revise ${o.id} card.md`, "reply with the card's next revision"),
+          next(`baesian withdraw ${o.id} --reason "<why>"`, "or withdraw it, if it no longer applies"),
           ...(o.ruleAsked ? ruleHint(o.id) : []),
         ];
       }
       if (o.status === "deferred") {
         return [
-          `${o.id} deferred${by(o.verdict)}.`,
+          head("attention", id(o.id), " ", attention("deferred"), by(o.verdict)),
           ...comment(o.verdict),
-          o.level === "hard"
-            ? "It is hard: don't proceed with it."
-            : "Proceed provisionally; it must be resolved before the branch merges.",
+          text(o.level === "hard" ? "It is hard: don't proceed with it." : "Proceed provisionally; it must be resolved before the branch merges."),
         ];
       }
-      return [`${o.id} is ${o.status}: it no longer applies. Don't build on it.`];
+      return [head("attention", id(o.id), ` is ${o.status}: it no longer applies. Don't build on it.`)];
     case "no-verdict": {
       const why = o.reason === "away" ? "the reviewer is away" : "timed out";
       if (!o.proceed) {
         return [
-          `No verdict on ${o.id} yet (${why}).`,
-          `It is hard: do not proceed with it. Park this task and work on something else, or stop. Run \`baesian wait ${o.id}\` again later.`,
+          failed("no verdict on ", id(o.id), ` yet (${why})`),
+          text("It is hard: do not proceed with it. Park this task and work on something else, or stop."),
+          next(`baesian wait ${o.id}`, "later, to wait again"),
         ];
       }
       return [
-        `No verdict on ${o.id} yet (${why}).`,
-        `Proceed provisionally on your proposal. Commits that build on it carry \`Baesian-Card: ${o.id}\`.`,
-        ...(o.recorded ? ["Recorded on the card: you proceeded without a verdict."] : []),
+        head("attention", "no verdict on ", id(o.id), ` yet (${why})`),
+        text("Proceed provisionally on your proposal. ", ...carries(o.id)),
+        ...(o.recorded ? [text("Recorded on the card: you proceeded without a verdict.")] : []),
       ];
     }
   }
@@ -461,30 +483,31 @@ const named = (ids: string[]) => (ids.length < 2 ? ids.join("") : `${ids.slice(0
  * words a wait on one card uses. A run that ends with "again" gives no answers yet: they all come when the wait ends,
  * so the agent doesn't start on half of them.
  */
-export function describeAll(o: WaitAllOutcome): string[] {
+export function describeAll(o: WaitAllOutcome): Line[] {
   const open = o.cards.filter((c): c is StillOpen => c.kind === "open").map((c) => c.id);
   const answered = o.cards.filter((c): c is Exclude<CardOutcome, StillOpen> => c.kind !== "open");
   if (o.ended === "again") {
     const min = Math.max(1, Math.round((o.leftMs ?? 0) / 60_000));
     const sofar = answered.length ? ` (${answered.length} of ${o.cards.length} answered so far; every answer comes when the wait ends)` : "";
     return [
-      `No verdict yet on ${named(open)}, and the reviewer is still there${sofar}.`,
-      `Run \`baesian wait ${o.ids.join(" ")}\` again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}.`,
+      head("next", `no verdict yet on ${named(open)}, and the reviewer is still there${sofar}`),
+      next(`baesian wait ${o.ids.join(" ")}`, `again: the wait goes on for about ${min} more minute${min === 1 ? "" : "s"}`),
     ];
   }
   // What ended it comes first: the cards that came back, or were held back.
   const first = answered.filter((c) => (o.ended === "returned" ? cameBack(c) : o.ended === "held" ? c.kind === "held" : false));
   const rest = answered.filter((c) => !first.includes(c));
-  const head = {
-    answered: `Every card you waited on has an answer: ${named(o.ids)}.`,
-    returned: `${named(first.map((c) => c.id))} came back to you, so the wait ended before every card was answered.`,
-    held: `${named(first.map((c) => c.id))} ${first.length === 1 ? "is" : "are"} held back, so the wait ended before every card was answered.`,
-    "no-verdict": `The wait is over with no verdict yet on ${named(o.cards.filter((c) => c.kind === "no-verdict").map((c) => c.id))}.`,
+  const parked = o.cards.some((c) => c.kind === "no-verdict" && !c.proceed);
+  const head_ = {
+    answered: head(answered.every((c) => c.kind === "resolved") ? "done" : "attention", `every card you waited on has an answer: ${named(o.ids)}`),
+    returned: head("attention", `${named(first.map((c) => c.id))} came back to you, so the wait ended before every card was answered`),
+    held: head("done", `${named(first.map((c) => c.id))} ${first.length === 1 ? "is" : "are"} held back, so the wait ended before every card was answered`),
+    "no-verdict": head(parked ? "failed" : "attention", `the wait is over with no verdict yet on ${named(o.cards.filter((c) => c.kind === "no-verdict").map((c) => c.id))}`),
   }[o.ended];
-  const lines = [head, ...[...first, ...rest].flatMap(describeOutcome)];
+  const lines = [head_, ...[...first, ...rest].flatMap(describeOutcome)];
   if (open.length) {
-    const again = `baesian wait ${open.join(" ")}${o.untilAnswered ? " --until-answered" : ""}`;
-    lines.push(`Still with the reviewer: ${named(open)}. To wait on ${open.length === 1 ? "it" : "them"} again once you've acted on ${named(first.map((c) => c.id))}: \`${again}\`, with any card you revise added.`);
+    lines.push(text(`Still with the reviewer: ${named(open)}. To wait on ${open.length === 1 ? "it" : "them"} again once you've acted on ${named(first.map((c) => c.id))}, with any card you revise added:`));
+    lines.push(next(`baesian wait ${open.join(" ")}${o.untilAnswered ? " --until-answered" : ""}`));
   }
   return lines;
 }

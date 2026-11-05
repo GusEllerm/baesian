@@ -2,14 +2,16 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cite, citeIn } from "./cite.js";
 import { commitSnapshot } from "./facts.js";
-import { type GateReport, configWarnings, describeReport, detectStaged, evaluate } from "./gate.js";
+import { type GateReport, blockedBody, configWarnings, detectStaged, evaluate, named } from "./gate.js";
+import { HANG, type Line, cmd, dim, failed, failure, fields, head, id, indent, next, note, ok, strong, text, trailer, warning } from "./style.js";
 import { type Repo, git } from "./git.js";
 import { byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
 import { TODAY, levelInForce, route } from "./routing.js";
 import { type GateRecord, HARD_BY_DEFAULT } from "./schema.js";
 import { BAESIAN, type Card, RECORD_DIR, SHALLOW_HISTORY, Store, type StoreTrust, drawOf, normalise, recordAtLinking, settingsOf } from "./store.js";
-import { parseTrailers } from "./trailers.js";
+import { ACK_TRAILER, CARD_TRAILER, parseTrailers } from "./trailers.js";
 import { TRUST_ENV, type TrustRoot, drawOfProof, pinComplete, pinProblems, pinnedTrust } from "./trust.js";
 import { DECISIONS, RULES, cleanVaultPath, vaultWarnings } from "./vault.js";
 
@@ -144,7 +146,7 @@ function otherProject(record: Store, pinned: TrustRoot): string[] {
   const named = record.config().project;
   if (named === undefined || pinned.project === undefined || named === pinned.project) return [];
   return [
-    `.baesian/config.json names project ${named}, but CI pins project ${pinned.project} (B-mar8x): a commit can't link the repo to another project. If the repo was linked again on purpose, run \`baesian ci\` and update ${TRUST_ENV}.`,
+    `.baesian/config.json names project ${named}, but CI pins project ${pinned.project}${cite("B-mar8x")}: a commit can't link the repo to another project. If the repo was linked again on purpose, run \`baesian ci\` and update ${TRUST_ENV}.`,
   ];
 }
 
@@ -170,7 +172,7 @@ export function checkMerge(head: Store, baseRecord: Store, cited: string[]): Mer
     }
     if (status === "resolved") continue;
     if (status === "held") {
-      notes.push(`${id} is held: the gate let its agent go ahead (D150), so it counts as settled; the reviewer may still answer it.`);
+      notes.push(`${id} is held: the gate let its agent go ahead${cite("D150")}, so it counts as settled; the reviewer may still answer it.`);
       continue;
     }
     if (status === "deferred") {
@@ -318,7 +320,7 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
       const warnings = [...vaultWarnings(head, vaultFilesAt(repo, head, "HEAD")), ...configWarnings(head.config())];
       const h = head.hosted();
       if (h && !h.pinned) {
-        warnings.push(`the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (${TRUST_ENV}, D142)`);
+        warnings.push(`the service's keys come from the record, which a commit can change: in CI, pin them in its protected settings (${TRUST_ENV}${citeIn("D142")})`);
       }
       const skipped = h ? head.uncounted() : [];
       // Answers from before the repo was linked count as they are (B-45xz8), which takes the commit that linked it: a
@@ -334,7 +336,7 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
         if (!commits.some((c) => c.sha === tip)) problems.push(...otherProject(head, pinned).map((p) => `at HEAD, ${p}`));
       }
       if (pinned && linking === null) {
-        warnings.push(`no commit in HEAD's history links the repo to project ${pinned.project}, so no unsigned answer counts as one from before linking (B-45xz8, B-mar8x)`);
+        warnings.push(`no commit in HEAD's history links the repo to project ${pinned.project}, so no unsigned answer counts as one from before linking${cite("B-45xz8", "B-mar8x")}`);
       }
       const hosted = h
         ? {
@@ -355,50 +357,74 @@ export function verify(repo: Repo, base: string, opts: { merge: boolean; pinned?
   }
 }
 
-export function describeVerify(r: VerifyResult): string[] {
-  const out: string[] = [];
-  out.push(`baesian verify: ${r.commits.length} commit${r.commits.length === 1 ? "" : "s"} since ${r.base}`);
-  // The local gate's advice about previewing and bypassing doesn't apply to commits already made.
-  const localOnly = (l: string) =>
-    l.startsWith("baesian: commit blocked") || l.includes("--no-verify") || l.includes("`baesian check` previews");
+/** A commit as `verify` names it: seven characters of its ID. */
+const short = (ref: string): string => (/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(ref) ? ref.slice(0, 7) : ref);
+
+/** What a failing commit says: why, and what to add; the local gate's advice on previewing and bypassing goes. */
+function commitBody(r: GateReport): Line[] {
+  if (r.uncovered.length !== 1) return blockedBody(r, { steps: false });
+  // One decision uncovered, as most failing commits have: a sentence, and the two trailers that cover it.
+  const f = r.uncovered[0]!;
+  const rest = blockedBody({ ...r, uncovered: [] }, { steps: false });
+  return [
+    ...rest,
+    text(f.id, " ", dim(`(${f.detail})`), " isn't covered: add a trailer for a card whose touches include it, or, for a two-way door, an ack with a reason:"),
+    trailer(`${CARD_TRAILER}: <id>`),
+    trailer(`${ACK_TRAILER}: ${f.id} <why this is fine>`),
+  ].map((l) => (l.kind === "text" && l.indent === 0 ? { ...l, indent: 2 } : l));
+}
+
+/** What `verify` prints, for CI's log: a headline, each commit and the merge gate, and what to do about a failure. */
+export function describeVerify(r: VerifyResult): Line[] {
+  const out: Line[] = [];
+  const n = r.commits.length;
+  const failing = r.commits.filter((c) => !c.ok);
+  const mergeFails = Boolean(r.merge && (r.merge.problems.length || r.merge.conflicts.length));
+  const hostedFails = Boolean(r.hosted?.shallow || r.hosted?.problems?.length);
+  const commits = `${failing.length && failing.length < n ? `${failing.length} of ` : ""}${n} commit${n === 1 ? "" : "s"} since ${short(r.base)}`;
+  const what = r.ok
+    ? `${commits}${r.merge ? ", and the merge gate" : ""}`
+    : [failing.length ? commits : "", mergeFails ? "the merge gate" : "", hostedFails ? "the hosted record" : ""].filter(Boolean).join(", and ") || commits;
+  out.push(r.ok ? head("done", strong("baesian verify:"), " ", ok("ok"), `: ${what}`) : failed(strong("baesian verify:"), " ", failure("failed"), `: ${what}`));
   if (r.hosted) {
     const where = [r.hosted.project ? `project ${r.hosted.project}` : "", r.hosted.linked ? `linked at ${r.hosted.linked.slice(0, 10)}` : ""].filter(Boolean).join(", ");
-    out.push(`hosted: only answers the service signed count (D138), checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}${where ? `; ${where}` : ""}`);
+    out.push(
+      ...fields([
+        { label: "hosted", value: `only answers the service signed count${cite("D138")}, checked with ${r.hosted.keys === "pinned" ? "the keys CI pins" : "the record's copy of the keys"}${where ? `; ${where}` : ""}` },
+      ]),
+    );
   }
   for (const c of r.commits) {
-    out.push(`${c.ok ? "  ok  " : "  FAIL"} ${c.sha.slice(0, 10)} ${c.subject}`);
-    if (!c.report.ok) {
-      for (const line of describeReport(c.report).filter((l) => !localOnly(l))) out.push(`      ${line}`);
-    }
-    for (const t of c.trust) out.push(`      ${t}`);
-  }
-  if (r.commits.some((c) => !c.report.ok)) {
-    out.push("  To fix a failed commit, reword its message to add the trailers (e.g. `git rebase -i`, then reword).");
-    out.push("  Commits from before the repo adopted Baesian: verify from a later --base.");
+    out.push(indent(2, text(c.ok ? ok("ok  ") : failure("FAIL"), " ", id(c.sha.slice(0, 7)), " ", HANG, c.subject)));
+    const body = [...(c.report.ok ? [] : commitBody(c.report)), ...c.trust.map((t) => text(t))];
+    out.push(...indent(5, body));
   }
   if (r.merge) {
-    out.push("merge gate:");
-    if (!r.merge.problems.length && !r.merge.conflicts.length) out.push("  ok: every cited card is resolved or deferred");
-    for (const p of r.merge.problems) out.push(`  FAIL ${p.message}`);
+    if (!mergeFails) out.push(indent(2, text(ok("ok  "), " merge gate: every cited card is resolved or deferred")));
+    else out.push(indent(2, text(failure("FAIL"), " merge gate")));
+    for (const p of r.merge.problems) out.push(indent(7, text(p.message)));
     for (const c of r.merge.conflicts) {
-      out.push(
-        `  FAIL conflict on ${c.topic}: ${c.base.id} on the base decided ${q(c.base.decision)}, ${c.branch.id} here decided ${q(c.branch.decision)}.`,
-      );
+      out.push(indent(7, text(`conflict on ${c.topic}: ${c.base.id} on the base decided ${q(c.base.decision)}, ${c.branch.id} here decided ${q(c.branch.decision)}.`)));
     }
     if (r.merge.conflicts.length) {
-      out.push("       Settle it: run `baesian verify --merge --file-conflicts` locally and answer the conflict card,");
-      out.push("       or file a card that `supersedes` one of them.");
+      out.push(indent(7, text("Settle it: run the command below locally and answer the conflict card it files, or file a card that ", cmd("supersedes"), " one of them.")));
     }
-    for (const n of r.merge.notes) out.push(`  note: ${n}`);
+    for (const m of r.merge.notes) out.push(indent(2, note(m)));
   }
-  if (r.hosted?.shallow) out.push("  FAIL answers from before the repo was linked can't be checked in a shallow clone (B-45xz8): fetch the full history (in CI, fetch-depth: 0)");
-  for (const p of r.hosted?.problems ?? []) out.push(`  FAIL ${p}`);
+  if (r.hosted?.shallow) out.push(indent(2, text(failure("FAIL"), ` answers from before the repo was linked can't be checked in a shallow clone${cite("B-45xz8")}: fetch the full history (in CI, fetch-depth: 0)`)));
+  for (const p of r.hosted?.problems ?? []) out.push(indent(2, text(failure("FAIL"), " ", p)));
   // A file that doesn't count is ignored, not an error (D138): an answer given outside the website, say. Those that don't
   // count because the link can't be told are said once, above.
   const told = new Set([SHALLOW_HISTORY, ...(r.hosted?.problems ?? [])]);
-  for (const s of r.hosted?.skipped ?? []) if (!told.has(s.why)) out.push(`note: ${s.file} doesn't count: ${s.why}`);
-  for (const w of r.warnings ?? []) out.push(`warning: ${w}`);
-  out.push(r.ok ? "baesian verify: ok" : "baesian verify: failed");
+  for (const s of r.hosted?.skipped ?? []) if (!told.has(s.why)) out.push(note(`${s.file} doesn't count: ${s.why}`));
+  for (const w of r.warnings ?? []) out.push(warning(w));
+  if (r.merge?.conflicts.length) out.push(next("baesian verify --merge --file-conflicts", "locally: files a conflict card to answer"));
+  const reword = failing.filter((c) => !c.report.ok);
+  if (reword.length) {
+    const shas = named(reword.map((c) => c.sha.slice(0, 7)));
+    out.push(next(`git rebase -i ${short(r.base)}`, `reword ${shas}'s message${reword.length === 1 ? "" : "s"} to add ${reword.length === 1 ? "its" : "their"} trailers`));
+    out.push(indent(2, text(dim("Commits from before the repo used Baesian fail too: verify from a later --base."))));
+  }
   return out;
 }
 

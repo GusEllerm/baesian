@@ -23,7 +23,7 @@ describe("inbox --quiet, for a harness's session-start hook", () => {
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
     const once = await run(dir, ["inbox", "--quiet"]);
     expect(once.code).toBe(0);
-    expect(once.out.split("\n")[0]).toBe("Baesian: new verdicts on this branch's cards since you last looked (`baesian inbox`):");
+    expect(once.out.split("\n")[0]).toBe("Baesian: 1 new verdict on this branch's cards, since you last looked (`baesian inbox`)");
     expect(once.out).toContain(`${id} r1  accept`);
     expect((await run(dir, ["inbox", "--quiet"])).out).toBe(""); // delivered: marked as seen
   });
@@ -73,7 +73,7 @@ describe("cli", () => {
     expect(r.err).toMatch(/same topic/);
     expect(r.err).toMatch(/baesian attach/);
     // A topic is one question (D112): the message says how to file a different question on the same subject.
-    expect(r.err).toMatch(/If yours is a different question on the same subject, give it a narrower topic/);
+    expect(r.err).toMatch(/A different question on the same subject: give it a narrower topic of its own, such as storage\/run-metadata\/<what it asks>/);
     expect((await run(dir, ["file", "--new"], draftFile({ title: "SQLite or Postgres?" }))).code).toBe(0);
   });
 
@@ -89,10 +89,10 @@ describe("cli", () => {
     const filed = await run(dir, ["file", "--json"], draftFile());
     const id: string = JSON.parse(filed.out).card.meta.id;
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
-    expect((await run(dir, ["show", id])).out).toContain('decided by gus (a person): "SQLite (WAL mode)"');
-    expect((await run(dir, ["show", id])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  (20`);
+    expect((await run(dir, ["show", id])).out).toContain('decided:  by gus (a person): "SQLite (WAL mode)"');
+    expect((await run(dir, ["show", id])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  20`);
     // An accept names what it accepted, as `wait` does.
-    expect((await run(dir, ["inbox"])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  (20`);
+    expect((await run(dir, ["inbox"])).out).toContain(`${id} r1  accept by gus (a person): "SQLite (WAL mode)"  20`);
     expect((await run(dir, ["inbox"])).out).toBe("no new verdicts");
   });
 

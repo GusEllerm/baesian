@@ -3,8 +3,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 import { Store } from "../src/store.js";
-import { describeOutcome, waitForVerdict } from "../src/wait.js";
+import { describeOutcome as describeOutcomeLines, waitForVerdict } from "../src/wait.js";
 import { BODY, REVIEWER, cleanup, draft, fakeClock, repo, worktree } from "./helpers.js";
+import { plain } from "../src/style.js";
+
+/** What the agent reads, in plain text. */
+const describeOutcome = (...a: Parameters<typeof describeOutcomeLines>) => plain(describeOutcomeLines(...a));
 
 // A rule from an answer (D16): the reviewer ticks "make this a rule", the agent drafts it with the gate patterns
 // it covers, and it comes back as a card; accepting it saves the rule (D109, D110).
@@ -111,7 +115,7 @@ describe("telling the agent (D109)", () => {
     const { store, id } = asked();
     const o = await waitForVerdict(store, id, { ...AGENT, ...fakeClock() });
     expect(o).toMatchObject({ kind: "resolved", ruleAsked: true });
-    expect(describeOutcome(o).join("\n")).toContain(`baesian rule ${id} "<the rule>" --covers <pattern>…`);
+    expect(describeOutcome(o).join("\n")).toContain(`next: baesian rule ${id} "<the rule>" --covers <pattern>`);
     store.draftRule(id, RULE, [], AGENT);
     const again = await waitForVerdict(store, id, { ...AGENT, ...fakeClock() });
     expect(describeOutcome(again).join("\n")).not.toContain("baesian rule");
@@ -194,7 +198,9 @@ describe("retiring a rule (D119)", () => {
     expect(saved!.retired).toMatchObject({ rule, card: breaker, by: "gus" });
     expect(existsSync(join(store.record, "rules", `${rule}-retired.json`))).toBe(true);
     // The agent is told, and stops citing it.
-    expect((await run(dir, ["inbox"])).out).toContain(`${breaker} r1  accept by gus (a person): "A shell script"; retires ${rule}`);
+    const inbox = (await run(dir, ["inbox"])).out;
+    expect(inbox).toContain(`${breaker} r1  accept by gus (a person): "A shell script"`);
+    expect(inbox).toContain(`  It retires ${rule}.`);
   });
 
   it("stops the gate approving what it covered", async () => {

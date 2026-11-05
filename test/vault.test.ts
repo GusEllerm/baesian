@@ -502,13 +502,13 @@ describe("baesian init --vault (P17 §5)", () => {
     withVault(dir);
     const r = await run(dir, ["init", "--no-hooks", "--vault", `${VAULT}/`]);
     expect(r.code).toBe(0);
-    expect(r.out).toContain(`vault:       ${VAULT}/  (recorded in .baesian/config.json)`);
+    expect(r.out).toMatch(/vault: +docs\/vault\/ +recorded in \.baesian\/config\.json; Bases turned on/);
     expect(store.config()).toEqual({ format: 1, vault: VAULT, gate_schema: ["src/schema.ts"] });
     expect(readFileSync(join(dir, VAULT, ".obsidian", "core-plugins.json"), "utf8")).toBe(`{\n  "file-explorer": true,\n  "graph": true,\n  "bases": true\n}\n`);
     const log = readFileSync(join(dir, VAULT, "Decision Log.md"), "utf8");
     expect(log).toBe(`---\ntype: decision-log\n---\n\n# Decision Log\n\nIntro.\n\n${DECISION_LOG_SECTION}\n## Accepted (user)\n\n| ID |\n`);
     const again = await run(dir, ["init", "--no-hooks", "--vault", VAULT]);
-    expect(again.out).toContain("(already in .baesian/config.json)");
+    expect(again.out).toMatch(/^Baesian is set up in this repo already, in shared mode\n  vault: +docs\/vault\/ +already in .baesian\/config.json;/);
     expect(readFileSync(join(dir, VAULT, "Decision Log.md"), "utf8")).toBe(log);
   });
 
@@ -557,9 +557,9 @@ describe("baesian sync", () => {
     const id = file(store);
     store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
     const r = await run(dir, ["sync"]);
-    expect(r.out).toContain(`wrote in the vault:\n  ${VAULT}/Decisions/${id} The run-metadata store.md`);
+    expect(r.out).toContain(`wrote 1 note in the vault\n  ${VAULT}/Decisions/${id} The run-metadata store.md`);
     expect(sh(dir, "diff", "--cached", "--name-only")).toBe("");
-    expect((await run(dir, ["sync"])).out).toContain("vault notes are up to date");
+    expect((await run(dir, ["sync"])).out).toContain("the vault's notes are up to date");
   });
 });
 

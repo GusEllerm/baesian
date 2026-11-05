@@ -125,7 +125,7 @@ describe.each(LAYERS)("filing, over %s", (_, repo, it) => {
 
   it("validates the draft", () => {
     const { store } = repo();
-    expect(() => store.fileCard(draft({ touches: ["vibes"] }), BODY, AGENT)).toThrow(/not valid/);
+    expect(() => store.fileCard(draft({ touches: ["vibes"] }), BODY, AGENT)).toThrow(/^not filed: 1 of the card's fields needs fixing\n  invalid:  touches\.0 must be/);
     expect(() => store.fileCard(draft({ topic: "Not A Topic" }), BODY, AGENT)).toThrow(/topic/);
   });
 
