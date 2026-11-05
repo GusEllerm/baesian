@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-a6xpc",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "security",
+    "schema",
+    "user-facing"
+  ],
+  "reverse": "moderate",
+  "source": "agent",
+  "row": "security",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-05T13:24:38.139Z"
+}

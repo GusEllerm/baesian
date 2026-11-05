@@ -1,0 +1,69 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "How CI knows the repo's own project and link: Pin the project in CI beside the keys (B-mar8x)."
+created: 2026-11-05
+updated: 2026-11-05
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-mar8x
+card: B-mar8x
+revision: 1
+title: How CI knows the repo's own project and link
+question: With CI's keys pinned, how should `baesian verify` tell the repo's real project and linking commit from ones a commit makes up?
+answer: Pin the project in CI beside the keys
+response: accept
+not_chosen:
+  - Your passkey vouches for the link
+answered: 2026-11-05T13:17:44.958Z
+answered_by: GusEllerm
+topic: hosted/linking-commit
+deck: setup
+level: hard
+reverse: moderate
+touches:
+  - security
+  - schema
+filed: 2026-11-05T13:13:57.709Z
+filed_by: claude-code
+branch: v1/next
+depends_on:
+  - "[[B-45xz8 Whether answers from before linking still count|B-45xz8]]"
+---
+
+# How CI knows the repo's own project and link
+
+With CI's keys pinned, how should `baesian verify` tell the repo's real project and linking commit from ones a commit makes up?
+
+**Decided:** Pin the project in CI beside the keys, the agent's pick. Then `BAESIAN_TRUST` gains a line naming the project. A commit whose config names another project fails. The linking commit is the earliest in the tip's history naming the pinned project, chosen by ancestry, the same for every commit checked; two unrelated candidates fail. Branches from before linking pass when the answers they build on were in the record at linking. This repo's variable needs the line added.
+
+**Not chosen:** Your passkey vouches for the link. Approving a link, your passkey also signs the project and the repo's first commit, kept in `trust/`. CI already pins your passkey, so nothing new is set up. A commit naming a project with no link your pinned passkey signed fails. A new signed file, and work on the approval page, the relay, the CLI and verify.
+
+**It turned on:** Should guarding the link take one more line in CI's settings, or more to build and no setup? (a preference) One more line: Pin the project in CI beside the keys. More to build: Your passkey vouches for the link.
+
+**The fact given:** Tested on 2026-11-05 in a throwaway clone, with this repo's real pinned keys: a commit that points the config at a made-up project, covered by an ack anyone can write, and carries a hand-written answer on a hard card, passes `verify` and the merge gate; the same answer without the re-link fails. Today verify takes the linking commit to be the first whose config names the checked commit's own project, so a made-up project makes its own 'before linking' record (B-45xz8). The same rule makes commits from before the real link count no unsigned answers, so branches in flight at linking fail. The repo is private and the CLI unpublished, so nobody outside can try this yet.
+
+**First chose:** Your passkey vouches for the link, then switched once the agent's pick was shown.
+
+**The agent's case:** One line pinned where commits can't reach is the rule D142 and D159 already use, and `baesian ci` would print it. The passkey-signed link closes the same holes with more to build, and is worth it only if CI's setup must stay keys only.
+
+**Wrong if:** A commit naming the pinned project, made on a branch that doesn't descend from the real link, can still be taken as the linking commit. **To check:** src/store.ts `recordAtLinking()`: pick the linking commit by ancestry, not date order; test with a backdated commit naming the pinned project on a branch from before the link.
+
+Answered by GusEllerm on 2026-11-05, through Baesian (card B-mar8x, revision 1). Filed by claude-code on v1/next, in the deck “Setting up a repo with the hosted service”.
+
+The record is in `.baesian/cards/B-mar8x/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+**The test.** A clone of this repo, signed out so nothing reached the service: `.baesian/config.json` set to project `p-0000000000000000000a`, a hard card filed, an answer written with `Store.addVerdict` and copied into the record, committed with `Baesian-Ack: infra:.baesian/config.json …` and `--no-verify`; then a commit citing the card. `verify` and `verify --merge`, with `BAESIAN_TRUST` as this repo pins it: both commits ok. Control: the same answer and card without changing the project fails ("B-6vyby is hard and isn't resolved yet").
+
+**A second route, reasoned, not tested.** Re-linking to a real project of one's own on baesian.dev, and answering its cards there: the relay signs those answers with the same service key, so a non-hard card's answer would count. A hard card's wouldn't, since its proof needs a passkey CI pins (D159). Pinning the project closes this route too; so does the passkey-signed link.
+
+**Why "by ancestry".** Today "first" is `git log --reverse` order, which follows commit dates, and those can be set to anything. A backdated commit naming the real project, on a branch from before the link, could otherwise come first.
+
+Not proposed: leaving it, with a reviewer reading every change to `.baesian/config.json` in pull requests. That's the check the gate exists to make unnecessary.
