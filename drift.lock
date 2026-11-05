@@ -7566,6 +7566,71 @@ target = "src/facts.ts#dependencyFacts"
 sig = "8a539918aaa94533"
 
 [[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "service/src/relay.ts#outcomeOf"
+sig = "4eb943411b97286f"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/agents.ts#AGENTS_BLOCK"
+sig = "15c2f3e7784b36fb"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/facts.ts"
+sig = "2dec46d61718ded5"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/facts.ts#DEFAULT_IGNORE"
+sig = "f06728516d47c8f2"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/facts.ts#linkFact"
+sig = "0bc02b8260ce1e60"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/proposals.ts#LOOSEN_AFTER"
+sig = "d30622daef88b1b7"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/proposals.ts#proposeSliderMoves"
+sig = "65e116fc9202aaa8"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/routing.ts#ROW_FLOOR"
+sig = "365fe6fa0d771fa9"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/routing.ts#ROW_NAMES"
+sig = "84bfed8b05017709"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/routing.ts#ROW_OF_FACT"
+sig = "e5a05090c42a6f24"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/routing.ts#outcomeOf"
+sig = "76b3d8f3d65b500d"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/routing.ts#replay"
+sig = "6b7d54b629bba9af"
+
+[[bindings]]
+doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
+target = "src/wait.ts#outcomeOf"
+sig = "2a93d4f9fdabf52e"
+
+[[bindings]]
 doc = "docs/vault/Working Agreement.md"
 target = "client/src/site/api.ts#ApiError"
 sig = "b0e1776fc4a3975b"

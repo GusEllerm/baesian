@@ -1,0 +1,61 @@
+---
+type: decision
+format: 1
+status: active
+authority: log
+livedocs: snapshot
+summary: "Who may change what the commit gate looks for: Your preferences, with the passkey to loosen (B-qkek1)."
+created: 2026-11-05
+updated: 2026-11-05
+tags:
+  - baesian
+  - decision
+aliases:
+  - B-qkek1
+card: B-qkek1
+revision: 1
+title: Who may change what the commit gate looks for
+question: A commit can change the gate's own settings in `.baesian/config.json` without the gate noticing. What should changing them take?
+answer: Your preferences, with the passkey to loosen
+response: accept
+not_chosen:
+  - A gate fact, acknowledged in the commit
+answered: 2026-11-05T15:30:59.999Z
+answered_by: GusEllerm
+topic: gate/own-settings
+deck: setup
+level: hard
+reverse: moderate
+touches:
+  - security
+  - schema
+filed: 2026-11-05T15:29:55.452Z
+filed_by: claude-code
+branch: v1/next
+---
+
+# Who may change what the commit gate looks for
+
+A commit can change the gate's own settings in `.baesian/config.json` without the gate noticing. What should changing them take?
+
+**Decided:** Your preferences, with the passkey to loosen, the agent's pick. The gate's settings (`gate_ignore`, `gate_schema`, `gate_infra`, `gate_api`) move from the committed config into the preference files, which only the client writes. A change that makes the gate see less is loosening, so it takes your passkey (D163), and CI checks the signed file as it checks your preferences. Until that's built, any change to those keys is a gate fact, as changing the link is (B-w4g6c).
+
+**Not chosen:** A gate fact, acknowledged in the commit. The settings stay in the committed config, and any change to them is `infra:.baesian/config.json`, needing a card or an ack, as linking does. An agent can still change them, with an ack it writes itself, but only visibly, in that commit's message and record.
+
+**It turned on:** Should an agent be able to make the gate see less, as long as it says so in a commit message? No: Your preferences, with the passkey to loosen. Yes: A gate fact, acknowledged in the commit.
+
+**The fact given:** Tested on 2026-11-05 in a throwaway clone with this repo's real pinned keys: a commit that sets `gate_ignore` to `["**"]` and adds a dependency, with no card or ack, passes `baesian verify`; the same dependency without it fails. Today the gate ignores `.baesian/` except the link's three fields. The setting is per repo and committed, so it applies to every machine and to CI.
+
+**The agent's case:** An ack is written by whoever makes the change, so for the gate's own blindfold it records rather than checks. The preference files are already the place where only a person, through the client, decides how much reaches them, with the passkey to loosen; the gate's settings are the same kind of decision.
+
+**Wrong if:** A repo needs its gate settings to differ by branch, or to change in the same commit as the code they cover, which preference files (one set per repo, live at once) can't do. **To check:** This repo's history of `gate_schema` changes (`git log -p -- .baesian/config.json`), and whether any came with the code they cover.
+
+Answered by GusEllerm on 2026-11-05, through Baesian (card B-qkek1, revision 1). Filed by claude-code on v1/next, in the deck “Setting up a repo with the hosted service”.
+
+The record is in `.baesian/cards/B-qkek1/`. To change this decision, answer the card again or file one that supersedes it: editing this note changes nothing.
+
+## Background
+
+Found by the adversarial critic reviewing profiles (2026-11-05), and confirmed by test. It names the same route for a future profile file: anything that defines detectors, floors or rows must be out of an agent's reach, or pinned.
+
+**The stopgap in either case.** Until the settings move, making a change to any `gate_*` key a gate fact closes the silent route at once, and only adds detection.
