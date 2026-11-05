@@ -17,11 +17,13 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-05.*
 
-- **Setting up a linked repo's CI is built (2026-11-05)** ([[2026-11-05 CI Setup]]), on a builder's branch off `v1/next`, from three cards the user accepted:
-  - **CI pins the project beside the keys (B-mar8x):** `BAESIAN_TRUST` gains a line, `{"type":"project","format":1,"project":"p-…"}`; a commit naming another project fails, and the linking commit is found once, from HEAD, by ancestry, so branches in flight at linking pass and a backdated re-link fails closed.
-  - **`baesian ci` (B-pt52b)** prints the pin's lines from what the service sent, and the workflow steps; `--github` sets the variable with `gh`.
-  - **`baesian login` links to https://baesian.dev** when nobody names a service (B-f2mfb).
-  - **Before CI runs this code:** add the project's line to this repo's `BAESIAN_TRUST` (`baesian ci --github`, or by hand): without it, `verify` stops.
+- **This repo is linked, and setting a repo up is easier (2026-11-05)** ([[2026-11-05 Linking This Repo]]):
+  - Linked as project `p-c81yx9gdvfr9yjsfdsrp`; CI pins the service's key, the passkey and the project (`BAESIAN_TRUST`, set with `baesian ci --github`), and finds the linking commit by ancestry (B-mar8x).
+  - `baesian login` defaults to baesian.dev (B-f2mfb); `baesian ci` prints and sets CI's pin (B-pt52b); each passkey's line for CI is on the account page (B-yj5d5).
+  - On a phone, hold a card until it lifts, then drag (B-yfehp); hard answers wait and one passkey tap confirms them (B-a6xpc); `baesian wait` on several cards or a deck, until answered, wakes an idle agent (B-xnae9); the preferences and calibration panels explain themselves (D180).
+  - The gate's own settings live in the preference files now, so making it see less takes the passkey (B-qkek1): a commit could silence it before.
+  - `v0.1.2` is deployed; everything since waits for `v0.1.3`.
+  - **Next:** `v0.1.3`; personal mode, nothing committed (B-4rwyz); whether to card the calibration fixes in [[Profiles and Collective Steering - Critique]]; confirm Globus sign-in; real-device checks; then M10.
 
 - **The hosted service is live at https://baesian.dev (2026-11-04)** ([[2026-11-04 M9c Sign-in]]):
   - `v0.1.0`, tagged on `main` and deployed by CI (B-bk20v).

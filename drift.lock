@@ -3863,22 +3863,27 @@ sig = "e8ef63540e060b6d"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "a1567adbaa10095b"
+sig = "3541da9a134961d9"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "9689f37777c5be2d"
+sig = "ec22ff818f2accfd"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "e6823df1ce6813b7"
+sig = "13bac2fb32723ff0"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/site/app.ts#PushRow"
 sig = "d441be56dc7c82bb"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "client/src/waiting.ts#Kept"
+sig = "d1df23fb1cf94300"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -3928,17 +3933,12 @@ sig = "6746675d46ad0648"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/store.ts#Store"
-sig = "3be89ff9186f71f0"
+sig = "711df8692d1c4cf9"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/verify.ts#VerifyResult"
 sig = "083d8693f367e77d"
-
-[[bindings]]
-doc = "docs/vault/Home.md"
-target = "src/verify.ts#verify"
-sig = "894f3e2691519c42"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
