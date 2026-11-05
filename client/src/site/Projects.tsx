@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { waitingByProject, waitingLine } from "../waiting";
 import { type Account, call, day, projectName } from "./api";
 import { follow } from "./nav";
 import { Field, Notice, Problem, Sheet, Shell, To } from "./Page";
 
 // Your projects (M9e): each repo you've linked, by the name you gave it (B-zqkwk), opening its desk at
 // /projects/{project}, the relay's own address for it (B-7z97x). Renamed here; the ID only in a tooltip (D69's spirit).
+// A project whose desk, in this tab, left answers waiting for your passkey says so (B-a6xpc).
 
 export function Projects({ account, reload, notice }: { account: Account; reload: () => Promise<void>; notice?: string | undefined }) {
+  const [waiting] = useState(() => waitingByProject());
   const [renaming, setRenaming] = useState<string>();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,6 +63,7 @@ export function Projects({ account, reload, notice }: { account: Account; reload
                   <a className="open" href={`/projects/${encodeURIComponent(p.id)}`} onClick={follow(`/projects/${encodeURIComponent(p.id)}`)} title={p.id}>
                     <span className="nm">{projectName(p)}</span>
                     <span className="st">Linked {day(p.created)}</span>
+                    {waiting.has(p.id) && <span className="st waits">{waitingLine(waiting.get(p.id)!)}</span>}
                   </a>
                   <button
                     type="button"

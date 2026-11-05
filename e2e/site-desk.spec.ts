@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Page, expect, test } from "@playwright/test";
@@ -171,7 +171,8 @@ test("the project's desk: the CLI's cards answered on the website and heard back
   await choose(page);
   await expect(page.getByText("Sent to claude-code.")).toBeVisible();
 
-  // A hard card asks for the passkey before the relay writes the answer (D139). Not using it sends nothing.
+  // A hard card's answer waits for the passkey before the relay writes it (D139, B-a6xpc). With no hard card in front of
+  // you after it, the desk asks at once. Not now: it waits, on the desk and marked on the path, and nothing is sent.
   const hard = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title: "The signing key", question: "Where should the signing key live?", topic: "keys/signing", reverse: "cheap", touches: [], level: "hard" }) });
   expect(hard.code, hard.err).toBe(0);
   const hardId = JSON.parse(hard.out).card.meta.id as string;
@@ -181,17 +182,87 @@ test("the project's desk: the CLI's cards answered on the website and heard back
   const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
   await expect(prompt).toBeVisible();
   await expect(prompt).toContainText("This card is hard, so your answer counts only once your passkey confirms it's yours");
+  await expect(prompt.getByRole("list", { name: "The card you answered" })).toHaveText("The signing key");
   await siteShot(page, "desk-passkey");
-  await prompt.getByRole("button", { name: "Don't send it" }).click();
-  await expect(page.getByText("That answer wasn't recorded: you didn't confirm it with your passkey, so it wasn't sent. The card is back.")).toBeVisible();
-  await next("The signing key").click();
-  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Where should the signing key live?");
-  await choose(page);
+  await prompt.getByRole("button", { name: "Not now" }).click();
+  await expect(page.getByText("Not confirmed: your answer waits for your passkey.")).toBeVisible();
+  const strip = page.locator(".passkey-wait");
+  await expect(strip).toContainText("One answer waits for your passkey.");
+  await expect(page.locator(".path .row.past", { hasText: "The signing key" })).toContainText("waiting for your passkey");
+  expect(await cli(dir, ["sync"]).then(() => Store.open(dir).status(hardId))).toBe("open");
+  // The button asks again; one tap confirms it.
+  await strip.getByRole("button", { name: "Confirm it" }).click();
   await prompt.getByRole("button", { name: "Use your passkey" }).click();
   await expect(page.getByText("Sent to claude-code.")).toBeVisible();
+  await expect(strip).toBeHidden();
   await expect.poll(async () => (await cli(dir, ["sync"]), Store.open(dir).status(hardId))).toBe("resolved");
   // The proof is beside the answer, and the answer counts on this machine.
   expect(readdirSync(join(Store.open(dir).live, "verdicts")).some((f) => f.includes(hardId) && f.endsWith(".passkey.json"))).toBe(true);
+});
+
+test("hard answers wait for the passkey with no prompt between them; one tap confirms them all, and both reach the CLI with their proofs", async ({ page }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  const file = async (title: string, question: string, topic: string) => {
+    const r = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title, question, topic, reverse: "cheap", touches: [], level: "hard" }) });
+    expect(r.code, r.err).toBe(0);
+    return JSON.parse(r.out).card.meta.id as string;
+  };
+  const keys = await file("The signing key", "Where should the signing key live?", "keys/signing");
+  const tokens = await file("Token lifetime", "How long should tokens live?", "keys/tokens");
+  sh(dir, "add", "-A");
+  sh(dir, "commit", "-q", "-m", "Two hard cards");
+  const project = await linkThroughPage(page, dir, "Crumb's shop");
+  await openDesk(page, project);
+  const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
+  const strip = page.locator(".passkey-wait");
+
+  // The first hard answer waits; the next card is hard too, so nothing asks.
+  const first = await page.locator(CARD).getAttribute("aria-label");
+  await choose(page);
+  await expect(page.getByText("It waits for your passkey.")).toBeVisible();
+  await expect(strip).toContainText("One answer waits for your passkey.");
+  await expect(page.locator(CARD)).not.toHaveAttribute("aria-label", first!);
+  await page.clock.fastForward(2000);
+  await expect(prompt).toBeHidden();
+  await siteShot(page, "desk-waiting");
+
+  // Leaving the page while it waits asks first; staying keeps it. Reloaded, it's still waiting.
+  const dialogs: string[] = [];
+  page.once("dialog", (d) => {
+    dialogs.push(d.type());
+    void d.dismiss();
+  });
+  await page.locator(".bar .wordmark").click({ noWaitAfter: true });
+  await expect.poll(() => dialogs).toEqual(["beforeunload"]);
+  await expect(page).toHaveURL(new RegExp(`/projects/${project}$`));
+  page.once("dialog", (d) => void d.accept());
+  await page.reload();
+  await expect(strip).toContainText("One answer waits for your passkey.");
+  await expect(page.locator(".path .row.past")).toContainText("waiting for your passkey");
+
+  // The second: no hard card is left in front of you, so the desk asks, for both, and one tap confirms them.
+  await choose(page);
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText("These two answers count only once your passkey confirms they're yours, not an agent's at your keyboard. One tap confirms them all.");
+  // Listed in the order you answered them.
+  const titles = first === "Where should the signing key live?" ? ["The signing key", "Token lifetime"] : ["Token lifetime", "The signing key"];
+  await expect(prompt.getByRole("list", { name: "The cards you answered" }).getByRole("listitem")).toHaveText(titles);
+  await siteShot(page, "desk-passkey-two");
+  await prompt.getByRole("button", { name: "Use your passkey" }).click();
+  await expect(page.getByText("Two answers confirmed and sent.")).toBeVisible();
+  await expect(strip).toBeHidden();
+  await expect(page.getByText("All caught up.")).toBeVisible();
+
+  // Both reach the CLI as resolved, each with its proof beside it, sharing one signature over the list of both.
+  await expect.poll(async () => (await cli(dir, ["sync"]), [keys, tokens].map((id) => Store.open(dir).status(id)))).toEqual(["resolved", "resolved"]);
+  const live = join(Store.open(dir).live, "verdicts");
+  const proofs = [keys, tokens].map((id) => readdirSync(live).find((f) => f.includes(id) && f.endsWith(".passkey.json"))!);
+  expect(proofs.every(Boolean)).toBe(true);
+  const [a, b] = proofs.map((f) => JSON.parse(readFileSync(join(live, f), "utf8")) as { batch: string[]; signature: string });
+  expect(a!.batch).toHaveLength(2);
+  expect(b!.batch).toEqual(a!.batch);
+  expect(b!.signature).toBe(a!.signature);
 });
 
 test("a change to the preferences that lets more cards past asks for the passkey over the panel, and saves", async ({ page }) => {
@@ -255,16 +326,43 @@ async function everyPage(page: Page, touch: boolean): Promise<string[]> {
   await page.goto(site.url);
   await expect(page.getByRole("listitem").filter({ hasText: "Crumb's shop" })).toBeVisible();
   await check(page, problems, "projects", touch);
-  const filed = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title: "The signing key", question: "Where should the signing key live?", topic: "keys/signing", reverse: "cheap", touches: [], level: "hard" }) });
-  expect(filed.code, filed.err).toBe(0);
+  for (const [title, question, topic] of [
+    ["The signing key", "Where should the signing key live?", "keys/signing"],
+    ["Token lifetime", "How long should tokens live, before an agent must sign in again?", "keys/tokens"],
+  ]) {
+    const filed = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title, question, topic, reverse: "cheap", touches: [], level: "hard" }) });
+    expect(filed.code, filed.err).toBe(0);
+  }
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openDesk(page, project);
-  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Where should the signing key live?");
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", /^(Where should the signing key live|How long should tokens live)/);
   await check(page, problems, "desk", touch);
+  // The first hard answer waits, over the next hard card (B-a6xpc).
   await choose(page);
-  await expect(page.getByRole("dialog", { name: "Confirm with your passkey" })).toBeVisible();
+  await expect(page.locator(".passkey-wait")).toContainText("One answer waits for your passkey.");
+  await check(page, problems, "desk-waiting", touch);
+  // The second: the desk asks for both.
+  await choose(page);
+  const prompt = page.getByRole("dialog", { name: "Confirm with your passkey" });
+  await expect(prompt).toContainText("These two answers");
   await check(page, problems, "desk-passkey", touch);
-  await page.getByRole("button", { name: "Use your passkey" }).click();
+  await prompt.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator(".passkey-wait")).toContainText("Two answers wait for your passkey.");
+  await check(page, problems, "desk-waiting-empty", touch);
+  // Your projects say so, and the desk has them still when you come back.
+  page.once("dialog", (d) => void d.accept());
+  await page.locator(".bar .wordmark").click();
+  await expect(page.getByRole("listitem").filter({ hasText: "Crumb's shop" })).toContainText("Two answers wait for your passkey.");
+  await check(page, problems, "projects-waiting", touch);
+  // So does signing out, on the account page.
+  await page.getByRole("link", { name: "Account" }).click();
+  const signOut = page.getByRole("region", { name: "Signing out" });
+  await expect(signOut).toContainText("Two answers wait for your passkey. They're on the desk of Crumb's shop: confirm them there before you sign out.");
+  await signOut.scrollIntoViewIfNeeded();
+  await check(page, problems, "account-waiting", touch);
+  // Back on the desk, with no card left in front of you, it asks by itself.
+  await page.goto(`${site.url}/projects/${project}`);
+  await prompt.getByRole("button", { name: "Use your passkey" }).click();
   await expect(page.getByText("All caught up.")).toBeVisible();
   await check(page, problems, "desk-empty", touch);
   return problems;

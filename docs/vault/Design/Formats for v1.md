@@ -266,10 +266,13 @@ Locally nothing changes: D62's convention and audit trail stand.
 | type | passkey-proof | yes | |
 | format | 1 | yes | |
 | file | file name | yes | the verdict it proves |
+| batch | list of SHA-256 digests, hex | no | **(B-a6xpc)** the batch form: every file one tap confirmed, this one among them |
 | credential | base64url | yes | the passkey's credential ID |
 | authenticator_data, client_data, signature | base64url | yes | WebAuthn's assertion, as the browser returned it |
 
 The relay sets the WebAuthn challenge to the SHA-256 digest of the verdict file's bytes. The verdict holds its card, revision and time, so the challenge is unique without a separate nonce. If card formats-8 goes that way, a preference change that loosens gets the same proof beside it.
+
+> **Changed (B-a6xpc, 2026-11-05): one tap signs a batch.** On the website, answers that take the passkey wait on the desk, and one tap confirms them all. The challenge is then the SHA-256 digest of the batch's message: the line `baesian-batch`, then each confirmed file's SHA-256 digest in hex, one per line (`batchChallenge()`). Each file's proof holds the same `batch` list and the same assertion, and proves its file by holding its digest; a tap over one file keeps the form above. `verify` still checks offline that the passkey signed each answer's own digest (D139), and refuses a proof whose list doesn't hold it, whose list was changed, whose signature isn't a pinned passkey's, or that sits beside another account's answer. A format change before v1 (D108): the proof stays format 1, its number moving only from v1 on (D156, D157), and a proof without `batch` reads as before. [[File Formats#The hosted service's proof (M9a)]] has it.
 
 ### The keys verify trusts (D142)
 
@@ -292,7 +295,7 @@ In a hosted repo, `verify()` checks every person-written file in each commit's r
 2. the signature matches the file's bytes, under a key CI pins (locally, the record's copy), valid at the file's own time and not revoked before it;
 3. the record's service keys match CI's pinned keys. A key in the record that CI doesn't pin fails the run (D142);
 4. for an answer on a hard card (the level in force on the revision it answers), a passkey proof is beside it, and:
-   - its client data has the type webauthn.get, the pinned origin, and a challenge equal to the verdict's digest;
+   - its client data has the type webauthn.get, the pinned origin, and a challenge equal to the verdict's digest (or, in the batch form, B-a6xpc, to its list's digest, the list holding the verdict's);
    - its authenticator data has the relying party's hash and the user-verified flag;
    - its signature checks under a trusted passkey key for the verdict's account;
 5. for a held card, its gate record counts (card formats-3) and rechecks (section 3).

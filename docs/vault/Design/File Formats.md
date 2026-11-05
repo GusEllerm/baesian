@@ -220,10 +220,13 @@ In a hosted repo only what the service signs counts: every answer, rule, rule re
 |---|---|
 | `type`, `format` | `passkey-proof`; 1 |
 | `file` | the file it proves, by name, in the same folder |
+| `batch` | optional, the batch form (B-a6xpc): the SHA-256 digest, lowercase hex, of every file one tap confirmed, this one's among them, in the order the relay wrote them |
 | `credential` | the passkey's credential ID, base64url |
 | `authenticator_data`, `client_data`, `signature` | WebAuthn's assertion as the browser returned it, base64url |
 
 Its client data must be `webauthn.get`, from the service key's `origin`, not in another site's frame, with the challenge the SHA-256 digest of the file's bytes (P16 section 7); its authenticator data must carry the hash of the key's `rp_id` and the user-present and user-verified flags; and its signature must check under a trusted passkey key with the file's `account` and the proof's `credential`, by its COSE algorithm: ES256, EdDSA or RS256 (`PASSKEY_ALGS`).
+
+**The batch form** (B-a6xpc): when one tap of the passkey confirms several answers waiting on the website, it signs them all at once. The challenge is then the SHA-256 digest, base64url, of the batch's message (`batchMessage()`, `batchChallenge()`): the line `baesian-batch`, then each file's digest in lowercase hex, one per line, each line ending in a newline. Every file the tap confirmed gets its own proof, each holding the same `batch` list and the same assertion, which is the signature they share; a file proves itself by its own digest being in that list, and the rest of the checks are as above. The first line keeps the forms apart: no verdict or preference file reads so, so a batch's assertion proves no file in the single form, and a file's digest is no batch's challenge. A tap that confirms one file alone uses the single form. It's format 1 still: before v1 a format changes in place (D108), and its number moves only from v1 on (D156, D157); a proof without `batch` reads as it always did.
 
 **The trust files** (D142, D159), in `trust/`, copied into every branch's record by `Store.syncRecord`:
 

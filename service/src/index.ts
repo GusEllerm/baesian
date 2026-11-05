@@ -15,7 +15,7 @@ import type { GlobusConfig } from "./globus.js";
 import { HEADERS, fail, readJson } from "./http.js";
 import { machinesRoute } from "./machines.js";
 import { type Mailer, bindingMailer } from "./mail.js";
-import { type Assertion, MAX_ENTRIES, MAX_FILE, type Pending, REVISION, Relay, type Reply } from "./relay.js";
+import { type Assertion, type Batch, MAX_ENTRIES, MAX_FILE, type Outcome, REVISION, Relay, type Reply, challengeFor } from "./relay.js";
 import { type KeyEnv, NoKey, ServiceSigner } from "./signer.js";
 import { type SignIn, signInRoute } from "./signin.js";
 import { SqlFileStorage } from "./sql-storage.js";
@@ -81,7 +81,7 @@ export function servicesFor(env: Env, given: Partial<Services> = {}): Services {
 type Who = "read" | "upload" | "answer";
 
 interface Route {
-  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "proofs";
+  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "batches" | "proofs";
   who: Who;
   path?: string;
 }
@@ -89,7 +89,7 @@ interface Route {
 /** What an address under a project is, by its method and the rest of its path; or why it's none. */
 function routeOf(method: string, rest: string): Route | Response {
   const reads: Record<string, Route["name"]> = { log: "log", state: "state", presets: "presets", live: "live", pushes: "pushes" };
-  const answers: Record<string, Route["name"]> = { verdicts: "verdicts", aliases: "aliases", preferences: "preferences", presence: "presence", proofs: "proofs" };
+  const answers: Record<string, Route["name"]> = { verdicts: "verdicts", aliases: "aliases", preferences: "preferences", presence: "presence", batches: "batches", proofs: "proofs" };
   if (rest.startsWith("files/")) {
     let path: string;
     try {
@@ -105,7 +105,7 @@ function routeOf(method: string, rest: string): Route | Response {
   if (read) return method === "GET" ? { name: read, who: "read" } : fail(405, `${rest} is read with GET`);
   const answer = answers[rest];
   if (answer) return method === "POST" ? { name: answer, who: "answer" } : fail(405, `${rest} takes a POST`);
-  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, proofs and presence`);
+  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, batches, proofs and presence`);
 }
 
 /** Why `who` may not use a route, or nothing (Hosted Service section 3). Each grant is for one project; a session, for its own. */
@@ -193,22 +193,30 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       if (input instanceof Response) return input;
       return reply(await stub.presence(project, input));
     }
+    case "batches": {
+      const input = await readJson(request);
+      if (input instanceof Response) return input;
+      return passkeyOptions(await stub.batch(project, input, person!.account), person!.account, env, services);
+    }
     case "proofs": {
       const input = await readJson(request);
       if (input instanceof Response) return input;
       return proofRequest(input, project, person!, stub, env, services);
     }
-    default: {
-      const input = await readJson(request);
-      if (input instanceof Response) return input;
-      return passkeyOptions(await stub.answer(project, route.name, input, person!), person!.account, env, services);
-    }
+    default:
+      // An answer that takes the passkey replies 202 and waits, to be confirmed with others or alone (B-a6xpc).
+      {
+        const input = await readJson(request);
+        if (input instanceof Response) return input;
+        return reply(await stub.answer(project, route.name, input, person!));
+      }
   }
 }
 
 /**
- * An answer composed and waiting for the passkey (202) gets the browser's options for `navigator.credentials.get()`: the
- * account's passkeys, user verification required, and the challenge the relay set, the digest of the file to prove.
+ * Answers asked for together (`POST batches`, 202, B-a6xpc) get the browser's options for `navigator.credentials.get()`:
+ * the account's passkeys, user verification required, and the challenge the relay set, the digest of the batch's list (or
+ * of its one file).
  */
 async function passkeyOptions(r: Reply, account: string, env: Env, services: Services): Promise<Response> {
   if (r.status !== 202) return reply(r);
@@ -219,28 +227,27 @@ async function passkeyOptions(r: Reply, account: string, env: Env, services: Ser
 }
 
 /**
- * `POST /v1/projects/{project}/proofs`, `{ pending, response }`: the passkey's assertion for a composed answer (D139,
- * D163). Checked here with SimpleWebAuthn (B-jp22m) against the account's own passkey and the digest the relay composed;
- * then the relay writes the answer, the proof beside it and the passkey's key file, and checks the proof counts.
+ * `POST /v1/projects/{project}/proofs`, `{ batch, response }`: the passkey's one assertion for answers asked for together
+ * (D139, D163, B-a6xpc). Checked here with SimpleWebAuthn (B-jp22m) against the account's own passkey and the batch's
+ * challenge; then the relay writes each answer, its proofs beside its files and the passkey's key file, and checks each
+ * proof counts. 200, with what became of each answer.
  */
 async function proofRequest(input: unknown, project: string, person: { account: string; handle: string }, stub: DurableObjectStub<ProjectRelay>, env: Env, services: Services): Promise<Response> {
-  const body = typeof input === "object" && input !== null ? (input as { pending?: unknown; response?: unknown }) : {};
-  if (typeof body.pending !== "string" || typeof body.response !== "object" || body.response === null) return fail(400, "send { pending, response }: the waiting answer's ID, and the passkey's assertion as the browser returned it");
+  const body = typeof input === "object" && input !== null ? (input as { batch?: unknown; response?: unknown }) : {};
+  if (typeof body.batch !== "string" || typeof body.response !== "object" || body.response === null) return fail(400, "send { batch, response }: the answers' batch, and the passkey's assertion as the browser returned it");
   const response = body.response as AuthenticationResponseJSON;
-  const pending = await stub.pendingFor(project, body.pending, person.account);
-  if (!pending) return fail(404, "no answer of yours is waiting for a passkey with that ID, or it expired: answer again");
-  const next = pending.need[pending.proofs.length]!;
-  const challenge = Buffer.from(next.digest, "hex").toString("base64url");
+  const batch = await stub.batchFor(project, body.batch, person.account);
+  if (!batch) return fail(404, "no answers of yours are waiting for your passkey under that ID, or they expired: confirm them again");
   const passkey = services.accounts && typeof response.id === "string" ? await services.accounts.passkey(response.id) : null;
   if (!passkey || passkey.account !== person.account) return fail(400, "that passkey isn't one of your account's");
   try {
-    await services.accounts!.usePasskey(passkey.credential, await verifyAssertion(rpOf(env), response, challenge, passkey));
+    await services.accounts!.usePasskey(passkey.credential, await verifyAssertion(rpOf(env), response, challengeFor(batch.digests), passkey));
   } catch (e) {
     return fail(400, `the passkey's signature doesn't check: ${e instanceof Error ? e.message : String(e)}`);
   }
   const r = response.response;
   const assertion: Assertion = { credential: passkey.credential, authenticator_data: r.authenticatorData, client_data: r.clientDataJSON, signature: r.signature };
-  return passkeyOptions((await stub.prove(project, body.pending, person.account, assertion, keyFile(passkey, person.account, person.handle))) as Reply, person.account, env, services);
+  return reply(await stub.proveBatch(project, body.batch, person.account, assertion, keyFile(passkey, person.account, person.handle)));
 }
 
 /** Every address that isn't a project's: accounts and sign-in (`signInRoute()`), and machines' sign-in (`machinesRoute()`). */
@@ -567,18 +574,23 @@ export class ProjectRelay extends DurableObject<Env> {
     if (fields) await this.usage.record(who, "card_answered", fields);
   }
 
-  /** A composed answer waiting for an account's passkey, for the Worker to check the assertion against. */
-  async pendingFor(project: string, id: string, account: string): Promise<Pending | undefined> {
-    return this.relay(project).pending(id, account);
+  /** Waiting answers asked for together (B-a6xpc): the batch, and its challenge for the passkey. */
+  async batch(project: string, input: unknown, account: string): Promise<Reply> {
+    return this.run(project, (r) => r.batch(input, account));
   }
 
-  async prove(project: string, id: string, account: string, assertion: Assertion, key: PasskeyKey): Promise<Reply> {
-    const relay = this.relay(project);
-    const kind = relay.pending(id, account)?.answer.kind;
-    const before = relay.settings();
-    const out = this.run(project, (r) => r.prove(id, account, assertion, key));
-    if (out.status === 201 && kind) await this.countAnswer(project, account, kind === "verdict" ? "verdict" : "preferences", out, before);
-    if (out.status === 201) await this.keepAlarm();
+  /** A batch waiting for an account's passkey, for the Worker to check the assertion against its challenge. */
+  async batchFor(project: string, id: string, account: string): Promise<Batch | undefined> {
+    return this.relay(project).batchOf(id, account);
+  }
+
+  /** One tap's assertion over a batch: each answer written, and each one written counted (B-7nq85). */
+  async proveBatch(project: string, id: string, account: string, assertion: Assertion, key: PasskeyKey): Promise<Reply> {
+    const before = this.relay(project).settings();
+    const out = this.run(project, (r) => r.proveBatch(id, account, assertion, key));
+    const written = out.status === 200 ? (out.body as { answers: Outcome[] }).answers.filter((a) => a.status === 201 && a.kind) : [];
+    for (const a of written) await this.countAnswer(project, account, a.kind!, { status: a.status, body: a.body }, before);
+    if (written.length) await this.keepAlarm();
     return out;
   }
 

@@ -1,13 +1,18 @@
 import type { ApiVerdictInput } from "../../src/api";
 import { type Endpoints, postAnswer } from "./endpoints";
+import type { Wait } from "./waiting";
 
 // M4 step 5c: the undo window (D82). An answer waits here before it's sent: undo takes it back; the next answer, or
 // the page closing, sends it at once. One answer waits at a time. A plain class, so its timing is tested with fake
 // timers (outbox.test.ts); the desk holds one for the session.
 
-/** What the server said once it recorded an answer: `filed`, the cards Baesian proposed from it (M8: D161, B-y6jn6). */
+/**
+ * What the server said once it took an answer: `filed`, the cards Baesian proposed from it (M8: D161, B-y6jn6); or, on
+ * the website, `waiting`, the relay holding it for your passkey, to be confirmed with other answers by one tap (B-a6xpc).
+ */
 export interface Posted {
   filed?: string[];
+  waiting?: Wait;
 }
 export type Post = (verdict: ApiVerdictInput, opts: { keepalive: boolean }) => Promise<Posted | void>;
 
@@ -65,17 +70,18 @@ export class Outbox {
 
 /**
  * Send a verdict to the server, with the browser's cookie: the local server's, or on the website the project's relay,
- * which may ask for the passkey first (`postAnswer()`). Rejects with the server's own reason.
+ * which holds an answer that takes the passkey until you confirm it (B-a6xpc). Rejects with the server's own reason.
  */
 export const postVerdictTo =
   (e: Endpoints): Post =>
   async (verdict, { keepalive }) => {
-    const r = await postAnswer(e, e.verdicts, verdict, { keepalive, client: true });
+    const r = await postAnswer(e, e.verdicts, verdict, { keepalive, client: true, wait: true });
     return posted(r);
   };
 
-/** What a recorded answer's reply says, or the server's reason it wasn't recorded. */
+/** What a recorded answer's reply says, that it waits for the passkey, or the server's reason it wasn't recorded. */
 async function posted(r: Response): Promise<Posted> {
+  if (r.status === 202) return { waiting: ((await r.json()) as { passkey: Wait }).passkey };
   if (r.ok) {
     const { filed } = (await r.json().catch(() => ({}))) as Posted;
     return filed?.length ? { filed } : {};

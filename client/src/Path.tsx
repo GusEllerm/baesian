@@ -19,6 +19,8 @@ export interface TrailStep {
   /** "you chose “X”", and so on. */
   state: string;
   rarity: Rarity;
+  /** On the website, an answer waiting for your passkey (B-a6xpc). */
+  waiting?: boolean;
   /** How the current card relates to it, when it does: drawn as an arc, not listed twice. */
   link?: Relation;
 }
@@ -230,6 +232,7 @@ export function Path(p: PathProps) {
               <span className="lbl">
                 <span className="nm">{s.name}</span>
                 <span className="st">{s.state}</span>
+                {s.waiting && <span className="tag passkey">waiting for your passkey</span>}
                 {s.link && <span className={`tag link${s.link.kind === "conflict" || s.link.kind === "rule" ? " c" : ""}`}>{linkWords(s.link)}</span>}
               </span>
               <span className="node">

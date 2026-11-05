@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,9 +7,9 @@ import { main } from "../src/cli.js";
 import { evaluate } from "../src/gate.js";
 import { openRepo } from "../src/git.js";
 import { proofProblem } from "../src/passkey.js";
-import { Config, NewerFormat } from "../src/schema.js";
+import { Config, NewerFormat, type PasskeyProof } from "../src/schema.js";
 import { NAMESPACE, parseSignature, signMessage } from "../src/sshsig.js";
-import { Store } from "../src/store.js";
+import { Store, proofPath } from "../src/store.js";
 import { BadTrust, TRUST_ENV, TRUST_FILE_ENV, checkSigned, parseTrust, pinnedTrust, projectLine } from "../src/trust.js";
 import { describeVerify, verify } from "../src/verify.js";
 import { waitForVerdict } from "../src/wait.js";
@@ -39,6 +40,15 @@ function hosted() {
   const service = new TestService();
   service.link(r.store);
   return { ...r, service };
+}
+
+/**
+ * Answers the service wrote, confirmed together by one tap (B-a6xpc): each one's proof in the batch form, beside it,
+ * as the relay writes them. `change` alters the proofs first, to make them wrong.
+ */
+function proveTogether(store: Store, passkey: TestPasskey, rels: string[], change = (p: PasskeyProof[]) => p): void {
+  const proofs = change(passkey.proveBatch(rels.map((rel) => ({ name: rel.split("/").at(-1)!, bytes: store.bytes(rel) }))));
+  rels.forEach((rel, i) => put(store, proofPath(rel), `${JSON.stringify(proofs[i], null, 2)}\n`));
 }
 
 function commit(dir: string, store: Store, message: string): string {
@@ -144,6 +154,30 @@ describe("passkey proofs (D139)", () => {
     expect(why(p.prove("v.json", BYTES), new TestPasskey().keyFile())).toBe("it was made with another passkey");
     expect(why(p.prove("v.json", BYTES), { ...key, public_key: new TestPasskey().keyFile().public_key })).toBe("its signature doesn't match the passkey's key");
   });
+
+  it("check one tap over several files (B-a6xpc): the challenge is its list's digest, and the list holds the file's", () => {
+    const p = new TestPasskey();
+    const key = p.keyFile();
+    const OTHER = Buffer.from('{"type":"verdict","card":"B-other"}\n');
+    const [mine, theirs] = p.proveBatch([
+      { name: "v.json", bytes: BYTES },
+      { name: "w.json", bytes: OTHER },
+    ]);
+    expect(mine!.batch).toEqual([createHash("sha256").update(BYTES).digest("hex"), createHash("sha256").update(OTHER).digest("hex")]);
+    // One assertion, shared: the same list and signature beside each file.
+    expect({ ...mine, file: "-" }).toEqual({ ...theirs, file: "-" });
+    expect(proofProblem(mine!, BYTES, key, service)).toBeUndefined();
+    expect(proofProblem(theirs!, OTHER, key, service)).toBeUndefined();
+    // Its challenge isn't a file's digest: the batch's proof proves nothing in the single form, and the reverse.
+    expect(proofProblem({ ...mine!, batch: undefined }, BYTES, key, service)).toBe("its challenge isn't the file's digest");
+    expect(proofProblem({ ...p.prove("v.json", BYTES), batch: mine!.batch }, BYTES, key, service)).toBe("its challenge isn't the digest of its batch");
+    // A list changed after the tap, or one that never held this file, or another passkey's key.
+    expect(proofProblem({ ...mine!, batch: [mine!.batch![0]!] }, BYTES, key, service)).toBe("its challenge isn't the digest of its batch");
+    expect(proofProblem(mine!, Buffer.from("a third file"), key, service)).toBe("its batch doesn't list the file's digest, so the passkey didn't confirm this file");
+    const [left] = p.proveBatch([{ name: "v.json", bytes: BYTES }], { list: [mine!.batch![1]!] });
+    expect(proofProblem(left!, BYTES, key, service)).toBe("its batch doesn't list the file's digest, so the passkey didn't confirm this file");
+    expect(proofProblem(mine!, BYTES, { ...key, public_key: new TestPasskey().keyFile().public_key }, service)).toBe("its signature doesn't match the passkey's key");
+  });
 });
 
 describe("in a hosted repo, only answers the service signs count (D138)", () => {
@@ -212,6 +246,47 @@ describe("in a hosted repo, only answers the service signs count (D138)", () => 
     expect(store.uncounted()).toContainEqual({ file: loose, why: "it has no signature, so the service didn't write it (D138)" });
     service.answer(store, { card: id, response: "accept" }, { passkey: gus });
     expect(store.status(id)).toBe("resolved");
+  });
+
+  it("counts hard answers one tap confirmed together (B-a6xpc), each by its proof in the batch form, and a single answer's still", () => {
+    const { store, service } = hosted();
+    const gus = new TestPasskey();
+    const eve = new TestPasskey("acct-eve", "eve");
+    service.enrol(store, gus);
+    service.enrol(store, eve);
+    const [a, b, c, d] = ["One", "Two", "Three", "Four"].map((title) => store.fileCard(hard({ title }), BODY, { ...AGENT, force: true }).card.meta.id);
+    const ra = service.answer(store, { card: a!, response: "accept" });
+    const rb = service.answer(store, { card: b!, response: "defer", comment: "later" });
+    expect([store.status(a!), store.status(b!)]).toEqual(["open", "open"]);
+    proveTogether(store, gus, [ra, rb]);
+    expect([store.status(a!), store.status(b!)]).toEqual(["resolved", "deferred"]);
+    expect(store.uncounted()).toEqual([]);
+
+    // A proof copied beside an answer its list doesn't hold; one by another account's passkey; one beside an answer of
+    // another account's, in a list that holds it; one made with a list changed after the tap.
+    const rc = service.answer(store, { card: c!, response: "accept" });
+    put(store, proofPath(rc), readFileSync(join(store.live, proofPath(ra)), "utf8").replace(/"file": "[^"]+"/, `"file": "${rc.split("/")[1]}"`));
+    expect(store.status(c!)).toBe("open");
+    expect(store.uncounted()).toContainEqual({ file: rc, why: "its passkey proof doesn't check: its batch doesn't list the file's digest, so the passkey didn't confirm this file" });
+    const rd = service.answer(store, { card: d!, response: "accept", account: "acct-eve", reviewer: "eve" });
+    const rd2 = service.answer(store, { card: d!, response: "accept" });
+    proveTogether(store, gus, [rd, rd2]);
+    expect(store.uncounted()).toContainEqual({ file: rd, why: `it answers ${d}, a hard card, so it takes the reviewer's passkey (D139), and its proof was made with a passkey that isn't trusted for account acct-eve (D159)` });
+    expect(store.status(d!)).toBe("resolved");
+    expect(store.verdicts(d!).map((v) => v.account)).toEqual(["acct-gus"]);
+
+    const { store: s2, service: sv2 } = hosted();
+    sv2.enrol(s2, gus);
+    const e = s2.fileCard(hard({ title: "Five" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const f = s2.fileCard(hard({ title: "Six" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const re = sv2.answer(s2, { card: e, response: "accept" });
+    const rf = sv2.answer(s2, { card: f, response: "accept" });
+    proveTogether(s2, gus, [re, rf], (proofs) => proofs.map((p) => ({ ...p, batch: [p.batch![1]!, p.batch![0]!] })));
+    expect(s2.uncounted().map((u) => u.why)).toEqual(["its passkey proof doesn't check: its challenge isn't the digest of its batch", "its passkey proof doesn't check: its challenge isn't the digest of its batch"]);
+    // An answer proved alone, in the single form, still counts beside them.
+    const g = s2.fileCard(hard({ title: "Seven" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    sv2.answer(s2, { card: g, response: "accept" }, { passkey: gus });
+    expect(s2.status(g)).toBe("resolved");
   });
 
   it("counts rules and topic merges only when signed", () => {
@@ -436,6 +511,35 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     const r = verify(repo, "main", { merge: true, pinned: service.pinned(passkey) });
     expect(r.commits.map((c) => [c.ok, c.trust])).toEqual([[true, []]]);
     expect(r).toMatchObject({ ok: true, hosted: { keys: "pinned", skipped: [] } });
+  });
+
+  it("passes hard answers one tap confirmed together (B-a6xpc), and not with a list changed after the tap", () => {
+    const { dir, store, repo, service } = branched();
+    const passkey = new TestPasskey();
+    service.enrol(store, passkey);
+    const a = store.fileCard(hard({ title: "Sessions" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const b = store.fileCard(hard({ title: "Tokens" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    proveTogether(store, passkey, [service.answer(store, { card: a, response: "accept" }), service.answer(store, { card: b, response: "accept" })]);
+    commit(dir, store, `Harden the sessions and tokens\n\nBaesian-Card: ${a}\nBaesian-Card: ${b}`);
+    const r = verify(repo, "main", { merge: true, pinned: service.pinned(passkey) });
+    expect(r.commits.map((c) => [c.ok, c.trust])).toEqual([[true, []]]);
+    expect(r).toMatchObject({ ok: true, hosted: { keys: "pinned", skipped: [] } });
+
+    const tampered = branched();
+    tampered.service.enrol(tampered.store, passkey);
+    const c = tampered.store.fileCard(hard({ title: "Keys" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const d = tampered.store.fileCard(hard({ title: "Logs" }), BODY, { ...AGENT, force: true }).card.meta.id;
+    const rels = [tampered.service.answer(tampered.store, { card: c, response: "accept" }), tampered.service.answer(tampered.store, { card: d, response: "accept" })];
+    proveTogether(tampered.store, passkey, rels, (proofs) => proofs.map((p) => ({ ...p, batch: p.batch!.slice(0, 1) })));
+    // Answers that don't count never reach the record (P15): the cards are unanswered there, and the merge gate fails.
+    expect(tampered.store.uncounted()).toEqual([
+      { file: rels[0], why: "its passkey proof doesn't check: its challenge isn't the digest of its batch" },
+      { file: rels[1], why: "its passkey proof doesn't check: its batch doesn't list the file's digest, so the passkey didn't confirm this file" },
+    ]);
+    commit(tampered.dir, tampered.store, `Rotate the keys\n\nBaesian-Card: ${c}\nBaesian-Card: ${d}`);
+    const t = verify(tampered.repo, "main", { merge: true, pinned: tampered.service.pinned(passkey) });
+    expect(t.ok).toBe(false);
+    expect(t.merge?.problems.map((p) => p.card).sort()).toEqual([c, d].sort());
   });
 
   it("fails a commit whose record holds a key CI doesn't pin, and doesn't count what that key signed", () => {

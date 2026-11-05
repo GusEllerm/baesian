@@ -2,7 +2,9 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import type { PasskeyKey, PasskeyProof } from "./schema.js";
 
 // Passkey proofs (D139, D163): a WebAuthn assertion whose challenge is the SHA-256 digest of the file it proves (P16
-// section 7), so the reviewer's own passkey signed that file's bytes. Checked offline against a key pinned in CI (D159).
+// section 7), so the reviewer's own passkey signed that file's bytes. Or, when one tap confirms several answers (B-a6xpc),
+// an assertion whose challenge is the digest of the list of their files' digests, which every proof of the batch holds,
+// so the passkey signed each file's digest as part of that list. Checked offline against a key pinned in CI (D159).
 // Checking an assertion needs no CBOR: only registration does, and that's the service's (M9c).
 
 /** User present and user verified: the face, fingerprint or PIN the proof stands for (D139). */
@@ -17,12 +19,27 @@ export function challengeOf(file: Buffer): string {
 }
 
 /**
+ * What a batch's passkey signs (B-a6xpc): a line naming it, then each file's SHA-256 digest in lowercase hex, one per line.
+ * Its first line keeps it apart from any file a proof could be for: no verdict or preference file reads so.
+ */
+export function batchMessage(digests: readonly string[]): Buffer {
+  return Buffer.from(`baesian-batch\n${digests.map((d) => `${d}\n`).join("")}`);
+}
+
+/** The challenge a batch's proofs carry: the SHA-256 digest of `batchMessage()`, in base64url. */
+export function batchChallenge(digests: readonly string[]): string {
+  return sha256(batchMessage(digests)).toString("base64url");
+}
+
+/**
  * Why a passkey proof doesn't prove `file`, or undefined if it does. The proof must be an assertion (`webauthn.get`) for
- * the service's origin and relying party, made with user verification, whose challenge is the file's digest, signed by
- * `key`. A proof made in a frame of another site doesn't count.
+ * the service's origin and relying party, made with user verification, signed by `key`, whose challenge is the file's
+ * digest; or, in the batch form, whose challenge is the digest of its list, which must hold the file's digest. A proof
+ * made in a frame of another site doesn't count.
  */
 export function proofProblem(proof: PasskeyProof, file: Buffer, key: PasskeyKey, service: { origin: string; rp_id: string }): string | undefined {
   if (proof.credential !== key.credential) return "it was made with another passkey";
+  if (proof.batch && !proof.batch.includes(sha256(file).toString("hex"))) return "its batch doesn't list the file's digest, so the passkey didn't confirm this file";
   const clientDataJson = Buffer.from(proof.client_data, "base64url");
   let client: Record<string, unknown>;
   try {
@@ -33,7 +50,9 @@ export function proofProblem(proof: PasskeyProof, file: Buffer, key: PasskeyKey,
     return "its client data isn't JSON";
   }
   if (client.type !== "webauthn.get") return `it's a ${String(client.type)}, not an assertion (webauthn.get)`;
-  if (client.challenge !== challengeOf(file)) return "its challenge isn't the file's digest";
+  if (proof.batch) {
+    if (client.challenge !== batchChallenge(proof.batch)) return "its challenge isn't the digest of its batch";
+  } else if (client.challenge !== challengeOf(file)) return "its challenge isn't the file's digest";
   if (client.origin !== service.origin) return `it was made on ${String(client.origin)}, not ${service.origin}`;
   if (client.crossOrigin === true) return "it was made in a frame of another site";
   const auth = Buffer.from(proof.authenticator_data, "base64url");

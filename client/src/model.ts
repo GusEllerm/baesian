@@ -38,6 +38,12 @@ export function replyOf(card: ApiCard): { reply: string; to: string | undefined 
 /** A card's identity for the client: a revised card is a new question, so it comes back. */
 export const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
 
+/**
+ * Whether a card is hard: its own level, or the level its gate showed it at, which can only raise it (D144). On the
+ * website, an answer on a hard card waits for your passkey (D139, B-a6xpc).
+ */
+export const isHard = (c: ApiCard) => c.meta.level === "hard" || (c.gate?.outcome === "shown" && c.gate.level === "hard");
+
 /** Cards that still rest on this one: withdrawn and superseded dependents no longer do. */
 export function liveDependents(card: ApiCard, cards: Map<string, ApiCard>): ApiCard[] {
   return card.dependents.flatMap((id) => cards.get(id) ?? []).filter((d) => d.status !== "withdrawn" && d.status !== "superseded");

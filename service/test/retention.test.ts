@@ -306,9 +306,12 @@ describe("a held card nobody answers (B-ec3kj)", () => {
     const r = await post("preferences", { ...(replaces ? { replaces } : {}), mode: "enforce", row_dependency: "agent-decides", burn_in: 0, rate_agent_decides: rate });
     if (r.status === 201) return r.body.name as string;
     expect(r.status, JSON.stringify(r.body)).toBe(202);
-    const done = await post("proofs", { pending: r.body.passkey.pending, response: o.person.passkey.sign(r.body.passkey.challenge) });
-    expect(done.status, JSON.stringify(done.body)).toBe(201);
-    return done.body.name as string;
+    // Asked for alone, and confirmed by one tap (B-a6xpc).
+    const asked = await post("batches", { pending: [r.body.passkey.pending] });
+    expect(asked.status, JSON.stringify(asked.body)).toBe(202);
+    const done = await post("proofs", { batch: asked.body.passkey.batch, response: o.person.passkey.sign(asked.body.passkey.challenge) });
+    expect(done.body.answers?.[0]?.status, JSON.stringify(done.body)).toBe(201);
+    return done.body.answers[0].body.name as string;
   }
 
   it("loses its text 90 days after it arrived, delivered or not; an audit and an open card keep theirs; the burn-in still counts it", async () => {
