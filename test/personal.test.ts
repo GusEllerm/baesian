@@ -350,6 +350,24 @@ describe("switching a personal clone to shared mode: `baesian init --shared` (B-
     expect(sh(dir, "log", "-1", "--format=%B")).toContain("Baesian-Ack: dep:hono");
   });
 
+  it("moves a linked clone's link into the record, and the commit it prints carries the ack the gate asks for it (B-w4g6c)", async () => {
+    const dir = teamRepo();
+    await run(dir, "init", "--personal");
+    const link = { format: 1, service: "https://baesian.example", project: "p-0123456789abcdefghjk", first_commit: sh(dir, "rev-list", "--max-parents=0", "HEAD") };
+    writeFileSync(join(commonDir(dir), "baesian", "config.json"), `${JSON.stringify(link, null, 2)}\n`);
+    expect(Store.open(dir).config()).toEqual(link);
+    const r = await run(dir, "init", "--shared");
+    expect(r.code, r.err).toBe(0);
+    expect(JSON.parse(readFileSync(join(dir, ".baesian", "config.json"), "utf8"))).toEqual(link);
+    expect(r.out).toContain("The commit gate asks an ack for the link, infra:.baesian/config.json (B-w4g6c)");
+    const command = /^ {2}git add (.+) && git commit -m "([^"]+)" -m "([^"]+)"$/m.exec(r.out);
+    expect(command, r.out).not.toBeNull();
+    sh(dir, "add", ...command![1]!.split(" "));
+    expect(commit(dir, `${command![2]}\n`).code).toBe(1);
+    const committed = commit(dir, `${command![2]}\n\n${command![3]}\n`);
+    expect(committed.code, committed.err).toBe(0);
+  });
+
   it("writes another branch's cards into its record when run there", async () => {
     const dir = teamRepo();
     await run(dir, "init", "--personal");
