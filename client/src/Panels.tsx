@@ -98,20 +98,24 @@ export function Panel({ label, onClose, children, id, wide }: { label: string; o
 }
 
 /**
- * The keys, or on a screen you touch, the gestures (D130): the same answers, by swipe and tap. The path's sheet is
- * named only where there is one, on a phone.
+ * The keys, or on a screen you touch, the gestures (D130, B-yfehp): the same answers, by holding the card and dragging
+ * it, or by a tap. The path's sheet is named only where there is one, on a phone.
  */
 export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: boolean; onClose: () => void }) {
+  // B-yfehp: a drag scrolls, a hold lifts the card, and a lifted card is dragged to an answer.
   if (touch) {
     return (
       <Panel label="Gestures" onClose={onClose}>
         <dl>
-          <dt>Swipe ← →</dt>
-          <dd>Choose an option, or tap it. Then confirm, once you've seen the agent's pick; on mythic cards, press and hold.</dd>
-          <dt>Swipe ↑</dt>
-          <dd>Write an answer</dd>
-          <dt>Swipe ↓</dt>
-          <dd>Say you can't judge it</dd>
+          <dt>Drag</dt>
+          <dd>Scrolls, wherever you touch the card</dd>
+          <dt>Hold, then drag</dt>
+          <dd>
+            Hold the card still until it lifts, and each answer is named at its edge of the screen: left or right for an option, up to write an answer, down to say you can't judge it. Drag the card
+            to one and let go when it says to, or let go anywhere else to put it down.
+          </dd>
+          <dt>Tap</dt>
+          <dd>An option, or Other answer or Can't judge at the card's foot, does the same. Then confirm, once you've seen the agent's pick; on mythic cards, press and hold.</dd>
           <dt>Undo</dt>
           <dd>In the note that comes up, for 5 seconds</dd>
           {phone && (
@@ -121,7 +125,7 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
             </>
           )}
         </dl>
-        <p className="sub after">On a card longer than the screen, swiping up or down scrolls it; Other answer and Can't judge, at the card's foot, do the same as those swipes.</p>
+        <p className="sub after">The setup survey's examples and a deck's briefing are held and dragged the same way.</p>
       </Panel>
     );
   }

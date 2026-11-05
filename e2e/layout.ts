@@ -1,7 +1,8 @@
 // The layout check, rebuilt from the round 5 quality pass (2026-10-24), whose script was lost with its scratchpad:
 // [[2026-10-23 Client Mockups]] records what it looked for. It runs in the page, over what's on screen now, and
-// returns each problem as a line of text. Overlays (the menu, the panels, the toast, the flying chip) may lie over
-// the desk: that's what they're for. A card that's leaving, and anything invisible, is skipped.
+// returns each problem as a line of text. Overlays (the menu, the panels, the toast, the flying chip, and the answers
+// named at the screen's edges while a card is lifted, B-yfehp) may lie over the desk: that's what they're for. A card
+// that's leaving, and anything invisible, is skipped.
 //
 // It looks for:
 // 1. SVG shapes drawn outside their SVG's box, where the SVG clips;
@@ -22,7 +23,7 @@ export function layoutProblems(): string[] {
   const W = window.innerWidth;
   const H = window.innerHeight;
   const TOL = 0.75;
-  const OVERLAY = ".menu, .panel, .toast, .fly";
+  const OVERLAY = ".menu, .panel, .toast, .fly, .lift-signals";
   const TRANSIENT = ".toast, .fly";
   const modal = document.querySelector('[aria-modal="true"]');
 

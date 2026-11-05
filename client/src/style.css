@@ -482,17 +482,59 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 }
 @keyframes sheet-in { from { transform: translateY(100%); } }
 
-/* A screen you touch, whatever its size (TOUCH in media.ts): no key hints, except the arrows that also say which way
-   to swipe; the option's arrow gives its room to the name; a long press doesn't select or open a menu. */
+/* A screen you touch, whatever its size (TOUCH in media.ts): no key hints, the arrows included, since a card is held,
+   then dragged (B-yfehp); the option's arrow gives its room to the name; a long press doesn't select or open a menu. */
 @media (hover: none) and (pointer: coarse) {
   html { -webkit-tap-highlight-color: transparent; }
-  kbd:not(.dir) { display: none; }
+  kbd { display: none; }
   .opt h2 { padding-right: 0; }
   .card { cursor: auto; }
   .opt:not(.armed):hover { background: var(--face-light); }
   .hold { touch-action: none; -webkit-touch-callout: none; user-select: none; }
+  /* A drag on a card scrolls the desk, wherever it starts; holding a card that can lift selects none of its text. */
+  .stage { touch-action: manipulation; }
+  .card[data-lift] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+
+/* ------------------------------------------------------------ a card held until it lifts (B-yfehp, Lift.tsx) */
+/* Held, it rises a little; lifted, it's off the desk, over the dimmed desk, with a deeper shadow. Each answer is named
+   at its edge of the screen, in its side's colour or in ink; the one it's dragged toward fills as it goes, and once
+   reached, says to let go. */
+.card[data-lift] { transition: box-shadow 200ms ease; }
+.deck > .card[data-lift="lifted"] { z-index: 63; box-shadow: 0 44px 60px -28px #2e2343a0; }
+.lift-dim { position: fixed; inset: 0; z-index: 62; pointer-events: none; background: #2e234338; animation: lift-in 160ms ease-out; }
+.lift-signals { --a: 0; position: fixed; inset: 0; z-index: 64; pointer-events: none; animation: lift-in 160ms ease-out; }
+@keyframes lift-in { from { opacity: 0; } }
+.sig { --c: var(--ink); position: absolute; display: flex; flex-direction: column; gap: 1px; max-width: min(44vw, 220px); padding: 7px 12px 9px; overflow: hidden; border-radius: 10px; background: #fffbea; color: var(--ink); box-shadow: 0 10px 22px -12px #2e234380, inset 0 0 0 2px var(--c); text-align: center; transition: opacity 120ms, background-color 120ms, color 120ms; }
+.sig[data-tone="left"] { --c: var(--left); }
+.sig[data-tone="right"] { --c: var(--right); }
+.sig small, .sig b { position: relative; }
+.sig small { font: var(--t-small); font-stretch: 90%; font-size: 11.5px; color: var(--ink-soft); }
+.sig b { font: var(--t-meta); font-stretch: 88%; font-size: 14.5px; font-weight: 700; text-wrap: balance; }
+/* the fill, from the side nearest the card toward the edge */
+.sig::before { content: ""; position: absolute; inset: 0; background: var(--c); opacity: .2; transform: scale(0, 1); }
+.sig.on::before { transform: scale(var(--a), 1); }
+.sig.up.on::before, .sig.down.on::before { transform: scale(1, var(--a)); }
+.sig.left::before { transform-origin: right; }
+.sig.right::before { transform-origin: left; }
+.sig.up::before { transform-origin: bottom; }
+.sig.down::before { transform-origin: top; }
+/* While it points to one, the others step back: still opaque, so the card's text doesn't show through them. */
+.lift-signals[data-dir] .sig:not(.on) { color: var(--ink-faint); box-shadow: 0 10px 22px -14px #2e234350, inset 0 0 0 2px color-mix(in srgb, var(--c) 35%, #fffbea); }
+.lift-signals[data-dir] .sig:not(.on) small { color: var(--ink-faint); }
+.sig.armed { background: var(--c); color: #fffbea; }
+.sig.armed small { color: inherit; }
+.sig.armed::before { display: none; }
+.sig.left { left: max(8px, env(safe-area-inset-left)); top: 50%; translate: 0 -50%; }
+.sig.right { right: max(8px, env(safe-area-inset-right)); top: 50%; translate: 0 -50%; }
+.sig.up { top: calc(env(safe-area-inset-top) + 64px); left: 50%; translate: -50% 0; }
+.sig.down { bottom: calc(var(--peek, 0px) + env(safe-area-inset-bottom) + 14px); left: 50%; translate: -50% 0; }
+.sig.up, .sig.down { min-width: 140px; }
+@media (prefers-reduced-motion: reduce) {
+  .card[data-lift], .sig { transition: none; }
+  .lift-dim, .lift-signals { animation: none; }
+}
 
 /* ------------------------------------------------------------ the website's pages (M9e) */
 /* The site's own pages, around the same desk: each page is a sheet the colour of a card's face, in its frame, in the

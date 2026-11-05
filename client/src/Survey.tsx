@@ -1,6 +1,7 @@
 import type { ApiPresets } from "../../src/api";
 import { type Row, type SurveyItem, suggestPreset } from "../../src/routing";
 import { ARROW, type Side } from "./Card";
+import { LIFT_HINT } from "./Lift";
 import { type Answers, type Mode, ROW_NAMES, countWords, heldRows, heldWords, listWords, rowInSentence, surveyAnswersOf } from "./prefs";
 
 // M8b: the setup survey (B-5na1k), in Baesian's own card format: offered once, when a repo has no preference file; then
@@ -49,6 +50,8 @@ export function AskFace(p: {
   survey: ApiPresets["survey"];
   i: number;
   armed?: Side | "up" | "down" | undefined;
+  /** A screen you touch: no arrows, and a line on holding the card and dragging it (B-yfehp). */
+  touch?: boolean;
   onAnswer: (side: Side) => void;
   onSkip: () => void;
   onBack: () => void;
@@ -96,7 +99,9 @@ export function AskFace(p: {
         })}
       </div>
       <div className="foot">
-        <span className="rule">Your answers suggest a preset. Nothing is saved until you say so.</span>
+        <span className="rule">
+          {p.touch ? `${LIFT_HINT} ` : ""}Your answers suggest a preset. Nothing is saved until you say so.
+        </span>
         {p.i > 0 && (
           <button type="button" onClick={p.onBack}>
             Back
