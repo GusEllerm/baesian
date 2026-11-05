@@ -1,6 +1,6 @@
 import { type CSSProperties, Fragment, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ApiCard } from "../../src/api";
-import { type BCard, type BranchesState, type Commit, type Lane, type Live, type Merge, type Model, type Row, branchModel, columnsOf, dayKey, daysOf, endWords, linkedKeys, listRows, openingKey, plural, saidOf, statusOf } from "./lanes";
+import { type BCard, type BranchesState, CHILD_Y, type Commit, FORK_Y, type Lane, type Live, MARK_Y, type Merge, type Model, type Row, SOURCE_Y, type Stroke, TARGET_Y, branchModel, columnsOf, dayKey, daysOf, endWords, linkedKeys, listRows, openingKey, plural, saidOf, statusOf, strokesOf } from "./lanes";
 
 /** What a merge brought, in words: its cards, and the commits citing cards that came with it (B-w41p7). */
 const broughtWords = (m: { cards: string[]; commits?: string[] | undefined }) => {
@@ -30,11 +30,13 @@ const wideW = (vw: number) => Math.min(880, vw - 560);
 /** Below this, the desk beside the drawer folds its path away, so the card stays whole. */
 const DESK_ROOM = 900;
 const WIDTH_KEY = "baesian:drawer-width";
+/** The one row detail open at a time, which the row that opened it names (`aria-controls`). */
+const DETAIL_ID = "br-detail";
 
 const FILTERS: [key: string, label: string, test: (c: BCard) => boolean][] = [
   ["all", "Every card", () => true],
   ["against", "You chose otherwise", (c) => c.state === "against"],
-  ["waiting", "Waiting for you", (c) => c.state === "waiting"],
+  ["waiting", "Waiting for you", (c) => c.forYou],
   ["hard", "Hard", (c) => c.hard],
   ["gone", "Withdrawn", (c) => c.state === "gone"],
 ];
@@ -256,8 +258,8 @@ export function BranchesDrawer(p: DrawerProps) {
               Wider
             </button>
           )}
-          <button type="button" className="panel-close drawer-close" onClick={p.onClose}>
-            Close <kbd>Esc</kbd>
+          <button type="button" className="panel-close drawer-close" aria-keyshortcuts="Escape" onClick={p.onClose}>
+            Close <kbd aria-hidden="true">Esc</kbd>
           </button>
         </div>
         <div className="drawer-scroll">
@@ -285,27 +287,39 @@ export function BranchesDrawer(p: DrawerProps) {
 
 type View = { from: string; key: string } | null;
 
+/**
+ * A row's room above it as it scrolls into view: its day's sticky header, as tall as it is now (on a narrow phone its
+ * counts wrap to a second line, IF-13), and a little more. Rows outside a day (the Now row's) keep the stylesheet's.
+ */
+function fitMargin(el: HTMLElement) {
+  const head = el.closest(".br-day")?.querySelector(".br-row.is-day");
+  if (head) el.style.scrollMarginTop = `${Math.ceil(head.getBoundingClientRect().height) + 11}px`;
+}
+
 function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   // Built again when the state changes, and once a minute: what's idle, and the "Now" row, don't need the clock finer.
   const minute = Math.floor(p.nowMs / 60_000);
   const model = useMemo(() => branchModel(p.state, { nowMs: p.nowMs }), [p.state.cards, p.state.commits, p.state.merges, p.state.defaultBranch, minute]);
   const columns = useMemo(() => columnsOf(model), [model]);
-  const days = useMemo(() => daysOf(model), [model]);
   const first = useMemo(() => openingKey(model), []);
-  const firstWaiting = !!first && model.cardById.get(first.slice(5))?.state === "waiting";
+  const firstWaiting = !!first && !!model.cardById.get(first.slice(5))?.forYou;
 
   const [filter, setFilter] = useState("all");
   const [commits, setCommits] = useState(false);
+  const days = useMemo(() => daysOf(model, { commits }), [model, commits]);
   // A card waiting for you is open as the drawer first opens; its day, or the latest card's, is unfolded.
   const [sel, setSel] = useState<string | null>(firstWaiting ? first : null);
   const [view, setView] = useState<View>(null);
   const [tab, setTab] = useState<string | null>(first);
   const [openDays, setOpenDays] = useState<Set<string>>(() => new Set(first ? [dayKey(model.cardById.get(first.slice(5))!.t)] : []));
   const [moreOf, setMoreOf] = useState<Set<string>>(new Set());
-  const [goDay, setGoDay] = useState(() => days.at(-1)?.key ?? "");
   const list = useRef<HTMLOListElement>(null);
-  /** After the next render: focus a row, and bring it (and its detail) into view. */
-  const after = useRef<{ key: string; focus: boolean; scroll: boolean } | null>(firstWaiting && first ? { key: first, focus: false, scroll: true } : null);
+  /**
+   * After the next render: focus a row, or a control in its detail (`inner`: what took the place of the one pressed), and
+   * bring it (and its detail) into view; or go to a day (`day`): its first row takes the tab stop and focus, and the day
+   * starts at the top of the list.
+   */
+  const after = useRef<{ key?: string; day?: string; inner?: string; focus: boolean; scroll: boolean } | null>(firstWaiting && first ? { key: first, focus: false, scroll: true } : null);
 
   const test = FILTERS.find((f) => f[0] === filter)![2];
   const P = useMemo(() => listRows(model, columns, { commits, filter: filter === "all" ? undefined : test, open: openDays }), [model, columns, commits, filter, openDays]);
@@ -328,12 +342,26 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     const a = after.current;
     if (!a || !list.current) return;
     after.current = null;
-    const b = list.current.querySelector<HTMLElement>(`[data-row="${CSS.escape(a.key)}"]`);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (a.day) {
+      // The day's group, not its header: a sticky header above the view sits at the bottom of its group (IF-1).
+      const group = list.current.querySelector(`.is-day[data-day="${CSS.escape(a.day)}"]`)?.closest<HTMLElement>(".br-day");
+      const row = group?.querySelector<HTMLElement>(".br-rb[data-row]");
+      if (a.scroll) group?.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
+      if (row) {
+        setTab(row.dataset.row!);
+        if (a.focus) row.focus({ preventScroll: true });
+      }
+      return;
+    }
+    const b = a.key ? list.current.querySelector<HTMLElement>(`[data-row="${CSS.escape(a.key)}"]`) : null;
     if (!b) return;
-    if (a.focus) b.focus({ preventScroll: true });
+    const det = b.closest("li")?.nextElementSibling;
+    const inner = a.inner && det?.classList.contains("is-detail") ? det.querySelector<HTMLElement>(a.inner) : null;
+    if (inner) inner.focus({ preventScroll: true });
+    else if (a.focus) b.focus({ preventScroll: true });
     if (a.scroll) {
-      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const det = b.closest("li")?.nextElementSibling;
+      fitMargin(b);
       if (det?.classList.contains("is-detail")) det.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
       b.scrollIntoView({ block: "nearest", behavior: "auto" });
     }
@@ -357,7 +385,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   const aboutLane = (name: string) => {
     if (sel?.startsWith("card:") || sel?.startsWith("merge:")) {
       setView({ from: sel, key: `lane:${name}` });
-      after.current = { key: sel, focus: false, scroll: true };
+      // Focus goes to what took the button's place: "← Back" (IF-2).
+      after.current = { key: sel, inner: ".br-back", focus: false, scroll: true };
       return;
     }
     select(`lane:${name}`);
@@ -393,6 +422,11 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     else if (e.key === "PageDown" || e.key === "PageUp") {
       const heads = [...ol.querySelectorAll<HTMLElement>(".is-day")];
       const mine = heads.filter((d) => d.compareDocumentPosition(cur) & Node.DOCUMENT_POSITION_FOLLOWING).at(-1);
+      // Above every day (the Now row) nothing is newer: Page Up stays (IF-10).
+      if (!mine && e.key === "PageUp") {
+        e.preventDefault();
+        return;
+      }
       const j = mine ? heads.indexOf(mine) + (e.key === "PageDown" ? 1 : -1) : e.key === "PageDown" ? 0 : -1;
       const d = heads[Math.max(0, Math.min(heads.length - 1, j))];
       next = d ? btns.find((x) => d.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING) : undefined;
@@ -400,6 +434,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     e.preventDefault();
     if (!next?.dataset.row) return;
     setTab(next.dataset.row);
+    fitMargin(next);
     next.focus();
   };
 
@@ -408,7 +443,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   const PITCH = cols <= 5 ? (p.wide ? 18 : 14) : Math.max(10, Math.floor((p.wide ? 100 : 70) / Math.max(1, cols - 1)));
   const cx = (c: number) => 11 + c * PITCH;
   const gw = cx(Math.max(0, cols - 1)) + 13;
-  const MY = 19;
+  const MY = MARK_Y;
   const quiet = (name: string, t: number) => {
     const e = L(name).end;
     return e.kind === "trunk" && e.quietSince < t ? "quiet" : undefined;
@@ -420,14 +455,31 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       {children}
     </svg>
   );
-  /** A curve between two columns passes over any live branch between them: a gap under it shows the branch going under (B-tgq5p). */
-  const crosses = (live: Live, a: number, b: number) => [...live.keys()].some((c) => c > Math.min(a, b) && c < Math.max(a, b));
+  // A fork's dashed curve, from its parent's line to its branch's; a merge's, from its branch's line up into its target's.
+  const forkD = (from: number, to: number) => `M${cx(from)},${FORK_Y} C${cx(from)},${FORK_Y - 9} ${cx(to)},${FORK_Y - 9} ${cx(to)},${CHILD_Y}`;
+  const mergeD = (from: number, to: number) => `M${cx(from)},${SOURCE_Y} C${cx(from)},${MY + 9} ${cx(to)},${MY + 11} ${cx(to)},${TARGET_Y}`;
+  /** A row's strokes (`strokesOf()`), drawn in order; the marks are the row's own to draw. A halo under a curve shows the branch it passes going under (B-tgq5p). */
+  const draw = (strokes: Stroke[] | null, t: number) =>
+    (strokes ?? []).map((s, i) => {
+      if (s.k === "line") return <line key={i} x1={cx(s.col)} x2={cx(s.col)} y1={s.y1} y2={s.y2} className={quiet(s.lane, t)} />;
+      if (s.k === "cap") return <line key={i} x1={cx(s.col) - s.half} x2={cx(s.col) + s.half} y1={s.y} y2={s.y} className="cap" />;
+      if (s.k === "halo") return <path key={i} d={s.curve === "fork" ? forkD(s.from, s.to) : mergeD(s.from, s.to)} className="halo" />;
+      if (s.k === "fork") return <path key={i} d={forkD(s.from, s.to)} className="fork" />;
+      if (s.k === "merge")
+        return (
+          <Fragment key={i}>
+            <path d={mergeD(s.from, s.to)} />
+            {arrowUp(cx(s.to), MY - 1)}
+          </Fragment>
+        );
+      return null;
+    });
 
   // ---------------------------------------------------------------------------------------------- details
   const commitBtn = (c: Commit, ctx?: BCard) => {
     const what = c.folded ? "the merge's commit" : c.branch === ctx?.branch ? "this branch" : sn(c.branch);
     return (
-      <button key={c.hash} type="button" className="br-lnk" onClick={() => (sel ? (setView({ from: sel, key: `commit:${c.hash}` }), (after.current = { key: sel, focus: false, scroll: true })) : select(`commit:${c.hash}`))}>
+      <button key={c.hash} type="button" className="br-lnk" onClick={() => (sel ? (setView({ from: sel, key: `commit:${c.hash}` }), (after.current = { key: sel, inner: ".br-back", focus: false, scroll: true })) : select(`commit:${c.hash}`))}>
         <code>{c.short}</code>
         <span>
           {hm(c.t)} · {what}
@@ -435,11 +487,11 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       </button>
     );
   };
-  const cardBtn = (id: string) => {
+  const cardBtn = (id: string, i = 0) => {
     const c = model.cardById.get(id);
     if (!c) return null;
     return (
-      <button key={id} type="button" className="br-lnk title" onClick={() => goCard(id)}>
+      <button key={id} type="button" className="br-lnk title" data-more-first={i === 6 || undefined} onClick={() => goCard(id)}>
         <Sw w={20} h={20}>
           <CardMark c={c} />
         </Sw>
@@ -530,6 +582,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       if (!mg) return null;
       const Ln = L(mg.branch);
       const all = moreOf.has(key);
+      // The commits citing cards it brought (B-w41p7), as a card's detail lists those that cite it.
+      const brought = (mg.commits ?? []).flatMap((h) => model.commitByHash.get(h) ?? []);
       return (
         <>
           <span className="br-said plain">
@@ -541,17 +595,31 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
             </span>
           </span>
           <span className="br-meta">
-            {mg.branch} · {plural(mg.cards.length, "card")} it brought
+            {mg.branch} · {broughtWords(mg)} it brought
             {mg.ends ? "" : `. It ended nothing: ${mg.branch === model.trunk || Ln.end.kind === "trunk" ? `${sn(mg.branch)} is the trunk` : `more happened on ${sn(mg.branch)} after it`}`}
           </span>
           {mg.cards.length > 0 && (
             <div className="br-links">
-              {(all ? mg.cards : mg.cards.slice(0, 6)).map(cardBtn)}
+              {(all ? mg.cards : mg.cards.slice(0, 6)).map((id, i) => cardBtn(id, i))}
               {!all && mg.cards.length > 6 && (
-                <button type="button" className="br-lnk" onClick={() => setMoreOf((s) => new Set([...s, key]))}>
+                <button
+                  type="button"
+                  className="br-lnk"
+                  onClick={() => {
+                    setMoreOf((s) => new Set([...s, key]));
+                    // Focus goes to the first of the cards it showed, which took its place (IF-2).
+                    after.current = { key, inner: "[data-more-first]", focus: false, scroll: false };
+                  }}
+                >
                   and {mg.cards.length - 6} more
                 </button>
               )}
+            </div>
+          )}
+          {brought.length > 0 && (
+            <div className="br-links">
+              <span className="br-list-h">{brought.length === 1 ? "Its commit citing cards:" : `Its ${brought.length} commits citing cards:`}</span>
+              {brought.map((c) => commitBtn(c))}
             </div>
           )}
           {mg.own && (
@@ -617,7 +685,15 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
         </dl>
         {sel === `lane:${name}` && (
           <div className="br-acts">
-            <button type="button" className="br-btn soft" onClick={() => select(null)}>
+            <button
+              type="button"
+              className="br-btn soft"
+              onClick={() => {
+                select(null);
+                // Focus goes back to the branch's end, which opened this (IF-2).
+                after.current = { key: `lane:${name}`, focus: true, scroll: false };
+              }}
+            >
               Close this
             </button>
           </div>
@@ -626,7 +702,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     );
   }
   const detailRow = (live: Live, t: number, inner: ReactNode, extra?: ReactNode) => (
-    <li className="br-row is-detail">
+    <li className="br-row is-detail" id={DETAIL_ID}>
       {gutter(
         <>
           {liveLines(live, t)}
@@ -658,6 +734,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       data-branch={Ln.name}
       tabIndex={inRow ? (tabKey === `lane:${Ln.name}` ? 0 : -1) : undefined}
       aria-expanded={sel === `lane:${Ln.name}`}
+      aria-controls={sel === `lane:${Ln.name}` ? DETAIL_ID : undefined}
       onClick={() => (sel === `lane:${Ln.name}` ? select(null, { scroll: false }) : select(`lane:${Ln.name}`))}
     >
       <span>
@@ -669,12 +746,11 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   function rowOf(r: Row): ReactNode {
     if (r.kind === "now") {
       if (!r.tags.length && !model.trunk) return null;
-      const g = [...r.live].flatMap(([c, name]) => [line(`l${c}`, c, MY + 18, "100%", quiet(name, r.t)), ...(r.tags.includes(name) ? [<line key={`cap${c}`} x1={cx(c) - 5} x2={cx(c) + 5} y1={MY + 18} y2={MY + 18} className="cap" />] : [])]);
       const open = r.tags.find((n) => sel === `lane:${n}`);
       return (
         <>
           <li className="br-row is-now">
-            {gutter(g)}
+            {gutter(draw(strokesOf(r, P, model), r.t))}
             <span className="br-nowh">Now, {hm(model.nowT)}</span>
             {r.tags.length > 0 && <div className="br-tags">{r.tags.map((n) => endTag(L(n), true))}</div>}
           </li>
@@ -683,16 +759,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       );
     }
     if (r.kind === "fold") {
-      const g: ReactNode[] = [];
-      for (let c = 0; c < P.cols; c++) {
-        const a = r.top.get(c);
-        const b = r.bottom.get(c);
-        if (a && a === b) g.push(line(`f${c}`, c, 0, "100%", quiet(a, r.t)));
-        else {
-          if (a) g.push(line(`a${c}`, c, 0, "38%", quiet(a, r.t)), <line key={`ac${c}`} x1={cx(c) - 4} x2={cx(c) + 4} y1="38%" y2="38%" className="cap" />);
-          if (b) g.push(line(`b${c}`, c, "62%", "100%", quiet(b, r.t)), <line key={`bc${c}`} x1={cx(c) - 4} x2={cx(c) + 4} y1="62%" y2="62%" className="cap" />);
-        }
-      }
+      const g = draw(strokesOf(r, P, model), r.t);
       const bits = [plural(r.cards, "card") + (r.against ? `, ${r.against} you chose otherwise` : "") + (r.gone ? `, ${r.gone} withdrawn` : "")];
       if (r.began.length) bits.push(`${plural(r.began.length, "branch", "branches")} began${r.merged ? ` and ${r.merged} merged` : ""} (${r.began.slice(0, 3).join(", ")}${r.began.length > 3 ? ", …" : ""})`);
       else if (r.merged) bits.push(`${plural(r.merged, "branch", "branches")} merged`);
@@ -706,7 +773,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
             tabIndex={tabKey === r.key ? 0 : -1}
             onClick={() => {
               setOpenDays((s) => new Set([...s, r.dk]));
-              after.current = { key: r.key, focus: false, scroll: false };
+              // The fold goes as the day opens: its first row takes the tab stop and focus (IF-2).
+              after.current = { day: r.dk, focus: true, scroll: false };
             }}
           >
             {bits.join("; ")}. <u>Show the day</u>
@@ -717,7 +785,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     if (r.kind === "more") {
       return (
         <li className="br-row is-more">
-          {gutter(liveLines(r.live, r.t))}
+          {gutter(draw(strokesOf(r, P, model), r.t))}
           <button
             type="button"
             className="br-rb"
@@ -741,14 +809,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       return (
         <>
           <li className="br-row is-end">
-            {gutter(
-              <>
-                {liveLines(r.live, r.t, [r.col])}
-                {line("own", r.col, MY, "100%")}
-                <line x1={cx(r.col) - 5} x2={cx(r.col) + 5} y1={MY} y2={MY} className="cap" />
-              </>,
-            )}
-            <button type="button" className="br-rb" data-row={k} data-branch={r.lane} tabIndex={tabKey === k ? 0 : -1} aria-expanded={sel === k} onClick={() => (sel === k ? select(null, { scroll: false }) : select(k))}>
+            {gutter(draw(strokesOf(r, P, model), r.t))}
+            <button type="button" className="br-rb" data-row={k} data-branch={r.lane} tabIndex={tabKey === k ? 0 : -1} aria-expanded={sel === k} aria-controls={sel === k ? DETAIL_ID : undefined} onClick={() => (sel === k ? select(null, { scroll: false }) : select(k))}>
               <span className="br-rs">{Ln.short}</span>
               <span className="br-rm">
                 <span className={`st ${Ln.end.kind === "open" && Ln.end.waiting ? "waiting" : "with"}`}>{endWords(Ln)}</span>
@@ -762,21 +824,9 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     if (r.kind !== "event") return null;
     const e = r.e;
     if (e.kind === "fork") {
-      const pc = r.col!;
-      const cc = r.other!;
-      const fy = 25;
-      const d = `M${cx(pc)},${fy} C${cx(pc)},${fy - 9} ${cx(cc)},${fy - 9} ${cx(cc)},${fy - 18}`;
       return (
         <li className="br-row is-fork">
-          {gutter(
-            <>
-              {liveLines(r.live, r.t, [pc, cc])}
-              {crosses(r.live, pc, cc) && <path d={d} className="halo" />}
-              {line("p", pc, 0, "100%", quiet(e.from, r.t))}
-              <path d={d} className="fork" />
-              {line("c", cc, 0, fy - 18)}
-            </>,
-          )}
+          {gutter(draw(strokesOf(r, P, model), r.t))}
           <span className="br-tx">
             {L(e.lane).short} began, from {sn(e.from)}
             {e.guess ? " (a guess: nothing records it)" : ""}
@@ -796,9 +846,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       branch = c.branch;
       g = (
         <>
-          {liveLines(r.live, r.t, [col])}
-          {r.above.get(col) === e.lane && line("up", col, 0, MY)}
-          {r.below.get(col) === e.lane && line("dn", col, MY, "100%")}
+          {draw(strokesOf(r, P, model), r.t)}
           <g transform={`translate(${cx(col)},${MY})`}>
             {isLit && <circle r={11.5} className="lit-ring" />}
             <CardMark c={c} />
@@ -832,9 +880,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       const col = r.col ?? P.cols;
       g = (
         <>
-          {liveLines(r.live, r.t, r.col !== null ? [r.col] : [])}
-          {r.col !== null && r.above.get(r.col) === e.lane && line("up", r.col, 0, MY)}
-          {r.col !== null && r.below.get(r.col) === e.lane && line("dn", r.col, MY, "100%")}
+          {draw(strokesOf(r, P, model), r.t)}
           {r.col === null && <path d={`M${cx(col)},${MY} L${cx(col) - 6},${MY + 9}`} className="stub" />}
           <circle cx={cx(col)} cy={MY} r={isLit ? 4.2 : 3.2} className={`m-commit${isLit ? " lit" : ""}`} />
         </>
@@ -862,20 +908,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     } else {
       const mg: Merge = e.merge;
       branch = mg.branch;
-      const tc = r.col!;
-      const sc = r.other!;
-      const d = `M${cx(sc)},${MY + 18} C${cx(sc)},${MY + 9} ${cx(tc)},${MY + 11} ${cx(tc)},${MY + 3}`;
-      g = (
-        <>
-          {liveLines(r.live, r.t, [tc, sc])}
-          {crosses(r.live, sc, tc) && <path d={d} className="halo" />}
-          {line("t", tc, 0, "100%", quiet(mg.into, r.t))}
-          {line("s", sc, MY + 18, "100%")}
-          {r.above.get(sc) === e.lane && line("su", sc, 0, MY + 18)}
-          <path d={d} />
-          {arrowUp(cx(tc), MY - 1)}
-        </>
-      );
+      g = draw(strokesOf(r, P, model), r.t);
       text = (
         <>
           <span className="br-tm">{hm(mg.gitT)}</span>
@@ -895,7 +928,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
           </span>
         </>
       );
-      label = `${sn(mg.branch)} merged into ${sn(mg.into)}, ${when(mg.gitT)}, with ${broughtWords(mg)}.${isLit ? ` ${cap1(litWords)}.` : ""}`;
+      label = `${sn(mg.branch)} merged into ${sn(mg.into)}, ${when(mg.gitT)}, with ${broughtWords(mg)}.${mg.own ? ` Its commit cites ${plural(mg.own.cards.length, "card")}.` : ""}${isLit ? ` ${cap1(litWords)}.` : ""}`;
     }
     const open = sel === e.key;
     return (
@@ -909,6 +942,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
             data-branch={branch}
             tabIndex={tabKey === e.key ? 0 : -1}
             aria-expanded={open}
+            aria-controls={open ? DETAIL_ID : undefined}
             aria-label={label}
             onClick={() => (open ? (setSel(null), setView(null), setTab(e.key)) : select(e.key))}
           >
@@ -927,13 +961,16 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     else groups.at(-1)!.rows.push(r);
   }
   const st = statusOf(model);
-  const waiting = model.cards.filter((c) => c.state === "waiting").sort((a, b) => a.t - b.t);
+  const waiting = model.cards.filter((c) => c.forYou).sort((a, b) => a.t - b.t);
   const touch = p.touch;
 
   return (
     <>
-      <p className="br-status" id="drawer-status">
-        <b>{st.lead}</b> {st.body}
+      <p className="br-status">
+        {/* The dialog's description is the words, not the button beside them (IF-15). */}
+        <span id="drawer-status">
+          <b>{st.lead}</b> {st.body}
+        </span>
         {waiting.length > 0 && (
           <>
             {" "}
@@ -976,14 +1013,19 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
           <label className="br-ctl">
             Go to
             <select
-              value={goDay}
+              // It names no day of its own, so the same day can be picked again (IF-12); the list goes there, its first row
+              // focused (IF-8), the day at the top (IF-1).
+              value=""
               onChange={(e) => {
                 const dk = e.target.value;
-                setGoDay(dk);
+                if (!dk) return;
                 setOpenDays((s) => new Set([...s, dk]));
-                requestAnimationFrame(() => list.current?.querySelector(`.is-day[data-day="${dk}"]`)?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
+                after.current = { day: dk, focus: true, scroll: true };
               }}
             >
+              <option value="" disabled hidden>
+                a day
+              </option>
               {[...days].reverse().map((d) => (
                 <option key={d.key} value={d.key}>
                   {dayW(d.t)} · {plural(d.cards, "card")}

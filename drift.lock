@@ -63,7 +63,7 @@ sig = "c6905b99e0842ec1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Branches.tsx"
-sig = "b4dfa358c9902ba5"
+sig = "4d939ef8e27ed856"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -73,7 +73,7 @@ sig = "bb4bf9258f43ead2"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "d238a099bb44407a"
+sig = "d23d74f4d0717f27"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -113,7 +113,7 @@ sig = "5d09af9e7d7b28d6"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Sheet.tsx"
-sig = "c58bef63d2dffc40"
+sig = "83b44a1f43048188"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -207,6 +207,11 @@ sig = "ee9b6dbe66c017e9"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#BCard"
+sig = "c941a81b3fd5c0b4"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#BranchesState"
 sig = "304e02fc692e2263"
 
@@ -223,7 +228,7 @@ sig = "7c397137a35cf437"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#branchModel"
-sig = "d90999147820cd61"
+sig = "7e7c18de997ecd3d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -233,12 +238,17 @@ sig = "9f2e980451760915"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#columnsOf"
-sig = "249a14e35d9011f9"
+sig = "72f187496365e346"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#commitsOf"
 sig = "d643278735dafa35"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#daysOf"
+sig = "1df92e295f6c06ea"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -253,12 +263,17 @@ sig = "e7e1be2ea609d1c2"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#listRows"
-sig = "5818e357e7d1d5a7"
+sig = "7629b5d3c21bd516"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#markState"
 sig = "fdbe461f1401ce81"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#mergeKey"
+sig = "895337d4b50cfaea"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -272,8 +287,18 @@ sig = "f049ce1af27440e4"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#spansOf"
+sig = "9fadabb209741316"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#statusOf"
-sig = "0476d1a514e32b54"
+sig = "8e15bf7acb0649d4"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#strokesOf"
+sig = "4e0c870922dd1f5a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -909,6 +934,11 @@ sig = "61b2c38f5750106a"
 doc = "docs/vault/Design/Client Build.md"
 target = "src/cli.ts#files"
 sig = "836efe7451576cad"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "src/git.ts#defaultBranch"
+sig = "af77fc68f6c164b0"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -4083,7 +4113,7 @@ sig = "e8ef63540e060b6d"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "d238a099bb44407a"
+sig = "d23d74f4d0717f27"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5793,7 +5823,7 @@ sig = "1ebada7599d6a7b9"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "client/src/Branches.tsx"
-sig = "8122f1dda53a18d5"
+sig = "4d939ef8e27ed856"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5813,7 +5843,7 @@ sig = "fe29dd40f7bcdd99"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "client/src/lanes.ts#Model"
-sig = "5d6ab46c34097bab"
+sig = "fadc26221bb58bae"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -8828,17 +8858,17 @@ sig = "dc9d944f2ac47f29"
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
 target = "client/src/lanes.ts#branchModel"
-sig = "b0250ea34398d843"
+sig = "7e7c18de997ecd3d"
 
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
 target = "client/src/lanes.ts#columnsOf"
-sig = "249a14e35d9011f9"
+sig = "72f187496365e346"
 
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
 target = "client/src/lanes.ts#listRows"
-sig = "5818e357e7d1d5a7"
+sig = "7629b5d3c21bd516"
 
 [[bindings]]
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"

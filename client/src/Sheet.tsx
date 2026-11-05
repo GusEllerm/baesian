@@ -25,6 +25,8 @@ export function PathSheet(p: {
   onOpen: (open: boolean) => void;
   /** The path, drawn in the sheet. */
   children: ReactNode;
+  /** Under something modal (the branches drawer, filling a phone): no keys, clicks or screen reader reach it. */
+  inert?: boolean;
 }) {
   const bar = useRef<HTMLButtonElement>(null);
   const head = useRef<HTMLButtonElement>(null);
@@ -94,7 +96,7 @@ export function PathSheet(p: {
 
   return (
     <>
-      <div className="sheet-bar" data-fx={fx}>
+      <div className="sheet-bar" data-fx={fx} inert={p.inert}>
         <button type="button" ref={bar} className="sheet-peek" aria-expanded={p.open} aria-controls="path-sheet" onClick={tap(!p.open)} {...pull("up")}>
           <span className="grip" aria-hidden="true" />
           <span className="peek-text">

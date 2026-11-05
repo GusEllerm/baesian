@@ -1139,7 +1139,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         </section>
       </main>
       {phone && (
-        <PathSheet open={sheetOpen} answered={trail.length} connected={relations} next={ahead.length} lean={leanKind} onOpen={openSheet}>
+        <PathSheet open={sheetOpen} answered={trail.length} connected={relations} next={ahead.length} lean={leanKind} onOpen={openSheet} inert={drawerOpen}>
           <Path
             {...pathProps}
             sheet

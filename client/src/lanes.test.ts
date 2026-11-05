@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiCommit, ApiMerge } from "../../src/api";
-import { type BranchesState, type Event, type Model, type Row, branchModel, chosenOf, columnsOf, commitsOf, endWords, linkedKeys, listRows, markState, openingKey, saidOf, shortNames, statusOf } from "./lanes";
+import { type BranchesState, CHILD_Y, type Event, FORK_Y, MARK_Y, type Model, NOW_Y, type Row, type Rows, SOURCE_Y, type Stroke, TARGET_Y, type Y, branchModel, chosenOf, columnsOf, commitsOf, dayKey, daysOf, endWords, linkedKeys, listRows, markState, openingKey, saidOf, shortNames, statusOf, strokesOf } from "./lanes";
 
 // D181 redrawn (B-v8jzy, B-vfdhz, B-tgq5p, B-jr8mk): the branches list's model, against hand-built states. The fixtures
 // are the design loop's (its final/data.mjs), as typed builders: a history like this repo's (a trunk, v1/next, worktrees
@@ -12,7 +12,7 @@ const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
 const sha = (s: string) => (s + "0123456789abcdef".repeat(3)).slice(0, 40);
 
 let n = 0;
-type St = "with" | "against" | "waiting" | "held" | "deferred" | "gone";
+type St = "with" | "against" | "waiting" | "held" | "deferred" | "gone" | "returned" | "rerouted";
 function card(branch: string, min: number, st: St = "with", over: Partial<ApiCard["meta"]> = {}): ApiCard {
   n += 1;
   const id = over.id ?? `B-${String(n).padStart(5, "0")}`;
@@ -29,7 +29,7 @@ function card(branch: string, min: number, st: St = "with", over: Partial<ApiCar
       ...over,
     },
     body: "", revisions: 1, replied: false, status, canonicalTopic: `t${n}/x`, dependents: [], briefs: [], waiting: [], fallbacks: [], attachments: 0,
-    verdicts: st === "with" ? verdict("accept") : st === "against" ? verdict("alternative") : [],
+    verdicts: st === "with" ? verdict("accept") : st === "against" ? verdict("alternative") : st === "returned" ? verdict("reject") : [],
   } as unknown as ApiCard;
 }
 const cite = (c: ApiCard, min: number, hash: string, branch = c.meta.source_branch): ApiCommit => ({ commit: sha(hash), branch, card: c.meta.id, at: at(min) });
@@ -490,5 +490,306 @@ describe("the list's rows", () => {
     expect(forks.find((e) => e.lane === W("a0"))).toMatchObject({ from: "v1/next", guess: false });
     // A fork comes before its branch's first card.
     for (const e of forks) expect(e.t).toBeLessThanOrEqual(Math.min(...lane(m, e.lane).cards.map((x) => x.t)));
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ the gutter's invariants
+
+// The bug sweep of 2026-11-05 found lines that broke where two rows shared an instant, a branch's first card floating above
+// its fork, a filter's folded run dropping a line, a fork from a line that had ended, an idle branch with no end, and two
+// ends for one. Each is a break in one of these rules, checked over what every row's gutter draws (`strokesOf()`, which
+// `<BranchesDrawer />` draws exactly), for every fixture, with commits on and off, with and without a filter, folded and
+// open. A gap under a curve's halo is paint, not a break: the line goes on under it.
+
+/** A position down a row, comparable: px from its top; a fold's 38% and 62% between its top and bottom; its bottom last. */
+const yOf = (y: Y) => (y === "100%" ? Number.POSITIVE_INFINITY : y === "38%" ? 1e6 : y === "62%" ? 1e6 + 1 : y);
+const ends = (s: Stroke[], edge: "top" | "bottom") => new Set(s.flatMap((x) => (x.k === "line" && (edge === "top" ? yOf(x.y1) === 0 : yOf(x.y2) === Number.POSITIVE_INFINITY) ? [`${x.col}:${x.lane}`] : [])));
+
+/**
+ * Every break in the gutter's rules: a line that stops at a row's edge with nothing going on across it, or starts there
+ * from nothing; a line that starts or stops inside a row with no mark, cap or curve there; a curve or arrowhead that
+ * doesn't sit on its branch's line, or its target's; two branches in one column at once; and a branch that began at a fork
+ * running off the bottom of the list.
+ */
+function checkGutter(m: Model, P: Rows, opts: { columns?: boolean } = {}): string[] {
+  const drawn = P.rows.flatMap((r) => {
+    const s = strokesOf(r, P, m);
+    return s ? [{ r, s }] : [];
+  });
+  const out: string[] = [];
+  const lines = (s: Stroke[]) => s.filter((x): x is Extract<Stroke, { k: "line" }> => x.k === "line");
+  const on = (s: Stroke[], col: number, lane: string, y: number) => lines(s).some((x) => x.col === col && x.lane === lane && yOf(x.y1) <= y && y <= yOf(x.y2));
+  for (let i = 0; i < drawn.length; i++) {
+    const { r, s } = drawn[i]!;
+    // Two branches in one column at once.
+    if (opts.columns !== false) {
+      const ls = lines(s);
+      for (const a of ls) for (const b of ls) if (a.col === b.col && a.lane < b.lane && yOf(a.y1) < yOf(b.y2) && yOf(b.y1) < yOf(a.y2)) out.push(`${r.key}: ${a.lane} and ${b.lane} share column ${a.col}`);
+    }
+    // A line that starts or stops inside the row does so at a mark, a cap, a curve's end, or the Now row's heading.
+    const node = (col: number, y: number, lane: string) =>
+      (r.kind === "now" && y === NOW_Y) ||
+      s.some(
+        (x) =>
+          (x.k === "mark" && x.col === col && x.lane === lane && y === MARK_Y) ||
+          (x.k === "cap" && x.col === col && x.lane === lane && yOf(x.y) === y) ||
+          (x.k === "fork" && ((x.from === col && x.parent === lane && y === FORK_Y) || (x.to === col && x.lane === lane && y === CHILD_Y))) ||
+          (x.k === "merge" && ((x.from === col && x.lane === lane && y === SOURCE_Y) || (x.to === col && x.into === lane && y === TARGET_Y))),
+      );
+    for (const x of lines(s)) {
+      for (const y of [yOf(x.y1), yOf(x.y2)]) {
+        if (y === 0 || y === Number.POSITIVE_INFINITY) continue;
+        const joined = lines(s).some((o) => o !== x && o.col === x.col && o.lane === x.lane && (yOf(o.y1) === y || yOf(o.y2) === y));
+        if (!node(x.col, y, x.lane) && !joined) out.push(`${r.key}: ${x.lane}'s line ends in mid-air at ${y}px`);
+      }
+    }
+    // Curves on their branches' columns; an arrowhead only into its target's line.
+    for (const x of s) {
+      if (x.k === "fork") {
+        if (!on(s, x.from, x.parent, FORK_Y)) out.push(`${r.key}: the fork leaves column ${x.from}, where ${x.parent} isn't drawn`);
+        if (!on(s, x.to, x.lane, CHILD_Y)) out.push(`${r.key}: the fork reaches column ${x.to}, where ${x.lane} isn't drawn`);
+      }
+      if (x.k === "merge") {
+        if (!on(s, x.from, x.lane, SOURCE_Y)) out.push(`${r.key}: the merge leaves column ${x.from}, where ${x.lane} isn't drawn`);
+        if (!on(s, x.to, x.into, TARGET_Y)) out.push(`${r.key}: the arrowhead is in column ${x.to}, where ${x.into} isn't drawn`);
+      }
+    }
+    // Row edges: what reaches the bottom of one row goes on at the top of the next.
+    const next = drawn[i + 1];
+    const bottom = ends(s, "bottom");
+    if (!next) {
+      for (const k of bottom) {
+        const lane = k.slice(k.indexOf(":") + 1);
+        if (m.lanes.get(lane)?.parent && lane !== m.trunk) out.push(`${r.key}: ${lane} began at a fork, but runs off the bottom of the list`);
+      }
+      continue;
+    }
+    const top = ends(next.s, "top");
+    for (const k of bottom) if (!top.has(k)) out.push(`${r.key}: ${k} stops at its bottom edge, and ${next.r.key} doesn't go on with it`);
+    for (const k of top) if (!bottom.has(k)) out.push(`${next.r.key}: ${k} starts at its top edge from nothing (${r.key} above)`);
+  }
+  return out;
+}
+
+/** Every way the list is drawn: commits on and off, every card or one filter, every day folded but the latest or all open. */
+function everyWay(f: { state: BranchesState; now: number }, o: { cap?: number } = {}) {
+  const m = branchModel(f.state, { nowMs: f.now });
+  const cols = columnsOf(m);
+  const out: { how: string; m: Model; P: Rows }[] = [];
+  for (const commits of [false, true])
+    for (const filter of [undefined, "against", "hard"] as const)
+      for (const open of ["folded", "open"] as const) {
+        const test = filter === "against" ? (c: { state: string }) => c.state === "against" : filter === "hard" ? (c: { hard: boolean }) => c.hard : undefined;
+        const P = listRows(m, cols, { commits, filter: test as never, open: open === "open" ? allOpen(m) : new Set(), ...(o.cap ? { cap: o.cap } : {}) });
+        out.push({ how: `commits ${commits ? "on" : "off"}, ${filter ?? "every card"}, ${open}`, m, P });
+      }
+  return out;
+}
+
+/** Two merges recorded at one commit, in one second, as 952d56b has them: one worktree merged in, the next fast-forwarded to it. */
+function sharedCommit() {
+  const v = [card("v1", 5), card("v1", 10)];
+  const commits = [cite(v[0]!, 12, "a1", "wt-a"), cite(v[1]!, 45, "b1", "wt-b")];
+  const merges = [{ ...merge("wt-a", "v1", 30, [], "X"), tip: sha("a1"), commits: [sha("a1")] }, merge("v1", "wt-b", 30, v, "X"), { ...merge("wt-b", "v1", 50, [], "bm"), tip: sha("b1"), commits: [sha("b1")] }];
+  return { state: { cards: [card("main", 0), ...v, card("v1", 60)], commits, merges } satisfies BranchesState, now: T0 + 90 * 60_000 };
+}
+/** Two branches whose first cards were filed in the same minute, and two merges into main in one second. */
+function sameStart() {
+  const a = [card("feat-a", 10), card("feat-a", 20)];
+  const b = [card("feat-b", 10), card("feat-b", 25)];
+  return { state: { cards: [card("main", 0), ...a, ...b, card("main", 40)], commits: [], merges: [merge("feat-a", "main", 30, a, "ma"), merge("feat-b", "main", 30, b, "mb")] } satisfies BranchesState, now: T0 + 60 * 60_000 };
+}
+/** A branch guessed to begin from one that has since gone idle: old's last card is before new began. */
+function idleParent() {
+  return { state: { cards: [card("main", -300), card("old", 0), card("old", 30), card("old", 60), card("new", 120), card("new", 130)], commits: [], merges: [] } satisfies BranchesState, now: T0 + 30 * 3600_000 };
+}
+/** An idle branch whose last event is a commit, which the Commits switch hides. */
+function idleLastCommit() {
+  const o = [card("old", 0), card("old", 10)];
+  return { state: { cards: [card("main", -10), ...o, card("main", 2000)], commits: [cite(o[1]!, 40, "late")], merges: [] } satisfies BranchesState, now: T0 + 48 * 3600_000 };
+}
+/** An idle branch, a card of which a filter hides, as a run that would span its end. */
+function moreOverEnd() {
+  return { state: { cards: [card("main", -10), card("old", 30, "against"), card("old", 40), card("main", 50)], commits: [], merges: [] } satisfies BranchesState, now: T0 + 48 * 3600_000 };
+}
+/** An idle branch whose last second holds two merges into it, at one commit. */
+function twoMergesAtTheEnd() {
+  const fa = [card("feat-a", 3)];
+  const fb = [card("feat-b", 4)];
+  return { state: { cards: [card("main", -10), card("dev", 1), card("dev", 2), ...fa, ...fb], commits: [], merges: [merge("feat-a", "dev", 10, fa, "oct"), merge("feat-b", "dev", 10, fb, "oct")] } satisfies BranchesState, now: T0 + 3 * 24 * 3600_000 };
+}
+/** v1 fast-forwarded into a new worktree (a sync, G-1), which then merges back. */
+function syncThenBack() {
+  const v = [card("v1", 5), card("v1", 10)];
+  return { state: { cards: [card("main", 0), ...v, card("v1", 50)], commits: [cite(v[0]!, 30, "w1", "wt")], merges: [merge("v1", "wt", 20, v, "v1tip"), { ...merge("wt", "v1", 40, [], "wm"), tip: sha("w1"), commits: [sha("w1")] }] } satisfies BranchesState, now: T0 + 90 * 60_000 };
+}
+/**
+ * As this repo stood at 15:20 on 2026-11-05: a worktree merged into v1 at a commit, and in the same second (as the record
+ * has it) v1 fast-forwarded into a new worktree at that commit, with nothing on v1 after, so v1 ends there (G-1, as built).
+ */
+function syncAtTheMergeCommit() {
+  const v = [card("v1", 5), card("v1", 10)];
+  const commits = [cite(v[0]!, 12, "a1", "wt-a"), cite(v[1]!, 45, "b1", "wt-b")];
+  const merges = [{ ...merge("wt-a", "v1", 30, [], "X"), tip: sha("a1"), commits: [sha("a1")] }, merge("v1", "wt-b", 30, v, "X")];
+  return { state: { cards: [card("main", 0), ...v], commits, merges } satisfies BranchesState, now: T0 + 90 * 60_000 };
+}
+/** Ten branches open at once off main: more than the gutter's eight columns. */
+function tenParallel() {
+  const cards = [card("main", 0)];
+  const merges: ApiMerge[] = [];
+  for (let k = 0; k < 10; k++) cards.push(card(`wt-${k}`, 10 + k), card(`wt-${k}`, 30 + k));
+  for (let k = 9; k >= 0; k--) merges.push(merge(`wt-${k}`, "main", 60 + (9 - k), [], `t${k}`));
+  return { state: { cards, commits: [], merges } satisfies BranchesState, now: T0 + 200 * 60_000 };
+}
+
+describe("the gutter's invariants (B-tgq5p: a branch's line runs whole from its fork to its merge, gaps only under a curve's halo)", () => {
+  const fixtures: [string, () => { state: BranchesState; now: number }][] = [
+    ["a history like this repo's", realLike],
+    ["parallel worktrees, held and unmerged", parallel],
+    ["no cards on main", noMainCards],
+    ["a feature branch only", featureOnly],
+    ["six branches at once", sixParallel],
+    ["two merges at one commit", sharedCommit],
+    ["two branches begun in one minute", sameStart],
+    ["a fork from a branch gone idle", idleParent],
+    ["an idle branch ending in a commit", idleLastCommit],
+    ["a filtered run over an idle branch's end", moreOverEnd],
+    ["two merges in an idle branch's last second", twoMergesAtTheEnd],
+    ["a sync, then a merge back", syncThenBack],
+    ["a merge in, and a sync out, at one commit in one second", syncAtTheMergeCommit],
+  ];
+  for (const [name, f] of fixtures) {
+    it(`holds for ${name}, every way it's drawn`, () => {
+      for (const { how, m, P } of everyWay(f())) expect(checkGutter(m, P), how).toEqual([]);
+    });
+  }
+
+  it("holds for 60 days", () => {
+    const f = big();
+    const m = branchModel(f.state, { nowMs: f.now });
+    const P = listRows(m, columnsOf(m), { commits: true, open: allOpen(m) });
+    expect(checkGutter(m, P)).toEqual([]);
+  });
+
+  it("holds past eight columns with room for them all; at eight, only the shared last column breaks, which is a choice (G-12)", () => {
+    for (const { how, m, P } of everyWay(tenParallel(), { cap: 16 })) expect(checkGutter(m, P), how).toEqual([]);
+    for (const { how, m, P } of everyWay(tenParallel())) expect(checkGutter(m, P, { columns: false }).filter((x) => !/column 7|7:wt-|wt-[0-3]/.test(x)), how).toEqual([]);
+  });
+
+  it("puts a merge into a branch before a merge out of it in the same second: the first made the commit the second moved to", () => {
+    const f = syncAtTheMergeCommit();
+    const m = branchModel(f.state, { nowMs: f.now });
+    const order = m.events.filter((e) => e.kind === "merge").map((e) => `${e.lane}>${e.into}`);
+    expect(order).toEqual(["wt-a>v1", "v1>wt-b"]);
+  });
+
+  it("joins a branch's first card to its fork (G-3)", () => {
+    const m = branchModel({ cards: [card("main", 0), card("feat", 10), card("feat", 20)], commits: [], merges: [] }, { nowMs: T0 + 60 * 60_000 });
+    const P = listRows(m, columnsOf(m), { commits: false, open: allOpen(m) });
+    const first = events(P.rows).find((r) => r.e.kind === "card" && r.e.card.t === T0 + 10 * 60_000)!;
+    expect(first.below.get(first.col!)).toBe("feat");
+    expect(checkGutter(m, P)).toEqual([]);
+  });
+
+  it("keeps every line whole through rows in one second (G-2: two merges at one commit; two branches begun in one minute)", () => {
+    for (const f of [sharedCommit(), sameStart()]) {
+      const m = branchModel(f.state, { nowMs: f.now });
+      const P = listRows(m, columnsOf(m), { commits: true, open: allOpen(m) });
+      // Each merged lane is drawn through every other row between its fork and its merge.
+      const rs = events(P.rows);
+      for (const L of m.lanes.values()) {
+        if (L.end.kind !== "merged") continue;
+        const key = L.end.merge.key;
+        const from = rs.findIndex((r) => r.key === key);
+        const to = rs.findIndex((r) => r.e.kind === "fork" && r.e.lane === L.name);
+        for (const r of rs.slice(from + 1, to)) if (r.e.lane !== L.name) expect([...r.live.values()], `${L.name} through ${r.key}`).toContain(L.name);
+      }
+      expect(checkGutter(m, P)).toEqual([]);
+    }
+  });
+
+  it("keeps a branch's line through a run a filter folds, and ends a run at an idle branch's end (G-7)", () => {
+    const f = [card("feat", 10), card("feat", 20, "against")];
+    const m = branchModel({ cards: [card("main", 0), ...f, card("main", 30)], commits: [], merges: [merge("feat", "main", 25, f, "fm")] }, { nowMs: T0 + 60 * 60_000 });
+    const P = listRows(m, columnsOf(m), { commits: false, filter: (c) => c.state === "against", open: allOpen(m) });
+    const more = P.rows.find((r): r is Extract<Row, { kind: "more" }> => r.kind === "more" && r.keys.includes(`card:${f[0]!.meta.id}`))!;
+    expect([...more.live.values()]).toContain("feat");
+    expect(checkGutter(m, P)).toEqual([]);
+    const o = moreOverEnd();
+    const mo = branchModel(o.state, { nowMs: o.now });
+    const Po = listRows(mo, columnsOf(mo), { commits: false, filter: (c) => c.state === "against", open: allOpen(mo) });
+    const end = Po.rows.findIndex((r) => r.kind === "end" && r.lane === "old");
+    // old's own hidden card isn't folded into a run above its end.
+    const above = Po.rows.slice(0, end).flatMap((r) => (r.kind === "more" ? r.keys : []));
+    expect(above).not.toContain(`card:${o.state.cards[2]!.meta.id}`);
+    expect(checkGutter(mo, Po)).toEqual([]);
+  });
+
+  it("forks a branch only from a line that's there: a guessed parent gone idle keeps its line to the fork (G-8)", () => {
+    const f = idleParent();
+    const m = branchModel(f.state, { nowMs: f.now });
+    expect(m.lanes.get("new")!.parent).toBe("old");
+    expect(m.lanes.get("old")!.end).toMatchObject({ kind: "open", idleSince: T0 + 60 * 60_000 });
+    const P = listRows(m, columnsOf(m), { commits: false, open: allOpen(m) });
+    const fork = P.rows.findIndex((r) => r.kind === "event" && r.e.kind === "fork" && r.e.lane === "new");
+    const end = P.rows.findIndex((r) => r.kind === "end" && r.lane === "old");
+    // old's end is above the fork from it, not below.
+    expect(end).toBeGreaterThanOrEqual(0);
+    expect(end).toBeLessThan(fork);
+    expect(checkGutter(m, P)).toEqual([]);
+  });
+
+  it("ends an idle branch with its end row whatever the Commits switch, and only once (G-9, IF-5, G-13)", () => {
+    for (const commits of [false, true]) {
+      const f = idleLastCommit();
+      const m = branchModel(f.state, { nowMs: f.now });
+      const P = listRows(m, columnsOf(m), { commits, open: allOpen(m) });
+      expect(P.rows.filter((r) => r.kind === "end" && r.lane === "old"), `commits ${commits}`).toHaveLength(1);
+      expect(checkGutter(m, P)).toEqual([]);
+    }
+    const g = twoMergesAtTheEnd();
+    const m = branchModel(g.state, { nowMs: g.now });
+    const P = listRows(m, columnsOf(m), { commits: false, open: allOpen(m) });
+    expect(P.rows.filter((r) => r.kind === "end").map((r) => r.key)).toEqual(["end:dev"]);
+    expect(new Set(P.rows.map((r) => r.key)).size).toBe(P.rows.length);
+  });
+});
+
+describe("rows and counts the sweep found wrong", () => {
+  it("keys two merges at one commit of one branch, into two branches, apart; one record found twice is one (IF-4)", () => {
+    const v = [card("v1", 5)];
+    const m = branchModel({ cards: [card("main", 0), ...v, card("v1", 50)], commits: [], merges: [merge("v1", "wt-a", 20, v, "same"), merge("v1", "wt-b", 21, v, "same")] }, { nowMs: T0 + 90 * 60_000 });
+    expect(m.merges).toHaveLength(2);
+    expect(new Set(m.merges.map((x) => x.key)).size).toBe(2);
+    expect(new Set(m.events.map((e) => e.key)).size).toBe(m.events.length);
+    const twice = branchModel({ cards: [card("main", 0), ...v, card("v1", 50)], commits: [], merges: [merge("v1", "wt-a", 20, v, "same"), { ...merge("v1", "wt-a", 20, v, "same"), at: at(20.5) }] }, { nowMs: T0 + 90 * 60_000 });
+    expect(twice.merges).toHaveLength(1);
+  });
+
+  it("counts only open cards as waiting for you; returned and passed-on ones still hold the merge (IF-6)", () => {
+    for (const st of ["returned", "rerouted"] as const) {
+      const held = card("feat", 10, st);
+      const m = branchModel({ cards: [card("main", 0), held], commits: [], merges: [] }, { nowMs: T0 + 60 * 60_000 });
+      expect(m.counts.waiting, st).toBe(0);
+      expect(statusOf(m).lead).toBe("Nothing is waiting for you.");
+      expect(openingKey(m)).toBe(`card:${held.meta.id}`);
+      expect(endWords(m.lanes.get("feat")!)).toBe("No merge recorded · Merge held: 1 waiting");
+      const P = listRows(m, columnsOf(m), { commits: false, open: allOpen(m) });
+      expect(P.rows.find((r): r is Extract<Row, { kind: "day" }> => r.kind === "day")!.waiting).toBe(0);
+    }
+    const open = card("feat", 10, "waiting");
+    const m = branchModel({ cards: [card("main", 0), card("feat", 5, "returned"), open], commits: [], merges: [] }, { nowMs: T0 + 60 * 60_000 });
+    expect([m.counts.waiting, statusOf(m).lead, openingKey(m)]).toEqual([1, "One card is waiting for you, holding feat from merging.", `card:${open.meta.id}`]);
+  });
+
+  it("shows no day, and offers none to go to, that holds only commits the switch hides (IF-11)", () => {
+    const c = card("main", 0);
+    const m = branchModel({ cards: [c], commits: [cite(c, 26 * 60, "nextday")], merges: [] }, { nowMs: T0 + 27 * 3600_000 });
+    const off = listRows(m, columnsOf(m), { commits: false, open: new Set() });
+    expect(off.rows.filter((r) => r.kind === "day")).toHaveLength(1);
+    expect(daysOf(m, { commits: false }).map((d) => d.key)).toEqual([dayKey(T0)]);
+    const on = listRows(m, columnsOf(m), { commits: true, open: new Set() });
+    expect(on.rows.filter((r) => r.kind === "day")).toHaveLength(2);
+    expect(daysOf(m, { commits: true })).toHaveLength(2);
   });
 });
