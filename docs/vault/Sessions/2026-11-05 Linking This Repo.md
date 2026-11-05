@@ -29,6 +29,17 @@ Get the hosted service working with this repo, and make setting up a repo easy, 
 - **The preferences and calibration panels explain themselves** (D180, from a mockup the user approved): what each stop does to the card and the agent, and a stacked bar per row.
 - **Four critiques of profiles and collective steering** for domain science: [[Profiles and Collective Steering - Critique]].
 
+## Later the same day
+
+- **Shipped:** v0.1.3 (batched passkeys, `wait` on several cards, the panels, the gate's settings in preferences), v0.1.4 (the privacy policy on branch names, B-nkbqs), v0.1.5 (decisions by branch with merges and commits, D181), v0.1.6 (the drawer, the output system, merges with fast-forwards, the default branch).
+- **Personal mode** (B-4rwyz), then its fix: an included config, so `make setup` in chorus_conservancy can't turn the gate off, found by the agent there.
+- **Four critiques of profiles for science:** [[Profiles and Collective Steering - Critique]]; two holes found, the gate's own settings fixed (B-qkek1).
+- **Graph libraries:** none would draw the branches view for us ([[Graph Libraries for the Branches View]]).
+- **A design loop** (a workflow of eight agents) diagnosed the branches panel with real data (22 defects, correctness bugs among them), proposed and critiqued three directions, and synthesised one; the user chose the vertical list in a drawer after a demo (B-v8jzy r1 returned "see it run", r2 accepted).
+- **The command line's output:** an audit of 59 captures, five cards (deck cli-output), built.
+- **Cloudflare Web Analytics** found injecting its beacon (blocked by the CSP) and turned off.
+- **Pushing to GitHub** failed now and then with "fatal error in commit_refs_rules" while the livedocs stamps file is about 10 MB; retrying works.
+
 ## Decisions
 
 D180 (the panels, in conversation). Cards answered: B-f2mfb, B-pt52b, B-mar8x, B-yj5d5, B-a6xpc, B-xnae9, B-3az04, B-yfehp, B-4rwyz (personal mode: nothing committed), B-qkek1. Every one is in the Decision Log as built, except B-4rwyz, not built yet.

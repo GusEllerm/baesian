@@ -17,6 +17,14 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-05.*
 
+- **v0.1.6 is live (2026-11-05, evening)** ([[2026-11-05 Linking This Repo]]):
+  - **Your decisions, by branch** is a vertical list in a drawer beside the desk (B, or the Branches button), full screen on a phone (B-v8jzy, B-vfdhz, B-tgq5p), from a design loop of eight agents on real data; merges record what they brought, fast-forwards included (B-w41p7), and the state carries the repo's default branch (B-jr8mk). This repo's history was rescanned: 31 merges on the service.
+  - **The command line prints through one output system** (B-eyrt5): headlines, aligned fields, `next:` lines; colour and ✓ ✗ ! → only on a terminal, never to an agent's harness (B-qszqr, B-t3tev); citations only with `--verbose` (B-728jd); `baesian --version`.
+  - **Personal mode** (B-4rwyz): `baesian init --personal` keeps everything in the clone, in a shared repo; its gate lives in an included config, so a team's `make setup` can't turn it off. In use in chorus_conservancy.
+  - **The gate's own settings live in the preference files** (B-qkek1): a commit could silence it before; and **batched passkey answers** (B-a6xpc), **`wait` on several cards or a deck, until answered** (B-xnae9), **the preferences and calibration panels explained** (D180).
+  - **Cloudflare's Web Analytics is off** for baesian.dev; the privacy policy now lists branch names, commit IDs, merges and the default branch.
+  - **Next:** the critics' calibration fixes (the model on each card, a sequential test for loosening, a reason when you come round, planted practice cards), if carded; a history scan at first link, for repos that already have merges; the README's GIF remade; real-device checks; then M10.
+
 - **This repo is linked, and setting a repo up is easier (2026-11-05)** ([[2026-11-05 Linking This Repo]]):
   - Linked as project `p-c81yx9gdvfr9yjsfdsrp`; CI pins the service's key, the passkey and the project (`BAESIAN_TRUST`, set with `baesian ci --github`), and finds the linking commit by ancestry (B-mar8x).
   - `baesian login` defaults to baesian.dev (B-f2mfb); `baesian ci` prints and sets CI's pin (B-pt52b); each passkey's line for CI is on the account page (B-yj5d5).
