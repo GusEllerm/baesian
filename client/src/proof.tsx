@@ -2,19 +2,23 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type RequestOptionsJSON, signWithPasskey } from "./webauthn";
 
 // The passkey on an answer (D139, D163, M9e). On the website, an answer on a hard card, or a change to your preferences
-// that lets more cards past you, comes back from the relay waiting for your passkey (202). The desk asks you here, and
-// only your tap starts the passkey, as Safari requires; the assertion goes back to the relay, which writes the answer.
+// that lets more cards past you, comes back from the relay waiting for your passkey (202). Answers on the desk wait there
+// until one tap confirms them together (B-a6xpc, waiting.ts); a change to your preferences is confirmed at once. The
+// passkey is asked for here, and only your tap starts it, as Safari requires; the assertion goes back to the relay, which
+// writes what it confirmed.
 
-/** What the relay asks the passkey to prove (`POST …/verdicts` or `…/preferences`, 202). */
+/** What the passkey is asked to confirm, with the browser's options for it (`POST …/batches`, 202). */
 export interface PasskeyAsk {
-  pending: string;
-  proving: "verdict" | "preferences";
-  step: number;
-  of: number;
+  /** Answers waiting on the desk, which go on waiting if you don't confirm them; or a change to your preferences. */
+  kind: "answers" | "preferences";
+  /** The cards the answers are on, by their titles. */
+  titles: string[];
+  /** Whether an answer among them lets more cards past you (an accepted slider proposal, D163). */
+  loosens: boolean;
   options: RequestOptionsJSON;
 }
 
-/** The answer wasn't sent: the person chose not to use their passkey. */
+/** The passkey wasn't used: the person chose not to, for now. */
 export class NotConfirmed extends Error {
   constructor() {
     super("you didn't confirm it with your passkey, so it wasn't sent");
@@ -59,7 +63,21 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
-/** The prompt itself, while an answer waits for the passkey. The desk renders it on the website. */
+/** Small counts in words. */
+const NUMBER = ["no", "one", "two", "three", "four", "five", "six"];
+/** The prompt lists this many cards, then says how many more. */
+const LISTED = 5;
+
+/** Why the passkey is asked for, in a sentence or two. */
+function whyOf(ask: PasskeyAsk): string {
+  const n = ask.titles.length;
+  if (ask.kind === "preferences") return "This change lets more cards past you without asking, so it counts only once your passkey confirms it's yours.";
+  if (n > 1) return `These ${NUMBER[n] ?? n} answers count only once your passkey confirms they're yours, not an agent's at your keyboard. One tap confirms them all.`;
+  if (ask.loosens) return "Accepting this lets more cards past you without asking, so it counts only once your passkey confirms it's yours.";
+  return "This card is hard, so your answer counts only once your passkey confirms it's yours, not an agent's at your keyboard.";
+}
+
+/** The prompt itself, while the passkey is asked for. The desk renders it on the website. */
 export function ProofPrompt() {
   const w = useSyncExternalStore(subscribe, () => waiting);
   const [busy, setBusy] = useState(false);
@@ -94,20 +112,20 @@ export function ProofPrompt() {
       setProblem(e instanceof Error ? e.message : String(e));
     }
   };
-  const why =
-    ask.proving === "verdict"
-      ? "This card is hard, so your answer counts only once your passkey confirms it's yours, not an agent's at your keyboard."
-      : "This change lets more cards past you without asking, so it counts only once your passkey confirms it's yours.";
+  const more = ask.titles.length - LISTED;
   return (
     <>
       <div className="proof-backdrop" aria-hidden="true" />
       <aside className="panel proof" role="dialog" aria-modal="true" aria-labelledby="proof-title">
         <h4 id="proof-title">Confirm with your passkey</h4>
-        <p className="proof-why">{why}</p>
-        {ask.of > 1 && (
-          <p className="sub">
-            Step {ask.step} of {ask.of}: {ask.proving === "verdict" ? "your answer" : "the change to your preferences it makes"}.
-          </p>
+        <p className="proof-why">{whyOf(ask)}</p>
+        {ask.kind === "answers" && ask.titles.length > 0 && (
+          <ul className="proof-list" aria-label={ask.titles.length === 1 ? "The card you answered" : "The cards you answered"}>
+            {ask.titles.slice(0, more > 1 ? LISTED : LISTED + 1).map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+            {more > 1 && <li className="sub">and {NUMBER[more] ?? more} more</li>}
+          </ul>
         )}
         {problem && (
           <p className="problem" role="alert">
@@ -119,9 +137,10 @@ export function ProofPrompt() {
             {busy ? "Waiting for your passkey…" : "Use your passkey"}
           </button>
           <button type="button" className="cancel" onClick={() => w.refuse()}>
-            Don't send it
+            {ask.kind === "answers" ? "Not now" : "Don't send it"}
           </button>
         </div>
+        {ask.kind === "answers" && <p className="small">Not now leaves {ask.titles.length === 1 ? "it" : "them"} waiting on the desk, for up to 30 minutes from when you answered.</p>}
       </aside>
     </>
   );

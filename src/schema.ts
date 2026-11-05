@@ -825,12 +825,18 @@ export type PinnedProject = z.infer<typeof PinnedProject>;
  * A passkey's proof that a person made a file (D139, D163): `<file without .json>.passkey.json` beside a verdict on a
  * hard card, or a preference change that lets more cards past. WebAuthn's assertion as the browser returned it, whose
  * challenge is the SHA-256 digest of the file's bytes (P16 section 7). Written once, by the relay.
+ *
+ * Or, for answers confirmed together by one tap (B-a6xpc), the batch form: `batch` lists the SHA-256 digest of every file
+ * the tap confirmed, this one's among them, and the challenge is the digest of that list (`batchChallenge()`). Every
+ * proof of the batch holds the same list and the same assertion: that's the signature they share.
  */
 export const PasskeyProof = z.strictObject({
   type: z.literal("passkey-proof"),
   format: formatOf("passkey-proof"),
   /** The file it proves, by name, in the same folder. */
   file: z.string().min(1),
+  /** In the batch form (B-a6xpc): the digests of the files one tap confirmed, in the order the relay wrote them. */
+  batch: z.array(Sha256).min(1).optional(),
   credential: Base64Url,
   authenticator_data: Base64Url,
   client_data: Base64Url,

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { waitingByProject, waitingLine } from "../waiting";
 import { type CreationOptionsJSON, type RequestOptionsJSON, makePasskey } from "../webauthn";
 import { type Account as AccountData, type Ceremony, type Passkey, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
 import { go, takeFragment } from "./nav";
@@ -212,6 +213,7 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
       <UsageCounts counted={account.usage.counted} reload={reload} />
 
       <Sheet title="Sign out" sub label="Signing out">
+        <WaitingHere account={account} />
         <div className="site-actions">
           <button type="button" className="switch" disabled={busy !== undefined} onClick={() => void signOut(false)}>
             Sign out of this browser
@@ -225,6 +227,29 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
 
       <DeleteAccount handle={account.handle} fresh={freshNow} check={check} />
     </Shell>
+  );
+}
+
+/**
+ * Before you sign out: answers this tab's desks left waiting for your passkey (B-a6xpc). Signed out, they can't be confirmed
+ * until you sign in again, and the service drops them 30 minutes after you answered.
+ */
+function WaitingHere({ account }: { account: AccountData }) {
+  const [waiting] = useState(() => [...waitingByProject()].filter(([id]) => account.projects.some((p) => p.id === id)));
+  if (!waiting.length) return null;
+  return (
+    <div className="site-warn" role="note">
+      {waiting.map(([id, n]) => {
+        const p = account.projects.find((x) => x.id === id)!;
+        const one = n === 1;
+        return (
+          <p key={id}>
+            {waitingLine(n)} {one ? "It's" : "They're"} on the desk of <To to={`/projects/${encodeURIComponent(id)}`}>{projectName(p)}</To>: confirm {one ? "it" : "them"} there before you sign out. Signed out,{" "}
+            {one ? "it waits" : "they wait"} until you sign in again, for up to 30 minutes from when you answered; then {one ? "it's" : "they're"} dropped, unrecorded.
+          </p>
+        );
+      })}
+    </div>
   );
 }
 

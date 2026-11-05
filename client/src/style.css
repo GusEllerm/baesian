@@ -622,6 +622,18 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 .site-foot a:hover { color: var(--ink); }
 /* the project's page, when a machine's cards don't notify for a while (a burst) */
 .desk-notice { margin: 0 0 6px; padding: 8px 12px; border-radius: 8px; background: #fbecc8; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink); }
+/* answers waiting for your passkey (B-a6xpc): how many, and the button that confirms them together; and any that waited
+   too long. On the path, each waiting answer is marked. */
+.passkey-wait { --c: var(--ink); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 8px; padding: 6px 6px 6px 14px; border-radius: 10px; background: #ece8f6; box-shadow: inset 0 0 0 1.5px #d3cbe6; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink); }
+.passkey-wait p { flex: 1 1 14em; }
+.passkey-wait .confirm { height: 38px; padding: 0 16px; }
+.passkey-wait .confirm:disabled { opacity: .7; cursor: wait; }
+.passkey-wait.lapsed { background: #fbecc8; box-shadow: none; }
+.passkey-wait.lapsed .cancel { padding: 0 10px; height: 38px; color: var(--ink); font-weight: 650; }
+.key-dot { display: inline-block; width: 8px; height: 8px; margin: 0 8px 1px 0; border-radius: 50%; background: var(--right); vertical-align: 1px; }
+.path .row .tag.passkey { color: var(--right); }
+.site-row .st.waits { color: var(--right); font-weight: 650; }
+.site-warn { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 10px; background: #fbecc8; font: var(--t-body); font-size: 15.5px; }
 
 /* the passkey on an answer: over the desk, dimmed, and over any panel open on it (a preference change asks from the
    preferences panel) and the menu */
@@ -635,6 +647,8 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
 .proof-row { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
 .proof-row .confirm { flex: 1; padding: 0 16px; }
 .proof-row .confirm:disabled { opacity: .7; cursor: wait; }
+.proof-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; font: var(--t-body); font-size: 15px; }
+.proof-list .sub { list-style: none; margin-left: -20px; color: var(--ink-soft); }
 
 @media (max-width: 760px) {
   a.wordmark { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
@@ -654,6 +668,8 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
   .site-foot { margin-top: 22px; }
   .site-foot a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
   .desk-notice { margin: 0 0 6px; }
+  .passkey-wait { margin: 0 0 4px; padding: 6px 6px 6px 12px; }
+  .passkey-wait .confirm, .passkey-wait.lapsed .cancel { height: auto; min-height: 44px; }
   .once-row { flex-direction: column; align-items: stretch; }
   .once-row .switch { min-height: 44px; }
   .proof-row { flex-direction: column; align-items: stretch; }

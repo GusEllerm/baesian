@@ -8,6 +8,7 @@ import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
 import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
 import type { ApiRemovedCard } from "../../src/api.js";
+import { batchChallenge } from "../../src/passkey.js";
 import { checkSigned, readTrustFile } from "../../src/trust.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
 import type { Waiting } from "./notify.js";
@@ -21,7 +22,8 @@ import { agentKind, beforeLinkingKind, notAgentWritten, uploadProblem } from "./
 // One project's relay (M9b): Baesian's own store over the project's files in its Durable Object (B-0ag7h, B-17wn9), and
 // what each address does with it (B-7z97x). The Durable Object and the Worker around it are in index.ts; who may call
 // what is decided there, before anything here runs. An answer that takes the reviewer's passkey (D139, D163) is
-// composed first and waits for the passkey's assertion over its bytes (M9c). docs/vault/Modules/service.md describes it.
+// composed first and waits for the passkey's assertion over its bytes (M9c); answers waiting together are confirmed by
+// one assertion over the list of their digests (B-a6xpc). docs/vault/Modules/service.md describes it.
 
 /** What an address answers: a status and a JSON body, which the Worker sends. */
 export interface Reply {
@@ -41,8 +43,14 @@ export const MAX_ENTRIES = 1000;
 /** The hosted clients a person answers from (D130). */
 export const CLIENTS = ["hosted-desktop", "hosted-phone"] as const;
 
-/** How long a composed answer waits for the reviewer's passkey. */
-export const PENDING_MS = 5 * 60_000;
+/**
+ * How long a composed answer waits for the reviewer's passkey: long enough for a sitting, since answers wait on the desk
+ * until one tap confirms them together (B-a6xpc).
+ */
+export const PENDING_MS = 30 * 60_000;
+
+/** The most waiting answers one tap confirms (B-a6xpc). */
+export const MAX_BATCH = 50;
 
 /** A person signed in, as the Worker found them: their account, handle and client (P16 section 7). */
 export interface Person {
@@ -62,18 +70,44 @@ export interface Needed {
   digest: string;
 }
 
-/** An answer composed and waiting for the passkey: what to write again, at the same time, and the proofs given so far. */
+/** An answer composed and waiting for the passkey: what to write again, at the same time, and what needs proving. */
 export interface Pending {
+  kind: "answer";
   account: string;
   answer: Answer;
   at: string;
   need: Needed[];
-  proofs: Omit<PasskeyProof, "type" | "format" | "file">[];
-  keys: PasskeyKey[];
+  /** When it stops waiting, by the relay's clock. */
+  expires: string;
 }
 
+/**
+ * Waiting answers asked for together (B-a6xpc): what one tap of the passkey confirms. The passkey signs the list of the
+ * digests of every file they write that takes it (`batchChallenge()`), or, for one file alone, that file's digest.
+ */
+export interface Batch {
+  kind: "batch";
+  account: string;
+  /** The waiting answers it confirms, in the order they were answered. */
+  answers: string[];
+  /** Every file those answers write that takes the passkey, in order: the list the passkey signs. */
+  digests: string[];
+}
+
+/** The challenge a batch's passkey signs: one file's digest alone, as before (P16 section 7), or its list's (B-a6xpc). */
+export const challengeFor = (digests: readonly string[]) => (digests.length === 1 ? Buffer.from(digests[0]!, "hex").toString("base64url") : batchChallenge(digests));
+
 /** The assertion's parts a proof keeps (P16 section 7), as the Worker checked them. */
-export type Assertion = Omit<PasskeyProof, "type" | "format" | "file">;
+export type Assertion = Omit<PasskeyProof, "type" | "format" | "file" | "batch">;
+
+/** What became of one answer a tap confirmed (B-a6xpc): written, as its own address would have answered, or why not. */
+export interface Outcome {
+  pending: string;
+  /** What it answered, when it was still waiting. */
+  kind?: Answer["kind"];
+  status: number;
+  body: unknown;
+}
 
 /** What's written needs passkey proofs that weren't given: nothing is kept. */
 class NeedsProof extends Error {
@@ -470,7 +504,8 @@ export class Relay {
    * local client's is (B-0ag7h), naming the account, the project (B-tf9fc) and the card revision's digest (B-f571v),
    * and signed by the relay's storage as it's written (D138, D160). An answer on a hard card (D139), or one that writes a
    * preference file letting more cards past you (D163), takes the reviewer's passkey: it's composed, nothing is kept,
-   * and it waits (202) for the passkey to sign its bytes (`Relay.prove`). Baesian's own proposals follow, as the local
+   * and it waits (202) until the passkey signs its bytes, alone or with other answers (`Relay.batch`, `Relay.proveBatch`,
+   * B-a6xpc). Baesian's own proposals follow, as the local
    * server files them (D161, B-y6jn6); their failure never fails the answer.
    */
   verdict(input: unknown, who: Person): Reply {
@@ -538,8 +573,8 @@ export class Relay {
     }
     if ("need" in out) {
       const id = randomBytes(18).toString("base64url");
-      const pending: Pending = { account: who.account, answer: a, at: out.at, need: out.need, proofs: [], keys: [] };
-      this.files.putPending(id, JSON.stringify(pending), new Date(Date.now() + PENDING_MS).toISOString());
+      const pending: Pending = { kind: "answer", account: who.account, answer: a, at: out.at, need: out.need, expires: new Date(Date.now() + PENDING_MS).toISOString() };
+      this.files.putPending(id, JSON.stringify(pending), pending.expires);
       return awaiting(id, pending);
     }
     return this.answered(a, out.done);
@@ -560,30 +595,32 @@ export class Relay {
 
   /**
    * Run an answer through the store, in one transaction. What it writes that takes the passkey is found as it's written:
-   * a verdict on a hard revision, a preference file that lets more cards past you. With no proofs given, those mean
-   * nothing is kept (`NeedsProof`). With proofs, the answer is written again at the time it was composed: its bytes must
-   * be the ones the passkey signed, or the project changed meanwhile (`Changed`), and each proof must count, by the
-   * same checks `baesian verify` makes, before anything is kept.
+   * a verdict on a hard revision, a preference file that lets more cards past you. With no assertion given, those mean
+   * nothing is kept (`NeedsProof`). With one, the answer is written again at the time it was composed: its bytes must be
+   * the ones the passkey signed, or the project changed meanwhile (`Changed`); each gets its proof beside it, naming the
+   * batch's list when the tap confirmed more than one file (B-a6xpc); and each proof must count, by the same checks
+   * `baesian verify` makes, before anything is kept.
    */
-  private attempt(a: Answer, given: { at?: string; proofs?: Assertion[]; keys?: PasskeyKey[]; need?: Needed[] }): { done: unknown } | { need: Needed[]; at: string } {
+  private attempt(a: Answer, given: { at?: string; assertion?: Assertion; key?: PasskeyKey; need?: Needed[]; batch?: string[] }): { done: unknown } | { need: Needed[]; at: string } {
     try {
       const done = this.write((s, mark) => {
-        for (const k of given.keys ?? []) this.putKey(k);
+        if (given.key) this.putKey(given.key);
         const before = s.inForce();
         const { result, at } = runAnswer(a, s, given.at);
         const written = this.files.writtenSince(mark);
         const need = this.needed(s, before, written);
-        if (!given.proofs) {
+        if (!given.assertion) {
           if (need.length) throw new NeedsProof(need.map((n) => ({ kind: n.kind, digest: n.digest })), at);
           return result;
         }
         if (need.length !== given.need?.length || need.some((n, i) => n.digest !== given.need![i]!.digest)) {
           throw new Changed("the project changed while your passkey was asked (the card was answered again, or the preferences moved): answer again");
         }
-        need.forEach((n, i) => {
-          const proof: PasskeyProof = { type: "passkey-proof", format: newestFormat("passkey-proof"), file: n.path.slice(n.path.lastIndexOf("/") + 1), ...given.proofs![i]! };
+        for (const n of need) {
+          const file = n.path.slice(n.path.lastIndexOf("/") + 1);
+          const proof: PasskeyProof = { type: "passkey-proof", format: newestFormat("passkey-proof"), file, ...(given.batch ? { batch: given.batch } : {}), ...given.assertion };
           this.files.create(proofPath(n.path), new TextEncoder().encode(json(proof)));
-        });
+        }
         const check = this.store();
         for (const n of need) {
           const j = check.judge(n.path);
@@ -616,38 +653,75 @@ export class Relay {
     return out;
   }
 
+  /** What waits under an ID, if it's still waiting and it's this account's: a composed answer, or a batch of them. */
+  private waitingFor<K extends "answer" | "batch">(id: string, account: string, kind: K): (K extends "answer" ? Pending : Batch) | undefined {
+    const raw = this.files.pending(id);
+    const p = raw ? (JSON.parse(raw) as Pending | Batch) : undefined;
+    // An answer composed before batches named no kind.
+    return p?.account === account && (p.kind ?? "answer") === kind ? (p as K extends "answer" ? Pending : Batch) : undefined;
+  }
+
   /** A composed answer waiting for the passkey, if it's still waiting and it's this account's. */
   pending(id: string, account: string): Pending | undefined {
-    const raw = this.files.pending(id);
-    const p = raw ? (JSON.parse(raw) as Pending) : undefined;
-    return p?.account === account ? p : undefined;
+    return this.waitingFor(id, account, "answer");
+  }
+
+  /** Answers asked for together, waiting for the passkey's one tap, if they're still waiting and this account's (B-a6xpc). */
+  batchOf(id: string, account: string): Batch | undefined {
+    return this.waitingFor(id, account, "batch");
   }
 
   /**
-   * The passkey's assertion over the next file a composed answer needs proved, as the Worker checked it against the
-   * account's passkey (B-jp22m), with that passkey's key file. When every file is proved, the answer is written, with
-   * each proof beside its file and the key file in `trust/`, so the relay and every pinned machine count it.
+   * Answers waiting for the passkey, asked for together (B-a6xpc): `POST batches`, `{ pending: [ids] }`, in the order they
+   * were answered. Replies 202 with the batch's ID and the challenge one tap signs: the digest of the list of every file
+   * they write that takes the passkey (`batchChallenge()`), or one file's own digest. Answers no longer waiting are named
+   * in `expired`; if none is waiting, 404. The batch waits as long as its last answer does.
    */
-  prove(id: string, account: string, assertion: Assertion, key: PasskeyKey): Reply {
-    const p = this.pending(id, account);
-    if (!p) return fail(404, "no answer of yours is waiting for a passkey with that ID, or it expired: answer again");
-    p.proofs.push(assertion);
-    if (!p.keys.some((k) => k.credential === key.credential)) p.keys.push(key);
-    if (p.proofs.length < p.need.length) {
-      this.files.putPending(id, JSON.stringify(p), new Date(Date.now() + PENDING_MS).toISOString());
-      return awaiting(id, p);
+  batch(input: unknown, account: string): Reply {
+    const ids = isObject(input) && Array.isArray(input.pending) ? input.pending : undefined;
+    if (!ids?.length || ids.length > MAX_BATCH || ids.some((x) => typeof x !== "string") || new Set(ids).size !== ids.length) {
+      return fail(400, `send { pending: [ids] }: from 1 to ${MAX_BATCH} different answers waiting for your passkey`);
     }
-    let out;
-    try {
-      out = this.attempt(p.answer, { at: p.at, proofs: p.proofs, keys: p.keys, need: p.need });
-    } catch (e) {
-      this.files.dropPending(id);
-      if (e instanceof Changed) return fail(409, e.message);
-      return answerFailed(e);
+    const alive: [string, Pending][] = [];
+    const expired: string[] = [];
+    for (const id of ids as string[]) {
+      const p = this.pending(id, account);
+      if (p) alive.push([id, p]);
+      else expired.push(id);
     }
+    if (!alive.length) return { status: 404, body: { error: "none of these answers is waiting for your passkey any more: they expired, or were confirmed already", expired } };
+    const batch: Batch = { kind: "batch", account, answers: alive.map(([id]) => id), digests: alive.flatMap(([, p]) => p.need.map((n) => n.digest)) };
+    const expires = alive.map(([, p]) => p.expires).sort().at(-1)!;
+    const id = randomBytes(18).toString("base64url");
+    this.files.putPending(id, JSON.stringify(batch), expires);
+    return { status: 202, body: { passkey: { batch: id, answers: batch.answers, expired, files: batch.digests.length, challenge: challengeFor(batch.digests), expires } } };
+  }
+
+  /**
+   * The passkey's one assertion over a batch (B-a6xpc), as the Worker checked it against the account's passkey (B-jp22m)
+   * and the batch's challenge, with that passkey's key file. Each answer is then written in turn, as its own address would
+   * have written it, in a transaction of its own, with its proofs beside its files, each naming the batch's list when it
+   * holds more than one; and the key file in `trust/`, so the relay and every pinned machine count them. An answer that
+   * expired meanwhile (410), or whose card changed (409), isn't written; the rest are. Replies 200 with each one's outcome.
+   */
+  proveBatch(id: string, account: string, assertion: Assertion, key: PasskeyKey): Reply {
+    const b = this.batchOf(id, account);
+    if (!b) return fail(404, "no answers of yours are waiting for your passkey under that ID, or they expired: confirm them again");
     this.files.dropPending(id);
-    if ("need" in out) return fail(500, "the answer still needs a passkey after every proof was given");
-    return this.answered(p.answer, out.done);
+    const answers: Outcome[] = b.answers.map((pending) => {
+      const p = this.pending(pending, account);
+      if (!p) return { pending, status: 410, body: { error: "it waited too long for your passkey, so it wasn't recorded: answer again" } };
+      let r: Reply;
+      try {
+        const out = this.attempt(p.answer, { at: p.at, assertion, key, need: p.need, ...(b.digests.length > 1 ? { batch: b.digests } : {}) });
+        r = "need" in out ? fail(500, "the answer still needs a passkey after the tap") : this.answered(p.answer, out.done);
+      } catch (e) {
+        r = e instanceof Changed ? fail(409, e.message) : outcomeOf(e);
+      }
+      this.files.dropPending(pending);
+      return { pending, kind: p.answer.kind, status: r.status, body: r.body };
+    });
+    return { status: 200, body: { answers } };
   }
 
   /** Put passkey key files in the project's `trust/`, signed (P16 section 7, D159): `Relay.putKey` for each. */
@@ -712,12 +786,11 @@ function runAnswer(a: Answer, s: Store, at: string | undefined): { result: unkno
 }
 
 /**
- * What a composed answer replies while it waits for the passkey (202): its ID, and the next file to prove, whose digest
- * is the passkey's challenge, base64url (P16 section 7). The Worker adds the browser's options.
+ * What a composed answer replies while it waits for the passkey (202): its ID, what it writes that takes the passkey, and
+ * until when it waits. It's confirmed with others or alone, through a batch (`Relay.batch`, B-a6xpc).
  */
 function awaiting(id: string, p: Pending): Reply {
-  const next = p.need[p.proofs.length]!;
-  return { status: 202, body: { passkey: { pending: id, proving: next.kind, step: p.proofs.length + 1, of: p.need.length, challenge: Buffer.from(next.digest, "hex").toString("base64url") } } };
+  return { status: 202, body: { passkey: { pending: id, proving: p.need.map((n) => n.kind), expires: p.expires } } };
 }
 
 /** The hosted client an answer names (D130): `hosted-desktop` unless it says `hosted-phone`. */
@@ -734,4 +807,14 @@ function answerFailed(e: unknown): Reply {
   if (e instanceof StalePreferences || e instanceof NotAllowed || /stale/.test(message)) return fail(409, message);
   if (e instanceof NoCard) return fail(404, message);
   throw e;
+}
+
+/** Why one answer of a batch wasn't written (B-a6xpc): as its own address would say, or, for the unforeseen, 500. */
+function outcomeOf(e: unknown): Reply {
+  try {
+    return answerFailed(e);
+  } catch {
+    console.error(`an answer a passkey confirmed wasn't written: ${e instanceof Error ? e.message : String(e)}`);
+    return fail(500, `it couldn't be written (${e instanceof Error ? e.message : String(e)})`);
+  }
 }

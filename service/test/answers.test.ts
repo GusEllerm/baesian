@@ -82,7 +82,7 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     for (const response of ["accept", "defer"]) {
       const r = await json(await answer({ card: id, revision: 1, response, ...(response === "defer" ? { comment: "later" } : {}) }));
       expect(r.status).toBe(202);
-      expect(r.body.passkey).toMatchObject({ proving: "verdict", step: 1, of: 1, challenge: expect.any(String) });
+      expect(r.body.passkey).toEqual({ pending: expect.any(String), proving: ["verdict"], expires: expect.any(String) });
     }
     expect((await pullLog()).at(-1)!.seq).toBe(head);
   });
@@ -113,7 +113,7 @@ describe("answers, signed so the CLI's own checks pass (D138, D160)", () => {
     for (const change of [{ mode: "enforce" }, { row_dependency: "sample" }, { burn_in: 0 }]) {
       const looser = await json(await call("POST", "preferences", { as: "person", json: { replaces: tighter.body.name, ...change } }));
       expect(looser.status, JSON.stringify(change)).toBe(202);
-      expect(looser.body.passkey).toMatchObject({ proving: "preferences" });
+      expect(looser.body.passkey).toMatchObject({ proving: ["preferences"] });
     }
     expect((await json(await call("POST", "preferences", { as: "person", json: { row_dependency: "never-without-me" } }))).status).toBe(409);
     expect((await state()).routing.preferences?.name).toBe(tighter.body.name);

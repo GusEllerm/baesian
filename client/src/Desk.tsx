@@ -9,11 +9,12 @@ import { laterSuperseded, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
 import { usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
-import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdictTo } from "./outbox";
-import { postAnswer, useEndpoints } from "./endpoints";
-import { ProofPrompt } from "./proof";
+import { type Confirmed, confirmAnswers, postAnswer, useEndpoints } from "./endpoints";
+import { NotConfirmed, ProofPrompt } from "./proof";
+import { ASK_BEFORE_EXPIRY_MS, type Wait, askNow, confirmedLine, expiredLine, loadWaiting, saveWaiting, waitingLine } from "./waiting";
 import { LIFT_TILT, type LiftLabel, LiftSignals, type LiftLabels, answerLabel, choiceLabel, useLift } from "./Lift";
 import { PHONE, TOUCH, useMedia } from "./media";
 import { CalibrationPanel, DeckBriefing, DeckPanel, EmptyDesk, HeldPanel, KeysPanel, MoreMenu, type PanelKind, hasBriefing, moveInMenu } from "./Panels";
@@ -61,7 +62,11 @@ type Leave = Dir | "fade";
 
 interface Answered {
   answer: Answer;
-  phase: "held" | "sent";
+  /**
+   * In its undo window or on its way (held); on the website, held by the relay until your passkey confirms it, with
+   * other answers waiting (B-a6xpc); or recorded (sent).
+   */
+  phase: "held" | "waiting" | "sent";
   words: string;
   agent: string;
   /** What the toast says once it's recorded. */
@@ -70,6 +75,27 @@ interface Answered {
   name: string;
   rarity: Rarity;
   state: string;
+  /** On the website, a hard card's: its answer will wait for your passkey (D139, B-a6xpc). */
+  hard?: boolean;
+  /** While it waits for your passkey: the relay's hold on it. */
+  wait?: Wait;
+}
+
+/**
+ * The answers this tab left waiting for your passkey in a project (B-a6xpc), as the desk finds them when it opens: those
+ * the relay still holds, on cards still to answer at the same revision, and the cards of those it has dropped.
+ */
+function restoreWaiting(project: string, state: ApiState, now: number): { kept: [string, Answered][]; expired: string[] } {
+  const kept: [string, Answered][] = [];
+  const expired: string[] = [];
+  for (const e of loadWaiting<Answered>(project)) {
+    if (e.answered?.phase !== "waiting" || !e.answered.wait) continue;
+    const card = state.cards.find((c) => keyOf(c) === e.key);
+    if (!card || (card.status !== "open" && card.status !== "held")) continue;
+    if (Date.parse(e.expires) <= now) expired.push(e.answered.name);
+    else kept.push([e.key, e.answered]);
+  }
+  return { kept, expired };
 }
 interface Toast {
   text: string;
@@ -99,6 +125,9 @@ function sentWords(card: ApiCard, answer: Answer): string {
   return isOwnCard(m) ? "Recorded." : `Sent to ${m.source_agent}.`;
 }
 
+/** Baesian may have proposed something from your answers (D161, B-y6jn6): it's in the queue now. */
+const filedWords = (n: number) => (n ? ` Baesian has ${n === 1 ? "a proposal" : `${NUMBER[n]?.toLowerCase() ?? n} proposals`} from your answers, in your queue.` : "");
+
 /** Baesian's own cards, for people: its card IDs and references become words (D69). An agent's own words are left as they are. */
 function forPeople(card: ApiCard, cards: Map<string, ApiCard>): ApiCard {
   if (!isOwnCard(card.meta)) return card;
@@ -116,9 +145,15 @@ function messy(id: string, depth: number) {
 export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt: number; notice?: string | undefined }) {
   const salt = useMemo(() => Math.random().toString(36).slice(2), []);
   const reduced = useReducedMotion();
-  const [answered, setAnswered] = useState<Map<string, Answered>>(() => new Map());
+  /** Where it reads and answers: the local server, or on the website the project's relay (M9e). */
+  const endpoints = useEndpoints();
+  // On the website, the answers this tab left waiting for your passkey come back, while the relay holds them (B-a6xpc).
+  const [restored] = useState(() => (endpoints.hosted ? restoreWaiting(state.project.name, state, serverNow(state, fetchedAt)) : { kept: [], expired: [] }));
+  const [answered, setAnswered] = useState<Map<string, Answered>>(() => new Map(restored.kept));
   const answeredRef = useRef(answered);
   answeredRef.current = answered;
+  /** The cards whose answers waited too long for your passkey, which the desk tells you of until you dismiss it. */
+  const [expired, setExpired] = useState<string[]>(restored.expired);
   const [pick, setPick] = useState<string>();
   /** A card you've answered this session, reopened from the path. */
   const [reviewing, setReviewing] = useState<string>();
@@ -144,8 +179,6 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   /** A draft for the preferences panel to open with: the survey's suggestion, to adjust. */
   const [prefsInitial, setPrefsInitial] = useState<Draft>();
   const project = state.project.name;
-  /** Where it reads and answers: the local server, or on the website the project's relay (M9e). */
-  const endpoints = useEndpoints();
   /** The phone layout (D130), and a screen you touch: see media.ts. */
   const phone = useMedia(PHONE);
   const touch = useMedia(TOUCH);
@@ -226,11 +259,14 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     outbox.current = new Outbox(postVerdictTo(endpoints), UNDO_MS, {
       sent: (k, posted) => {
         const a = answeredRef.current.get(k);
+        // On the website, a hard answer waits for your passkey, with any others waiting, and you go on (B-a6xpc).
+        const wait = posted?.waiting;
+        if (wait) {
+          setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "waiting", wait }) : m));
+          return say(`${a?.hard === false ? "Accepting it lets more cards past you, so it" : "It"} waits for your passkey.`);
+        }
         setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "sent" }) : m));
-        // Baesian may have proposed something from your answer (D161, B-y6jn6): it's in the queue now.
-        const n = posted?.filed?.length ?? 0;
-        const filed = n ? ` Baesian has ${n === 1 ? "a proposal" : `${NUMBER[n]?.toLowerCase() ?? n} proposals`} from your answers, in your queue.` : "";
-        say(`${a?.sent ?? "Sent."}${filed}`);
+        say(`${a?.sent ?? "Sent."}${filedWords(posted?.filed?.length ?? 0)}`);
       },
       failed: (k, error) => {
         setAnswered((m) => {
@@ -248,6 +284,137 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     return () => removeEventListener("pagehide", leave);
   }, []);
 
+  // ---------------------------------------------------------------- answers waiting for your passkey (B-a6xpc)
+  // On the website, a hard answer waits, marked on the path, while you go on; one tap then confirms every answer waiting.
+  const waits = [...answered].filter((e): e is [string, Answered & { wait: Wait }] => e[1].phase === "waiting" && !!e[1].wait);
+  const waitKey = waits.map(([, a]) => a.wait.pending).join(" ");
+  const [asking, setAsking] = useState(false);
+  /** Answers you said "Not now" to, or whose tap failed: the desk doesn't ask by itself again for them alone. */
+  const declined = useRef(new Set<string>());
+  /** Answers it has asked about as they neared expiry. */
+  const warned = useRef(new Set<string>());
+  /** How far the relay's clock, which a wait's expiry is by, is ahead of this browser's. */
+  const skew = now - Date.now();
+  const expiresAt = (a: { wait: Wait }) => Date.parse(a.wait.expires);
+  // Kept in this tab while they wait, so a reload, coming back to the page or signing in again finds them (waiting.ts).
+  useEffect(() => {
+    if (endpoints.hosted) saveWaiting(project, waits.map(([key, a]) => ({ key, expires: a.wait.expires, answered: a })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitKey]);
+  // Looked at again when one would expire within five minutes, and when it expires.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const at = waits.flatMap(([, a]) => [expiresAt(a) - skew - ASK_BEFORE_EXPIRY_MS, expiresAt(a) - skew]).filter((t) => t > Date.now());
+    if (!at.length) return;
+    const t = setTimeout(() => setTick((n) => n + 1), Math.min(...at) - Date.now() + 20);
+    return () => clearTimeout(t);
+  });
+
+  /** Take answers off the desk that weren't recorded: their cards come back. */
+  const drop = (keys: string[]) => {
+    if (!keys.length) return;
+    setAnswered((m) => {
+      const n = new Map(m);
+      for (const k of keys) n.delete(k);
+      return n;
+    });
+    if (reviewing && keys.includes(reviewing)) setReviewing(undefined);
+  };
+  /** The cards of answers that waited too long, for the notice: each once, whether the desk's clock or the relay said so. */
+  const noteExpired = (names: string[]) => names.length && setExpired((x) => [...new Set([...x, ...names])]);
+  // An answer the relay has dropped, unconfirmed, comes off the desk, and the desk says so until you dismiss it.
+  const lapsed = waits.filter(([, a]) => expiresAt(a) <= now);
+  const lapsedKey = lapsed.map(([k]) => k).join(" ");
+  useEffect(() => {
+    if (!lapsed.length) return;
+    drop(lapsed.map(([k]) => k));
+    noteExpired(lapsed.map(([, a]) => a.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lapsedKey]);
+
+  /** What a tap's outcomes do on the desk: answers recorded, dropped (they waited too long), or refused (their cards changed). */
+  const settle = (list: [string, Answered & { wait: Wait }][], out: Confirmed) => {
+    const keyFor = new Map(list.map(([k, a]) => [a.wait.pending, k]));
+    const gone = out.expired.flatMap((p) => keyFor.get(p) ?? []);
+    const written: string[] = [];
+    const refused: { key: string; why: string }[] = [];
+    let filed = 0;
+    for (const o of out.outcomes) {
+      const k = keyFor.get(o.pending);
+      if (!k) continue;
+      const body = o.body as { error?: string; filed?: string[] } | undefined;
+      if (o.status === 201) {
+        written.push(k);
+        filed += body?.filed?.length ?? 0;
+      } else if (o.status === 410) gone.push(k);
+      else refused.push({ key: k, why: body?.error ?? `the server answered ${o.status}` });
+    }
+    const names = new Map(list.map(([k, a]) => [k, a]));
+    setAnswered((m) => {
+      const n = new Map(m);
+      for (const k of written) {
+        const a = n.get(k);
+        if (!a) continue;
+        const { wait: _, ...rest } = a;
+        n.set(k, { ...rest, phase: "sent" });
+      }
+      return n;
+    });
+    drop([...gone, ...refused.map((x) => x.key)]);
+    noteExpired(gone.map((k) => names.get(k)!.name));
+    if (refused.length) {
+      const one = refused.length === 1;
+      say(`${one ? "That answer wasn't" : `${NUMBER[refused.length] ?? refused.length} answers weren't`} recorded: ${refused[0]!.why}. ${one ? "The card is" : "Their cards are"} back.`);
+    } else if (written.length) say(`${confirmedLine(written.length, names.get(written[0]!)?.sent)}${filedWords(filed)}`);
+  };
+
+  /** Ask your passkey to confirm every answer waiting, with one tap: by the button, or by the desk's own rule. */
+  const confirmWaiting = async (expiring = false) => {
+    const list = waits.filter(([, a]) => expiresAt(a) > serverNow(state, fetchedAt));
+    if (!list.length || !endpoints.hosted) return;
+    const pendings = list.map(([, a]) => a.wait.pending);
+    if (expiring) for (const p of pendings) warned.current.add(p);
+    setAsking(true);
+    try {
+      const titles = Object.fromEntries(list.map(([, a]) => [a.wait.pending, a.name]));
+      settle(list, await confirmAnswers(endpoints, pendings, { kind: "answers", titles, loosens: list.some(([, a]) => a.wait.proving.includes("preferences")) }));
+    } catch (e) {
+      for (const p of pendings) declined.current.add(p);
+      const one = list.length === 1;
+      if (e instanceof NotConfirmed) say(`Not confirmed: ${one ? "your answer waits" : "your answers wait"} for your passkey.`);
+      else say(`Your passkey didn't confirm ${one ? "it" : "them"}: ${e instanceof Error ? e.message : String(e)}. ${one ? "It waits" : "They wait"} still.`);
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  // The desk asks by itself once the run of hard cards in front of you is over, or an answer nears expiry (waiting.ts).
+  const busy = asking || [...answered.values()].some((a) => a.phase === "held") || mode.kind === "write" || mode.kind === "pass" || menuOpen || (!!panel && panel !== "path");
+  const decision = askNow({
+    waiting: waits.filter(([, a]) => expiresAt(a) > now).map(([, a]) => ({ pending: a.wait.pending, expiresAt: expiresAt(a) })),
+    busy,
+    hardInFront: !!current && isHard(current),
+    declined: declined.current,
+    warned: warned.current,
+    now,
+  });
+  useEffect(() => {
+    if (decision !== "no") void confirmWaiting(decision === "expiring");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decision, waitKey]);
+
+  // Leaving the page while answers wait, or a hard answer is still in its undo window, asks first: closed, they're lost.
+  const unconfirmed = waits.length > 0 || [...answered.values()].some((a) => a.phase === "held" && a.hard);
+  useEffect(() => {
+    if (!unconfirmed) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    addEventListener("beforeunload", warn);
+    return () => removeEventListener("beforeunload", warn);
+  }, [unconfirmed]);
+
   const commit = (answer: Answer) => {
     if (!current) return;
     const v = verdictFor(current, answer);
@@ -264,7 +431,17 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     }
     // A changed answer keeps its place on the path (Map.set keeps the order) and replaces what was there.
     setAnswered((m) =>
-      new Map(m).set(key, { answer, phase: "held", words, agent: agentOf(current), sent: sentWords(current, answer), name: current.meta.title, rarity: r!.rarity, state: pathState(current, answer) }),
+      new Map(m).set(key, {
+        answer,
+        phase: "held",
+        words,
+        agent: agentOf(current),
+        sent: sentWords(current, answer),
+        name: current.meta.title,
+        rarity: r!.rarity,
+        state: pathState(current, answer),
+        ...(endpoints.hosted ? { hard: isHard(current) } : {}),
+      }),
     );
     const waiting = outbox.current!.hold(key, v.verdict);
     // Round 5 took your answer out of this toast: the path shows it.
@@ -332,8 +509,10 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const change = () => {
     if (!reviewing) return;
     const a = answered.get(reviewing);
-    if (a?.phase === "held") {
-      outbox.current!.undo();
+    // An answer not yet recorded is taken back: one in its undo window, or one waiting for your passkey, which the relay
+    // then drops unconfirmed when it expires (B-a6xpc).
+    if (a?.phase === "held" || a?.phase === "waiting") {
+      if (a.phase === "held") outbox.current!.undo();
       setAnswered((m) => {
         const n = new Map(m);
         n.delete(reviewing);
@@ -583,7 +762,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     .map(([k, a]) => {
       const id = k.split("@")[0]!;
       const link = relById.get(id);
-      return { key: k, id, name: a.name, state: a.state, rarity: a.rarity, ...(link ? { link } : {}) };
+      return { key: k, id, name: a.name, state: a.state, rarity: a.rarity, ...(a.phase === "waiting" ? { waiting: true } : {}), ...(link ? { link } : {}) };
     });
   const ahead = inPlay ? ordered.filter((c) => c.meta.id !== inPlay.meta.id) : setup ? ordered : [];
   const nextUp = ahead.slice(0, NEXT_MAX).map((c) => {
@@ -745,6 +924,26 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
               {notice}
             </p>
           )}
+          {/* On the website: answers waiting for your passkey, confirmed together (B-a6xpc); and any that waited too long. */}
+          {expired.length > 0 && (
+            <div className="passkey-wait lapsed" role="alert">
+              <p>{expiredLine(expired)}</p>
+              <button type="button" className="cancel" onClick={() => setExpired([])}>
+                Got it
+              </button>
+            </div>
+          )}
+          {waits.length > 0 && (
+            <div className="passkey-wait" role="status">
+              <p>
+                <span className="key-dot" aria-hidden="true" />
+                {waitingLine(waits.length)}
+              </p>
+              <button type="button" className="confirm" disabled={asking} onClick={() => void confirmWaiting()}>
+                {waits.length === 1 ? "Confirm it" : "Confirm them"}
+              </button>
+            </div>
+          )}
           <p className="crumbs">
             {setup ? (
               <>
@@ -849,7 +1048,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     readFraction: dwell ? 1 - readLeft / dwell : 1,
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
-                    ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent" } } : {}),
+                    ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent", waiting: answered.get(reviewing)!.phase === "waiting" } } : {}),
                     ...(near.length ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
                     onMode: (m) => {

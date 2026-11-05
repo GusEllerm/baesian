@@ -6,6 +6,7 @@ import { randomSuffix } from "../src/ids.js";
 import { GATE_VERSION, type GateSource, TODAY, route } from "../src/routing.js";
 import type { GateRecord, PasskeyKey, PasskeyProof, Preferences, ServiceKey, Verdict } from "../src/schema.js";
 import { DRAW_NAMESPACE, NAMESPACE, opensshPublicKey, parseSignature, signMessage } from "../src/sshsig.js";
+import { batchChallenge } from "../src/passkey.js";
 import { type Store, proofPath, settingsOf } from "../src/store.js";
 import { type TrustRoot, drawMessage, parseTrust, projectLine } from "../src/trust.js";
 
@@ -51,13 +52,25 @@ export class TestPasskey {
    * The assertion a browser returns when the reviewer verifies and this passkey signs `bytes`: the challenge is their
    * SHA-256 digest (P16 section 7). Each override makes one thing wrong.
    */
-  prove(file: string, bytes: Buffer, over: { type?: string; challenge?: string; origin?: string; rpId?: string; flags?: number; crossOrigin?: boolean } = {}): PasskeyProof {
-    const clientData = Buffer.from(JSON.stringify({ type: over.type ?? "webauthn.get", challenge: over.challenge ?? sha256(bytes).toString("base64url"), origin: over.origin ?? ORIGIN, crossOrigin: over.crossOrigin ?? false }));
+  prove(file: string, bytes: Buffer, over: { type?: string; challenge?: string; origin?: string; rpId?: string; flags?: number; crossOrigin?: boolean; batch?: string[] } = {}): PasskeyProof {
+    const challenge = over.challenge ?? (over.batch ? batchChallenge(over.batch) : sha256(bytes).toString("base64url"));
+    const clientData = Buffer.from(JSON.stringify({ type: over.type ?? "webauthn.get", challenge, origin: over.origin ?? ORIGIN, crossOrigin: over.crossOrigin ?? false }));
     // The relying party's hash, the flags (user present and verified), and a zero sign counter, as a synced passkey has.
     const auth = Buffer.concat([sha256(over.rpId ?? RP_ID), Buffer.from([over.flags ?? 0x05]), Buffer.alloc(4)]);
     const data = Buffer.concat([auth, sha256(clientData)]);
     const signature = this.alg === -8 ? sign(null, data, this.privateKey) : sign("sha256", data, this.privateKey);
-    return { type: "passkey-proof", format: 1, file, credential: this.credential, authenticator_data: auth.toString("base64url"), client_data: clientData.toString("base64url"), signature: signature.toString("base64url") };
+    return { type: "passkey-proof", format: 1, file, ...(over.batch ? { batch: over.batch } : {}), credential: this.credential, authenticator_data: auth.toString("base64url"), client_data: clientData.toString("base64url"), signature: signature.toString("base64url") };
+  }
+
+  /**
+   * One tap over several files (B-a6xpc): one assertion over the list of their digests, and each file's proof in the
+   * batch form, holding the list and that same assertion. `list` signs another list instead, to make it wrong.
+   */
+  proveBatch(files: { name: string; bytes: Buffer }[], over: Parameters<TestPasskey["prove"]>[2] & { list?: string[] } = {}): PasskeyProof[] {
+    const { list, ...rest } = over;
+    const batch = list ?? files.map((f) => sha256(f.bytes).toString("hex"));
+    const one = this.prove("-", Buffer.alloc(0), { ...rest, batch });
+    return files.map((f) => ({ ...one, file: f.name }));
   }
 }
 

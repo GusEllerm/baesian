@@ -46,8 +46,11 @@ export interface CardProps {
   /** Where a drag or swipe that has gone far enough is pointing: letting go will choose it (round 5). */
   armed?: Side | "up" | "down";
   problem?: string;
-  /** For a reopened card: your answer in a few words, and whether it has gone to the agent. */
-  review?: { words: string; sent: boolean };
+  /**
+   * For a reopened card: your answer in a few words, and whether it has gone to the agent, or on the website waits for
+   * your passkey (B-a6xpc).
+   */
+  review?: { words: string; sent: boolean; waiting?: boolean };
   onReach: (dir: Side | "up" | "down") => void;
   onMode: (mode: Mode) => void;
   onConfirm: () => void;
@@ -461,7 +464,8 @@ function Review(p: CardProps) {
     <div className="panel-in">
       <div className="result">
         <p>
-          <b>{p.review?.words ?? "You answered this card."}</b> {p.review?.sent ? `It was sent to ${agent}.` : `It goes to ${agent} in a few seconds.`}
+          <b>{p.review?.words ?? "You answered this card."}</b>{" "}
+          {p.review?.sent ? `It was sent to ${agent}.` : p.review?.waiting ? `It waits for your passkey, and goes to ${agent} once you confirm it.` : `It goes to ${agent} in a few seconds.`}
         </p>
       </div>
       <div className="row">

@@ -238,6 +238,8 @@ D128 makes the local MCP server the usual way in. Its tools are the ones [[Baesi
 - **It is the same React app as the desktop client** (D32, D98), with a phone layout, served by the relay as a progressive web app (a website that can be installed to the Home Screen).
 
 > **Built (M9e step 1, 2026-11-04): the layout on the website.** The website is the same React app (D130), its phone layout included, served by the relay's Worker; the hard card's passkey is asked at the moment of answering, from a prompt whose button starts it ([[Client Build]] item 19). Installing it as an app, and the notifications below, came in step 2.
+>
+> **Changed (B-a6xpc, 2026-11-05): one tap signs a batch.** A hard answer no longer asks at once: it waits on the desk, marked as waiting for your passkey, while you go on, and the desk asks once no hard card is in front of you, or when you press its button; one tap then signs every answer waiting, each still checkable offline as your passkey's (D139). The proof's batch form is in [[File Formats#The hosted service's proof (M9a)]], the relay's side in [[service#Answers that take the passkey (D139, D163, M9c, B-a6xpc)]], the desk's in [[Client Build]] item 23.
 
 ### Notifications
 
