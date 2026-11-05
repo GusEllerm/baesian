@@ -4,7 +4,7 @@ status: draft
 authority: proposes
 summary: "The hosted service's privacy policy, which Hosted Service section 6 puts before anything is published: who runs it (Gus Ellerm, as an individual, B-mkryw), what it keeps and why, the lawful basis, how long (B-9jqt4, B-ec3kj, B-dsqyd), who else handles it, deleting an account (B-b46z3), people's rights, and where to write (privacy@baesian.dev, forwarded, B-8xxrc). The website's /privacy page carries this text. Not legal advice; what needs a lawyer is listed at the end."
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 reviewed: 2026-11-04
 tags: [baesian, design, hosted, privacy]
 ---
@@ -15,7 +15,7 @@ tags: [baesian, design, hosted, privacy]
 
 ## The policy, as the page says it
 
-*Last changed 4 November 2026* (`POLICY_CHANGED`; set it to the day it's published).
+*Last changed 5 November 2026* (`POLICY_CHANGED`). Corrected on 2026-11-05 (B-nkbqs): it had said branch names never reach the service, but every card carries `source_branch`, written by the CLI; what's kept didn't change, only what the page says about it.
 
 Baesian's hosted service, at baesian.dev, passes your coding agents' design decisions to you as cards, and your answers back to them. This page says what it keeps about you and your projects, why, for how long, who else handles it, and how to have it corrected or deleted.
 
@@ -43,7 +43,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 **Your projects, to pass cards and answers between your machines and you:**
 - Each project's name, as you typed it, and its random ID.
 - Each machine you approve with `baesian login`: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
-- What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, and when.
+- What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it.
 - What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.
 - While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.
 
@@ -54,7 +54,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 **What it doesn't keep:**
 - Your network address, which is used in passing to limit how often sign-in can be tried and to check for bots, then forgotten.
 - Passwords: there are none.
-- Your repository: its code, branches, file paths and name never reach the service. Only what an agent writes in a card does.
+- Your repository: its code, file paths and name never reach the service. Only what an agent writes in a card does, with the name of the branch it was filed on.
 
 **In your browser:**
 - The sign-in cookie while you're signed in, and a second cookie for ten minutes during a Globus sign-in. No other cookies.

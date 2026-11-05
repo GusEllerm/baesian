@@ -7,7 +7,7 @@ import { Sheet, Shell, To } from "./Page";
 // service's code bears out; the note says where each comes from, and what still needs a lawyer's eye.
 
 /** When the policy last changed, as the page says it. */
-export const POLICY_CHANGED = "2026-11-04";
+export const POLICY_CHANGED = "2026-11-05";
 
 /** Where people write about their data (B-8xxrc): an address on the domain, forwarded to the operator. */
 export const PRIVACY_CONTACT = "privacy@baesian.dev";
@@ -80,7 +80,7 @@ export function Privacy({ who }: { who?: string | undefined }) {
           <li>
             Each machine you approve with <code>baesian login</code>: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
           </li>
-          <li>What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, and when.</li>
+          <li>What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it.</li>
           <li>What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.</li>
           <li>While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.</li>
         </List>
@@ -94,7 +94,7 @@ export function Privacy({ who }: { who?: string | undefined }) {
         <List>
           <li>Your network address, which is used in passing to limit how often sign-in can be tried and to check for bots, then forgotten.</li>
           <li>Passwords: there are none.</li>
-          <li>Your repository: its code, branches, file paths and name never reach the service. Only what an agent writes in a card does.</li>
+          <li>Your repository: its code, file paths and name never reach the service. Only what an agent writes in a card does, with the name of the branch it was filed on.</li>
         </List>
         <h3 className="site-sub">In your browser</h3>
         <List>
