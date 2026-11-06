@@ -1,0 +1,14 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-qrdhh",
+  "revision": 1,
+  "response": "need_context",
+  "comment": "I think we need to do some research on this. What is best practice for this type of integration.",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "d0be793b4f4319f41c66549b7ca1038073778c756f069dc31a9fbbb99cc1a240",
+  "client": "hosted-phone",
+  "at": "2026-11-06T03:07:23.817Z"
+}

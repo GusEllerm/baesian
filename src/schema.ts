@@ -380,6 +380,17 @@ export function secretsIn(d: CardDraft, body = ""): Map<string, string> {
 }
 
 /**
+ * An outcome that starts with a capital (B-b0dzp): the card shows it after "then", so it reads "then The relay…". A
+ * program can't tell a name from an ordinary first word, so this only asks; a first word in capitals (CI, API) passes.
+ */
+function thenCapitals(d: CardDraft): string[] {
+  const capital = (v: string | undefined) => v !== undefined && /^[A-Z]/.test(v) && !/^[A-Z0-9]{2,}\b/.test(v);
+  return (["proposal_then", "alternative_then"] as const)
+    .filter((name) => capital(d[name]))
+    .map((name) => `${name} starts with a capital, and the card shows it after "then": start it lowercase, unless its first word is a name`);
+}
+
+/**
  * Advice on a draft that files anyway: no length limit has been measured yet, so long fields only warn; and a field,
  * or the body, that looks like it holds a secret (B-vqn69), named without quoting it. In a hosted repo the store refuses
  * such a draft instead, unless it gives `secret_reason` (B-jfkv9).
@@ -392,6 +403,7 @@ export function filingWarnings(d: CardDraft, body = ""): string[] {
   ];
   return [
     ...long.filter(([, v, max]) => v !== undefined && v.length > max).map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`),
+    ...thenCapitals(d),
     ...[...secretsIn(d, body)].map(([name, kind]) => `${name} looks like it holds a secret (${kind}): the record is committed with the code, so check it before the next commit`),
   ];
 }

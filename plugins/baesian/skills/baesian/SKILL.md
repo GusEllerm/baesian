@@ -29,7 +29,7 @@ A clone can use Baesian for one person in a repo whose collaborators don't (`bae
 The reviewer chooses between your two options before seeing which is yours, your reasoning, or the card's body. So:
 
 - **The question and title are neutral.** Ask "Where should the token live?", not "Should we keep the token in a cookie?". Don't name your pick in either.
-- **Two real options, each with what happens.** `proposal` is your pick and `alternative` the strongest other option, not a straw man. Each `_then` says concretely what follows: which files change, what the user sees, what it costs later. Keep the two the same in tone and detail.
+- **Two real options, each with what happens.** `proposal` is your pick and `alternative` the strongest other option, not a straw man. Each `_then` says concretely what follows: which files change, what the user sees, what it costs later. The card shows each `_then` after the word "then", so start it lowercase: "the relay keeps…". Keep the two the same in tone and detail.
 - **The crux is the one question the choice turns on,** with the answer that leads to each option (`crux_proposal`, `crux_alternative`). If the answers don't point at different options, it isn't the crux.
 - **`crux_fact` is the only context they see first.** Put there what they need in order to choose: when the situation arises, what goes wrong, what's already true. Keep it neutral: a fact, not an argument for your pick.
 - **The body is background,** shown with your case once they've chosen. Your reasoning goes in `rationale`, and what would show you're wrong in `wrong_if` and `check`.

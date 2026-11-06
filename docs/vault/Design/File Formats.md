@@ -84,8 +84,8 @@ Frontmatter (`CardMeta`):
 | `level` | `provisional` \| `blocking` \| `hard` | | the level in force, set by the gate at filing (M8): a shown card's level, the level the draft asked for raised by its row; a held card's `provisional`, since its agent goes ahead. A draft's `level` is what the agent asks for, and is kept in the gate record. With no preference file, `hard` when `touches` includes `publishes`, `security`, `privacy`, `money` or `data-loss` (D42, D144; privacy since card B-z3agk), otherwise the level asked for or `provisional`, as before the gate |
 | `touches` | list of facts | | the D11 checklist: `schema`, `public-api`, `dependency`, `infra`, `user-facing`, `publishes`, `security`, `privacy` (personal data, split from security by card B-z3agk), `money`, `data-loss`. Also decides which gate facts a `Baesian-Card:` trailer covers (D53) |
 | `reverse` | `cheap` \| `moderate` \| `one-way` | yes (D95) | how costly the decision is to undo. It decides the stakes line and feeds rarity |
-| `proposal`, `proposal_then` | strings | yes | the agent's pick, named in a few words, and what happens if it's chosen |
-| `alternative`, `alternative_then` | strings | yes | the strongest alternative (D12, D93), and what happens if it's chosen |
+| `proposal`, `proposal_then` | strings | yes | the agent's pick, named in a few words, and what happens if it's chosen, read after "then" (B-b0dzp) |
+| `alternative`, `alternative_then` | strings | yes | the strongest alternative (D12, D93), and what happens if it's chosen, read after "then" |
 | `also_considered` | list | | other options the agent considered, by name; not shown on the card (D93) |
 | `crux` | string | yes | the one question the choice turns on (D74) |
 | `crux_proposal`, `crux_alternative` | strings | yes | the answer that leads to each option ("If it does", "If it doesn't") |
