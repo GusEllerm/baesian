@@ -82,7 +82,7 @@ describe("finding merges in the committed record (D181, shared mode)", () => {
     expect(m).toMatchObject({ type: "merge", format: 1, branch: "feat", into: "main", commit: head(dir), cards });
     expect(m.at).toBe(new Date(sh(dir, "log", "-1", "--format=%cI")).toISOString());
     // Named by the commit and the branch merged, so finding it again writes nothing.
-    expect(Store.open(dir).storage.read(mergeFile(head(dir), "feat"))).toBeDefined();
+    expect(Store.open(dir).storage.read(mergeFile(head(dir), "feat", "main"))).toBeDefined();
     expect(await hook(dir, "post-merge", "0")).toBe(0);
     expect(merges(dir)).toHaveLength(1);
     // The message says what was found, and never a commit's subject.
@@ -308,7 +308,7 @@ describe("what a merge brought (B-w41p7)", () => {
     // Its own file, at the commit it landed on: the first is as it was, since nothing is ever rewritten.
     expect(all.find((m) => m.commit === tip)).toMatchObject({ branch: "feat", into: "main", tip, cards: [], commits: [log] });
     expect(all.find((m) => m.commit === filed)).toEqual(first);
-    expect(Store.open(dir).storage.read(mergeFile(tip, "feat"))).toBeDefined();
+    expect(Store.open(dir).storage.read(mergeFile(tip, "feat", "main"))).toBeDefined();
     // The state the panel reads says which merge each commit citing a card came in by: none is left unmerged.
     const state = panel(dir);
     const cited = state.commits!.filter((c) => c.branch === "feat").map((c) => c.commit);
@@ -430,8 +430,204 @@ describe("what a merge brought (B-w41p7)", () => {
     const { dir } = repo();
     const store = Store.open(dir);
     const commit = "a".repeat(40);
-    store.storage.create(mergeFile(commit, "feat"), new TextEncoder().encode(`${JSON.stringify({ type: "merge", format: 1, branch: "feat", into: "main", commit, at: new Date().toISOString(), cards: [] })}\n`));
+    store.storage.create(mergeFile(commit, "feat", "main"), new TextEncoder().encode(`${JSON.stringify({ type: "merge", format: 1, branch: "feat", into: "main", commit, at: new Date().toISOString(), cards: [] })}\n`));
     expect(store.merges()[0]).toMatchObject({ commit, commits: [] });
     expect(store.merges()[0]).not.toHaveProperty("tip");
+  });
+});
+
+// The bug sweep of 2026-11-05 (D1, D3 to D8, G-6): what a merge records, on the machine that made it and on one that
+// pulled it, should be the same merge, at the same commit, dated when it happened, with what it brought.
+
+/** A commit as git makes it with Baesian's hooks: pre-commit stages the record, post-commit writes the ledger entry. */
+async function commitAs(dir: string, name: string, opts: { card?: boolean; date?: string } = {}): Promise<{ id?: string; commit: string }> {
+  n += 1;
+  const store = Store.open(dir);
+  const id = opts.card ? store.fileCard(draft({ title: `Decision ${n}`, question: `Which way for decision ${n}?`, topic: `sweep${n}/q` }), BODY, { agent: "claude-code", force: true }).card.meta.id : undefined;
+  writeFileSync(join(dir, name), `${name}\n`);
+  store.syncRecord();
+  sh(dir, "add", "-A");
+  execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", `${name}${id ? `\n\nBaesian-Card: ${id}` : ""}`], { cwd: dir, env: { ...process.env, ...(opts.date ? { GIT_COMMITTER_DATE: opts.date, GIT_AUTHOR_DATE: opts.date } : {}) } });
+  if (id) await runHook(Store.open(dir), "post-commit", [], quiet);
+  return { ...(id ? { id } : {}), commit: head(dir) };
+}
+/** A bare remote with main pushed, and a second machine: a clone of it, with Baesian's live layer. */
+function twoMachines(dir: string) {
+  const remote = realpathSync(mkdtempSync(join(tmpdir(), "baesian-remote-")));
+  const other = realpathSync(mkdtempSync(join(tmpdir(), "baesian-other-")));
+  dirs.push(remote, other);
+  sh(remote, "init", "-q", "--bare", "-b", "main");
+  sh(dir, "remote", "add", "origin", remote);
+  sh(dir, "push", "-q", "-u", "origin", "main");
+  sh(dir, "remote", "set-head", "origin", "main");
+  sh(other, "clone", "-q", remote, ".");
+  Store.open(other).init();
+  return { remote, other };
+}
+function recorded(dir: string) {
+  const { dir: d } = { dir };
+  sh(d, "add", ".baesian");
+  sh(d, "commit", "-q", "-m", "Set up Baesian");
+}
+const into = (dir: string, target: string) => merges(dir).filter((m) => m.into === target);
+
+describe("merges as the bug sweep found them (2026-11-05)", () => {
+  it("a fast-forward onto a merge commit made earlier is dated when it happens, not by that commit's git time (D4, G-6)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    sh(dir, "checkout", "-q", "-b", "v1");
+    await commitAs(dir, "v1-card.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "side");
+    await commitAs(dir, "side.txt", { card: true });
+    sh(dir, "checkout", "-q", "v1");
+    // v1's tip is a merge commit, made a year ago as git has it.
+    execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", "--no-ff", "--no-edit", "side"], { cwd: dir, env: { ...process.env, GIT_COMMITTER_DATE: "2025-11-05T12:00:00Z", GIT_AUTHOR_DATE: "2025-11-05T12:00:00Z" } });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "v1");
+    const now = Date.now();
+    await hook(dir, "post-merge", "0");
+    const m = into(dir, "main");
+    expect(m.map((x) => x.branch)).toEqual(["v1"]);
+    expect(Math.abs(Date.parse(m[0]!.at) - now)).toBeLessThan(10_000);
+  });
+
+  it("bringing the trunk up to a branch already pushed to the remote's trunk is one merge of that branch, at its tip (D1)", async () => {
+    for (const how of ["merge", "pull"] as const) {
+      const { dir } = repo();
+      recorded(dir);
+      twoMachines(dir);
+      sh(dir, "checkout", "-q", "-b", "v1/next");
+      await commitAs(dir, "v1-a.txt", { card: true });
+      for (const w of ["wt-1", "wt-2"]) {
+        sh(dir, "checkout", "-q", "-b", w);
+        await commitAs(dir, `${w}.txt`, { card: true });
+        sh(dir, "checkout", "-q", "v1/next");
+        sh(dir, "merge", "-q", "--no-ff", "--no-edit", w);
+        await hook(dir, "post-merge", "0");
+        await commitAs(dir, `v1-after-${w}.txt`, { card: true });
+      }
+      const tip = head(dir);
+      // This repo's habit: v1/next pushed to the remote's main; then main brought up to it.
+      sh(dir, "push", "-q", "origin", "v1/next:main");
+      sh(dir, "fetch", "-q", "origin");
+      sh(dir, "checkout", "-q", "main");
+      sh(dir, "merge", "-q", "--ff-only", how === "merge" ? "v1/next" : "origin/main");
+      await hook(dir, "post-merge", "0");
+      expect(into(dir, "main").map((m) => [m.branch, m.commit, m.tip]), how).toEqual([["v1/next", tip, tip]]);
+      expect(into(dir, "main")[0]!.cards, how).toHaveLength(3);
+    }
+  });
+
+  it("one branch fast-forwarded into two branches at one commit is two merges, each in a file of its own (D3)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    sh(dir, "branch", "-q", "release");
+    sh(dir, "checkout", "-q", "-b", "feat");
+    await commitAs(dir, "feat.txt", { card: true });
+    const tip = head(dir);
+    for (const target of ["main", "release"]) {
+      sh(dir, "checkout", "-q", target);
+      sh(dir, "merge", "-q", "--ff-only", "feat");
+      await hook(dir, "post-merge", "0");
+    }
+    expect(merges(dir).map((m) => [m.branch, m.into, m.commit]).sort()).toEqual([
+      ["feat", "main", tip],
+      ["feat", "release", tip],
+    ]);
+    expect(Store.open(dir).storage.read(mergeFile(tip, "feat", "release"))).toBeDefined();
+    expect(mergeFile(tip, "feat", "main")).not.toBe(mergeFile(tip, "feat", "release"));
+  });
+
+  it("a merge found by a pull lists the branch's last commit, whose ledger entry no commit on the branch carried: as the merging machine recorded it (D5)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { other } = twoMachines(dir);
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const first = await commitAs(dir, "feat-1.txt", { card: true });
+    const last = await commitAs(dir, "feat-2.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat");
+    await hook(dir, "post-merge", "0");
+    sh(dir, "push", "-q", "origin", "main");
+    expect(only(dir).commits).toEqual([first.commit, last.commit]);
+    sh(other, "pull", "-q", "--no-rebase", "--no-edit");
+    await hook(other, "post-merge", "0");
+    expect(only(other)).toEqual(only(dir));
+  });
+
+  it("a fast-forward found by a pull is recorded at the tip it moved to, the file the merging machine wrote (D6)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { other } = twoMachines(dir);
+    sh(dir, "checkout", "-q", "-b", "feat");
+    await commitAs(dir, "feat-1.txt", { card: true });
+    await commitAs(dir, "feat-plain.txt");
+    const tip = head(dir);
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    sh(dir, "push", "-q", "origin", "main");
+    expect(only(dir)).toMatchObject({ branch: "feat", commit: tip, tip });
+    // The other machine never had feat: its pull sees only main move.
+    sh(other, "pull", "-q", "--ff-only");
+    await hook(other, "post-merge", "0");
+    expect(only(other)).toMatchObject({ branch: "feat", into: "main", commit: tip, tip });
+    expect(Store.open(other).storage.list("merges")).toEqual(Store.open(dir).storage.list("merges"));
+  });
+
+  it("a branch merged into another first, then both into main, is a merge into that other branch on a pulling machine too (D7)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { other } = twoMachines(dir);
+    sh(dir, "checkout", "-q", "-b", "feat1");
+    await commitAs(dir, "feat1.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "feat2");
+    await commitAs(dir, "feat2.txt", { card: true });
+    sh(dir, "checkout", "-q", "feat1");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat2");
+    await hook(dir, "post-merge", "0");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat1");
+    await hook(dir, "post-merge", "0");
+    sh(dir, "push", "-q", "origin", "main");
+    expect(merges(dir).map((m) => `${m.branch}>${m.into}`).sort()).toEqual(["feat1>main", "feat2>feat1"]);
+    sh(other, "pull", "-q", "--no-rebase", "--no-edit");
+    await hook(other, "post-merge", "0");
+    expect(merges(other).map((m) => `${m.branch}>${m.into}`)).toEqual(["feat1>main"]);
+  });
+
+  it("a branch another began from, whose whole tip reaches main through it, merged into main with it (D8)", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    sh(dir, "checkout", "-q", "-b", "feat1");
+    const c1 = await commitAs(dir, "feat1.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "feat2");
+    const c2 = await commitAs(dir, "feat2.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat2");
+    await hook(dir, "post-merge", "0");
+    const m = head(dir);
+    expect(into(dir, "main").map((x) => [x.branch, x.commit, x.cards])).toEqual(
+      expect.arrayContaining([
+        ["feat2", m, [c2.id]],
+        ["feat1", m, [c1.id]],
+      ]),
+    );
+    expect(into(dir, "main")).toHaveLength(2);
+    // A branch fast-forwarded into the one merged, and recorded so, merged into that one, not into main.
+    const { dir: d2 } = repo();
+    recorded(d2);
+    sh(d2, "checkout", "-q", "-b", "v1");
+    await commitAs(d2, "v1.txt", { card: true });
+    sh(d2, "checkout", "-q", "-b", "wt");
+    await commitAs(d2, "wt.txt", { card: true });
+    sh(d2, "checkout", "-q", "v1");
+    sh(d2, "merge", "-q", "--ff-only", "wt");
+    await hook(d2, "post-merge", "0");
+    await commitAs(d2, "v1-after.txt", { card: true });
+    sh(d2, "checkout", "-q", "main");
+    sh(d2, "merge", "-q", "--no-ff", "--no-edit", "v1");
+    await hook(d2, "post-merge", "0");
+    expect(into(d2, "main").map((x) => x.branch)).toEqual(["v1"]);
   });
 });

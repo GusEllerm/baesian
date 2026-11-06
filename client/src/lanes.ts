@@ -9,8 +9,10 @@ import { agentOf, isHard } from "./model";
 // brought, not to infer it).
 //
 //   branchModel(state, opts) -> Model   what happened: lanes, parents, ends, one entry per commit, events in order
+//   spansOf(model)           -> Map     each lane's stretch of the events' order, from its fork to its merge or end
 //   columnsOf(model)         -> Map     each lane's column in the gutter, reused once a lane has merged
-//   listRows(model, cols, o) -> rows    the history as rows, newest first, with what each row's gutter draws
+//   listRows(model, cols, o) -> rows    the history as rows, newest first, with the lanes live through each
+//   strokesOf(row, rows, m)  -> Stroke[] what a row's gutter draws, as the drawer draws it
 //   statusOf(model)          -> words   the opening sentences
 //   shortNames(names)        -> Map     names that keep the part that tells branches apart
 
@@ -100,7 +102,10 @@ export interface BCard {
   agent: string;
   /** When it was filed, in ms. */
   t: number;
+  /** Its mark: "waiting" holds its branch's merge (open, returned to its agent, or passed on), as `verify --merge` counts. */
   state: MarkState;
+  /** Waiting for you to answer: open. One returned to its agent, or passed on to someone else, holds the merge, but not for you. */
+  forYou: boolean;
   hard: boolean;
 }
 
@@ -182,6 +187,7 @@ export interface Model {
     cards: number;
     with: number;
     against: number;
+    /** Cards waiting for you (`BCard.forYou`). */
     waiting: number;
     aside: number;
     gone: number;
@@ -232,13 +238,23 @@ export function shortNames(names: string[]): Map<string, string> {
 }
 
 /**
+ * A merge's row key: its commit, the branch merged and the one it went into. Two worktrees fast-forwarded to one tip are
+ * two merges of one branch at one commit, so the target is part of it.
+ */
+export const mergeKey = (m: Pick<ApiMerge, "commit" | "branch" | "into">) => `merge:${m.commit.slice(0, 12)}:${m.branch}:${m.into}`;
+
+/**
  * The same merge found twice with nothing on its branch between is one: a pull that merged where the branch had moved
  * on finds its own merge besides the one made where it was pushed.
  */
 function distinctMerges(merges: ApiMerge[], activity: Map<string, number[]>): ApiMerge[] {
   const out: ApiMerge[] = [];
   const last = new Map<string, ApiMerge>();
+  const seen = new Set<string>();
   for (const m of [...merges].sort((a, b) => a.at.localeCompare(b.at))) {
+    // One merge, one key (`mergeKey()`): the same record found twice, under two names, is one.
+    if (seen.has(mergeKey(m))) continue;
+    seen.add(mergeKey(m));
     const key = `${m.branch}\0${m.into}`;
     const before = last.get(key);
     if (before && !(activity.get(m.branch) ?? []).some((t) => t > Date.parse(before.at) + 999 && t <= Date.parse(m.at) + 999)) continue;
@@ -274,7 +290,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
   const offLane = state.cards.filter((c) => noLane(c.meta.source_branch)).length;
   const cards: BCard[] = state.cards
     .filter((c) => !noLane(c.meta.source_branch))
-    .map((c) => ({ id: c.meta.id, card: c, title: c.meta.title, branch: c.meta.source_branch, agent: agentOf(c), t: Date.parse(c.meta.created), state: markState(c), hard: isHard(c) }))
+    .map((c) => ({ id: c.meta.id, card: c, title: c.meta.title, branch: c.meta.source_branch, agent: agentOf(c), t: Date.parse(c.meta.created), state: markState(c), forYou: c.status === "open", hard: isHard(c) }))
     .sort((a, b) => a.t - b.t || a.id.localeCompare(b.id));
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const commits = commitsOf(state.commits ?? []);
@@ -308,7 +324,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
   const laneOf = (n: string) => lanes.get(n)!;
   for (const c of cards) laneOf(c.branch).cards.push(c);
 
-  const merges: Merge[] = distinctMerges(raw, activity).map((m) => ({ ...m, gitT: Date.parse(m.at), t: Date.parse(m.at) + 999, key: `merge:${m.commit.slice(0, 12)}:${m.branch}`, ends: false }));
+  const merges: Merge[] = distinctMerges(raw, activity).map((m) => ({ ...m, gitT: Date.parse(m.at), t: Date.parse(m.at) + 999, key: mergeKey(m), ends: false }));
   for (const m of merges) {
     // The commit git recorded for the merge, when it's in the ledger too, is the merge's: one mark, not two.
     const own = commitByHash.get(m.commit);
@@ -396,7 +412,14 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
   for (const L of lanes.values()) for (const c of L.commits) events.push({ kind: "commit", key: `commit:${c.hash}`, lane: L.name, commit: c, t: c.t, rank: 2 });
   for (const c of loose.commits) events.push({ kind: "commit", key: `commit:${c.hash}`, lane: null, commit: c, t: c.t, rank: 2 });
   for (const m of merges) events.push({ kind: "merge", key: m.key, lane: m.branch, into: m.into, merge: m, ends: m.ends, t: m.t, rank: 3 });
-  events.sort((a, b) => a.t - b.t || a.rank - b.rank || a.key.localeCompare(b.key));
+  // Merges in one second (two records at one commit, as 952d56b has): one into a branch comes before one out of it, since
+  // it made the commit the other moved to (A into B, then B fast-forwarded into C).
+  const step = new Map<Merge, number>(merges.map((m) => [m, 0]));
+  const sameSecond = new Map<number, Merge[]>();
+  for (const m of merges) sameSecond.set(m.t, [...(sameSecond.get(m.t) ?? []), m]);
+  for (const ms of sameSecond.values()) if (ms.length > 1) for (let pass = 0; pass < 4; pass++) for (const m of ms) for (const o of ms) if (o !== m && o.into === m.branch) step.set(m, Math.max(step.get(m)!, step.get(o)! + 1));
+  const stepOf = (e: Event) => (e.kind === "merge" ? step.get(e.merge)! : 0);
+  events.sort((a, b) => a.t - b.t || a.rank - b.rank || stepOf(a) - stepOf(b) || a.key.localeCompare(b.key));
   const citedBy = new Map<string, Commit[]>();
   for (const c of commits) for (const id of c.cards) citedBy.set(id, [...(citedBy.get(id) ?? []), c]);
 
@@ -421,7 +444,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
       cards: cards.length,
       with: count("with"),
       against: count("against"),
-      waiting: count("waiting"),
+      waiting: cards.filter((c) => c.forYou).length,
       aside: count("aside"),
       gone: count("gone"),
       hard: cards.filter((c) => c.hard).length,
@@ -438,29 +461,67 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
 // ------------------------------------------------------------------------------------------------ the gutter's columns
 
 /**
+ * A lane's time in its column, as positions in the events' order (`Model.events`, by index), not as times: events in one
+ * second (two merges at one commit, a fork and the card it precedes) are distinct rows, and a branch's line runs through
+ * every row between its fork and its merge. An event at index i sits at i; the gap above it, toward newer, at i + 0.5.
+ */
+export interface Span {
+  /** Its fork's index; -Infinity for the trunk and a lane with no parent, whose line runs down off the list's bottom. */
+  start: number;
+  /** Its merge's index; Infinity while it's open; for one idle, just past its end row, in the gap above its last event. */
+  end: number;
+  /** An idle lane's end row: in the gap above event `after`, at position `at` (`end` is just above it). */
+  endRow?: { after: number; at: number };
+}
+
+/**
+ * Each lane's span (`Span`). An idle lane's line reaches its last event, a merge into it, or a fork from it (G-8: a branch
+ * guessed to begin from it is drawn from a line that's there), and its end row goes just above that; two ending above the
+ * same event are stacked, one above the other.
+ */
+export function spansOf(model: Model): Map<string, Span> {
+  const index = new Map(model.events.map((e, i) => [e.key, i]));
+  const fork = new Map<string, number>();
+  const last = new Map<string, number>();
+  const touch = (n: string | null, i: number) => {
+    if (n) last.set(n, i);
+  };
+  model.events.forEach((e, i) => {
+    if (e.kind === "fork") fork.set(e.lane, i), touch(e.from, i);
+    else if (e.kind === "merge") touch(e.lane, i), touch(e.into, i);
+    else touch(e.lane, i);
+  });
+  const spans = new Map<string, Span>();
+  const idle = new Map<number, string[]>();
+  for (const L of model.lanes.values()) {
+    const start = fork.get(L.name) ?? -Infinity;
+    const end = L.end.kind === "merged" ? index.get(L.end.merge.key)! : Infinity;
+    spans.set(L.name, { start, end });
+    if (L.end.kind === "open" && L.end.idleSince !== null) {
+      const after = last.get(L.name) ?? Math.max(0, start);
+      idle.set(after, [...(idle.get(after) ?? []), L.name]);
+    }
+  }
+  for (const [after, names] of idle) {
+    names.sort().forEach((name, j) => {
+      const at = after + 0.5 + 0.01 * j;
+      Object.assign(spans.get(name)!, { end: at + 0.005, endRow: { after, at } });
+    });
+  }
+  return spans;
+}
+
+/**
  * Each lane's column in the gutter (B-tgq5p: fixed rows, gaps where curves cross): the trunk first; then by depth,
  * shortest first, each in the first column right of its parent's that's free over its time, from where it began to its
  * merge (to now, for one still open; to its last event, for one idle). A short branch inside a longer one's time sits
  * nearer the parent, so the longer one's curves don't cross it; open and held branches, the longest, go outermost.
  * A column is reused once the lane in it has merged. Time here is the events' order: the list gives each its row.
  */
-export function columnsOf(model: Model): Map<string, number> {
-  const idx = new Map(model.events.map((e, i) => [e.key, i]));
-  const firstEv = new Map<string, number>();
-  const lastEv = new Map<string, number>();
-  model.events.forEach((e, i) => {
-    if (e.kind === "fork") return;
-    for (const n of e.kind === "merge" ? [e.lane, e.into] : [e.lane]) {
-      if (!n) continue;
-      if (!firstEv.has(n)) firstEv.set(n, i);
-      lastEv.set(n, i);
-    }
-  });
+export function columnsOf(model: Model, spans: Map<string, Span> = spansOf(model)): Map<string, number> {
   const extent = (L: Lane) => {
-    const fork = idx.get(`fork:${L.name}`);
-    const x0 = L.name === model.trunk ? -Infinity : (fork ?? (firstEv.get(L.name) ?? 0) - 0.5);
-    const x1 = L.end.kind === "merged" ? idx.get(L.end.merge.key)! : L.end.kind === "open" && L.end.idleSince !== null ? (lastEv.get(L.name) ?? 0) + 0.5 : Infinity;
-    return { x0, x1 };
+    const s = spans.get(L.name)!;
+    return { x0: s.start, x1: s.end };
   };
   const col = new Map<string, number>();
   const used: { x0: number; x1: number }[][] = [];
@@ -510,40 +571,42 @@ export interface Rows {
  * The history as rows, newest first, each with what its gutter draws. A day other than the latest folds into one row,
  * unless it has a card waiting or held back, a card the filter matches, or the reader has opened it.
  */
-export function listRows(model: Model, columns: Map<string, number>, opts: { commits: boolean; filter?: ((c: BCard) => boolean) | undefined; open: Set<string>; cap?: number }): Rows {
+export function listRows(model: Model, columns: Map<string, number>, opts: { commits: boolean; filter?: ((c: BCard) => boolean) | undefined; open: Set<string>; cap?: number; spans?: Map<string, Span> }): Rows {
   const cap = opts.cap ?? COLUMNS;
   const col = (name: string) => Math.min(columns.get(name) ?? 0, cap - 1);
   const lanes = [...model.lanes.values()];
-  // Each lane's time in its column: from where it began to its merge (or now; or its last event, when idle).
-  const span = new Map(
-    lanes.map((L) => [
-      L.name,
-      {
-        start: L.name === model.trunk || !L.parent ? -Infinity : L.first,
-        end: L.end.kind === "merged" ? L.end.merge.t : L.end.kind === "open" && L.end.idleSince !== null ? L.last + 0.4 : Infinity,
-        col: col(L.name),
-      },
-    ]),
-  );
-  const liveAt = (t: number): Live => {
+  const spans = opts.spans ?? spansOf(model);
+  const span = [...spans].map(([name, s]) => ({ name, ...s, col: col(name) }));
+  // The lanes live at a position in the events' order (`Span`): at an event's own index, those passing through its row.
+  const liveAt = (x: number): Live => {
     const cols: Live = new Map();
-    for (const [name, s] of span) if (s.start < t && t < s.end) cols.set(s.col, name);
+    for (const s of span) if (s.start < x && x < s.end) cols.set(s.col, s.name);
     return cols;
   };
-  const byDay = new Map<string, Event[]>();
-  for (const e of model.events) byDay.set(dayKey(e.t), [...(byDay.get(dayKey(e.t)) ?? []), e]);
-  const days = [...byDay.keys()].sort().reverse();
+  const events = model.events;
+  const shown = (e: Event) => e.kind !== "commit" || opts.commits;
+  // Each idle lane's end row, by the event it goes above, the highest first.
+  const endRows = new Map<number, { lane: string; at: number }[]>();
+  for (const [lane, s] of spans) if (s.endRow) endRows.set(s.endRow.after, [...(endRows.get(s.endRow.after) ?? []), { lane, at: s.endRow.at }].sort((a, b) => b.at - a.at));
+  const byDay = new Map<string, number[]>();
+  events.forEach((e, i) => byDay.set(dayKey(e.t), [...(byDay.get(dayKey(e.t)) ?? []), i]));
+  // A day with nothing to show (commits only, with the switch off) has no header, and no place in "Go to" (`daysOf()`).
+  const days = [...byDay.keys()].filter((dk) => byDay.get(dk)!.some((i) => shown(events[i]!) || endRows.has(i))).sort().reverse();
   const pending = (e: Event) => e.kind === "card" && (e.card.state === "waiting" || e.card.state === "aside");
   const rows: Row[] = [];
   const open = lanes.filter((L) => L.end.kind === "open" && L.end.idleSince === null);
-  rows.push({ kind: "now", key: "now", t: model.nowT, tags: open.map((L) => L.name), live: liveAt(model.nowT - 0.1) });
+  // Above the newest event, past any end row there: what the Now row and a day's header draw.
+  rows.push({ kind: "now", key: "now", t: model.nowT, tags: open.map((L) => L.name), live: liveAt(events.length - 0.1) });
   for (const dk of days) {
-    const all = byDay.get(dk)!;
+    const idx = byDay.get(dk)!;
+    const all = idx.map((i) => events[i]!);
+    const a = idx[0]!;
+    const b = idx.at(-1)!;
     const tTop = all.at(-1)!.t;
     const tBottom = all[0]!.t;
     const cardsOf = all.filter((e): e is Extract<Event, { kind: "card" }> => e.kind === "card");
     const match = opts.filter ? cardsOf.some((e) => opts.filter!(e.card)) : false;
-    rows.push({ kind: "day", key: `day:${dk}`, dk, t: tTop + 0.5, live: liveAt(tTop + 0.5), cards: cardsOf.length, against: cardsOf.filter((e) => e.card.state === "against").length, waiting: cardsOf.filter((e) => e.card.state === "waiting").length, merges: all.filter((e) => e.kind === "merge").length });
+    rows.push({ kind: "day", key: `day:${dk}`, dk, t: tTop + 0.5, live: liveAt(b + 0.9), cards: cardsOf.length, against: cardsOf.filter((e) => e.card.state === "against").length, waiting: cardsOf.filter((e) => e.card.forYou).length, merges: all.filter((e) => e.kind === "merge").length });
     const folded = !opts.open.has(dk) && dk !== days[0] && !all.some(pending) && !match;
     if (folded) {
       const began = all.filter((e) => e.kind === "fork").map((e) => model.lanes.get(e.lane!)!.short);
@@ -552,8 +615,8 @@ export function listRows(model: Model, columns: Map<string, number>, opts: { com
         key: `fold:${dk}`,
         dk,
         t: tBottom,
-        top: liveAt(tTop + 0.5),
-        bottom: liveAt(tBottom - 0.5),
+        top: liveAt(b + 0.9),
+        bottom: liveAt(a - 0.1),
         cards: cardsOf.length,
         against: cardsOf.filter((e) => e.card.state === "against").length,
         gone: cardsOf.filter((e) => e.card.state === "gone").length,
@@ -563,24 +626,27 @@ export function listRows(model: Model, columns: Map<string, number>, opts: { com
       continue;
     }
     let run: Extract<Row, { kind: "more" }> | null = null;
-    for (const e of [...all].reverse()) {
-      if (e.kind === "commit" && !opts.commits) continue;
-      // An idle lane's end goes just above its last event.
-      for (const L of lanes) {
-        if (L.end.kind !== "open" || L.end.idleSince === null || Math.abs(L.last - e.t) >= 1) continue;
-        if (e.lane === L.name || (e.kind === "merge" && e.into === L.name)) rows.push({ kind: "end", key: `end:${L.name}`, lane: L.name, t: L.last + 0.2, live: liveAt(L.last + 0.2), col: col(L.name) });
+    for (const i of [...idx].reverse()) {
+      const e = events[i]!;
+      // An idle lane's end goes just above its last event, shown or not (G-9), once (G-13); a run a filter folds stops there (G-7).
+      for (const end of endRows.get(i) ?? []) {
+        run = null;
+        const L = model.lanes.get(end.lane)!;
+        rows.push({ kind: "end", key: `end:${end.lane}`, lane: end.lane, t: L.last + 0.2, live: liveAt(end.at), col: col(end.lane) });
       }
+      if (!shown(e)) continue;
       const hidden = opts.filter && (e.kind === "card" ? !opts.filter(e.card) : e.kind === "commit");
       if (hidden) {
         if (!run) rows.push((run = { kind: "more", key: `more:${e.key}`, t: e.t, keys: [], cards: 0, commits: 0, live: new Map() }));
         run.keys.push(e.key);
         if (e.kind === "card") run.cards++;
         else run.commits++;
-        run.live = liveAt(e.t - 0.1);
+        // The lines through the run: those through its oldest event (none begins or ends at a card or a commit).
+        run.live = liveAt(i);
         continue;
       }
       run = null;
-      const r: Extract<Row, { kind: "event" }> = { kind: "event", key: e.key, e, t: e.t, live: liveAt(e.t), above: liveAt(e.t + 0.1), below: liveAt(e.t - 0.1), col: null };
+      const r: Extract<Row, { kind: "event" }> = { kind: "event", key: e.key, e, t: e.t, live: liveAt(i), above: liveAt(i + 0.5), below: liveAt(i - 0.5), col: null };
       if (e.kind === "card" || e.kind === "commit") r.col = e.lane ? col(e.lane) : null;
       if (e.kind === "merge") (r.col = col(e.into)), (r.other = col(e.lane));
       if (e.kind === "fork") (r.col = col(e.from)), (r.other = col(e.lane));
@@ -589,6 +655,95 @@ export function listRows(model: Model, columns: Map<string, number>, opts: { com
   }
   const n = Math.max(0, ...[...model.lanes.keys()].map(col)) + 1;
   return { rows, cols: model.lanes.size ? Math.min(cap, n) : 0, loose: opts.commits && model.loose.commits.length > 0 };
+}
+
+// ------------------------------------------------------------------------------------------------ what a row's gutter draws
+
+/** Where a stroke starts or stops down its row: px from the row's top, or a share of the row's height. */
+export type Y = number | "38%" | "62%" | "100%";
+/** A mark's centre, down its row. */
+export const MARK_Y = 19;
+/** Where a fork leaves its parent's line, and where it reaches its branch's. */
+export const FORK_Y = 25;
+export const CHILD_Y = FORK_Y - 18;
+/** Where a merge's curve leaves its branch's line, and where it reaches its target's (under the arrowhead). */
+export const SOURCE_Y = MARK_Y + 18;
+export const TARGET_Y = MARK_Y + 3;
+/** Where the lines start in the "Now" row, under its heading. */
+export const NOW_Y = MARK_Y + 18;
+
+/**
+ * What a row's gutter draws, in the order it's drawn: a branch's line in its column, a cap where one stops, a fork's dashed
+ * curve, a merge's curve (with its arrowhead on the target), the halo under a curve that passes over a live branch
+ * (B-tgq5p), and a card's or commit's mark. Pure: `<BranchesDrawer />` draws exactly these, and the tests check them.
+ */
+export type Stroke =
+  | { k: "line"; col: number; y1: Y; y2: Y; lane: string }
+  | { k: "cap"; col: number; y: Y; lane: string; half: number }
+  | { k: "halo"; curve: "fork" | "merge"; from: number; to: number }
+  | { k: "fork"; from: number; to: number; lane: string; parent: string }
+  | { k: "merge"; from: number; to: number; lane: string; into: string }
+  | { k: "mark"; col: number; lane: string | null };
+
+/** A curve between two columns passes over any live branch between them. */
+const crossesLive = (live: Live, a: number, b: number) => [...live.keys()].some((c) => c > Math.min(a, b) && c < Math.max(a, b));
+
+/** The strokes of a row's gutter (`Stroke`); null for a row that isn't drawn. */
+export function strokesOf(r: Row, P: Rows, model: Model): Stroke[] | null {
+  const line = (col: number, y1: Y, y2: Y, lane: string): Stroke => ({ k: "line", col, y1, y2, lane });
+  const lines = (live: Live, skip: (number | null | undefined)[] = []): Stroke[] => [...live].filter(([c]) => !skip.includes(c)).map(([c, lane]) => line(c, 0, "100%", lane));
+  /** A lane's line in an event's row, through the point `y` where its mark or curve is: from above it, on below it, or both. */
+  const through = (r: Extract<Row, { kind: "event" }>, c: number, lane: string, y: Y): Stroke[] => {
+    const up = r.above.get(c) === lane;
+    const dn = r.below.get(c) === lane;
+    return up && dn ? [line(c, 0, "100%", lane)] : [...(up ? [line(c, 0, y, lane)] : []), ...(dn ? [line(c, y, "100%", lane)] : [])];
+  };
+  if (r.kind === "now") {
+    if (!r.tags.length && !model.trunk) return null;
+    return [...r.live].flatMap(([c, lane]): Stroke[] => [line(c, NOW_Y, "100%", lane), ...(r.tags.includes(lane) ? [{ k: "cap", col: c, y: NOW_Y, lane, half: 5 } as const] : [])]);
+  }
+  if (r.kind === "day" || r.kind === "more") return lines(r.live);
+  if (r.kind === "fold") {
+    const out: Stroke[] = [];
+    for (let c = 0; c < P.cols; c++) {
+      const a = r.top.get(c);
+      const b = r.bottom.get(c);
+      if (a && a === b) out.push(line(c, 0, "100%", a));
+      else {
+        if (a) out.push(line(c, 0, "38%", a), { k: "cap", col: c, y: "38%", lane: a, half: 4 });
+        if (b) out.push(line(c, "62%", "100%", b), { k: "cap", col: c, y: "62%", lane: b, half: 4 });
+      }
+    }
+    return out;
+  }
+  if (r.kind === "end") return [...lines(r.live, [r.col]), line(r.col, MARK_Y, "100%", r.lane), { k: "cap", col: r.col, y: MARK_Y, lane: r.lane, half: 5 }];
+  const e = r.e;
+  if (e.kind === "fork") {
+    const pc = r.col!;
+    const cc = r.other!;
+    return [
+      ...lines(r.live, [pc, cc]),
+      ...(crossesLive(r.live, pc, cc) ? [{ k: "halo", curve: "fork", from: pc, to: cc } as const] : []),
+      ...through(r, pc, e.from, FORK_Y),
+      { k: "fork", from: pc, to: cc, lane: e.lane, parent: e.from },
+      ...(r.above.get(cc) === e.lane ? [line(cc, 0, CHILD_Y, e.lane)] : []),
+    ];
+  }
+  if (e.kind === "card" || e.kind === "commit") {
+    if (r.col === null) return [...lines(r.live), { k: "mark", col: P.cols, lane: null }];
+    const c = r.col;
+    const lane = e.lane!;
+    return [...lines(r.live, [c]), ...(r.above.get(c) === lane ? [line(c, 0, MARK_Y, lane)] : []), ...(r.below.get(c) === lane ? [line(c, MARK_Y, "100%", lane)] : []), { k: "mark", col: c, lane }];
+  }
+  const tc = r.col!;
+  const sc = r.other!;
+  return [
+    ...lines(r.live, [tc, sc]),
+    ...(crossesLive(r.live, sc, tc) ? [{ k: "halo", curve: "merge", from: sc, to: tc } as const] : []),
+    ...through(r, tc, e.into, TARGET_Y),
+    ...through(r, sc, e.lane, SOURCE_Y),
+    { k: "merge", from: sc, to: tc, lane: e.lane, into: e.into },
+  ];
 }
 
 // ------------------------------------------------------------------------------------------------ words
@@ -615,7 +770,8 @@ export function endWords(L: Lane): string {
 export function statusOf(model: Model): { lead: string; body: string; open: Lane[]; cites: string } {
   const c = model.counts;
   if (!c.cards) return { lead: "No cards yet.", body: "A branch appears here once an agent files a card on it.", open: [], cites: "" };
-  const held = c.held.map((L) => L.short);
+  // The branches a card waiting for you holds from merging (one returned to its agent holds it too, but not for you).
+  const held = c.held.filter((L) => L.cards.some((x) => x.forYou)).map((L) => L.short);
   const first = c.waiting ? `${c.waiting === 1 ? "One card is" : `${lead(c.waiting)} cards are`} waiting for you${held.length ? `, holding ${listOf(held)} from merging` : ""}.` : "Nothing is waiting for you.";
   const answered = c.against ? `you chose otherwise than the agent on ${c.against}` : c.with ? "you chose the agent's pick on every one you answered" : "none answered yet";
   const body = [
@@ -631,7 +787,7 @@ export function statusOf(model: Model): { lead: string; body: string; open: Lane
 
 /** What the panel opens on: the oldest card waiting for you; else the latest card. */
 export function openingKey(model: Model): string | null {
-  const waiting = model.cards.filter((c) => c.state === "waiting").sort((a, b) => a.t - b.t)[0];
+  const waiting = model.cards.filter((c) => c.forYou).sort((a, b) => a.t - b.t)[0];
   const latest = model.cards.at(-1);
   const c = waiting ?? latest;
   return c ? `card:${c.id}` : null;
@@ -649,10 +805,11 @@ export function linkedKeys(model: Model, key: string | null): string[] {
   return [];
 }
 
-/** The days, oldest first, with how many cards each has: for "Go to". */
-export function daysOf(model: Model): { key: string; t: number; cards: number }[] {
+/** The days, oldest first, with how many cards each has: for "Go to". With the Commits switch off, a day of commits only isn't one. */
+export function daysOf(model: Model, opts: { commits: boolean } = { commits: true }): { key: string; t: number; cards: number }[] {
   const out = new Map<string, { key: string; t: number; cards: number }>();
   for (const e of model.events) {
+    if (e.kind === "commit" && !opts.commits) continue;
     const k = dayKey(e.t);
     if (!out.has(k)) out.set(k, { key: k, t: e.t, cards: 0 });
     if (e.kind === "card") out.get(k)!.cards++;

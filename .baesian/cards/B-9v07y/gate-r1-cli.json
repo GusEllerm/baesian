@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-9v07y",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "asked": "provisional",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-05T23:54:07.347Z"
+}

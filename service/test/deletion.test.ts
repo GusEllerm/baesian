@@ -56,7 +56,7 @@ async function owner(): Promise<{ p: Person; project: string; machine: { access:
   const commit = "c".repeat(40);
   const hooks: [string, string][] = [
     [`ledger/${card}-abcde.md`, renderDoc({ type: "ledger", format: 1, card, branch: "feat/x", commit, at: new Date(now).toISOString() }, ledgerBody(commit, card))],
-    [mergeFile(commit, "feat/x"), JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit, at: new Date(now).toISOString(), cards: [card] })],
+    [mergeFile(commit, "feat/x", "main"), JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit, at: new Date(now).toISOString(), cards: [card] })],
   ];
   for (const [path, text] of hooks) {
     const r = await call("PUT", `files/${path}`, { as: { headers: { authorization: `Bearer ${machine.access}` } }, project, body: new TextEncoder().encode(text) });

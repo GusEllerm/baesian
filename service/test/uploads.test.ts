@@ -106,19 +106,19 @@ describe("uploads (P15 section 3)", () => {
     expect((await read(await upload(`ledger/${id}-stvwx.md`, renderDoc({ ...meta, subject: "Secret" }, `Commit \`${commit.slice(0, 12)}\` builds on ${id}.\n`)))).status).toBe(400);
 
     const merge = { type: "merge", format: 1, branch: "feat/runs", into: "main", commit, at: new Date().toISOString(), cards: [id] };
-    const path = mergeFile(commit, "feat/runs");
+    const path = mergeFile(commit, "feat/runs", "main");
     const ok = await read(await upload(path, JSON.stringify(merge)));
     expect(ok.status, ok.body.error).toBe(201);
     // The same merge found on another machine, said the same way, is already there; said otherwise, it's refused.
     expect((await read(await upload(path, JSON.stringify(merge)))).status).toBe(200);
     expect((await read(await upload(path, JSON.stringify({ ...merge, cards: [] })))).status).toBe(409);
     const malformed: [string, unknown, RegExp][] = [
-      [mergeFile(commit, "other"), merge, /isn't named for its branch/],
-      [mergeFile("d".repeat(40), "feat/runs"), merge, /path names d{40}/],
-      [mergeFile("e".repeat(40), "main"), { ...merge, commit: "e".repeat(40), branch: "main" }, /one branch into another/],
-      [mergeFile("f".repeat(40), "feat/runs"), { ...merge, commit: "f".repeat(40), cards: ["not-a-card"] }, /card ID/],
-      [mergeFile("a".repeat(40), "feat/runs"), { ...merge, commit: "a".repeat(40), subject: "the acquisition talks" }, /subject/],
-      [mergeFile("b".repeat(40), "feat/runs"), { ...merge, commit: "b".repeat(40), at: "yesterday" }, /at/],
+      [mergeFile(commit, "other", "main"), merge, /isn't named for its branch/],
+      [mergeFile("d".repeat(40), "feat/runs", "main"), merge, /path names d{40}/],
+      [mergeFile("e".repeat(40), "main", "main"), { ...merge, commit: "e".repeat(40), branch: "main" }, /one branch into another/],
+      [mergeFile("f".repeat(40), "feat/runs", "main"), { ...merge, commit: "f".repeat(40), cards: ["not-a-card"] }, /card ID/],
+      [mergeFile("a".repeat(40), "feat/runs", "main"), { ...merge, commit: "a".repeat(40), subject: "the acquisition talks" }, /subject/],
+      [mergeFile("b".repeat(40), "feat/runs", "main"), { ...merge, commit: "b".repeat(40), at: "yesterday" }, /at/],
     ];
     for (const [p, body, why] of malformed) {
       const r = await read(await upload(p, JSON.stringify(body)));

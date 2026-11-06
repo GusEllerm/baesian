@@ -176,9 +176,11 @@ const isCompanion = (name: string) => name.endsWith(".sig") || name.endsWith(".p
 
 /**
  * Where a merge is recorded (D181): `merges/<commit>-<key>.json`, the key the first 12 hex digits of the SHA-256 of the
- * merged branch's name, so the same merge found on two machines is the same file, and a branch's name never needs escaping.
+ * merged branch's name and its target's, so the same merge found on two machines is the same file, a branch's name never
+ * needs escaping, and one branch fast-forwarded into two branches at one commit is two merges, not one lost (the bug sweep
+ * of 2026-11-05: two builders' worktrees brought up to one v1/next tip).
  */
-export const mergeFile = (commit: string, branch: string) => `merges/${commit}-${createHash("sha256").update(branch).digest("hex").slice(0, 12)}.json`;
+export const mergeFile = (commit: string, branch: string, into: string) => `merges/${commit}-${createHash("sha256").update(`${branch}\0${into}`).digest("hex").slice(0, 12)}.json`;
 
 /** Where a file's passkey proof would be: beside it, `.passkey.json` for `.json` (P16 section 7). */
 export const proofPath = (rel: string) => rel.replace(/\.json$/, ".passkey.json");
@@ -1640,7 +1642,8 @@ export class Store {
 
   /**
    * Record that a branch merged into another (D181), as the hooks found it: `merges/<commit>-<key>.json`, named by the
-   * commit and the merged branch (`mergeFile()`), so the same merge found twice, here or on another machine, is one file.
+   * commit, the merged branch and its target (`mergeFile()`), so the same merge found twice, here or on another machine,
+   * is one file.
    * Returns it, or undefined when that merge is recorded already. Live only: it goes to the relay, never the record. A
    * later fast-forward of the same branch lands at another commit, so it's a file of its own (B-w41p7): nothing is ever
    * rewritten, and the relay takes it as it takes any new file.
@@ -1649,7 +1652,7 @@ export class Store {
     this.requireInit();
     if (m.branch === m.into) throw new ValidationError(`a merge is of one branch into another, not ${m.branch} into itself`);
     const event = parse(MergeEvent, { type: "merge", format: newestFormat("merge"), ...m, cards: [...new Set(m.cards ?? [])].sort(), commits: [...new Set(m.commits ?? [])] }, "the merge");
-    const rel = mergeFile(event.commit, event.branch);
+    const rel = mergeFile(event.commit, event.branch, event.into);
     if (this.storage.read(rel) !== undefined) return undefined;
     try {
       this.writeOnce(rel, `${JSON.stringify(event, null, 2)}\n`);

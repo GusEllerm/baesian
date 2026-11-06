@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Locator, type Page, expect, test } from "@playwright/test";
+import type { ApiState } from "../src/api.js";
 import { type RunningServer, startServer } from "../src/server.js";
 import { Store } from "../src/store.js";
 import { cleanup, repo } from "../test/helpers.js";
@@ -328,6 +329,295 @@ test.describe("the local desk", () => {
     await expect(d.locator(".br-row.is-card")).toHaveCount(6);
     // Under reduced motion, nothing slides.
     expect(await d.evaluate((el) => getComputedStyle(el).transitionDuration)).toMatch(/^0s/);
+  });
+
+  // ---------------------------------------------------------------------------------------- the bug sweep (2026-11-05)
+
+  /** The history's state, as the server gives it, changed by `patch`, and served in its place: a fixture of its own. */
+  async function openPatched(page: Page, patch: (s: ApiState, h: History) => void) {
+    const { dir, h } = await open(page);
+    const state = (await (await page.request.get(new URL("/api/state", server!.url).toString())).json()) as ApiState;
+    patch(state, h);
+    await page.route(/\/api\/state(\?|$)/, (r) => r.fulfill({ json: state }));
+    await page.reload();
+    await expect(page.locator("main.desk")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    return { dir, h, state };
+  }
+  const NOON = (days: number, now: number) => {
+    const d = new Date(now);
+    d.setHours(12, 0, 0, 0);
+    return d.getTime() - days * 86_400_000;
+  };
+  /**
+   * The history spread over four days, at noon, in its own order: main's card three days back, feat/checkout and its merge
+   * two, fix/typo and its squash one, feat/catalog today; and `extra` days with nothing but commits after (IF-11).
+   */
+  function overDays(s: ApiState, o: { now?: number } = {}) {
+    const now = Date.parse(s.server.now);
+    const days: Record<string, number> = { main: 3, "feat/checkout": 2, "fix/typo": 1, "feat/catalog": 0 };
+    const t0 = Math.min(...s.cards.map((c) => Date.parse(c.meta.created)));
+    const move = (at: string, branch: string) => new Date(NOON(days[branch] ?? 0, now) + (Date.parse(at) - t0)).toISOString();
+    for (const c of s.cards) {
+      const b = c.meta.source_branch;
+      c.meta.created = move(c.meta.created, b);
+      for (const v of c.verdicts) v.at = move(v.at, b);
+    }
+    for (const c of s.commits ?? []) c.at = move(c.at, c.branch);
+    for (const m of s.merges ?? []) m.at = move(m.at, m.branch);
+    s.server.now = new Date(o.now ?? NOON(0, now) + 3_600_000).toISOString();
+  }
+  /** Open every folded day, one at a time: each fold goes as its day opens. */
+  async function unfoldAll(d: Locator) {
+    for (let i = 0; i < 20 && (await d.locator(".br-row.is-fold .br-rb").count()); i++) await d.locator(".br-row.is-fold .br-rb").first().click();
+    await expect(d.locator(".br-row.is-fold")).toHaveCount(0);
+  }
+  /** Every line a row's gutter draws to its bottom edge goes on at the top of the next row, by its x (G-2, G-3). */
+  const gutterBreaks = (d: Locator) =>
+    d.evaluate((el) => {
+      const rows = [...el.querySelectorAll<HTMLElement>("li.br-row")];
+      const at = (li: HTMLElement, edge: "top" | "bottom") =>
+        new Set(
+          [...li.querySelectorAll<SVGLineElement>(":scope > svg.br-g > line:not(.cap)")]
+            .filter((l) => (edge === "top" ? l.getAttribute("y1") === "0" : l.getAttribute("y2") === "100%"))
+            .map((l) => l.getAttribute("x1")),
+        );
+      const out: string[] = [];
+      for (let i = 0; i + 1 < rows.length; i++) {
+        const a = at(rows[i]!, "bottom");
+        const b = at(rows[i + 1]!, "top");
+        const name = (li: HTMLElement) => li.querySelector("[data-row]")?.getAttribute("data-row") ?? li.className;
+        for (const x of a) if (!b.has(x)) out.push(`x=${x} stops at the bottom of ${name(rows[i]!)}`);
+        for (const x of b) if (!a.has(x)) out.push(`x=${x} starts at the top of ${name(rows[i + 1]!)}`);
+      }
+      return out;
+    });
+
+  test("draws every branch's line whole, from its fork to its merge, every way the list is drawn (G-2, G-3)", async ({ page }) => {
+    await openPatched(page, (s) => overDays(s));
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await unfoldAll(d);
+    expect(await gutterBreaks(d)).toEqual([]);
+    await d.getByRole("switch", { name: "Commits" }).click();
+    expect(await gutterBreaks(d)).toEqual([]);
+    await d.getByRole("button", { name: /^You chose otherwise/ }).click();
+    expect(await gutterBreaks(d)).toEqual([]);
+  });
+
+  test("Go to: the day picked starts at the top of the list, above or below, its first row focused; the same day again goes again (IF-1, IF-8, IF-12)", async ({ page }) => {
+    await openPatched(page, (s) => overDays(s));
+    await page.setViewportSize({ width: 1440, height: 560 });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    const go = d.getByRole("combobox", { name: "Go to" });
+    const days = (await go.locator("option:not([disabled])").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).filter(Boolean);
+    expect(days).toHaveLength(4);
+    /** Where the day's header and first row are, against the top of the list's scroller. */
+    const placed = (dk: string) =>
+      d.evaluate((el, dk) => {
+        const top = el.querySelector(".drawer-scroll")!.getBoundingClientRect().top;
+        const group = el.querySelector(`.is-day[data-day="${dk}"]`)!.closest(".br-day")!;
+        const head = group.querySelector(".is-day")!.getBoundingClientRect();
+        const first = group.querySelector(".br-rb")!.getBoundingClientRect();
+        return { head: Math.round(head.top - top) || 0, first: Math.round(first.top - head.bottom) || 0 };
+      }, dk);
+    const firstRow = async (dk: string) => (await d.locator(`.br-day:has(.is-day[data-day="${dk}"]) .br-rb`).first().getAttribute("data-row"))!;
+    // The oldest day, below (at the list's end, so it can't come all the way up); then two newer ones, above it.
+    await go.selectOption(days.at(-1)!);
+    await expect(page.locator(":focus")).toHaveAttribute("data-row", await firstRow(days.at(-1)!));
+    for (const dk of [days[0]!, days[1]!]) {
+      await go.selectOption(dk);
+      await expect.poll(() => placed(dk)).toEqual({ head: 0, first: 0 });
+      // Its first row has the tab stop and focus: the keyboard is where it asked to go.
+      await expect(page.locator(":focus")).toHaveAttribute("data-row", await firstRow(dk));
+      await expect(d.locator(".br-list [tabindex='0']")).toHaveCount(1);
+      // It names no day of its own afterwards, so picking the same day again goes there again.
+      await expect(go).toHaveValue("");
+    }
+    await d.locator(".drawer-scroll").evaluate((el) => (el.scrollTop = 0));
+    await go.selectOption(days[1]!);
+    await expect.poll(() => placed(days[1]!)).toEqual({ head: 0, first: 0 });
+    await check(page);
+  });
+
+  test("keeps focus in the list when a button replaces itself, and Page Up from Now stays (IF-2, IF-10)", async ({ page }) => {
+    const { h } = await openPatched(page, (s, h) => {
+      overDays(s);
+      // Six more cards that feat/checkout's merge brought, so its detail shows six, then "and N more".
+      const cookie = s.cards.find((c) => c.meta.id === h.cards.cookie)!;
+      const merged = s.merges!.find((m) => m.branch === "feat/checkout")!;
+      for (let k = 0; k < 6; k++) {
+        const c = structuredClone(cookie);
+        c.meta.id = `B-zz${k}x${k}`;
+        c.meta.title = `Another decision ${k}`;
+        c.meta.created = new Date(Date.parse(cookie.meta.created) + (k + 1) * 1000).toISOString();
+        s.cards.push(c);
+        merged.cards.push(c.meta.id);
+      }
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    const focused = () => page.locator(":focus");
+    // "Show the day": the day opens, and its first row has focus and the tab stop.
+    const fold = d.locator(".br-row.is-fold .br-rb").first();
+    await fold.focus();
+    await page.keyboard.press("Enter");
+    await expect(focused()).toHaveAttribute("data-row", /^(card|merge|lane|commit):/);
+    await expect(d.locator(".br-list [tabindex='0']")).toHaveAttribute("data-row", (await focused().getAttribute("data-row"))!);
+    await page.keyboard.press("ArrowDown");
+    await expect(focused()).toHaveAttribute("data-row", /./);
+    // A card's commit, or its branch, opened in its place: focus on "← Back".
+    await unfoldAll(d);
+    await row(d, `card:${h.cards.deletion}`).click();
+    await detail(d).getByRole("button", { name: "About this branch" }).click();
+    await expect(focused()).toHaveText("← Back");
+    await page.keyboard.press("Enter");
+    await expect(focused()).toHaveAttribute("data-row", `card:${h.cards.deletion}`);
+    await detail(d).locator(".br-links .br-lnk").first().click();
+    await expect(focused()).toHaveText("← Back");
+    // A merge's "and 2 more": focus on the first card it showed.
+    const merge = d.locator(".br-row.is-merge .br-rb", { hasText: "feat/checkout merged into main" });
+    await merge.click();
+    await detail(d).getByRole("button", { name: "and 2 more" }).click();
+    await expect(focused()).toHaveAttribute("data-more-first", "true");
+    // "Close this" in a branch's summary: focus back on its end, where it was opened.
+    await row(d, "lane:feat/catalog").first().click();
+    await detail(d).getByRole("button", { name: "Close this" }).click();
+    await expect(focused()).toHaveAttribute("data-row", "lane:feat/catalog");
+    // Page Up on the Now row: nothing is newer, so focus stays.
+    await page.keyboard.press("Home");
+    await page.keyboard.press("PageUp");
+    await expect(focused()).toHaveAttribute("data-row", "lane:feat/catalog");
+  });
+
+  test("a merge's detail lists what it brought, commits too; the rows name what their detail controls (IF-7, IF-15)", async ({ page }) => {
+    const { h } = await open(page);
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    // The dialog's description is the opening words, without the button beside them; the close button is "Close".
+    const described = await d.evaluate((el) => document.getElementById(el.getAttribute("aria-describedby")!)!.textContent!.trim());
+    expect(described).toMatch(/^One card is waiting for you.*Two branches have merged\.$/);
+    await expect(d.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+    const merge = d.locator(".br-row.is-merge .br-rb", { hasText: "feat/checkout merged into main" });
+    await merge.click();
+    await expect(detail(d)).toContainText("2 cards and 2 commits citing cards it brought");
+    await expect(detail(d).getByRole("button", { name: new RegExp(`^${h.commits[1]!.slice(0, 7)} `) })).toBeVisible();
+    await expect(detail(d).getByRole("button", { name: new RegExp(`^${h.commits[2]!.slice(0, 7)} `) })).toBeVisible();
+    await expect(merge).toHaveAttribute("aria-controls", "br-detail");
+    await expect(d.locator("#br-detail")).toBeVisible();
+    await check(page);
+  });
+
+  test("two merges of one branch at one commit, into two branches, are two rows: one picked is one open (IF-4)", async ({ page }) => {
+    await openPatched(page, (s) => {
+      const m = s.merges!.find((x) => x.branch === "feat/checkout")!;
+      s.merges!.push({ ...m, into: "feat/catalog", at: new Date(Date.parse(m.at) + 60_000).toISOString() });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    const rows = d.locator(".br-row.is-merge .br-rb", { hasText: "feat/checkout merged into" });
+    await expect(rows).toHaveCount(2);
+    await rows.filter({ hasText: "into feat/catalog" }).click();
+    await expect(d.locator(".br-row.is-merge.sel")).toHaveCount(1);
+    await expect(detail(d)).toHaveCount(1);
+    await expect(d.locator(".br-list [tabindex='0']")).toHaveCount(1);
+  });
+
+  test("a card returned to its agent holds its branch's merge, but isn't waiting for you (IF-6)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      const c = s.cards.find((x) => x.meta.id === h.cards.prices)!;
+      c.status = "returned";
+      c.verdicts.push({ type: "verdict", format: 1, card: c.meta.id, revision: 1, response: "reject", reviewer: "tester", client: "test", at: new Date().toISOString() } as (typeof c.verdicts)[number]);
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".br-status")).toContainText("Nothing is waiting for you.");
+    await expect(d.locator(".br-go")).toHaveCount(0);
+    await expect(d.getByRole("button", { name: /^Waiting for you/ })).toBeDisabled();
+    await expect(d.locator(".is-now .br-endtag")).toHaveText(["feat/catalog · No merge recorded · Merge held: 1 waiting"]);
+    await expect(d.locator(".br-row.is-day h3").first()).not.toContainText("waiting");
+  });
+
+  test("an idle branch keeps its end, and a day of commits alone shows nothing, with the Commits switch off (IF-5, G-9, IF-11)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      overDays(s);
+      // Three days on, and a commit of main's alone the day before.
+      const now = Date.parse(s.server.now) + 3 * 86_400_000;
+      s.server.now = new Date(now).toISOString();
+      s.commits!.push({ commit: "f".repeat(40), branch: "main", card: h.cards.session, at: new Date(now - 86_400_000).toISOString() });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    // feat/catalog is idle, its last event a commit: its end, with its words, whatever the switch.
+    const end = d.locator(".br-row.is-end [data-row='lane:feat/catalog']");
+    await expect(end).toContainText("Merge held: 1 waiting · idle since");
+    await expect(d.locator(".br-row.is-day")).toHaveCount(4);
+    await expect(d.getByRole("combobox", { name: "Go to" }).locator("option:not([disabled])")).toHaveCount(4);
+    await d.getByRole("switch", { name: "Commits" }).click();
+    await expect(end).toHaveCount(1);
+    await expect(d.locator(".br-row.is-day")).toHaveCount(5);
+    await expect(d.getByRole("combobox", { name: "Go to" }).locator("option:not([disabled])")).toHaveCount(5);
+    expect(await gutterBreaks(d)).toEqual([]);
+  });
+
+  test("each row's gutter reaches into the next, so a line has no hairline seam where rows meet (IF-14)", async ({ page }) => {
+    await open(page);
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    const short = await d.evaluate((el) => [...el.querySelectorAll<HTMLElement>("li.br-row")].filter((li) => li.querySelector(":scope > svg.br-g")!.getBoundingClientRect().bottom < li.getBoundingClientRect().bottom + 0.9).length);
+    expect(short).toBe(0);
+  });
+
+  for (const size of PHONES) {
+    test.describe(`${size.name}, ${size.width}×${size.height}`, () => {
+      test.use(phone(size));
+      test("nothing behind the full-screen drawer takes focus (IF-3)", async ({ page }) => {
+        await open(page);
+        await branchesButton(page).tap();
+        const d = drawerOf(page);
+        await expect(d).toBeVisible();
+        await expect(page.locator(".sheet-bar")).toHaveAttribute("inert", "");
+        await page.keyboard.press("Tab");
+        await expect(page.locator(".sheet-peek")).not.toBeFocused();
+        await expect(d).toBeVisible();
+      });
+    });
+  }
+
+  test.describe("small Android, 360×740: a day's header on two lines", () => {
+    test.use(phone(PHONES[1]));
+    test("a row the arrow keys reach is never under its day's header, however tall it is (IF-13)", async ({ page }) => {
+      await openPatched(page, (s, h) => {
+        // Twenty more of main's cards that day: a list taller than the screen, and a header whose counts wrap.
+        const session = s.cards.find((c) => c.meta.id === h.cards.session)!;
+        for (let k = 0; k < 20; k++) {
+          const c = structuredClone(session);
+          c.meta.id = `B-yy${String(k).padStart(2, "0")}y`;
+          c.meta.title = `Another of main's decisions, ${k}`;
+          c.meta.created = new Date(Date.parse(session.meta.created) + (k + 1) * 100).toISOString();
+          s.cards.push(c);
+        }
+      });
+      await branchesButton(page).tap();
+      const d = drawerOf(page);
+      const head = d.locator(".br-row.is-day").first();
+      expect((await head.boundingBox())!.height).toBeGreaterThan(45);
+      // Up through every row from the last: each lands below its day's sticky header.
+      await d.locator(".br-list [tabindex='0']").focus();
+      await page.keyboard.press("End");
+      const covered: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        await page.keyboard.press("ArrowUp");
+        const gap = await page.evaluate(() => {
+          const f = document.activeElement as HTMLElement;
+          const top = f.closest(".br-day")?.querySelector(".br-row.is-day");
+          return top ? Math.round(f.getBoundingClientRect().top - top.getBoundingClientRect().bottom) : 0;
+        });
+        if (gap < 0) covered.push(`${await page.locator(":focus").getAttribute("data-row")}: ${gap}px`);
+      }
+      expect(covered).toEqual([]);
+    });
   });
 
   for (const size of PHONES) {

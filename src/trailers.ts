@@ -130,3 +130,19 @@ export function readHistory(cwd: string): History {
   histories.set(cwd, { refs, history });
   return history;
 }
+
+/**
+ * The cards one commit's message cites, by its `Baesian-Card` trailers, read with git's own trailer rules as
+ * `readHistory()` reads them, and git's time for it. Only the IDs leave this function, never the message.
+ */
+export function citedIn(cwd: string, commit: string): { cards: string[]; at: string } | undefined {
+  const out = gitOut(cwd, ["log", "-1", "--format=%cI%x00%(trailers:only,unfold)", commit]);
+  if (!out) return undefined;
+  const [at = "", trailers = ""] = out.split("\0");
+  const cards = new Set(
+    trailerLines(trailers)
+      .filter((t) => t.key === CARD_TRAILER.toLowerCase())
+      .flatMap((t) => t.value.split(/[\s,]+/).filter((id) => CARD_ID.test(id))),
+  );
+  return { cards: [...cards], at: at.trim() };
+}

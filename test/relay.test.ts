@@ -209,7 +209,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const entry = store.ledgerEntries().find((e) => e.meta.commit === cited)!;
       expect(entry.meta).toMatchObject({ card: id, branch: "feat/runs" });
       const ledgerPath = `ledger/${readdirSync(join(store.live, "ledger")).find((f) => f.startsWith(id))}`;
-      const mergePath = mergeFile(merged, "feat/runs");
+      const mergePath = mergeFile(merged, "feat/runs", "main");
       expect(await relayPaths("proj-d181")).toEqual(expect.arrayContaining([ledgerPath, mergePath]));
       // An entry written before D120 lists the commit's files: it stays on this machine.
       const legacy = `ledger/${id}-old01.md`;
@@ -272,7 +272,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       sh(a.dir, "checkout", "-q", "main");
       sh(a.dir, "merge", "-q", "--ff-only", "feat/log");
       await runHook(Store.open(a.dir), "post-merge", ["0"], quiet);
-      expect(await relayPaths("proj-w41p7")).toEqual(expect.arrayContaining([mergeFile(filed, "feat/log"), mergeFile(log, "feat/log")]));
+      expect(await relayPaths("proj-w41p7")).toEqual(expect.arrayContaining([mergeFile(filed, "feat/log", "main"), mergeFile(log, "feat/log", "main")]));
       const grant = readGrant("proj-w41p7")!;
       const state = (await (await fetch(`${relay.url}/v1/projects/proj-w41p7/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: Record<string, unknown>[] };
       expect(state.merges.map(({ at: _at, ...m }) => m)).toEqual([
@@ -900,7 +900,7 @@ describe("the first-commit check in a shallow clone (B-5gnea)", () => {
 
 describe("what a machine pushes is what the relay takes (Hosted Service section 1)", () => {
   it("every kind the CLI pushes is one the relay's uploads accept, and nothing a person writes", () => {
-    const pushed = ["decks/branch-main.md", "cards/B-7f3kq/r1.md", "cards/B-7f3kq/r2.md", "cards/B-7f3kq/gate-r1-cli.json", "cards/B-7f3kq/withdrawn.json", "cards/B-7f3kq/fallback-ab3de.json", "attachments/B-7f3kq-ab3de.json", "ledger/B-7f3kq-ab3de.md", mergeFile("a".repeat(40), "feat/x")];
+    const pushed = ["decks/branch-main.md", "cards/B-7f3kq/r1.md", "cards/B-7f3kq/r2.md", "cards/B-7f3kq/gate-r1-cli.json", "cards/B-7f3kq/withdrawn.json", "cards/B-7f3kq/fallback-ab3de.json", "attachments/B-7f3kq-ab3de.json", "ledger/B-7f3kq-ab3de.md", mergeFile("a".repeat(40), "feat/x", "main")];
     for (const p of pushed) {
       expect(agentWritten(p), p).toBe(true);
       expect(agentKind(p), p).toBeDefined();
