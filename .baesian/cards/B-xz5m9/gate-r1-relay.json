@@ -1,0 +1,19 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-xz5m9",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "reverse": "moderate",
+  "source": "baesian",
+  "row": "other",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-06T02:44:57.051Z"
+}
