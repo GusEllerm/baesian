@@ -1,0 +1,14 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-dezkk",
+  "revision": 1,
+  "response": "accept",
+  "first_choice": "proposal",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "9e457875af73502ca7222a2d396e4fb968a4acd6669507216e243d7a2bfa27d7",
+  "client": "hosted-phone",
+  "at": "2026-11-06T02:43:44.629Z"
+}
