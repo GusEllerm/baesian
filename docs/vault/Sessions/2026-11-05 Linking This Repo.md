@@ -39,6 +39,13 @@ Get the hosted service working with this repo, and make setting up a repo easy, 
 - **The command line's output:** an audit of 59 captures, five cards (deck cli-output), built.
 - **Cloudflare Web Analytics** found injecting its beacon (blocked by the CSP) and turned off.
 - **Pushing to GitHub** failed now and then with "fatal error in commit_refs_rules" while the livedocs stamps file is about 10 MB; retrying works.
+- **The drawer's day headers stick flush** to the top of the list: the scroller's top padding left a band above them where rows showed through.
+- **A bug sweep of the branches view** (a workflow of eight agents, on this repo's real data): three finders (the gutter against git, the interface, the data path) reported 43 findings, and skeptics reproduced all 43: 29 bugs, 14 choices. One builder fixed 27 bugs, each with a test that failed first, and added invariant tests over the gutter's drawing for every fixture. Among them:
+  - bringing main up to a v1/next already pushed there recorded one fast-forward as 53 merges;
+  - a second merge of a branch at one commit overwrote the first: merge files are now named by their target too (B-ttn2c, built as its pick);
+  - lines vanished through rows in one second, and no branch's first event was joined to its fork;
+  - Go to, focus after a button replaces itself, and the phone's path bar behind the drawer.
+- **The sweep's choices went to cards** (deck branches-view): a worktree brought up to v1/next as it starts, recorded as a merge into it and drawn twice (B-c4efj); whether that ends v1/next (B-9v07y); how a sync is drawn (B-gm915); and seven smaller ones. One bug is held as a choice: keeping a commits-only merge the relay can't tie to cards would outlast what the privacy page promises (B-15v62, hard, not built).
 
 ## Decisions
 
@@ -52,4 +59,4 @@ D180 (the panels, in conversation). Cards answered: B-f2mfb, B-pt52b, B-mar8x, B
 
 ## Next steps
 
-`v0.1.3` (batched passkeys, `wait` on several cards, the panels, the gate's settings in preferences), then personal mode (B-4rwyz), then the calibration fixes if carded, then M10.
+`v0.1.7` (the sticky headers and the sweep's fixes); the sweep's cards, answered, built; then the calibration fixes if carded, then M10.

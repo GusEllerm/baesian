@@ -17,6 +17,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-05.*
 
+- **A bug sweep of the branches view (2026-11-05, late)** ([[2026-11-05 Linking This Repo]]), on `v1/next` for `v0.1.7`: 43 findings, all reproduced; 27 bugs fixed with tests, the gutter's drawing checked by invariant tests; merges recorded once per movement, on every machine that finds them, in files named by target too (B-ttn2c).
+  - **Next:** the deck branches-view: a worktree brought up to v1/next as it starts, drawn as a merge into it and again as its start (B-c4efj), whether that ends v1/next (B-9v07y), how a sync is drawn (B-gm915), seven smaller cards, and B-15v62 (hard: a commits-only merge the relay can't tie to cards, against the privacy page's promise).
+
 - **v0.1.6 is live (2026-11-05, evening)** ([[2026-11-05 Linking This Repo]]):
   - **Your decisions, by branch** is a vertical list in a drawer beside the desk (B, or the Branches button), full screen on a phone (B-v8jzy, B-vfdhz, B-tgq5p), from a design loop of eight agents on real data; merges record what they brought, fast-forwards included (B-w41p7), and the state carries the repo's default branch (B-jr8mk). This repo's history was rescanned: 31 merges on the service.
   - **The command line prints through one output system** (B-eyrt5): headlines, aligned fields, `next:` lines; colour and ✓ ✗ ! → only on a terminal, never to an agent's harness (B-qszqr, B-t3tev); citations only with `--verbose` (B-728jd); `baesian --version`.
