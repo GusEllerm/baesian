@@ -65,4 +65,16 @@ Anthropic's auto-mode classifier blocks 0.4% of benign actions and misses 17% of
 4. A merge-time review that sees only the diff and the cards, flagging unfiled decisions for the agent to card or ack; its hits measure how often (a) happens.
 5. When the reviewer is in the conversation, the agent says "it's in your deck" rather than listing the options, which would unblind the card. Whether an answer already given in chat may be filed as a card marked not blind is its own question for the user (D32, calibration).
 
-Put to the user as B-qrdhh r2.
+Put to the user as B-qrdhh r2, and decided for its proposal, "Check as the agent acts".
+
+## The turn-end check, measured (2026-11-06)
+
+Provenance: B-qrdhh's builder, as it built the check ([[Baesian Design]], the plugin). The sample is the last message of each of 228 turns in the lead agent's session on Baesian (2026-10-23 to 2026-11-06), what a `Stop` hook gets as `last_assistant_message`, labelled by hand: 11 ask the person to choose between options for a design decision (*choice*; the "say which you'd prefer" that became B-b0dzp among them), 18 ask them to approve the agent's picks for one or settle one with a yes or no (*approve*; the eight CLI-output decisions the user asked about on 2026-11-05 among them), and 199 do neither (go-aheads, questions of fact, what to do next, reports, cards already filed). It's kept, cut to the end the pattern reads and scrubbed, in `test/fixtures/turn-endings.json`, whose test holds the pattern's counts. The pattern was tuned on this same sample, so its numbers are in-sample and will be lower on new text; the judges weren't tuned.
+
+| Design | Flags | Choices caught (precision) | Choices or approvals caught (precision) | Model calls |
+|---|---|---|---|---|
+| The pattern alone (`asksChoice()`) | 29 | 8 of 11 (0.57) | 23 of 29 (0.79) | none |
+| (i) A prompt hook: a model judges every turn's end | 30 | 10 of 11 (0.63) | 24 of 29 (0.80) | 228 |
+| (ii) The pattern, then the agent judges its own message | 21 | 8 of 11 (0.89) | 20 of 29 (0.95) | none; 29 extra turns, 8 of them ended at once |
+
+The choices column's precision leaves approvals out on both sides. (i) was simulated with Claude Haiku, the default model for hooks' background work, reading each message alone with the hook's prompt; (ii) with Claude Opus reading the message alone and the hook's reason, where the real agent also has the conversation. (i) caught two implicit choices the pattern misses ("If you want teams in v1, it needs a design pass… I'd launch first", and "Is that the gap you mean, or is the vision something else?"), but flagged six of the 199 others, and it can't be made conditional: a hook's `if` filters only tool events, and `Stop` takes no matcher, so it's a model call at every turn's end, about 230 in this session. Codex parses prompt hooks and skips them. So (ii) was built, in both harnesses. Its misses are the pattern's: questions with no "or" or "which" in them.

@@ -960,6 +960,12 @@ export const Config = z
      */
     first_commit: CommitId.optional(),
     /**
+     * The paths whose edits are user-facing in this repo, as globs (B-bf29j): the plugin's hook reminds an agent about
+     * to edit one that a decision there goes to the person as a card (B-qrdhh). Only a reminder, never a gate fact, so
+     * it lives here, where agents set it, with no built-in list: a repo that declares none gets no reminder.
+     */
+    user_facing: z.array(Glob).min(1).optional(),
+    /**
      * No longer read (B-qkek1): what the gate looks at is in the preference files now, which only the client writes, since
      * agents edit this file. Still accepted, so a config that has them reads, and `baesian check` and `baesian verify`
      * warn that they're ignored (`staleGateKeys()`).

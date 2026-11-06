@@ -106,7 +106,9 @@ checking its passkey lines against your account page, then add its steps to your
 <url>` links to a service of your own instead.
 
 For Claude Code, install the plugin, which teaches the agent to write cards and brings your answers into its
-sessions:
+sessions. It also checks as the agent acts: an agent that puts a choice to you in chat, at the end of its turn or with
+its question tool, is asked to file it as a card instead, and one about to edit a path the repo lists as
+`user_facing` in `.baesian/config.json` is reminded that a decision there is a card:
 
 ```text
 /plugin marketplace add /path/to/baesian

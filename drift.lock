@@ -8,12 +8,27 @@ sig = "33c12d76b7926a65"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
+target = "plugins/baesian/hooks/choices.mjs"
+sig = "dd4992229c1eee7d"
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
+target = "plugins/baesian/hooks/question-asked.mjs"
+sig = "7b1e8e1afdc4cb7d"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "plugins/baesian/hooks/turn-ended.mjs"
-sig = "5d3d19dadfa7aa88"
+sig = "1aa86015ff7e8889"
+
+[[bindings]]
+doc = "docs/vault/Design/Baesian Design.md"
+target = "plugins/baesian/hooks/user-facing-edit.mjs"
+sig = "33c84d59e213a3b4"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -908,7 +923,7 @@ sig = "a529f82bf25c2a5e"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1218,12 +1233,17 @@ sig = "75bdabe8f81d601e"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = ".baesian/config.json"
-sig = "e7c4497c0fe28ecc"
+sig = "f1c65467202b28d8"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = ".livedocs/config.json"
 sig = "b346b2b146c7c63e"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "client/index.html"
+sig = "34e03dcb6c10d5a0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1433,7 +1453,7 @@ sig = "cfd32713f48b1632"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1499,6 +1519,11 @@ sig = "4788716bc2ecc7ee"
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#reply"
 sig = "0101404b91b31a70"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/mail.ts"
+sig = "69ed1f32a153c568"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1913,7 +1938,7 @@ sig = "33f7b024fa06655c"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/schema.ts#Config"
-sig = "7d08584779e87d8b"
+sig = "915137a5814b4368"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2194,6 +2219,11 @@ sig = "c6d222583ded5802"
 doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#mergeFile"
 sig = "79d5bc2aaedc102b"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "src/style.ts"
+sig = "c162c58d949ff0ea"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3513,12 +3543,12 @@ sig = "77f21c726a34fd5c"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "15c2f3e7784b36fb"
+sig = "c7d9d1f56c7462d6"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -3903,7 +3933,7 @@ sig = "33f7b024fa06655c"
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
 target = "src/schema.ts#Config"
-sig = "7d08584779e87d8b"
+sig = "915137a5814b4368"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -4188,7 +4218,7 @@ sig = "e0fbb29477bf0c92"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4278,7 +4308,7 @@ sig = "7871414a5c16aa74"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5163,7 +5193,7 @@ sig = "d9e44de54aed0221"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5178,7 +5208,7 @@ sig = "0101404b91b31a70"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "15c2f3e7784b36fb"
+sig = "c7d9d1f56c7462d6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5893,7 +5923,12 @@ sig = "33c12d76b7926a65"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "plugins/baesian/hooks/user-facing-edit.mjs"
+sig = "33c84d59e213a3b4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6848,7 +6883,7 @@ sig = "3a5a335a45f4bf57"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/mcp.ts"
-sig = "6939fa2219c6e73b"
+sig = "92ed79e0747d027f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7443,7 +7478,7 @@ sig = "0e7e5affcea6939e"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = ".baesian/config.json"
-sig = "e7c4497c0fe28ecc"
+sig = "f1c65467202b28d8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -7463,7 +7498,7 @@ sig = "51ce45927f9f053e"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -7613,7 +7648,7 @@ sig = "23a03436ff19f7dd"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/schema.ts#Config"
-sig = "7d08584779e87d8b"
+sig = "915137a5814b4368"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -8398,7 +8433,7 @@ sig = "074727f051f4bdf0"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
@@ -8563,7 +8598,7 @@ sig = "fdae1a8b9ae2a189"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "fe458262d20ef072"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -8573,7 +8608,7 @@ sig = "50b84c6c2b06b24e"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/agents.ts"
-sig = "854704b128a7225b"
+sig = "809204f7135f5dd7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
@@ -8941,6 +8976,16 @@ target = "client/src/lanes.ts#listRows"
 sig = "0e634a5457f37f1a"
 
 [[bindings]]
+doc = "docs/vault/Research/Holding Agents to Filing Cards.md"
+target = "plugins/baesian/hooks/choices.mjs"
+sig = "dd4992229c1eee7d"
+
+[[bindings]]
+doc = "docs/vault/Research/Holding Agents to Filing Cards.md"
+target = "test/fixtures/turn-endings.json"
+sig = "a9a1e0dacea4cd3e"
+
+[[bindings]]
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"
 target = "design/explorations/round3/atlas.js#level"
 sig = "5e500011f99b3490"
@@ -8968,7 +9013,7 @@ sig = "4eb943411b97286f"
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "15c2f3e7784b36fb"
+sig = "c7d9d1f56c7462d6"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"

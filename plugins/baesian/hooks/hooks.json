@@ -1,5 +1,5 @@
 {
-  "description": "Baesian: new verdicts at natural stopping points, and an approved plan as a deck",
+  "description": "Baesian: new verdicts at natural stopping points, an approved plan as a deck, and a choice put in chat sent back to be a card",
   "hooks": {
     "SessionStart": [
       {
@@ -30,6 +30,28 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/turn-ended.mjs\"",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion|request_user_input",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/question-asked.mjs\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/user-facing-edit.mjs\"",
+            "timeout": 10
           }
         ]
       }

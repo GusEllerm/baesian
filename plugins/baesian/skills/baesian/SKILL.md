@@ -16,6 +16,8 @@ Run `baesian inbox`, and act on each new verdict as "Waiting and after" says; `b
 
 File one when the decision changes a schema or an on-disk format, a public API, URL scheme or module boundary; adds a runtime dependency; changes CI, infrastructure or deployment; is user-facing; publishes something; touches security or privacy; spends money; deletes or overwrites stored data; or would break something to reverse. Otherwise decide it yourself.
 
+**A choice you'd put to the person in chat is a card,** even when they're in the conversation: file it, say "it's in your deck", and don't list the options there, so they still choose before seeing your pick. The plugin's hooks ask you about it when your last message, or the question tool, looks like such a choice, and remind you when you edit a file the repo calls user-facing (`user_facing` in its config). A change that only restores what a card or rule decided cites it, and needs no card.
+
 Run `baesian inbox` first: an earlier verdict may already decide it.
 
 If `AGENTS.md` points to the repo's vault, read the notes it names (a Working Agreement, the rules in force in `Rules/`) when deciding: they're guidance, and only rules accepted in the client change what the gate lets through.

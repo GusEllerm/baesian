@@ -3,5 +3,13 @@
   "vault": "docs/vault",
   "service": "https://baesian.dev",
   "project": "p-c81yx9gdvfr9yjsfdsrp",
-  "first_commit": "fd64e0c92700de21bda61496792f11a291e6efd1"
+  "first_commit": "fd64e0c92700de21bda61496792f11a291e6efd1",
+  "user_facing": [
+    "client/src/**/*.tsx",
+    "client/src/**/*.css",
+    "client/index.html",
+    "src/cli.ts",
+    "src/style.ts",
+    "service/src/mail.ts"
+  ]
 }
