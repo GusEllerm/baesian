@@ -13,6 +13,7 @@ import { agentOf, isHard } from "./model";
 //   columnsOf(model)         -> Map     each lane's column in the gutter, reused once a lane has merged
 //   listRows(model, cols, o) -> rows    the history as rows, newest first, with the lanes live through each
 //   strokesOf(row, rows, m)  -> Stroke[] what a row's gutter draws, as the drawer draws it
+//   gutterOf(cols, wide)     -> pitch   the gutter's spacing, and how many columns fit its width (B-cjqxz)
 //   statusOf(model)          -> words   the opening sentences
 //   shortNames(names)        -> Map     names that keep the part that tells branches apart
 
@@ -25,12 +26,13 @@ export type MarkState = "with" | "against" | "waiting" | "aside" | "gone";
  */
 export type BranchesState = Pick<ApiState, "cards" | "merges" | "commits"> & { defaultBranch?: string };
 
-/** A branch with nothing for this long, and no merge recorded after it, is idle: its column is free again. */
+/**
+ * A branch with nothing for this long, and no merge recorded after it, is idle: its end moves down to its last event, and
+ * its column is free again; unless a card on it is waiting for you (B-srtcs), which keeps it at the top.
+ */
 export const IDLE_MS = 24 * 3600_000;
 /** How far back a guessed parent's own events count, for "busiest before". */
 const BUSY_MS = 6 * 3600_000;
-/** The gutter's columns, at most; past them, lanes share the last one, and their rows name the branch. */
-export const COLUMNS = 8;
 
 /** The branches no lane is drawn for: Baesian's own cards on the relay, and a detached HEAD's. */
 const noLane = (b: string | undefined) => !b || b === "relay" || b.startsWith("detached-");
@@ -130,15 +132,21 @@ export interface Merge extends ApiMerge {
   t: number;
   /** The merge's own commit, when a ledger entry names it: its cards are the merge's to show. */
   own?: Commit;
-  /** Whether it ends its branch: nothing happened on the branch after it. */
+  /** Whether it ends its branch: nothing happened on the branch after it, and it went into a branch that didn't begin from it. */
   ends: boolean;
+  /** Into a branch that began from it (its parent chain leads back to it): a sync, which ends nothing (B-9v07y). */
+  sync: boolean;
 }
 
 export type LaneEnd =
   | { kind: "trunk"; quietSince: number }
   | { kind: "merged"; into: string; at: string; merge: Merge }
-  /** No merge ends it: `waiting` cards hold its merge (`verify --merge`); `since`, a merge recorded before its last event. */
-  | { kind: "open"; waiting: number; aside: number; idleSince: number | null; since?: Merge };
+  /**
+   * No merge ends it: `waiting` cards hold its merge (`verify --merge`); `since`, a merge recorded before its last event (a
+   * sync never is). `idleSince`, its last event, when that was a day ago; `down`, its end moved down to it and its column
+   * freed, which a card waiting for you prevents (B-srtcs).
+   */
+  | { kind: "open"; waiting: number; aside: number; idleSince: number | null; down: boolean; since?: Merge };
 
 export interface Lane {
   name: string;
@@ -147,9 +155,11 @@ export interface Lane {
   commits: Commit[];
   out: Merge[];
   in: Merge[];
-  /** The branch it began from: the one it merged into, or a guess. */
+  /** Where it began, when a record says (B-c4efj): it was brought up to another branch's tip before any work of its own. */
+  began?: Merge;
+  /** The branch it began from: the one a record says it was brought up to, the one it merged into, or a guess. */
   parent: string | null;
-  parentWhy: "merged" | "guess" | null;
+  parentWhy: "began" | "merged" | "guess" | null;
   depth: number;
   /** Its first and last events, in ms, and its last card or commit. */
   first: number;
@@ -159,7 +169,8 @@ export interface Lane {
 }
 
 export type Event =
-  | { kind: "fork"; key: string; t: number; rank: 0; lane: string; from: string; guess: boolean }
+  /** Where a branch began. One a record places (`start`, B-c4efj) sits in its second with the merges, after any into `from`. */
+  | { kind: "fork"; key: string; t: number; rank: 0 | 3; lane: string; from: string; guess: boolean; start?: Merge }
   | { kind: "card"; key: string; t: number; rank: 1; lane: string; card: BCard }
   /** A commit on a branch with no lane (commits only, no cards and no merge recorded) is loose: `lane` is null. */
   | { kind: "commit"; key: string; t: number; rank: 2; lane: string | null; commit: Commit }
@@ -179,6 +190,8 @@ export interface Model {
   /** The commits that cite each card. */
   citedBy: Map<string, Commit[]>;
   merges: Merge[];
+  /** Records of a branch brought up to another's tip before any work of its own: where it began, not merges (B-c4efj). */
+  starts: Merge[];
   loose: { branches: string[]; commits: Commit[] };
   events: Event[];
   /** Cards on the relay's branch or a detached HEAD: counted, not drawn. */
@@ -194,6 +207,8 @@ export interface Model {
     hard: number;
     branches: number;
     merged: number;
+    /** Of those merged, the branches with commits but no cards of their own. */
+    mergedBare: number;
     open: Lane[];
     held: Lane[];
     commits: number;
@@ -214,13 +229,23 @@ export function commitsOf(ledger: ApiCommit[]): Commit[] {
   return [...by.values()].sort((a, b) => a.t - b.t || a.hash.localeCompare(b.hash));
 }
 
+/** The part of a name that differs is a hex ID (an agent's, a commit's): seven characters of it are enough. */
+const HEX_ID = /^(?=.*\d)[0-9a-f]{7,}$/i;
+/** Where a name's words end: before each separator, and at its end. */
+const wordEnds = (s: string) => [...[...s].flatMap((ch, i) => (i > 0 && /[-/_.]/.test(ch) ? [i] : [])), s.length];
+/** How much of a name's differing words are kept, at most, unless more are needed to tell it apart. */
+const WORDS_KEPT = 28;
+
 /**
- * Short names: a long name that shares a prefix with others keeps one word of the prefix and the part that differs,
- * from 7 characters until it's unique (`worktree-agent-a0bd0dd57881ac741` → `worktree a0bd0dd`), so it never reads as a
- * commit's ID. Any other name is kept whole up to 28 characters, then loses its middle.
+ * Short names (B-my3az): a long name that shares a prefix with others keeps one word of the prefix and the part that
+ * differs. Where that part is a hex ID it keeps 7 characters, more until it's unique (`worktree-agent-a0bd0dd57881ac741`
+ * → `worktree a0bd0dd`), so it never reads as a commit's ID; where it's words it keeps whole words, up to 28 characters,
+ * then "…", a word more until it's unique (`feature/checkout-and-payments-refactor` → `feature checkout-and-payments…`).
+ * Any other name is kept whole up to 28 characters, then loses its middle.
  */
 export function shortNames(names: string[]): Map<string, string> {
   const out = new Map<string, string>();
+  const words: { n: string; head: string; rest: string; ends: number[]; i: number }[] = [];
   for (const n of names) {
     let p = "";
     for (let i = 0; i < n.length; i++) if ((n[i] === "-" || n[i] === "/") && names.some((o) => o !== n && o.startsWith(n.slice(0, i + 1)))) p = n.slice(0, i + 1);
@@ -229,11 +254,32 @@ export function shortNames(names: string[]): Map<string, string> {
       continue;
     }
     const rest = n.slice(p.length);
-    const fam = names.filter((o) => o !== n && o.startsWith(p)).map((o) => o.slice(p.length));
-    let k = Math.min(7, rest.length);
-    while (k < rest.length && fam.some((f) => f.slice(0, k) === rest.slice(0, k))) k++;
-    out.set(n, `${p.replace(/[-/]+$/, "").split(/[-/]/)[0]} ${rest.slice(0, k)}`);
+    const head = p.replace(/[-/]+$/, "").split(/[-/]/)[0]!;
+    if (HEX_ID.test(rest)) {
+      const fam = names.filter((o) => o !== n && o.startsWith(p)).map((o) => o.slice(p.length));
+      let k = Math.min(7, rest.length);
+      while (k < rest.length && fam.some((f) => f.slice(0, k) === rest.slice(0, k))) k++;
+      out.set(n, `${head} ${rest.slice(0, k)}`);
+      continue;
+    }
+    // Words: all but the prefix's first, as many whole ones as fit, and at least one. Two names that share more than a
+    // word of their prefix (`gus/rework-the-flow-a`, `gus/rework-the-flow-b`) keep what they share, as far as it fits.
+    const all = n.slice(head.length + 1);
+    const ends = wordEnds(all);
+    let i = 0;
+    while (i + 1 < ends.length && ends[i + 1]! <= WORDS_KEPT) i++;
+    words.push({ n, head, rest: all, ends, i });
   }
+  const show = (w: (typeof words)[number]) => `${w.head} ${w.rest.slice(0, w.ends[w.i])}${w.ends[w.i]! < w.rest.length ? "…" : ""}`;
+  // Names that would read the same keep a word more each, until they don't.
+  for (let pass = 0; pass < 64; pass++) {
+    const same = new Map<string, typeof words>();
+    for (const w of words) same.set(show(w), [...(same.get(show(w)) ?? []), w]);
+    const grow = [...same.values()].filter((g) => g.length > 1).flat().filter((w) => w.i + 1 < w.ends.length);
+    if (!grow.length) break;
+    for (const w of grow) w.i++;
+  }
+  for (const w of words) out.set(w.n, show(w));
   return out;
 }
 
@@ -272,7 +318,7 @@ const TRUNK_NAMES = ["main", "master"];
  * then the longest-lived branch that others merged into and that never merged anywhere itself. With none of those
  * (a repo with only a feature branch), there's no trunk, and every branch has an end.
  */
-export function trunkOf(lanes: Map<string, Lane>, defaultBranch?: string): { name: string | null; known: boolean } {
+export function trunkOf(lanes: Map<string, Pick<Lane, "name" | "in" | "out" | "first" | "last">>, defaultBranch?: string): { name: string | null; known: boolean } {
   if (defaultBranch) return { name: lanes.has(defaultBranch) ? defaultBranch : null, known: true };
   const named = TRUNK_NAMES.find((n) => lanes.has(n));
   if (named) return { name: named, known: false };
@@ -305,26 +351,51 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
     }
   }
 
-  // Lanes: every branch with a card, or named by a recorded merge. Branches with commits only are loose.
-  const names: string[] = [];
-  const add = (n: string) => {
-    if (!noLane(n) && !names.includes(n)) names.push(n);
-  };
-  for (const c of cards) add(c.branch);
+  // Every branch's own activity, its cards and commits: what tells a merge found twice from two, and a start from a merge.
   const activity = new Map<string, number[]>();
   const act = (b: string, t: number) => activity.set(b, [...(activity.get(b) ?? []), t]);
   for (const c of cards) act(c.branch, c.t);
   for (const c of commits) act(c.branch, c.t);
   const raw = (state.merges ?? []).filter((m) => m.branch !== m.into && !noLane(m.branch) && !noLane(m.into));
-  for (const m of raw) add(m.branch), add(m.into);
+  const recorded: Merge[] = distinctMerges(raw, activity).map((m) => ({ ...m, gitT: Date.parse(m.at), t: Date.parse(m.at) + 999, key: mergeKey(m), ends: false, sync: false }));
+  /** The branches drawn: every branch with a card, or named by a merge. Branches with commits only are loose. */
+  const named = (ms: Merge[]) => {
+    const names: string[] = [];
+    const add = (n: string) => {
+      if (!noLane(n) && !names.includes(n)) names.push(n);
+    };
+    for (const c of cards) add(c.branch);
+    for (const m of ms) add(m.branch), add(m.into);
+    return names;
+  };
+
+  // The trunk, with every record counted as a merge: it never began from another branch.
+  const trunk = trunkOf(
+    new Map(
+      named(recorded).map((n) => {
+        const out = recorded.filter((m) => m.branch === n);
+        const into = recorded.filter((m) => m.into === n);
+        const ts = [...(activity.get(n) ?? []), ...out.map((m) => m.t), ...into.map((m) => m.t)];
+        return [n, { name: n, in: into, out, first: Math.min(...ts), last: Math.max(...ts) }];
+      }),
+    ),
+    state.defaultBranch,
+  );
+  // Where a branch began, when a record says (B-c4efj): the first record into a branch with nothing of its own before it
+  // (no card, no commit citing one, no merge out of it) is that branch brought up to the other's tip as it began, not a
+  // merge. One into a branch with work of its own before it is a merge.
+  const firstIn = new Map<string, Merge>();
+  for (const m of [...recorded].sort((a, b) => a.t - b.t || a.key.localeCompare(b.key))) if (!firstIn.has(m.into)) firstIn.set(m.into, m);
+  const starts = [...firstIn].filter(([b, m]) => b !== trunk.name && !(activity.get(b) ?? []).some((t) => t < m.gitT) && !recorded.some((o) => o.branch === b && o.t < m.t)).map(([, m]) => m);
+  const merges = recorded.filter((m) => !starts.includes(m));
+
+  const names = named(merges);
   const short = shortNames([...new Set([...names, ...commits.filter((c) => !noLane(c.branch)).map((c) => c.branch)])]);
   const lanes = new Map<string, Lane>(
-    names.map((n) => [n, { name: n, short: short.get(n) ?? n, cards: [], commits: [], out: [], in: [], parent: null, parentWhy: null, depth: 0, first: Infinity, last: -Infinity, lastOwn: -Infinity, end: { kind: "open", waiting: 0, aside: 0, idleSince: null } }]),
+    names.map((n) => [n, { name: n, short: short.get(n) ?? n, cards: [], commits: [], out: [], in: [], parent: null, parentWhy: null, depth: 0, first: Infinity, last: -Infinity, lastOwn: -Infinity, end: { kind: "open", waiting: 0, aside: 0, idleSince: null, down: false } }]),
   );
   const laneOf = (n: string) => lanes.get(n)!;
   for (const c of cards) laneOf(c.branch).cards.push(c);
-
-  const merges: Merge[] = distinctMerges(raw, activity).map((m) => ({ ...m, gitT: Date.parse(m.at), t: Date.parse(m.at) + 999, key: mergeKey(m), ends: false }));
   for (const m of merges) {
     // The commit git recorded for the merge, when it's in the ledger too, is the merge's: one mark, not two.
     const own = commitByHash.get(m.commit);
@@ -332,6 +403,8 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
     laneOf(m.branch).out.push(m);
     laneOf(m.into).in.push(m);
   }
+  // A start is drawn from the branch it was brought up to, where both are drawn.
+  for (const m of starts) if (lanes.has(m.into) && lanes.has(m.branch)) laneOf(m.into).began = m;
   const loose: Model["loose"] = { branches: [], commits: [] };
   for (const c of commits) {
     if (c.folded) continue;
@@ -339,39 +412,68 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
     if (lanes.has(c.branch)) laneOf(c.branch).commits.push(c);
     else loose.commits.push(c), loose.branches.includes(c.branch) || loose.branches.push(c.branch);
   }
-  // Where each lane's merge ends it: its last merge out, with nothing on it after (no card, commit, or merge into it).
-  const endMerge = new Map<string, Merge>();
+  // Each lane's last merge out, with nothing on it after (no card, commit, or merge into it): its end, unless a sync.
+  const lastOut = new Map<string, Merge>();
   for (const L of lanes.values()) {
     const own = [...L.cards.map((c) => c.t), ...L.commits.map((c) => c.t)];
+    const began = L.began ? [L.began.t] : [];
     L.lastOwn = own.length ? Math.max(...own) : -Infinity;
-    L.first = Math.min(...own, ...L.out.map((m) => m.t), ...L.in.map((m) => m.t));
-    L.last = Math.max(L.lastOwn, ...L.out.map((m) => m.t), ...L.in.map((m) => m.t));
-    const lastOut = [...L.out].sort((a, b) => a.t - b.t).at(-1);
-    if (lastOut && !(L.lastOwn > lastOut.t || L.in.some((m) => m.t > lastOut.t))) endMerge.set(L.name, lastOut);
+    L.first = Math.min(...own, ...L.out.map((m) => m.t), ...L.in.map((m) => m.t), ...began);
+    L.last = Math.max(L.lastOwn, ...L.out.map((m) => m.t), ...L.in.map((m) => m.t), ...began);
+    const m = [...L.out].sort((a, b) => a.t - b.t).at(-1);
+    if (m && L.name !== trunk.name && !(L.lastOwn > m.t || L.in.some((o) => o.t > m.t))) lastOut.set(L.name, m);
   }
 
-  const trunk = trunkOf(lanes, state.defaultBranch);
-  if (trunk.name) endMerge.delete(trunk.name);
-
-  // Parents: the branch it merged into; otherwise a guess among branches open when it began (never one already merged).
+  // Parents: where a record says it began; else the branch it merged into; else a guess among branches open when it began
+  // (never one already merged). A merge into a branch whose parent chain leads back to its own (a sync, B-9v07y) ends
+  // nothing, and makes no parent: found by looking again until there are no more.
   const order = [...lanes.values()].sort((a, b) => a.first - b.first || a.name.localeCompare(b.name));
-  for (const L of order) {
-    if (L.name === trunk.name) continue;
-    const into = (endMerge.get(L.name) ?? L.out[0])?.into;
-    if (into) {
-      L.parent = into;
-      L.parentWhy = "merged";
-      continue;
+  const sync = new Set<Merge>();
+  const endMerge = new Map<string, Merge>();
+  const parents = () => {
+    endMerge.clear();
+    for (const [n, m] of lastOut) if (!sync.has(m)) endMerge.set(n, m);
+    for (const L of order) {
+      L.parent = null;
+      L.parentWhy = null;
+      if (L.name === trunk.name) continue;
+      if (L.began) {
+        L.parent = L.began.branch;
+        L.parentWhy = "began";
+        continue;
+      }
+      const into = (endMerge.get(L.name) ?? L.out.find((m) => !sync.has(m)))?.into;
+      if (into) {
+        L.parent = into;
+        L.parentWhy = "merged";
+        continue;
+      }
+      // Scored by: the cards its commits cite; then how busy it was in the hours before; then the trunk; then its cards.
+      const cites = (o: Lane) => L.commits.reduce((n, c) => n + c.cards.filter((id) => cardById.get(id)?.branch === o.name).length, 0);
+      const busy = (o: Lane) => [...o.cards.map((c) => c.t), ...o.commits.map((c) => c.t), ...o.in.map((m) => m.t)].filter((t) => t <= L.first && t > L.first - BUSY_MS).length;
+      const cand = order
+        // Git keeps a merge's time to the second: a branch merged in the second this one began counts as merged already.
+        .filter((o) => o !== L && (o.name === trunk.name || (o.first <= L.first && !(endMerge.get(o.name) && endMerge.get(o.name)!.gitT <= L.first))))
+        .map((o) => ({ o, s: [cites(o), busy(o), o.name === trunk.name ? 1 : 0, o.cards.length] as const }))
+        .sort((a, b) => b.s[0] - a.s[0] || b.s[1] - a.s[1] || b.s[2] - a.s[2] || b.s[3] - a.s[3]);
+      if (cand[0]) (L.parent = cand[0].o.name), (L.parentWhy = "guess");
     }
-    // Scored by: the cards its commits cite; then how busy it was in the hours before; then the trunk; then its cards.
-    const cites = (o: Lane) => L.commits.reduce((n, c) => n + c.cards.filter((id) => cardById.get(id)?.branch === o.name).length, 0);
-    const busy = (o: Lane) => [...o.cards.map((c) => c.t), ...o.commits.map((c) => c.t), ...o.in.map((m) => m.t)].filter((t) => t <= L.first && t > L.first - BUSY_MS).length;
-    const cand = order
-      // Git keeps a merge's time to the second: a branch merged in the second this one began counts as merged already.
-      .filter((o) => o !== L && (o.name === trunk.name || (o.first <= L.first && !(endMerge.get(o.name) && endMerge.get(o.name)!.gitT <= L.first))))
-      .map((o) => ({ o, s: [cites(o), busy(o), o.name === trunk.name ? 1 : 0, o.cards.length] as const }))
-      .sort((a, b) => b.s[0] - a.s[0] || b.s[1] - a.s[1] || b.s[2] - a.s[2] || b.s[3] - a.s[3]);
-    if (cand[0]) (L.parent = cand[0].o.name), (L.parentWhy = "guess");
+  };
+  /** Whether `child` began from `from`, through its parents: each one there before the branch it's the parent of. */
+  const beganFrom = (child: string, from: string) => {
+    const seen = new Set<string>();
+    for (let L = laneOf(child); L.parent && !seen.has(L.parent) && laneOf(L.parent).first <= L.first; L = laneOf(L.parent)) {
+      if (L.parent === from) return true;
+      seen.add(L.parent);
+    }
+    return false;
+  };
+  // Each pass finds a sync or stops, so this ends with the parents of the last.
+  for (let pass = 0; pass <= merges.length; pass++) {
+    parents();
+    const found = merges.filter((m) => !sync.has(m) && beganFrom(m.into, m.branch));
+    if (!found.length) break;
+    for (const m of found) sync.add(m), (m.sync = true);
   }
   // No cycles: a branch can't be its own ancestor.
   for (const L of lanes.values()) {
@@ -394,12 +496,16 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
     if (L.name === trunk.name) L.end = { kind: "trunk", quietSince: L.last };
     else if (em) (L.end = { kind: "merged", into: em.into, at: em.at, merge: em }), (em.ends = true);
     else {
-      const since = [...L.out].sort((a, b) => a.t - b.t).at(-1);
+      // Its end words name the last merge out it carried on after, never a sync (B-9v07y).
+      const since = L.out.filter((m) => !m.sync).sort((a, b) => a.t - b.t).at(-1);
+      const idle = nowT - L.last > idleMs;
       L.end = {
         kind: "open",
         waiting: L.cards.filter((c) => c.state === "waiting").length,
         aside: L.cards.filter((c) => c.state === "aside").length,
-        idleSince: nowT - L.last > idleMs ? L.last : null,
+        idleSince: idle ? L.last : null,
+        // A card waiting for you keeps it at the top however long it's idle (B-srtcs).
+        down: idle && !L.cards.some((c) => c.forYou),
         ...(since ? { since } : {}),
       };
     }
@@ -407,18 +513,24 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
 
   // Every event, in the order it happened: where a branch began, its cards and commits, its merges.
   const events: Event[] = [];
-  for (const L of lanes.values()) if (L.parent) events.push({ kind: "fork", key: `fork:${L.name}`, lane: L.name, from: L.parent, guess: L.parentWhy !== "merged", t: L.first, rank: 0 });
+  for (const L of lanes.values()) {
+    if (!L.parent) continue;
+    // A start a record places is in its second with the merges, ordered among them below.
+    const start = L.parentWhy === "began" ? L.began : undefined;
+    events.push({ kind: "fork", key: `fork:${L.name}`, lane: L.name, from: L.parent, guess: L.parentWhy === "guess", t: L.first, rank: start && start.t === L.first ? 3 : 0, ...(start ? { start } : {}) });
+  }
   for (const c of cards) events.push({ kind: "card", key: `card:${c.id}`, lane: c.branch, card: c, t: c.t, rank: 1 });
   for (const L of lanes.values()) for (const c of L.commits) events.push({ kind: "commit", key: `commit:${c.hash}`, lane: L.name, commit: c, t: c.t, rank: 2 });
   for (const c of loose.commits) events.push({ kind: "commit", key: `commit:${c.hash}`, lane: null, commit: c, t: c.t, rank: 2 });
   for (const m of merges) events.push({ kind: "merge", key: m.key, lane: m.branch, into: m.into, merge: m, ends: m.ends, t: m.t, rank: 3 });
-  // Merges in one second (two records at one commit, as 952d56b has): one into a branch comes before one out of it, since
-  // it made the commit the other moved to (A into B, then B fast-forwarded into C).
-  const step = new Map<Merge, number>(merges.map((m) => [m, 0]));
-  const sameSecond = new Map<number, Merge[]>();
-  for (const m of merges) sameSecond.set(m.t, [...(sameSecond.get(m.t) ?? []), m]);
-  for (const ms of sameSecond.values()) if (ms.length > 1) for (let pass = 0; pass < 4; pass++) for (const m of ms) for (const o of ms) if (o !== m && o.into === m.branch) step.set(m, Math.max(step.get(m)!, step.get(o)! + 1));
-  const stepOf = (e: Event) => (e.kind === "merge" ? step.get(e.merge)! : 0);
+  // Merges and recorded starts in one second (two records at one commit, as 952d56b has): one into a branch comes before
+  // one out of it, or a start from it, since it made the commit the other moved to (A into B, then C brought up to B).
+  const moves = (e: Event) => (e.kind === "merge" ? { from: e.lane, to: e.into } : e.kind === "fork" && e.rank === 3 ? { from: e.from, to: e.lane } : null);
+  const step = new Map<string, number>();
+  const stepOf = (e: Event) => step.get(e.key) ?? 0;
+  const sameSecond = new Map<number, Event[]>();
+  for (const e of events) if (moves(e)) sameSecond.set(e.t, [...(sameSecond.get(e.t) ?? []), e]);
+  for (const es of sameSecond.values()) if (es.length > 1) for (let pass = 0; pass < 4; pass++) for (const e of es) for (const o of es) if (o !== e && moves(o)!.to === moves(e)!.from) step.set(e.key, Math.max(stepOf(e), stepOf(o) + 1));
   events.sort((a, b) => a.t - b.t || a.rank - b.rank || stepOf(a) - stepOf(b) || a.key.localeCompare(b.key));
   const citedBy = new Map<string, Commit[]>();
   for (const c of commits) for (const id of c.cards) citedBy.set(id, [...(citedBy.get(id) ?? []), c]);
@@ -437,6 +549,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
     commitByHash,
     citedBy,
     merges,
+    starts,
     loose,
     events,
     offLane,
@@ -450,6 +563,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
       hard: cards.filter((c) => c.hard).length,
       branches: all.filter((l) => l.cards.length).length,
       merged: all.filter((l) => l.end.kind === "merged").length,
+      mergedBare: all.filter((l) => l.end.kind === "merged" && !l.cards.length).length,
       open: all.filter((l) => l.end.kind === "open"),
       held: all.filter((l) => l.end.kind === "open" && l.end.waiting > 0),
       commits: commits.length,
@@ -497,7 +611,7 @@ export function spansOf(model: Model): Map<string, Span> {
     const start = fork.get(L.name) ?? -Infinity;
     const end = L.end.kind === "merged" ? index.get(L.end.merge.key)! : Infinity;
     spans.set(L.name, { start, end });
-    if (L.end.kind === "open" && L.end.idleSince !== null) {
+    if (L.end.kind === "open" && L.end.down) {
       const after = last.get(L.name) ?? Math.max(0, start);
       idle.set(after, [...(idle.get(after) ?? []), L.name]);
     }
@@ -548,8 +662,8 @@ export function columnsOf(model: Model, spans: Map<string, Span> = spansOf(model
 export type Live = Map<number, string>;
 
 export type Row =
-  /** The top: the branches still open, by their end words. */
-  | { kind: "now"; key: string; t: number; tags: string[]; live: Live }
+  /** The top: the branches still open, by their end words; `dated` when now isn't on the newest day shown (B-srtcs). */
+  | { kind: "now"; key: string; t: number; tags: string[]; live: Live; dated: boolean }
   | { kind: "day"; key: string; dk: string; t: number; live: Live; cards: number; against: number; waiting: number; merges: number }
   /** A day folded into one row: what it held, and the lanes at its top and bottom. */
   | { kind: "fold"; key: string; dk: string; t: number; top: Live; bottom: Live; cards: number; against: number; gone: number; began: string[]; merged: number }
@@ -562,7 +676,7 @@ export type Row =
 
 export interface Rows {
   rows: Row[];
-  /** How many columns the lanes take; a loose commit is drawn in the one after. */
+  /** How many columns the lanes take, one for each branch open at once (B-cjqxz); a loose commit is drawn in the one after. */
   cols: number;
   loose: boolean;
 }
@@ -571,9 +685,8 @@ export interface Rows {
  * The history as rows, newest first, each with what its gutter draws. A day other than the latest folds into one row,
  * unless it has a card waiting or held back, a card the filter matches, or the reader has opened it.
  */
-export function listRows(model: Model, columns: Map<string, number>, opts: { commits: boolean; filter?: ((c: BCard) => boolean) | undefined; open: Set<string>; cap?: number; spans?: Map<string, Span> }): Rows {
-  const cap = opts.cap ?? COLUMNS;
-  const col = (name: string) => Math.min(columns.get(name) ?? 0, cap - 1);
+export function listRows(model: Model, columns: Map<string, number>, opts: { commits: boolean; filter?: ((c: BCard) => boolean) | undefined; open: Set<string>; spans?: Map<string, Span> }): Rows {
+  const col = (name: string) => columns.get(name) ?? 0;
   const lanes = [...model.lanes.values()];
   const spans = opts.spans ?? spansOf(model);
   const span = [...spans].map(([name, s]) => ({ name, ...s, col: col(name) }));
@@ -594,9 +707,9 @@ export function listRows(model: Model, columns: Map<string, number>, opts: { com
   const days = [...byDay.keys()].filter((dk) => byDay.get(dk)!.some((i) => shown(events[i]!) || endRows.has(i))).sort().reverse();
   const pending = (e: Event) => e.kind === "card" && (e.card.state === "waiting" || e.card.state === "aside");
   const rows: Row[] = [];
-  const open = lanes.filter((L) => L.end.kind === "open" && L.end.idleSince === null);
+  const open = lanes.filter((L) => L.end.kind === "open" && !L.end.down);
   // Above the newest event, past any end row there: what the Now row and a day's header draw.
-  rows.push({ kind: "now", key: "now", t: model.nowT, tags: open.map((L) => L.name), live: liveAt(events.length - 0.1) });
+  rows.push({ kind: "now", key: "now", t: model.nowT, tags: open.map((L) => L.name), live: liveAt(events.length - 0.1), dated: !!days[0] && days[0] !== dayKey(model.nowT) });
   for (const dk of days) {
     const idx = byDay.get(dk)!;
     const all = idx.map((i) => events[i]!);
@@ -654,7 +767,36 @@ export function listRows(model: Model, columns: Map<string, number>, opts: { com
     }
   }
   const n = Math.max(0, ...[...model.lanes.keys()].map(col)) + 1;
-  return { rows, cols: model.lanes.size ? Math.min(cap, n) : 0, loose: opts.commits && model.loose.commits.length > 0 };
+  return { rows, cols: model.lanes.size ? n : 0, loose: opts.commits && model.loose.commits.length > 0 };
+}
+
+// ------------------------------------------------------------------------------------------------ the gutter's spacing
+
+/** The px between columns: roomy up to five, then narrower to fit the gutter's width, but never under 6 (B-cjqxz). */
+const PITCH = { narrow: 14, wide: 18 };
+const SPAN = { narrow: 70, wide: 100 };
+export const MIN_PITCH = 6;
+/** The first column's centre, and the room right of the last. */
+const LEFT = 11;
+const RIGHT = 13;
+
+/**
+ * The gutter's spacing for `cols` columns (B-cjqxz: a column for each branch open at once). Up to five, 14 px apart (18
+ * when Wider); past five they narrow to fit 70 px (100), as far as 6 px; past that the gutter widens, but only where
+ * that many are drawn: `fits` columns fit its usual width, and a stretch of rows that reaches further needs `width(n)`.
+ */
+export function gutterOf(cols: number, wide: boolean): { pitch: number; fits: number; x: (c: number) => number; width: (n: number) => number } {
+  const span = wide ? SPAN.wide : SPAN.narrow;
+  const pitch = cols <= 5 ? (wide ? PITCH.wide : PITCH.narrow) : Math.max(MIN_PITCH, Math.floor(span / Math.max(1, cols - 1)));
+  const x = (c: number) => LEFT + c * pitch;
+  return { pitch, fits: cols <= 5 ? cols : Math.min(cols, Math.floor(span / pitch) + 1), x, width: (n: number) => x(Math.max(0, n - 1)) + RIGHT };
+}
+
+/** How many columns a row's strokes reach: its highest column, and one. */
+export function reachOf(strokes: Stroke[] | null): number {
+  let n = 0;
+  for (const s of strokes ?? []) n = Math.max(n, 1 + ("col" in s ? s.col : Math.max(s.from, s.to)));
+  return n;
 }
 
 // ------------------------------------------------------------------------------------------------ what a row's gutter draws
@@ -774,9 +916,11 @@ export function statusOf(model: Model): { lead: string; body: string; open: Lane
   const held = c.held.filter((L) => L.cards.some((x) => x.forYou)).map((L) => L.short);
   const first = c.waiting ? `${c.waiting === 1 ? "One card is" : `${lead(c.waiting)} cards are`} waiting for you${held.length ? `, holding ${listOf(held)} from merging` : ""}.` : "Nothing is waiting for you.";
   const answered = c.against ? `you chose otherwise than the agent on ${c.against}` : c.with ? "you chose the agent's pick on every one you answered" : "none answered yet";
+  // The branches merged count every branch drawn, those with commits but no cards too, and say so (B-zshw5).
+  const bare = !c.mergedBare ? "" : c.mergedBare < c.merged ? `, ${c.mergedBare} of them with commits but no cards` : `, ${c.merged === 1 ? "" : c.merged === 2 ? "both " : "all "}with commits but no cards`;
   const body = [
     `${plural(c.cards, "card")} on ${plural(c.branches, "branch", "branches")}: ${answered}${c.gone ? `, and ${c.gone} ${c.gone === 1 ? "was" : "were"} withdrawn` : ""}.`,
-    c.merged ? `${lead(c.merged)} ${c.merged === 1 ? "branch has" : "branches have"} merged.` : "",
+    c.merged ? `${lead(c.merged)} ${c.merged === 1 ? "branch has" : "branches have"} merged${bare}.` : "",
   ]
     .filter(Boolean)
     .join(" ");

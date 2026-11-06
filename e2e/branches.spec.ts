@@ -367,6 +367,21 @@ test.describe("the local desk", () => {
     for (const m of s.merges ?? []) m.at = move(m.at, m.branch);
     s.server.now = new Date(o.now ?? NOON(0, now) + 3_600_000).toISOString();
   }
+  /** A card returned to its agent: it holds its branch's merge, but isn't waiting for you. */
+  function returned(s: ApiState, id: string) {
+    const c = s.cards.find((x) => x.meta.id === id)!;
+    c.status = "returned";
+    c.verdicts.push({ type: "verdict", format: 1, card: c.meta.id, revision: 1, response: "reject", reviewer: "tester", client: "test", at: new Date().toISOString() } as (typeof c.verdicts)[number]);
+  }
+  /** A copy of a card, on another branch, filed at `at`. */
+  function cloned(s: ApiState, from: string, o: { id: string; branch: string; at: number; title?: string }) {
+    const c = structuredClone(s.cards.find((x) => x.meta.id === from)!);
+    Object.assign(c.meta, { id: o.id, source_branch: o.branch, created: new Date(o.at).toISOString(), title: o.title ?? `${c.meta.title} (${o.id})` });
+    for (const v of c.verdicts) Object.assign(v, { card: o.id, at: new Date(o.at + 60_000).toISOString() });
+    s.cards.push(c);
+    return c;
+  }
+  const iso = (t: number) => new Date(Math.floor(t / 1000) * 1000).toISOString();
   /** Open every folded day, one at a time: each fold goes as its day opens. */
   async function unfoldAll(d: Locator) {
     for (let i = 0; i < 20 && (await d.locator(".br-row.is-fold .br-rb").count()); i++) await d.locator(".br-row.is-fold .br-rb").first().click();
@@ -525,11 +540,7 @@ test.describe("the local desk", () => {
   });
 
   test("a card returned to its agent holds its branch's merge, but isn't waiting for you (IF-6)", async ({ page }) => {
-    await openPatched(page, (s, h) => {
-      const c = s.cards.find((x) => x.meta.id === h.cards.prices)!;
-      c.status = "returned";
-      c.verdicts.push({ type: "verdict", format: 1, card: c.meta.id, revision: 1, response: "reject", reviewer: "tester", client: "test", at: new Date().toISOString() } as (typeof c.verdicts)[number]);
-    });
+    await openPatched(page, (s, h) => returned(s, h.cards.prices));
     await page.keyboard.press("b");
     const d = drawerOf(page);
     await expect(d.locator(".br-status")).toContainText("Nothing is waiting for you.");
@@ -546,6 +557,8 @@ test.describe("the local desk", () => {
       const now = Date.parse(s.server.now) + 3 * 86_400_000;
       s.server.now = new Date(now).toISOString();
       s.commits!.push({ commit: "f".repeat(40), branch: "main", card: h.cards.session, at: new Date(now - 86_400_000).toISOString() });
+      // Its card returned to its agent: it holds the merge, but isn't waiting for you, so the end moves down (B-srtcs).
+      returned(s, h.cards.prices);
     });
     await page.keyboard.press("b");
     const d = drawerOf(page);
@@ -567,6 +580,131 @@ test.describe("the local desk", () => {
     const d = drawerOf(page);
     const short = await d.evaluate((el) => [...el.querySelectorAll<HTMLElement>("li.br-row")].filter((li) => li.querySelector(":scope > svg.br-g")!.getBoundingClientRect().bottom < li.getBoundingClientRect().bottom + 0.9).length);
     expect(short).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------------------- the sweep's cards, answered
+
+  test("a branch brought up to main before any work of its own began there: one dashed start, no merge into it (B-c4efj)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      // As this repo's three: main recorded as merged into feat/checkout just before its first card, at main's commit.
+      const first = Date.parse(s.cards.find((c) => c.meta.id === h.cards.cookie)!.meta.created);
+      s.merges!.push({ branch: "main", into: "feat/checkout", commit: h.commits[0]!, at: iso(first - 5000), cards: [h.cards.session] });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".br-row.is-merge")).toHaveCount(2);
+    await expect(d.locator(".br-row.is-merge", { hasText: "main merged into" })).toHaveCount(0);
+    await expect(d.locator(".br-list path.m-merge")).toHaveCount(2);
+    // Its start, once, from main: recorded, so not a guess.
+    expect((await d.locator(".br-row.is-fork .br-tx").allTextContents()).sort()).toEqual(["feat/catalog began, from main (a guess: nothing records it)", "feat/checkout began, from main", "fix/typo began, from main"]);
+    // The merge's note and the branch's summary say where it began, and when.
+    await d.locator(".br-row.is-merge .br-rb", { hasText: "feat/checkout merged into main" }).click();
+    await expect(detail(d).locator(".br-note")).toHaveText(/^feat\/checkout began from main: it was brought up to main on \w{3} \d{1,2} \w{3}, \d\d:\d\d, before any work of its own, and its start is drawn, dashed, there\.$/);
+    await detail(d).getByRole("button", { name: "About this branch" }).click();
+    await expect(detail(d).locator("dd").nth(3)).toHaveText(/^from main, brought up to it on \w{3} \d{1,2} \w{3}, \d\d:\d\d before any work of its own$/);
+    expect(await gutterBreaks(d)).toEqual([]);
+    await check(page);
+  });
+
+  test("a merge into a branch that began from it ends nothing: the branch keeps its Now tag and isn't counted as merged (B-9v07y)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      // feat/catalog-photos began from feat/catalog (its commit cites feat/catalog's card), with work of its own; then
+      // feat/catalog was merged into it, and nothing happened on feat/catalog after.
+      const kitchen = s.cards.find((c) => c.meta.id === h.cards.kitchen)!;
+      const prices = Date.parse(s.cards.find((c) => c.meta.id === h.cards.prices)!.meta.created);
+      const t = Date.parse(kitchen.meta.created);
+      cloned(s, h.cards.kitchen, { id: "B-ph0t0", branch: "feat/catalog-photos", at: t + 2000, title: "Where the photos are kept" });
+      s.commits!.push({ commit: "a".repeat(40), branch: "feat/catalog-photos", card: h.cards.kitchen, at: new Date(t + 3000).toISOString() });
+      s.merges!.push({ branch: "feat/catalog", into: "feat/catalog-photos", commit: "b".repeat(40), at: iso(prices + 5000), cards: [h.cards.kitchen, h.cards.prices] });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".is-now .br-endtag", { hasText: /^feat\/catalog ·/ })).toHaveText("feat/catalog · No merge recorded · Merge held: 1 waiting");
+    await expect(d.locator(".br-status")).toContainText("Two branches have merged.");
+    await expect(d.locator(".br-row.is-fork .br-tx", { hasText: "feat/catalog-photos" })).toHaveText("feat/catalog-photos began, from feat/catalog (a guess: nothing records it)");
+    await d.locator(".br-row.is-merge .br-rb", { hasText: "feat/catalog merged into feat/catalog-photos" }).click();
+    await expect(detail(d)).toContainText("It ended nothing: feat/catalog-photos began from feat/catalog");
+    expect(await gutterBreaks(d)).toEqual([]);
+    await check(page);
+  });
+
+  test("gives each of fourteen branches open at once its own line, and that day alone a wider gutter (B-cjqxz)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      overDays(s);
+      // Two days back, beside feat/checkout: fourteen worktrees open at once, merged into main in turn.
+      const t = Date.parse(s.cards.find((c) => c.meta.id === h.cards.cookie)!.meta.created) + 3_600_000;
+      for (let k = 0; k < 14; k++) {
+        const b = `worktree-agent-${(0xa1000 + k).toString(16)}c0ffee1234`;
+        const ids = [`B-q${String(k).padStart(2, "0")}a0`, `B-q${String(k).padStart(2, "0")}b0`];
+        cloned(s, h.cards.cookie, { id: ids[0]!, branch: b, at: t + k * 60_000 });
+        cloned(s, h.cards.cookie, { id: ids[1]!, branch: b, at: t + (20 + k) * 60_000 });
+        s.merges!.push({ branch: b, into: "main", commit: (k + 10).toString(16).repeat(40).slice(0, 40), at: iso(t + (60 + 13 - k) * 60_000), cards: ids });
+      }
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await unfoldAll(d);
+    expect(await gutterBreaks(d)).toEqual([]);
+    // Where they're all open, fifteen lines (main's too), each at its own x, at least 6 px apart.
+    const xs = await d.evaluate((el) => {
+      const rows = [...el.querySelectorAll<HTMLElement>("li.br-row")];
+      const n = rows.map((li) => {
+        const x = [...new Set([...li.querySelectorAll(":scope > svg.br-g > line:not(.cap)")].map((l) => Number(l.getAttribute("x1"))))].sort((a, b) => a - b);
+        return x.every((v, i) => i === 0 || v - x[i - 1]! >= 6) ? x.length : -1;
+      });
+      // The screen saved shows where they're all open.
+      rows[n.indexOf(Math.max(...n))]!.scrollIntoView({ block: "center" });
+      return Math.max(...n);
+    });
+    expect(xs).toBe(15);
+    // Its text is narrower that day only: today's rows keep the usual indent.
+    const indent = (dk: number) => d.locator(".br-day").nth(dk).locator(".br-rb").first().evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingLeft));
+    const today = await indent(0);
+    const busy = await indent(2);
+    expect(busy).toBeGreaterThan(today);
+    await check(page);
+    await shot(page, "local-fourteen");
+  });
+
+  test("shortens a long name made of words to whole words, and keeps it whole in details (B-my3az)", async ({ page }) => {
+    const { h } = await openPatched(page, (s) => {
+      const names: Record<string, string> = { "feat/checkout": "feature/checkout-and-payments-refactor", "feat/catalog": "feature/catalog" };
+      for (const c of s.cards) c.meta.source_branch = names[c.meta.source_branch] ?? c.meta.source_branch;
+      for (const c of s.commits ?? []) c.branch = names[c.branch] ?? c.branch;
+      for (const m of s.merges ?? []) Object.assign(m, { branch: names[m.branch] ?? m.branch, into: names[m.into] ?? m.into });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".br-row.is-merge .br-rs", { hasText: "checkout" })).toHaveText("feature checkout-and-payments… merged into main");
+    await row(d, `card:${h.cards.deletion}`).click();
+    await expect(detail(d)).toContainText("claude-code on feature/checkout-and-payments-refactor");
+    await check(page);
+  });
+
+  test("says what the counts count: branches merged with commits but no cards (B-zshw5)", async ({ page }) => {
+    await openPatched(page, (s, h) => {
+      const at = Date.parse(s.merges!.find((m) => m.branch === "fix/typo")!.at) + 60_000;
+      s.commits!.push({ commit: "c".repeat(40), branch: "worktree-agent-a1b2c3d4e5f6a7b8c", card: h.cards.session, at: new Date(at).toISOString() });
+      s.merges!.push({ branch: "worktree-agent-a1b2c3d4e5f6a7b8c", into: "main", commit: "d".repeat(40), at: iso(at + 60_000), cards: [], commits: ["c".repeat(40)] });
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator("#drawer-status")).toHaveText(/6 cards on 4 branches: you chose otherwise than the agent on 1, and 1 was withdrawn\. Three branches have merged, 1 of them with commits but no cards\.$/);
+  });
+
+  test("keeps a branch with a card waiting for you at the top however long it's idle, and names Now's day (B-srtcs)", async ({ page }) => {
+    await openPatched(page, (s) => {
+      overDays(s);
+      s.server.now = new Date(Date.parse(s.server.now) + 3 * 86_400_000).toISOString();
+    });
+    await page.keyboard.press("b");
+    const d = drawerOf(page);
+    await expect(d.locator(".is-now .br-endtag")).toHaveText([/^feat\/catalog · No merge recorded · Merge held: 1 waiting · idle since \w{3} \d{1,2} \w{3}$/]);
+    await expect(d.locator(".br-row.is-end")).toHaveCount(0);
+    // The newest day below is three days back: the Now row says which day now is.
+    await expect(d.locator(".br-nowh")).toHaveText(/^Now, \w{3} \d{1,2} \w{3}, \d\d:\d\d$/);
+    expect(await gutterBreaks(d)).toEqual([]);
+    await check(page);
   });
 
   for (const size of PHONES) {
