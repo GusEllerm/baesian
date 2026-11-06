@@ -6933,7 +6933,7 @@ sig = "3a5a335a45f4bf57"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/mcp.ts"
-sig = "6939fa2219c6e73b"
+sig = "9ef815fdf1f131d1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -9108,7 +9108,7 @@ sig = "4eb943411b97286f"
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
 target = "src/agents.ts#AGENTS_BLOCK"
-sig = "15c2f3e7784b36fb"
+sig = "a7ce360ae5388c69"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"

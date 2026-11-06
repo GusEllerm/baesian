@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CARD_TEMPLATE } from "../src/agents.js";
+import { AGENTS_BLOCK, CARD_TEMPLATE } from "../src/agents.js";
 import { evaluate } from "../src/gate.js";
 import { openRepo } from "../src/git.js";
+import { MCP_INSTRUCTIONS } from "../src/mcp.js";
 import { cardDetails, fileOp, verdictLines } from "../src/ops.js";
 import { proposeSliderMoves } from "../src/proposals.js";
 import { routingReport } from "../src/report.js";
@@ -250,6 +251,19 @@ describe("rules and the gate treat it as an answered card", () => {
     expect(r.ok).toBe(true);
     const v = readdirVerdict(dir, id);
     expect(v).toMatchObject({ card: id, seen: true });
+  });
+});
+
+describe("the instructions agents read", () => {
+  it("say to file a choice already answered in chat as a seen card, and otherwise to file before asking: AGENTS.md's block, the skill and the MCP server's", () => {
+    const skill = readFileSync(join(process.cwd(), "plugins", "baesian", "skills", "baesian", "SKILL.md"), "utf8");
+    const repoBlock = readFileSync(join(process.cwd(), "AGENTS.md"), "utf8");
+    const line = "A choice the reviewer has already answered in chat is filed all the same, with their answer as your pick and their words";
+    for (const text of [AGENTS_BLOCK, repoBlock, skill, MCP_INSTRUCTIONS]) {
+      const flat = text.replace(/\s+/g, " ");
+      expect(flat).toContain(line);
+      expect(flat).toMatch(/answered_in_chat`?, for them to confirm with one tap; otherwise, file it before you ask/);
+    }
   });
 });
 

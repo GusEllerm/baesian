@@ -18,6 +18,8 @@ File one when the decision changes a schema or an on-disk format, a public API, 
 
 Run `baesian inbox` first: an earlier verdict may already decide it.
 
+A choice the reviewer has already answered in chat is filed all the same, with their answer as your pick and their words, quoted and short, in `answered_in_chat`, for them to confirm with one tap; otherwise, file it before you ask, so they choose blind.
+
 If `AGENTS.md` points to the repo's vault, read the notes it names (a Working Agreement, the rules in force in `Rules/`) when deciding: they're guidance, and only rules accepted in the client change what the gate lets through.
 
 ## In personal mode

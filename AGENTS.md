@@ -43,6 +43,9 @@ your pick, your case or the card's body; put what they need in order to choose, 
 `crux_fact`, and background in the body. The decision record is committed with the code, so don't paste
 secrets, credentials or private output into a card.
 
+A choice the reviewer has already answered in chat is filed all the same, with their answer as your pick and
+their words in `answered_in_chat`, for them to confirm with one tap; otherwise, file it before you ask.
+
 Before deciding whether to file, read this repo's guidance in its vault: `docs/vault/Working Agreement.md` and the rules in force, in `docs/vault/Rules/`.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
