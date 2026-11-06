@@ -8,7 +8,7 @@ sig = "b7090cba05fab487"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "package.json"
-sig = "558343f37cfb340f"
+sig = "612840f1c7db18ac"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -38,7 +38,7 @@ sig = "33c84d59e213a3b4"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "service/package.json"
-sig = "4bcfed05774a6378"
+sig = "779b31645382a3f1"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -4283,7 +4283,7 @@ sig = "f93d8955844312ac"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "package.json"
-sig = "558343f37cfb340f"
+sig = "612840f1c7db18ac"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4293,7 +4293,7 @@ sig = "fe458262d20ef072"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "service/package.json"
-sig = "4bcfed05774a6378"
+sig = "779b31645382a3f1"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4383,7 +4383,7 @@ sig = "7871414a5c16aa74"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "package.json"
-sig = "558343f37cfb340f"
+sig = "612840f1c7db18ac"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -4393,7 +4393,7 @@ sig = "fe458262d20ef072"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/package.json"
-sig = "4bcfed05774a6378"
+sig = "779b31645382a3f1"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -8978,12 +8978,12 @@ sig = "21ef9f2068b24af1"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "package.json"
-sig = "558343f37cfb340f"
+sig = "612840f1c7db18ac"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "service/package.json"
-sig = "4bcfed05774a6378"
+sig = "779b31645382a3f1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"

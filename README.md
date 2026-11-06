@@ -177,6 +177,12 @@ npm run readme-media   # remakes this README's images (needs ffmpeg)
 The project's memory is the Obsidian vault in [`docs/vault/`](docs/vault/Home.md): the design, the decision log, and
 a log of each working session. Start at `Home.md`.
 
+## Licence
+
+Baesian is source-available under the [Functional Source License 1.1](LICENSE.md) (FSL-1.1-ALv2): you may use, change
+and run it for any purpose except a product or service that competes with it, and each version becomes available under
+the Apache License 2.0 two years after its release.
+
 ## Why "Baesian"
 
 It's a dating app for decisions. Your agents line up their options, you swipe on the one you'd pick before you see
