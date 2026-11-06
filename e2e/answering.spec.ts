@@ -226,3 +226,20 @@ test("a two-finger swipe chooses as a drag does, once it stops; a short one does
   await swipe(0, 160);
   expect(await mode(page)).toBe("write");
 });
+
+test("an option's answer to the crux never runs under its arrow-key hint, however narrow the option (the README's GIF, 2026-11-06)", async ({ page }) => {
+  // The GIF showed it with the drawer open over a 1000 px window: "If it should be undoable for a" ran under ←.
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await open(page, [{ crux_proposal: "If it should be undoable for a while", crux_alternative: "If deleting should be final at once" }]);
+  await page.keyboard.press("b");
+  await expect(page.locator(".drawer")).toBeVisible();
+  for (const kind of ["proposal", "alternative"] as const) {
+    // Where its words wrap depends on their length, so check the room they're given: it ends before the key begins.
+    const { roomEnds, keyBegins } = await option(page, kind).evaluate((opt) => {
+      const ifans = opt.querySelector(".ifans")!;
+      const box = ifans.getBoundingClientRect();
+      return { roomEnds: box.right - parseFloat(getComputedStyle(ifans).paddingRight), keyBegins: opt.querySelector(".key")!.getBoundingClientRect().left };
+    });
+    expect(roomEnds, `${kind}'s answer to the crux has room under its key`).toBeLessThanOrEqual(keyBegins);
+  }
+});

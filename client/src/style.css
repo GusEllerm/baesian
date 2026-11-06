@@ -119,6 +119,8 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .opt:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
 .opt .key { position: absolute; top: 12px; right: 12px; color: var(--ink-soft); }
 .opt .ifans { font: var(--t-meta); font-stretch: 88%; font-size: 13px; color: var(--ink); }
+/* The arrow-key hint sits in the option's top corner: the line beside it stops short of it, as the title below does. */
+.opt .key + .ifans { padding-right: 30px; }
 .opt h2 { margin: 0; padding-right: 30px; font: var(--t-option); text-wrap: balance; }
 .opt .then { font: var(--t-body); color: var(--ink-soft); }
 /* In the reveal, the options shrink to their names, to make room for the agent's pick and its case (round 5). */
