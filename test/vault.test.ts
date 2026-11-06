@@ -133,6 +133,16 @@ describe("a decision note (D171, D172)", () => {
     expect(o.body.match(/\*\*Not chosen:\*\*/g)).toHaveLength(2);
   });
 
+  it("says a decision was answered in chat first, with what the reviewer said (B-hswmx)", () => {
+    const { dir, store } = vaultRepo();
+    const id = file(store, { answered_in_chat: "SQLite: one machine writes runs", proposal: "SQLite (WAL mode)" });
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    write(store);
+    const note = noteFor(dir, id);
+    expect(note.body).toContain('**Answered in chat first:** "SQLite: one machine writes runs", which the agent filed as its pick.');
+    expect(note.body).not.toContain("**First chose:**");
+  });
+
   it("is written for a conflict card, and the decision it didn't choose is superseded (D35)", () => {
     const { dir, store } = vaultRepo();
     const base = file(store);

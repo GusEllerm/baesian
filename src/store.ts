@@ -101,6 +101,9 @@ export { BAESIAN } from "./routing.js";
 /** Responses that return a card to its agent. */
 const RETURNS: ReadonlySet<Verdict["response"]> = new Set(["reject", "question", "need_context", "see_it_run"]);
 
+/** A choice the reviewer answered in chat comes to the gate as one, and is shown, for them to confirm (B-hswmx). */
+const chatOr = (m: { answered_in_chat?: string | undefined }, otherwise: GateSource): GateSource => (m.answered_in_chat !== undefined ? "chat" : otherwise);
+
 /**
  * A card revision's draw for audit (P16 section 3): a SHA-256 hash of its ID and revision, its first six bytes read as a
  * number from 0 to 1. The store picks the ID, so the agent can't choose it; `baesian verify` recomputes it.
@@ -1231,10 +1234,10 @@ export class Store {
    * own answer, or the agent's one reply; or else the agent's.
    */
   private gateSourceOf(card: Card, previous: Card | undefined): GateSource {
-    if (!previous) return isOwnCard(card.meta) ? "baesian" : "agent";
+    if (!previous) return isOwnCard(card.meta) ? "baesian" : chatOr(card.meta, "agent");
     if (card.meta.reply !== undefined && previous.meta.reply === undefined) return "answer";
     const own = this.latestVerdict(previous);
-    return this.parentReturns(previous).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : "agent";
+    return this.parentReturns(previous).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : chatOr(card.meta, "agent");
   }
 
   /**
@@ -1356,7 +1359,8 @@ export class Store {
     if (matches.length > 0) throw new PossibleDuplicate(matches, prep.draft.title);
     const id = this.freeCardId();
     // Baesian's own cards always reach you; the store files them under its name (conflict cards, D35).
-    const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : "agent");
+    // A choice the reviewer answered in chat is shown too, for them to confirm (B-hswmx).
+    const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : chatOr(prep.draft, "agent"));
     return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
   }
 
@@ -1391,7 +1395,7 @@ export class Store {
     // A revision that follows your answer is shown; one returned because a parent went the other way (D80) is a new
     // decision, so it's gated as one (P16 section 3).
     const own = this.latestVerdict(latest);
-    const source: GateSource = this.parentReturns(latest).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : "agent";
+    const source: GateSource = this.parentReturns(latest).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : chatOr(prep.draft, "agent");
     const { warnings, ...gated } = this.writeGated(id, latest.meta.revision + 1, prep.draft, body, opts.agent, source);
     return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
   }
@@ -1855,7 +1859,14 @@ export class Store {
     let at = input.at ?? now();
     const previous = this.verdicts(input.card).at(-1)?.at;
     if (previous && at <= previous) at = new Date(Date.parse(previous) + 1).toISOString();
-    const v = parse(Verdict, { ...input, type: "verdict", format: newestFormat("verdict"), at }, "the verdict");
+    // A card answered in chat (B-hswmx): its pick was seen before the answer, so every verdict on it says so, and none
+    // carries a blind choice. Only such a card's verdicts are marked seen.
+    const seen = card.meta.answered_in_chat !== undefined;
+    if (seen && input.first_choice !== undefined) {
+      throw new ValidationError(`${card.meta.id} was answered in chat, so its pick was seen first: a verdict on it has no blind choice (first_choice)${cite("B-hswmx")}`);
+    }
+    if (!seen && input.seen !== undefined) throw new ValidationError(`${card.meta.id} wasn't answered in chat: only a verdict on a card answered in chat is marked seen${cite("B-hswmx")}`);
+    const v = parse(Verdict, { ...input, ...(seen ? { seen: true } : {}), type: "verdict", format: newestFormat("verdict"), at }, "the verdict");
     for (const id of v.retire_rules ?? []) {
       const problem = this.retirementProblem(card, v, id);
       if (problem) throw new ValidationError(problem);

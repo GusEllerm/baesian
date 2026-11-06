@@ -51,7 +51,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
 const verdict = (response: "accept" | "alternative", over = {}) => ({ type: "verdict" as const, format: 1, card: "B-x", revision: 1, response, reviewer: "gus", client: "web", at: at(100), ...over });
 const blank: RowReport = {
   shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0,
-  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0,
+  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0,
 };
 const fewer = PRESETS.find((p) => p.id === "fewer-interruptions")!;
 

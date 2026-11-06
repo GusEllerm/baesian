@@ -1,5 +1,5 @@
-import type { ApiState, RowReport } from "../../src/api";
-import { LOOSEN_AFTER } from "../../src/routing";
+import type { ApiCard, ApiState, RowReport } from "../../src/api";
+import { LOOSEN_AFTER, answeredInChat } from "../../src/routing";
 import type { Answer } from "./answer";
 import type { Rarity } from "./model";
 import { listWords } from "./prefs";
@@ -37,12 +37,15 @@ export const seconds = (ms: number | undefined) => (ms === undefined ? "none yet
 
 /**
  * Decisions you resolved in the client that were later superseded (Client Data Contract: "Partial: say
- * 'superseded', not 'wrong'"). By name, never by ID (D69).
+ * 'superseded', not 'wrong'"). By name, never by ID (D69). Those you answered in chat first are left out, as from every
+ * measure here (B-hswmx), and counted, so the panel can say how many: `inChat`, of the decisions you settled here.
  */
-export function laterSuperseded(state: ApiState): string[] {
-  return state.cards
-    .filter((c) => c.status === "superseded" && c.verdicts.some((v) => CLIENTS.has(v.client) && (v.response === "accept" || v.response === "alternative" || v.response === "correction")))
-    .map((c) => c.meta.title);
+export function laterSuperseded(state: ApiState): { names: string[]; inChat: number } {
+  const settled = (c: ApiCard) => c.verdicts.some((v) => CLIENTS.has(v.client) && (v.response === "accept" || v.response === "alternative" || v.response === "correction"));
+  return {
+    names: state.cards.filter((c) => c.status === "superseded" && settled(c) && !answeredInChat(c)).map((c) => c.meta.title),
+    inChat: state.cards.filter((c) => (c.status === "superseded" || c.status === "resolved") && settled(c) && answeredInChat(c)).length,
+  };
 }
 
 /** The clients a verdict names when it was given here: the local desk, and the website's desktop and phone layouts. */
@@ -76,7 +79,7 @@ const times = (n: number) => (n === 1 ? "once" : `${n} times`);
 
 /**
  * What a row's bar leaves out, in short phrases: cards not answered yet, held back and not answered (D150), audits
- * waiting for you (D151), and final accepts with no blind choice recorded.
+ * waiting for you (D151), final accepts with no blind choice recorded, and choices you answered in chat (B-hswmx).
  */
 export function leftOut(r: RowReport): string[] {
   const audits = Math.min(r.auditsUnanswered, r.heldWaiting);
@@ -87,14 +90,18 @@ export function leftOut(r: RowReport): string[] {
     held ? `${held} held back` : "",
     audits ? `${plural(audits, "audit")} waiting` : "",
     r.unblind ? `${r.unblind} kept without a blind choice` : "",
+    r.inChat ? `${r.inChat} answered in chat` : "",
   ].filter(Boolean);
 }
+
+/** How many of a row's cards its bar leaves out (`leftOut()`). */
+export const notCounted = (r: RowReport | undefined): number => (r ? r.unanswered + r.unblind + r.inChat : 0);
 
 /** All your answers in a sentence (D180), and what the bars leave out, if anything. */
 export function summaryWords(pooled: RowReport): string {
   const b = barOf(pooled);
   const left = leftOut(pooled);
-  const more = pooled.unanswered + pooled.unblind;
+  const more = notCounted(pooled);
   if (!b.total) return more ? `No answers to count yet: ${listWords(left)}.` : "No answers yet: each row's bar fills in as you answer its cards.";
   const said = `Of ${plural(b.total, "card")}, you chose as the agent did ${times(b.agreed)} without seeing its pick, came round to it ${times(b.cameRound)} after reading its case, and overturned it ${times(b.overturned)}.`;
   return more ? `${said} ${more}\u00a0more ${more === 1 ? "isn't" : "aren't"} counted: ${listWords(left)}.` : said;

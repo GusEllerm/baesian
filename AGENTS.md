@@ -45,6 +45,8 @@ secrets, credentials or private output into a card.
 
 A choice you'd put to the reviewer in chat goes as a card, even when they're in the conversation: say
 "it's in your deck" and don't list the options there, so they still choose before seeing your pick. A
+choice the reviewer has already answered in chat is filed all the same, with their answer as your pick and
+their words in `answered_in_chat`, for them to confirm with one tap; otherwise, file it before you ask. A
 change that only restores what a card or rule decided cites it, and needs no card.
 
 Before deciding whether to file, read this repo's guidance in its vault: `docs/vault/Working Agreement.md` and the rules in force, in `docs/vault/Rules/`.

@@ -27,6 +27,8 @@ secrets, credentials or private output into a card.
 
 A choice you'd put to the reviewer in chat goes as a card, even when they're in the conversation: say
 "it's in your deck" and don't list the options there, so they still choose before seeing your pick. A
+choice the reviewer has already answered in chat is filed all the same, with their answer as your pick and
+their words in \`answered_in_chat\`, for them to confirm with one tap; otherwise, file it before you ask. A
 change that only restores what a card or rule decided cites it, and needs no card.
 
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
@@ -204,6 +206,10 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "crux_preference", value: "true", optional: true, note: "the crux is about what the reviewer values, not a fact" },
   { field: "crux_fact", value: '""', optional: true, note: "what the reviewer needs to choose, kept neutral: the only context they see first" },
   { field: "rationale", value: '""', optional: true, note: "why you pick the proposal" },
+  {
+    field: "answered_in_chat", value: '""', optional: true,
+    note: "only if the reviewer already answered it in chat: what they said, quoted and short; your pick is their answer, which they confirm with one tap",
+  },
   {
     field: "wrong_if", value: '""', optional: true,
     note: "what would show your pick is wrong: required if reverse is one-way, touches includes security or privacy, or a premise is set",

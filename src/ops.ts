@@ -79,6 +79,7 @@ export function cardDetails(card: Card): Line[] {
     text(`${by("crux", m.crux)}${m.crux_preference ? " (a preference)" : ""}`),
   ];
   if (m.crux_fact) out.push(text(by("crux_fact", m.crux_fact)));
+  if (m.answered_in_chat) out.push(text(by(`answered_in_chat (the reviewer's answer in chat, the agent's pick; marked seen${citeIn("B-hswmx")})`, m.answered_in_chat)));
   out.push(text(`${by("proposal (the agent's pick)", m.proposal)}; if: ${q(m.crux_proposal)}; then: ${q(m.proposal_then)}`));
   out.push(text(`${by("alternative", m.alternative)}; if: ${q(m.crux_alternative)}; then: ${q(m.alternative_then)}`));
   if (m.premise) out.push(text(`${by(`premise, unverified, of the ${m.premise_option}`, m.premise)}; check: ${q(m.premise_check ?? "")}`));
@@ -105,7 +106,7 @@ function response(r: Verdict["response"]): Piece {
 export function verdictLines(s: Store, v: Verdict): Line[] {
   const proposal = v.response === "accept" ? s.revisions(v.card).find((r) => r.meta.revision === v.revision)?.meta.proposal : undefined;
   const what = v.choice ?? proposal;
-  const out = [text(id(v.card), ` r${v.revision}  `, response(v.response), ` by ${byLine(reviewerOf(v))}${what !== undefined ? `: ${q(what)}` : ""}`, "  ", dim(when(v.at)))];
+  const out = [text(id(v.card), ` r${v.revision}  `, response(v.response), ` by ${byLine(reviewerOf(v))}${what !== undefined ? `: ${q(what)}` : ""}${v.seen ? ", answered in chat first" : ""}`, "  ", dim(when(v.at)))];
   if (v.comment) out.push(indent(2, text(said("Comment", reviewerOf(v), v.comment))));
   if (v.retire_rules?.length) out.push(indent(2, text(`It retires ${v.retire_rules.join(", ")}.`)));
   return out;
@@ -162,6 +163,7 @@ export function levelField(g: GateRecord, filer = true): Field {
     agent: `the level ${filer ? "you" : "its agent"} asked for`,
     baesian: "(a card Baesian files is always shown)",
     answer: "(a revision that follows an answer is always shown)",
+    chat: "(a choice the reviewer answered in chat is always shown, for them to confirm)",
     error: "(the gate couldn't run, so the card is shown)",
   }[g.reason];
   return { label: "level", value: [level(g.level ?? "provisional"), g.reason === "agent" ? `, ${why}` : ` ${why}`] };
@@ -178,6 +180,7 @@ function filed(result: FileResult, title: Piece): Line[] {
   out.push(
     ...fields([
       levelField(result.gate),
+      result.card.meta.answered_in_chat !== undefined && { label: "seen", value: `answered in chat: the reviewer confirms it with one tap, and calibration leaves it out${cite("B-hswmx")}` },
       { label: "deck", value: deck },
       result.hardBecause && { label: "raised", value: [`to `, level("hard"), ` by what it touches, ${result.hardBecause.join(", ")}: an agent can raise a card's level, never lower it${cite("D42", "D144")}`] },
       result.nearTopics.length > 0 && { label: "topic", value: `new; did you mean ${result.nearTopics.join(" or ")}?` },

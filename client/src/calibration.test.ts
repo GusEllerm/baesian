@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiState, RowReport } from "../../src/api";
-import { ENOUGH, barOf, laterSuperseded, leftOut, markAt, median, recap, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
+import { ENOUGH, barOf, laterSuperseded, leftOut, markAt, median, notCounted, recap, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
 
 // The calibration panel and the recap (M4 step 5e), and your answers row by row (D180).
 
@@ -20,10 +20,18 @@ describe("later superseded (Client Data Contract: partial)", () => {
   it("names the decisions you resolved in the client that were later superseded", () => {
     const card = (title: string, status: string, client: string, response = "accept") => ({ meta: { title }, status, verdicts: [{ client, response }] });
     const state = { cards: [card("Kept", "resolved", "web"), card("Overturned", "superseded", "web"), card("Not yours", "superseded", "cli"), card("Only asked", "superseded", "web", "question")] } as unknown as ApiState;
-    expect(laterSuperseded(state)).toEqual(["Overturned"]);
+    expect(laterSuperseded(state)).toEqual({ names: ["Overturned"], inChat: 0 });
     // Answered on the website, from either layout (D130).
     const site = { cards: [card("On a phone", "superseded", "hosted-phone"), card("On a desktop", "superseded", "hosted-desktop", "alternative")] } as unknown as ApiState;
-    expect(laterSuperseded(site)).toEqual(["On a phone", "On a desktop"]);
+    expect(laterSuperseded(site).names).toEqual(["On a phone", "On a desktop"]);
+  });
+
+  it("leaves out the choices you answered in chat, and counts those you settled here (B-hswmx)", () => {
+    const chat = (title: string, status: string) => ({ meta: { title, answered_in_chat: "Postgres." }, status, verdicts: [{ client: "web", response: "accept", seen: true }] });
+    const blind = { meta: { title: "Blind" }, status: "superseded", verdicts: [{ client: "web", response: "accept" }] };
+    const waiting = { meta: { title: "Waiting", answered_in_chat: "Postgres." }, status: "open", verdicts: [] };
+    const state = { cards: [chat("Said in chat", "superseded"), chat("Kept from chat", "resolved"), blind, waiting] } as unknown as ApiState;
+    expect(laterSuperseded(state)).toEqual({ names: ["Blind"], inChat: 2 });
   });
 });
 
@@ -44,7 +52,7 @@ describe("the recap", () => {
 
 const blank: RowReport = {
   shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0,
-  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0,
+  agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0,
 };
 
 describe("your answers, row by row (D180)", () => {
@@ -70,6 +78,16 @@ describe("your answers, row by row (D180)", () => {
     expect(summaryWords(blank)).toBe("No answers yet: each row's bar fills in as you answer its cards.");
     expect(summaryWords({ ...blank, unanswered: 1 })).toBe("No answers to count yet: 1 not answered.");
     expect(leftOut({ ...blank, unanswered: 2, heldWaiting: 2, auditsUnanswered: 2 })).toEqual(["2 audits waiting"]);
+  });
+
+  it("says how many choices answered in chat it left out (B-hswmx)", () => {
+    expect(leftOut({ ...blank, inChat: 2 })).toEqual(["2 answered in chat"]);
+    expect(notCounted({ ...blank, unanswered: 1, unblind: 1, inChat: 2 })).toBe(4);
+    expect(notCounted(undefined)).toBe(0);
+    expect(summaryWords({ ...blank, agreed: 3, inChat: 1 })).toBe(
+      "Of 3 cards, you chose as the agent did 3 times without seeing its pick, came round to it 0 times after reading its case, and overturned it 0 times. 1 more isn't counted: 1 answered in chat.",
+    );
+    expect(summaryWords({ ...blank, inChat: 2 })).toBe("No answers to count yet: 2 answered in chat.");
   });
 
   it("names a segment's count in its tooltip", () => {

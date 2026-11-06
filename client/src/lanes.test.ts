@@ -215,6 +215,10 @@ describe("the ledger and names", () => {
     expect(chosenOf(card("main", 0, "gone"))).toBeUndefined();
     expect(markState(card("main", 0, "deferred"))).toBe("aside");
     expect(saidOf(card("main", 0, "waiting"), now)).toEqual({ words: "waiting for you", tone: "waiting" });
+    // A choice you answered in chat, confirmed with one tap (B-hswmx).
+    const chat = card("main", 0, "with", { answered_in_chat: "A, please" });
+    chat.verdicts = chat.verdicts.map((v) => ({ ...v, seen: true as const }));
+    expect(saidOf(chat, now)).toEqual({ words: "you confirmed “A”, your answer in chat", tone: "with" });
   });
 });
 

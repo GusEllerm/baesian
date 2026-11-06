@@ -9,6 +9,7 @@ import {
   type ReplayCard,
   type Row,
   TODAY,
+  answeredInChat,
   isOwnCard,
   outcomeOf,
   rowOf,
@@ -35,8 +36,9 @@ export interface Counted {
 }
 
 /**
- * The agents' cards, on their rows, oldest first: Baesian's own and withdrawn cards are left out. A card counts on its
- * latest revision's record; one filed before the gate counts as "Today" showed it, in shadow.
+ * The agents' cards, on their rows, oldest first: Baesian's own and withdrawn cards are left out, and so are cards
+ * answered in chat (B-hswmx), whose choice wasn't made blind (`chatCards()` counts them). A card counts on its latest
+ * revision's record; one filed before the gate counts as "Today" showed it, in shadow.
  */
 export function countedCards(store: Store): Counted[] {
   return store.view(() =>
@@ -48,7 +50,9 @@ export function countedCards(store: Store): Counted[] {
         if (isOwnCard(card.meta) || gate?.source === "baesian") return [];
         const status = store.status(id);
         if (status === "withdrawn") return [];
-        const answers = outcomeOf(store.verdicts(id));
+        const verdicts = store.verdicts(id);
+        if (answeredInChat({ meta: card.meta, verdicts })) return [];
+        const answers = outcomeOf(verdicts);
         if (gate) {
           return [{ card, row: gate.row as AnyRow, position: gate.position, outcome: gate.outcome, mode: gate.mode, drawn: gate.drawn === true, at: gate.at, held: status === "held", answers, gate }];
         }
@@ -56,6 +60,22 @@ export function countedCards(store: Store): Counted[] {
         return [{ card, row, position, outcome: "shown", mode: "shadow", drawn: false, at: card.meta.created, held: false, answers }];
       })
       .sort((a, b) => a.at.localeCompare(b.at)),
+  );
+}
+
+/**
+ * The agents' cards answered in chat (B-hswmx), each by the row `countedCards()` would put it on: left out of every
+ * measure, and only counted, so the report can say how many it left out. Withdrawn ones aren't counted at all.
+ */
+export function chatCards(store: Store): AnyRow[] {
+  return store.view(() =>
+    store.cards().flatMap((card): AnyRow[] => {
+      const id = card.meta.id;
+      const gate = store.gateRecord(id, card.meta.revision);
+      if (isOwnCard(card.meta) || gate?.source === "baesian" || store.status(id) === "withdrawn") return [];
+      if (!answeredInChat({ meta: card.meta, verdicts: store.verdicts(id) })) return [];
+      return [gate ? (gate.row as AnyRow) : rowOf(card.meta.touches, TODAY).row];
+    }),
   );
 }
 
@@ -145,6 +165,7 @@ export const blankRow = (): RowReport => ({
   unblind: 0,
   unanswered: 0,
   heldWaiting: 0,
+  inChat: 0,
 });
 
 /**
@@ -195,6 +216,12 @@ export function routingReport(store: Store, force: InForce = store.inForce()): R
           if (c.held) t.heldWaiting++;
         }
       }
+    }
+    // Answered in chat (B-hswmx): left out of every count above, and said beside them.
+    for (const row of chatCards(store)) {
+      const r = (rows[row] ??= { position: (FIXED_ROWS as readonly string[]).includes(row) ? "never-without-me" : force.settings.rows[row as Row], ...blankRow() });
+      r.inChat++;
+      pooled.inChat++;
     }
     for (const w of rowWindows(store, counted, force)) {
       const r = rows[w.row]!;

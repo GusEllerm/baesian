@@ -22,6 +22,17 @@ describe("verdictFor", () => {
     });
   });
 
+  it("sends no blind choice for a card answered in chat, whose pick you'd seen (B-hswmx)", () => {
+    const seen = { meta: { ...card.meta, answered_in_chat: "SQLite, one machine." } } as unknown as ApiCard;
+    expect(verdictFor(seen, { kind: "choose", option: "proposal", rule: true })).toEqual({ verdict: { card: "B-7f3kq", revision: 2, response: "accept", make_rule: true } });
+    // Even if a blind choice reached it, it isn't sent: the server would refuse it.
+    expect(verdictFor(seen, { kind: "choose", option: "alternative", first: "alternative", why: "I meant the other." })).toEqual({
+      verdict: { card: "B-7f3kq", revision: 2, response: "alternative", choice: "Postgres", comment: "I meant the other." },
+    });
+    expect(describeAnswer(seen, { kind: "choose", option: "proposal" })).toBe("You confirmed “SQLite”, your answer in chat.");
+    expect(describeAnswer(seen, { kind: "choose", option: "alternative" })).toBe("You chose “Postgres”.");
+  });
+
   it("needs the text of a question, an answer of your own, or a rejection", () => {
     expect(verdictFor(card, { kind: "write", reason: "question", text: " " })).toEqual({ problem: "Write your question first." });
     expect(verdictFor(card, { kind: "write", reason: "correction", text: "DuckDB" })).toEqual({ verdict: { card: "B-7f3kq", revision: 2, response: "correction", choice: "DuckDB" } });

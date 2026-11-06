@@ -245,6 +245,13 @@ export const CardMeta = z.strictObject({
   supersedes: CardId.optional(),
   conflict_of: z.array(CardId).optional(),
   /**
+   * The reviewer already answered this choice in conversation (B-hswmx): what they said, quoted and short. It marks the
+   * card seen: its pick is their answer, the client shows it with the pick and confirms it with one tap, and each verdict
+   * on it says it was seen (`Verdict.seen`). It joins the record and can become a rule like any card; calibration leaves
+   * it out, since a choice discussed in chat isn't made blind. Only a person resolves it, in the client (D32).
+   */
+  answered_in_chat: Text.optional(),
+  /**
    * The agent's one reply to an answer that went against its pick (D89, D104): a fact the reviewer lacked, or a
    * check that would settle it. The revision is otherwise the one before it. Only `baesian reply` sets it.
    */
@@ -332,7 +339,33 @@ export function filingProblems(d: CardDraft): string[] {
   };
   partial("premise (premise, premise_option, premise_check)", [d.premise, d.premise_option, d.premise_check]);
   partial("acted (acted, acted_option)", [d.acted, d.acted_option]);
+  // A card answered in chat has the reviewer's answer as its pick (B-hswmx): an answer that is the alternative's name is the wrong way round.
+  if (d.answered_in_chat !== undefined && same(d.answered_in_chat, d.alternative)) {
+    out.push(`answered_in_chat is the alternative, “${d.alternative}”: a card answered in chat has the reviewer's answer as its pick${cite("B-hswmx")}, so make their answer the proposal`);
+  }
   return out;
+}
+
+/** Whether `text` names `name`, as whole words, ignoring case and spacing. */
+function mentions(text: string, name: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const t = norm(text), n = norm(name);
+  if (!n) return false;
+  for (let i = t.indexOf(n); i >= 0; i = t.indexOf(n, i + 1)) {
+    const before = t[i - 1], after = t[i + n.length];
+    if (!(before && /[\p{L}\p{N}]/u.test(before)) && !(after && /[\p{L}\p{N}]/u.test(after))) return true;
+  }
+  return false;
+}
+
+/**
+ * A card answered in chat whose quote names the alternative and not the pick (B-hswmx): its pick should be the answer the
+ * reviewer gave. "Not SQLite" names the option it turns down, so a program can't tell; this only asks.
+ */
+function chatNamesAlternative(d: CardDraft): string[] {
+  const said = d.answered_in_chat;
+  if (said === undefined || !mentions(said, d.alternative) || mentions(said, d.proposal)) return [];
+  return [`answered_in_chat names the alternative, “${d.alternative}”, and not your pick: a card answered in chat has the reviewer's answer as its pick, so check that the proposal is what they chose`];
 }
 
 /**
@@ -400,10 +433,12 @@ export function filingWarnings(d: CardDraft, body = ""): string[] {
     ["title", d.title, 60], ["proposal", d.proposal, 60], ["alternative", d.alternative, 60],
     ["question", d.question, 160], ["crux", d.crux, 160], ["doing", d.doing, 160],
     ["proposal_then", d.proposal_then, 240], ["alternative_then", d.alternative_then, 240],
+    ["answered_in_chat", d.answered_in_chat, 240],
   ];
   return [
     ...long.filter(([, v, max]) => v !== undefined && v.length > max).map(([name, v, max]) => `${name} is ${v!.length} characters; the card reads best under ${max}`),
     ...thenCapitals(d),
+    ...chatNamesAlternative(d),
     ...[...secretsIn(d, body)].map(([name, kind]) => `${name} looks like it holds a secret (${kind}): the record is committed with the code, so check it before the next commit`),
   ];
 }
@@ -438,6 +473,11 @@ export const Verdict = z
     comment: z.string().min(1).optional(),
     /** The option chosen before the agent's pick was shown (D86, D88). */
     first_choice: OptionKind.optional(),
+    /**
+     * The card was answered in chat (B-hswmx): the reviewer had seen the agent's pick, their own answer, so there was no
+     * blind choice, and calibration leaves it out. The store sets it on every verdict on a revision with `answered_in_chat`.
+     */
+    seen: z.literal(true).optional(),
     make_rule: z.boolean().optional(),
     /**
      * "You should have asked me" (D151, B-87tkc): on a card the gate held back, or in shadow would have, the reviewer
@@ -467,6 +507,7 @@ export const Verdict = z
     if ((v.response === "question" || v.response === "defer") && !v.comment) {
       ctx.addIssue({ code: "custom", path: ["comment"], message: `a ${v.response} verdict needs a comment` });
     }
+    if (v.seen && v.first_choice) ctx.addIssue({ code: "custom", path: ["first_choice"], message: "a verdict on a card answered in chat has no blind choice" });
   });
 export type Verdict = z.infer<typeof Verdict>;
 
@@ -818,8 +859,11 @@ export const GateRecord = z
     reverse: Reverse,
     /** The level the draft asked for, if any. It only raises a shown card's level (D144, B-chq61). */
     asked: Level.optional(),
-    /** An agent's card; one Baesian filed itself; or a revision that follows an answer, or a reply. The last two are always shown. */
-    source: z.enum(["agent", "baesian", "answer"]),
+    /**
+     * An agent's card; one Baesian filed itself; a revision that follows an answer, or a reply; or a card the reviewer
+     * answered in chat (B-hswmx). All but the first are always shown.
+     */
+    source: z.enum(["agent", "baesian", "answer", "chat"]),
     /** The strictest row it fell in, and that row's position. */
     row: z.enum(ALL_ROWS),
     position: Position,
@@ -827,7 +871,7 @@ export const GateRecord = z
     outcome: GateOutcome,
     /** The level it was shown at, when shown. */
     level: Level.optional(),
-    reason: z.enum(["row", "floor", "one-way", "agent", "baesian", "answer", "error"]),
+    reason: z.enum(["row", "floor", "one-way", "agent", "baesian", "answer", "chat", "error"]),
     /** When held: the card's draw (a hash of its ID and revision, read as a number from 0 to 1), the chance it had, the row's earlier held cards the gate counted, and whether it was drawn, and by the burn-in (B-fgc4y). */
     draw: z.number().min(0).max(1).optional(),
     p: z.number().min(0).max(1).optional(),

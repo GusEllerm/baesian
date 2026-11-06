@@ -1,6 +1,6 @@
 import type { ApiCard, ApiVerdictInput } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
-import { type Rarity, quoted } from "./model";
+import { type Rarity, isSeen, quoted } from "./model";
 
 // M4 step 5c: what the reviewer answered, turned into the verdict the server records (D96). Pure, so it's tested
 // on its own (answer.test.ts).
@@ -10,7 +10,8 @@ export type Answer =
   /** `rule`: D16's "make this a rule", so the agent drafts one for you to confirm (D109, D110). */
   /** `retire`: rules the chosen option breaks, which you retire with this answer (D119). */
   /** `asked`: "you should have asked me", on a card the gate held back, or in shadow would have (D151, B-87tkc). */
-  | { kind: "choose"; option: OptionKind; first: OptionKind; why?: string; rule?: boolean; retire?: string[]; asked?: boolean }
+  /** `first`: the blind choice (D88); none on a card answered in chat, whose pick you'd seen (B-hswmx). */
+  | { kind: "choose"; option: OptionKind; first?: OptionKind; why?: string; rule?: boolean; retire?: string[]; asked?: boolean }
   | { kind: "write"; reason: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason: PassReason; text: string };
 
@@ -43,10 +44,12 @@ export function verdictFor(card: ApiCard, answer: Answer): { verdict: ApiVerdict
   const rule = answer.kind !== "pass" && answer.rule ? { make_rule: true } : {};
   if (answer.kind === "choose") {
     const chosen = answer.option === "proposal" ? { response: "accept" as const } : { response: "alternative" as const, choice: card.meta.alternative };
-    // The choice made before the agent's pick showed (D88), and a disagreement's reason (D87).
+    // The choice made before the agent's pick showed (D88), and a disagreement's reason (D87). A card answered in chat
+    // has none: you'd seen its pick, and the server marks its verdict seen (B-hswmx).
+    const first = answer.first && !isSeen(card) ? { first_choice: answer.first } : {};
     const retire = answer.retire?.length ? { retire_rules: answer.retire } : {};
     const asked = answer.asked ? { should_have_asked: true } : {};
-    return { verdict: { ...base, ...chosen, first_choice: answer.first, ...(text ? { comment: text } : {}), ...rule, ...retire, ...asked } };
+    return { verdict: { ...base, ...chosen, ...first, ...(text ? { comment: text } : {}), ...rule, ...retire, ...asked } };
   }
   if (answer.kind === "write") {
     if (!text) return { problem: answer.reason === "question" ? "Write your question first." : answer.reason === "correction" ? "Write your answer first." : "Say why first." };
@@ -59,6 +62,7 @@ export function verdictFor(card: ApiCard, answer: Answer): { verdict: ApiVerdict
 /** The short words for an answer, for the toast and, later, the path. A held card's agent went ahead: you keep it or overturn it (D151). */
 export function describeAnswer(card: ApiCard, answer: Answer): string {
   if (answer.kind === "choose" && card.status === "held") return answer.option === "proposal" ? `You kept ${quoted(card.meta.proposal)}.` : `You overturned it, for ${quoted(card.meta.alternative)}.`;
+  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `You confirmed ${quoted(card.meta.proposal)}, your answer in chat.`;
   if (answer.kind === "choose") return `You chose ${quoted(card.meta[answer.option])}.`;
   if (answer.kind === "write") return answer.reason === "question" ? "You asked a question." : answer.reason === "correction" ? "You gave your own answer." : "You rejected it.";
   return answer.reason === "see_it_run" ? "You asked to see it run." : answer.reason === "not_my_area" ? "You passed it on." : "You asked for more context.";
