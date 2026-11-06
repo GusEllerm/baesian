@@ -1,14 +1,37 @@
-# Baesian
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/wordmark-dark.png">
+    <img src="docs/media/wordmark.png" alt="Baesian" width="280">
+  </picture>
+</p>
 
-Swipe review for agent decisions.
+<p align="center"><b>Swipe review for the decisions your coding agents shouldn't make alone.</b><br>
+They put each one to you as a card, and you choose before you see their pick.</p>
 
-![The Baesian client answering two agents building a made-up bakery's shop: you choose between two options before the agent's pick is shown, hold to confirm, then overrule codex on how prices are stored, while each agent's terminal hears your answer. It ends on the Branches drawer, where both branches' merges are held by cards still waiting.](docs/media/demo.gif)
+<p align="center">
+  <a href="https://baesian.dev">baesian.dev</a> ·
+  <a href="#try-the-demo">Try the demo</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#set-it-up">Set it up</a> ·
+  <a href="docs/setup.md">Setup guide</a>
+</p>
 
-Coding agents make design decisions all day, and most of them are the agent's to make. Some aren't: where a
-signed-in user's session lives, how prices are stored, what deleting an account removes. Baesian has the agent
-put those to you as cards. You choose between its two options before you see which one it picked, then read its
-case and confirm, at your desk or on your phone. Your answer goes back to the agent, and it's committed to git
-beside the code it decides.
+<p align="center">
+  <img src="docs/media/demo.gif" width="74%" alt="Answering two agents' decision cards in Baesian: choose first, then see the agent's pick, while each agent's terminal gets the answer">
+  <img src="docs/media/phone.png" width="22%" alt="A Baesian card held on a phone until it lifts, with its four answers named at the screen's edges">
+</p>
+<p align="center"><sub>At your desk, two agents building a made-up bakery's shop stop for you: you choose, see their pick,
+overrule one, and each agent's terminal gets your answer. On your phone, you hold a card until it lifts and drag it to
+an answer.</sub></p>
+
+> [!NOTE]
+> Baesian is in development, and not released yet. The hosted client at [baesian.dev](https://baesian.dev) runs
+> v0.1.8; the CLI and the plugin install from this repo; file formats may change before v1.
+
+Your Claude Code and Codex agents make design decisions all day, and a few of them are hard to undo: where a
+signed-in user's session lives, how prices are stored, what deleting an account removes. Baesian has the agent put
+those to you as cards, before it builds on them. You pick one of its two options before you see which it chose, then
+confirm or overrule it. Your answer goes back to the agent, and into git with the code it shapes.
 
 ## Try the demo
 
@@ -21,151 +44,126 @@ npm install
 npm run demo
 ```
 
-The demo makes a throwaway repo for Crumb, a made-up bakery's online shop, where two agents are at work on two
-branches and have filed five decisions. It opens the client in your browser, and the terminal shows what each
-agent hears as you answer. Press Enter for a stopping point, where the agents check for answers to the cards they
-didn't wait on. Ctrl-C stops it, and leaves the repo where it says.
+The demo makes a throwaway repo where two agents are building Crumb, a made-up bakery's online shop, and have filed
+five decisions. It opens the client, and its terminal shows what each agent gets as you answer.
 
 ## How it works
 
-- **An agent files a card** when a decision is hard to undo or isn't its call alone: it changes a schema or an
-  on-disk format, a public API, CI or deployment; adds a dependency; touches security or privacy; is user-facing;
-  or deletes data. `baesian init` writes these instructions into the repo's `AGENTS.md`. A card states the
-  question, two real options and what each one leads to, and the one question the choice turns on.
-- **You choose before you see the agent's pick.** The client shows the question, what it turns on, and the two
-  options. Once you've chosen, it reveals which option the agent picked and why, and you confirm or switch. A
-  decision that touches security, data loss, money or publishing takes a hold to confirm. On a phone, you hold a
-  card until it lifts, then drag it toward an answer.
-- **The agent waits as long as the decision needs.** On a *provisional* card it carries on with its pick, and hears
-  your answer at its next stopping point. On a *blocking* card it waits for you, for a while. On a *hard* card,
-  the default for security, data loss, money and publishing, it never goes ahead without you.
-- **Your answer goes back to the agent,** through `baesian wait` and `baesian inbox`, and the Claude Code plugin
-  brings late answers into the session when it reaches a stopping point. When you overrule an agent, it may
-  reply once, with a fact you lacked or a check that would settle it.
-- **A choice asked in chat becomes a card too.** An agent that puts a choice to you in chat, at the end of its turn
-  or with its question tool, is sent back to file it as a card. If you'd already answered it in the conversation,
-  the card arrives marked as seen, with what you said, for you to confirm with one tap.
-- **A commit gate catches the decisions nobody filed.** A commit that adds a dependency, changes a schema or a
-  migration, or changes CI and deploy files is blocked until a card covers it, or the agent acknowledges it as
-  easy to undo, with a reason. An answer can become a rule, and a rule acknowledges matching changes for you.
+1. **An agent files a card** when a decision is hard to undo or isn't its call alone: a schema, a public API, a
+   dependency, CI, security, anything user-facing. `baesian init` tells your agents when, in `AGENTS.md`.
+2. **You choose first,** between its two options, then see which it picked and why, and confirm or switch.
+3. **The agent waits as long as the decision needs:** on most cards it carries on and gets your answer at its next
+   pause; on a *blocking* card it waits for you; on a *hard* card, the default for security, privacy, data loss, money
+   and publishing, it never goes ahead without you, and you hold to confirm.
+4. **Your answer goes back to the agent,** and into git, committed with the code it shapes.
 
-<img src="docs/media/phone.png" alt="A decision card on a phone, held until it lifts: its four answers are named at the screen's edges, an option to drag to on each side, Other answer above and Can't judge below" width="320">
+Two things keep decisions from slipping past: a **commit gate** blocks a commit that adds a dependency, changes a
+schema or touches CI until a card covers it or the agent says why it's safe; and the **plugin** sends an agent that
+asks you to choose in chat back to file a card.
 
-## Decisions branch with the code
+## Why choose before you see the pick?
 
-![The Branches drawer on an evening of Baesian's own history: v1/next merges into main twice, four worktrees start from v1/next (dashed) and merge back with the cards and commits they brought, and one card is opened to list the three commits that cite it](docs/media/branches.png)
+Seeing the agent's case first anchors you: a confident argument is easy to agree with. Choosing first records, for
+each kind of decision, how often you'd have picked what the agent picked. That record is how Baesian suggests which
+kinds you could leave to the agent. When you keep answering one kind the same way, Baesian offers to make it a rule
+your agents follow without asking.
 
-Each branch has its own deck of cards, and the record of them, in `.baesian/`, is committed with the branch. So
-the decisions merge with the code they decided, and a branch's history says what was decided along the way.
-Your answers reach every worktree at once, though: they live in the repo's shared git directory, so an agent
-on another branch doesn't wait for a merge to hear them. In CI, `baesian verify --merge` holds a merge until
-every card on the branch is answered or deferred. It also holds a branch that answered a question differently
-from the branch it merges into, until a card settles which answer stands; `--file-conflicts` files that card for
-you.
+## Decisions live in git
 
-**Your decisions, by branch** (press B in the client) draws the project's history as it happened: where each branch
-began, the cards filed on it, the commits that cite them, and every merge with what it brought. The figure is
-Baesian's own, on the evening of 5 November. Baesian records a merge from whichever git event shows it, whether a merge, a fast-forward, a rebase
-or a push to the default branch, and reads the ones made before it was installed from git's history when the repo is
-first linked.
+Each branch carries its own cards, committed with its code, so decisions merge with the code they shaped. The client's
+**Your decisions, by branch** (press B) draws that history: where each branch began, what was decided on it, and every
+merge with what it brought.
 
-## Every commit is a checkpoint
+<p align="center"><img src="docs/media/branches.png" width="100%" alt="Baesian's Branches drawer on its own history: merges and cards by branch, with one card opened to the three commits that cite it"></p>
+<p align="center"><sub>Baesian's own decisions on one evening: worktrees branching off v1/next, the cards filed on them
+and the commits citing those cards, merging back.</sub></p>
 
-![Four commits on feat/checkout, each carrying the decisions as they stood. Later the answer on the session card changes, and the agent is told which commits built on the old answer.](docs/media/checkpoints.png)
+Every commit names the cards it builds on, so if you change an answer later, the agent is told which commits built on
+the old one. In CI, `baesian verify` checks each commit's decisions, and holds a merge until its cards are answered.
 
-Every commit carries the decisions as they stood when it was made, and names the cards it builds on with a
-`Baesian-Card:` trailer. `baesian verify` checks each commit in CI against its own record. If you change an
-answer later, the agent is told which commits built on the old one, so it knows what to rework. Only commits
-that cite the card are listed, so it's told to look for other work built on it as well.
+<p align="center"><img src="docs/media/checkpoints.png" width="100%" alt="Four commits on feat/checkout, each carrying the decisions as they stood; when an answer later changes, the agent is told which commits built on the old one"></p>
+<p align="center"><sub>Each commit carries the decisions as they stood. When an answer changes, the commits that built on
+the old one are named.</sub></p>
 
 ## Set it up
 
-Baesian isn't published yet: the CLI and the plugin install from this repo, and you answer cards at
-https://baesian.dev.
+You need Node 22 or later, git, and Claude Code or Codex. The [setup guide](docs/setup.md) has each step in full.
 
-**1. Install the CLI.**
+### 1. Install the CLI
+
+Baesian isn't on npm yet, so build it from this repo:
 
 ```sh
 git clone https://github.com/GusEllerm/baesian.git
 cd baesian
-npm install && npm run build && npm link   # puts `baesian` on your PATH
+npm install
+npm run build && npm link
 ```
 
-**2. Make an account** at https://baesian.dev, with your email or Globus, and make a passkey. It signs you in, and
-confirms your answers on hard cards; add one on each device you answer from, your phone included. The site can
-notify you when an agent stops for you.
+### 2. Make an account
 
-**3. Set up your repo.**
+Sign up at [baesian.dev](https://baesian.dev) and make a passkey. Add one on each device you answer from, your phone
+included.
+
+### 3. Set up your repo
 
 ```sh
 cd your-repo
-baesian init          # the commit gate, the record in .baesian/, and the instructions in AGENTS.md
-baesian login         # links the repo to baesian.dev and signs this machine in: approve it on the page it prints,
-                      # then run the `git add … && git commit …` it prints, which commits the link
-baesian ci --github   # sets CI's BAESIAN_TRUST variable, once you've checked its passkey lines on your account page
+baesian init
+baesian login
 ```
 
-Then add the workflow steps `baesian ci` prints, so CI checks each commit's decisions and holds a merge until its
-cards are answered. `baesian login --service <url>` links to a service of your own instead.
+`init` sets up the commit gate and tells your agents about Baesian. `login` links the repo to baesian.dev: approve
+this machine on the page it prints, then run the commit it prints.
 
-**4. Install the plugin,** which teaches your agents to write cards and brings your answers into their sessions. In
-Claude Code:
+### 4. Install the plugin
+
+In Claude Code:
 
 ```text
 /plugin marketplace add /path/to/baesian
 /plugin install baesian@baesian
 ```
 
-In the VS Code extension, where `/plugin` isn't available, run the same in a terminal as
-`claude plugin marketplace add /path/to/baesian` and `claude plugin install baesian@baesian`, then start a new
-conversation. Codex installs it with `codex plugin marketplace add /path/to/baesian` and then
-`codex plugin add baesian@baesian`. Codex runs a plugin's hooks only once you've trusted them: start Codex's
-interactive mode once and accept its "Hooks need review" prompt, and do it again after any update; `codex exec`
-skips untrusted hooks without a warning. In Codex, type `$baes` to pick the skill.
+<details>
+<summary><b>Claude Code in VS Code, and Codex</b></summary>
 
-The plugin also checks as the agent acts: a choice put to you in chat is sent back to be a card, and an agent about to
-edit a path the repo lists as `user_facing` in `.baesian/config.json` is reminded that a decision there is a card.
+In the VS Code extension, run the same from a terminal, then start a new conversation:
 
-**Without an account,** `baesian init` and then `baesian serve` give you the client on 127.0.0.1, and nothing leaves
-your machine: no phone, no notifications, and CI can't check who answered. `baesian login` links the repo later, and
-takes the answers you've given so far with it.
-
-**In a repo you share with people who don't use Baesian,** `baesian init --personal` sets it up for your clone alone,
-and commits nothing: your cards, answers and config stay in `.git/baesian/`, the repo's hooks and `AGENTS.md` are left
-as they are, and your clone's own hooks run Baesian's gate before the repo's. The gate still checks your commits, and
-takes its `Baesian-Card` and `Baesian-Ack` trailers out of the message once it has, so the shared history never shows
-them. Your agents hear about Baesian from the plugin, which you need here. `baesian login` links your clone the same
-way, but CI can't check decisions that aren't committed. The repo's setup script can still set `core.hooksPath`: the
-gate stays on, since your clone's `.git/config` includes Baesian's setting last. If something turns the gate off,
-`baesian` says so: run `baesian init --personal` again. Once the team wants the record, `baesian init --shared` writes
-it into the repo, with the hooks' block and `AGENTS.md`, for you to commit.
-
-## What agents see
-
-Agents use the CLI, or the same commands as tools through the plugin's MCP server: `baesian template` prints a card to
-fill in, `baesian file` files it, and `baesian wait` and `baesian inbox` bring the answers back. `baesian --help`
-lists the rest. Each command says what happened first, and ends with the next command to run, IDs filled in:
-
-```text
-filed B-ym5s9 "How prices are stored"
-  level:  blocking, the level you asked for
-  deck:   branch-main
-next: baesian wait B-ym5s9  # before building on it
-  Commits that build on it carry the trailer  Baesian-Card: B-ym5s9
+```sh
+claude plugin marketplace add /path/to/baesian
+claude plugin install baesian@baesian
 ```
 
-That's what an agent reads, and what a pipe gets. At a terminal the same words come with colour and a symbol on each
-headline (✓ ✗ ! →), wrapped at its width; never when an agent's harness runs the command, and never under `NO_COLOR`.
-`--no-color` shows you what the agent reads, and `--verbose` adds which of Baesian's own design decisions a message
-rests on.
+In Codex:
 
-## Status
+```sh
+codex plugin marketplace add /path/to/baesian
+codex plugin add baesian@baesian
+```
 
-Baesian is in development, and not released. Version 0.1.8 runs at https://baesian.dev, and Baesian's own design
-decisions go through it. The CLI, the commit gate, the CI check, the hosted and local clients, the phone layout, the
-Claude Code and Codex plugin with its MCP server, and a note for each decision in the repo's Obsidian vault all work.
-Still to come for v1: a licence, publishing the CLI to npm and the plugin to a marketplace, and a review before
-release. Until v1 is published, the file formats may change between versions without migrations.
+Codex runs the plugin's hooks only after you accept its "Hooks need review" prompt in interactive mode, and again after
+any update.
+</details>
+
+<details>
+<summary><b>Checking decisions in CI</b></summary>
+
+```sh
+baesian ci --github
+```
+
+sets the repository variable CI reads its keys from; then add the workflow steps it prints. See
+[the setup guide](docs/setup.md#5-check-decisions-in-ci).
+</details>
+
+<details>
+<summary><b>Without an account, or in a repo you share</b></summary>
+
+`baesian init` then `baesian serve` gives you the client on your own machine, with nothing sent anywhere; `baesian
+login` links the repo later. In a repo whose other contributors don't use Baesian, `baesian init --personal` keeps
+everything in your clone and commits nothing. Both are in [the setup guide](docs/setup.md#without-an-account).
+</details>
 
 ## Development
 
@@ -173,11 +171,11 @@ release. Until v1 is published, the file formats may change between versions wit
 npm test               # unit tests
 npm run e2e            # browser tests, with Playwright
 npm run typecheck
-npm run readme-media   # remakes this README's GIF and figures (needs ffmpeg)
+npm run readme-media   # remakes this README's images (needs ffmpeg)
 ```
 
-The project's memory is the Obsidian vault in [`docs/vault/`](docs/vault/Home.md): the design, the decision log,
-and a log of each working session. Start at `Home.md`.
+The project's memory is the Obsidian vault in [`docs/vault/`](docs/vault/Home.md): the design, the decision log, and
+a log of each working session. Start at `Home.md`.
 
 ## Why "Baesian"
 
