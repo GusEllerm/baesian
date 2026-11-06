@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
-import { agentOf, areaOf, byId, heldBack, heldRemoved, isHeld, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
+import { agentOf, areaOf, byId, chatWords, heldBack, heldRemoved, isHeld, isSeen, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
 
@@ -28,7 +28,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
   };
 }
 /** No preference file: "Today", in shadow (M8). */
-const pooled = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0 };
+const pooled = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0 };
 const ROUTING: ApiState["routing"] = { settings: TODAY, history: [], report: { rows: {}, pooled, beforeGate: 0 } };
 function snapshot(cards: ApiCard[], rules: ApiState["rules"] = []): ApiState {
   // Dependents, as the server computes them.
@@ -238,6 +238,19 @@ describe("sides (D86)", () => {
 describe("areas", () => {
   it("are the first segment of the canonical topic", () => {
     expect(areaOf(card({ topic: "storage/run-metadata" }))).toBe("storage");
+  });
+});
+
+describe("a choice answered in chat (B-hswmx)", () => {
+  it("is marked by what the reviewer said, and shows it inside the card's own quotation marks", () => {
+    expect(isSeen(card({ answered_in_chat: "Option A." }))).toBe(true);
+    expect(isSeen(card())).toBe(false);
+    expect(chatWords("  Option A, please ")).toBe("Option A, please");
+    expect(chatWords("“Option A, please”")).toBe("Option A, please");
+    expect(chatWords('"Option A"')).toBe("Option A");
+    expect(chatWords("'A' over 'B'")).toBe("'A' over 'B'");
+    expect(chatWords("“A” or “B”")).toBe("“A” or “B”");
+    expect(chatWords('"')).toBe('"');
   });
 });
 

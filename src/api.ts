@@ -239,6 +239,11 @@ export interface RowReport {
   unanswered: number;
   /** Of `unanswered`, the cards held back now, enforcing; the audits among them are `auditsUnanswered`. */
   heldWaiting: number;
+  /**
+   * Cards answered in chat (B-hswmx), on this row: left out of every count above, since the choice wasn't made blind,
+   * and counted here so what's left out can be said.
+   */
+  inChat: number;
 }
 
 export interface RoutingReport {

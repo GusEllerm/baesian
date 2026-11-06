@@ -101,6 +101,9 @@ describe("the tools", () => {
     const { tools } = await (await connect(dir)).listTools();
     const schema = tools.find((t) => t.name === "file_card")!.inputSchema as { properties: Record<string, { description?: string }>; required: string[]; additionalProperties?: boolean };
     for (const f of CARD_FIELDS) expect(schema.properties[f.field]?.description, f.field).toBe(f.note);
+    // A choice the reviewer already answered in chat is filed with what they said (B-hswmx), optional, as in the template.
+    expect(schema.properties.answered_in_chat?.description).toMatch(/^only if the reviewer already answered it in chat: what they said/);
+    expect(schema.required).not.toContain("answered_in_chat");
     // Every field the template shows is a field the tool takes, and the required ones are required.
     for (const f of CARD_FIELDS.filter((f) => f.template !== false)) expect(CARD_TEMPLATE).toContain(`${f.field}: ${f.value}`);
     expect(schema.required.sort()).toEqual(CARD_FIELDS.filter((f) => !f.optional && f.template !== false && f.field !== "touches").map((f) => f.field).sort());

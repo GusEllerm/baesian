@@ -74,6 +74,18 @@ test("an uncommon card asks you to read first (D91)", async ({ page }) => {
   expect(await mode(page)).toBe("reveal");
 });
 
+test("letting go of the arrow that confirmed an answer does nothing on the next card", async ({ page }) => {
+  await open(page, [{}, {}]);
+  const key = (await option(page, "proposal").getAttribute("data-side")) === "left" ? "ArrowLeft" : "ArrowRight";
+  await page.keyboard.press(key);
+  expect(await mode(page)).toBe("reveal");
+  await page.keyboard.down(key); // confirms
+  await expect(page.getByRole("heading", { name: "Question 1?" })).toBeVisible();
+  await page.keyboard.up(key);
+  await page.waitForTimeout(50);
+  expect(await mode(page)).toBe("live");
+});
+
 test("undo takes the answer back, and nothing is sent", async ({ page }) => {
   const { store, ids } = await open(page, [{}]);
   await option(page, "proposal").click();

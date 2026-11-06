@@ -6,21 +6,31 @@ import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "
 import { LIFT_HINT } from "./Lift";
 import { Mark } from "./Mark";
 import { Prose, inline } from "./Prose";
-import { RARITY, type Rarity, type WaitState, agentOf, isHeld, quoted, replyOf, ruleName } from "./model";
+import { RARITY, type Rarity, type WaitState, agentOf, chatWords, isHeld, isSeen, quoted, replyOf, ruleName } from "./model";
 import { POSITION_NAMES, type Position, rowInSentence } from "./prefs";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
 // Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys. M8b: a held card is answered blind
-// first, then shows what its agent went ahead with, to keep or overturn (D151).
+// first, then shows what its agent went ahead with, to keep or overturn (D151). B-hswmx: a choice you answered in chat
+// shows what you said and the pick, and one tap confirms it.
 
 export type Side = "left" | "right";
 export const ARROW = { left: "←", right: "→", up: "↑", down: "↓" } as const;
 
-/** What the card is showing: the choice, the reveal after it (D86), or one of the two written answers. */
+/** The side an option is on. */
+export const sideOfKind = (sides: Record<Side, OptionKind>, kind: OptionKind): Side => (sides.left === kind ? "left" : "right");
+
+/**
+ * What the card is showing: the choice, the reveal after it (D86), or one of the two written answers; or, for a choice
+ * you answered in chat (B-hswmx), what you said and the pick, to confirm.
+ */
 export type Mode =
   | { kind: "live" }
+  /** A card answered in chat: nothing hidden, the pick shown, and one tap confirms it. `rule`: "make this a rule". */
+  | { kind: "seen"; rule?: boolean }
   /** `asked`: "you should have asked me", on a card the gate held back, or in shadow would have (B-87tkc). */
-  | { kind: "reveal"; option: OptionKind; side: Side; first: OptionKind; why: string; rule?: boolean; retire?: string[]; asked?: boolean }
+  /** `first`: the blind choice (D88); none on a card answered in chat, whose pick you'd seen (B-hswmx). */
+  | { kind: "reveal"; option: OptionKind; side: Side; first?: OptionKind; why: string; rule?: boolean; retire?: string[]; asked?: boolean }
   | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
   | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
@@ -91,6 +101,7 @@ export function Card(p: CardProps) {
         <b>{agentOf(card)}</b> is {m.doing}
       </p>
       <h1>{m.question}</h1>
+      {mode.kind === "seen" && <Seen {...p} mode={mode} />}
       {mode.kind === "write" || mode.kind === "pass" ? null : (
         <>
           <Crux card={card} />
@@ -100,7 +111,7 @@ export function Card(p: CardProps) {
           </div>
         </>
       )}
-      {mode.kind === "live" && (
+      {(mode.kind === "live" || mode.kind === "seen") && (
         <>
           <Facets card={card} />
           {p.near?.length && p.onMerge ? <TopicMerge topic={card.canonicalTopic} near={p.near} onMerge={p.onMerge} /> : null}
@@ -191,11 +202,13 @@ function OptionButton(p: CardProps & { side: Side }) {
   const { card, mode, side } = p;
   const m = card.meta;
   const kind = p.sides[side];
-  const live = mode.kind === "live";
+  // A card answered in chat is answered from its options too: its pick, your answer, confirms it (B-hswmx).
+  const live = mode.kind === "live" || mode.kind === "seen";
   // The agent's pick shows only after you choose (D86); on a held card, it's what the agent went ahead with (D151).
-  // A settled card, opened to look at, shows its pick and the option chosen, if one was.
-  const showPick = kind === "proposal" && (mode.kind === "reveal" || mode.kind === "past");
-  const pickWords = isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
+  // A settled card, opened to look at, shows its pick and the option chosen, if one was. On a card answered in chat,
+  // you've seen the pick: it was your answer.
+  const showPick = kind === "proposal" && (mode.kind === "reveal" || mode.kind === "past" || mode.kind === "seen");
+  const pickWords = isSeen(card) ? "Your answer in chat" : isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
   const chosen = mode.kind === "reveal" ? mode.option : mode.kind === "past" ? p.past?.chosen : undefined;
   const cls = (chosen ? (chosen === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
   return (
@@ -292,9 +305,12 @@ function AskedToggle({ card, on, onChange }: { card: ApiCard; on: boolean | unde
 
 function Foot(p: CardProps) {
   const agent = agentOf(p.card);
-  // On a touch screen there are no arrows (B-yfehp): the line says how the card is answered by touch.
-  const rule =
-    p.readLeftMs > 0 ? (
+  // On a touch screen there are no arrows (B-yfehp): the line says how the card is answered by touch. A card answered in
+  // chat offers the other answers, in case it isn't what you meant (B-hswmx).
+  const other = ARROW[sideOfKind(p.sides, "alternative")];
+  const rule = isSeen(p.card) ? (
+    p.touch ? "Not what you meant? Tap the other option, or answer otherwise." : `Not what you meant? Choose the other option (${other}), or answer otherwise.`
+  ) : p.readLeftMs > 0 ? (
       <>
         <b>Read it first:</b> {(p.readLeftMs / 1000).toFixed(1)}&nbsp;s
       </>
@@ -329,17 +345,29 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const agent = agentOf(card);
   const held = isHeld(card);
   const own = isOwnCard(m);
+  // Answered in chat (B-hswmx): its pick is your answer, so choosing the other option is going against what you said.
+  const chat = isSeen(card);
   const same = mode.option === "proposal";
-  const switched = same && mode.first !== "proposal";
+  const switched = same && mode.first !== "proposal" && !chat;
   const key = ARROW[mode.side];
   const confirmWords = held ? (same ? `Keep ${quoted(m.proposal)}` : `Overturn it: ${quoted(m.alternative)}`) : `Confirm ${quoted(m[mode.option])}`;
   const overturn = held && !same ? `Overturning it sends ${agent} a brief of what to redo.` : "";
   // On a touch screen, Esc's way back is a button.
-  const small = p.touch ? overturn : `${overturn ? `${overturn} ` : ""}Esc goes back to the choice.`;
+  const small = p.touch ? overturn : `${overturn ? `${overturn} ` : ""}Esc goes back to ${chat ? "your answer in chat" : "the choice"}.`;
   return (
     <div className="panel-in">
       <p className="verdict">
-        {held ? (
+        {chat ? (
+          same ? (
+            <>
+              You chose <b>{m.proposal}</b>, your answer in chat.
+            </>
+          ) : (
+            <>
+              You chose <b>{m[mode.option]}</b>, not your answer in chat, <b>{m.proposal}</b>.
+            </>
+          )
+        ) : held ? (
           switched ? (
             <>
               You're keeping <b>{m.proposal}</b>, what {agent} went ahead with.
@@ -428,28 +456,10 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         </label>
       ))}
       <div className="reveal-row">
-        {p.rarity === "mythic" ? (
-          // A long press on a touch screen mustn't open the page's menu, or end the hold by scrolling (style.css).
-          <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd} onPointerCancel={p.onHoldEnd} onContextMenu={(e) => e.preventDefault()}>
-            <span className="fill" style={{ width: `${(p.hold ?? 0) * 100}%` }} />
-            <span>
-              {p.touch ? (
-                "Press and hold to confirm"
-              ) : (
-                <>
-                  Hold <kbd>{key}</kbd> or click and hold to confirm
-                </>
-              )}
-            </span>
-          </button>
-        ) : (
-          <button type="button" className="confirm" onClick={p.onConfirm}>
-            {confirmWords} <kbd>{key}</kbd>
-          </button>
-        )}
+        <ConfirmButton {...p} words={confirmWords} side={mode.side} />
         {!same && (
           <button type="button" className="switch" onClick={p.onSwitch}>
-            {held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
+            {chat ? "Back to your answer in chat" : held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
           </button>
         )}
         {/* Esc's way back, where there's no Esc key. */}
@@ -460,6 +470,60 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         )}
       </div>
       {small && <p className="small">{small}</p>}
+    </div>
+  );
+}
+
+/** The confirm: a button, or on a mythic card a hold (D67), with the arrow on the chosen option's side. */
+function ConfirmButton(p: CardProps & { words: string; side: Side }) {
+  const key = ARROW[p.side];
+  if (p.rarity !== "mythic") {
+    return (
+      <button type="button" className="confirm" onClick={p.onConfirm}>
+        {p.words} <kbd>{key}</kbd>
+      </button>
+    );
+  }
+  // A long press on a touch screen mustn't open the page's menu, or end the hold by scrolling (style.css).
+  return (
+    <button type="button" className="hold" onPointerDown={p.onHoldStart} onPointerUp={p.onHoldEnd} onPointerLeave={p.onHoldEnd} onPointerCancel={p.onHoldEnd} onContextMenu={(e) => e.preventDefault()}>
+      <span className="fill" style={{ width: `${(p.hold ?? 0) * 100}%` }} />
+      <span>
+        {p.touch ? (
+          "Press and hold to confirm"
+        ) : (
+          <>
+            Hold <kbd>{key}</kbd> or click and hold to confirm
+          </>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * A choice you already answered in chat (B-hswmx): what you said, the pick the agent filed it as, and one tap to confirm
+ * it. Nothing is hidden, since you'd seen the pick; the options and the other answers stay, in case it isn't what you
+ * meant. Confirmed, it's in the record like any answer, and can become a rule; your calibration leaves it out.
+ */
+function Seen(p: CardProps & { mode: Extract<Mode, { kind: "seen" }> }) {
+  const { card, mode } = p;
+  const m = card.meta;
+  const agent = agentOf(card);
+  return (
+    <div className="panel-in seen">
+      <div className="said">
+        <span className="lbl">You answered this in chat</span>
+        <q>{chatWords(m.answered_in_chat ?? "")}</q>
+      </div>
+      <p className="verdict">
+        {agent} filed your answer as its pick: <b>{m.proposal}</b>.
+      </p>
+      <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
+      <div className="reveal-row">
+        <ConfirmButton {...p} words={`Confirm ${quoted(m.proposal)}`} side={sideOfKind(p.sides, "proposal")} />
+      </div>
+      <p className="small">You'd seen the pick, so your calibration leaves this card out.</p>
     </div>
   );
 }

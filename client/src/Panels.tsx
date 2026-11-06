@@ -185,10 +185,12 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
 /**
  * Your calibration (D180): your answers row by row against the agents' picks (`<AnswerBars />`), then, from what can be
  * stood behind (D71), how long you spend by stakes, and the decisions you settled that were later superseded. Practice
- * cards join it when they exist (D83).
+ * cards join it when they exist (D83). Choices you answered in chat are left out of each, and said (B-hswmx).
  */
-export function CalibrationPanel({ spent, superseded, routing, onClose }: { spent: Spent[]; superseded: string[]; routing: ApiRouting; onClose: () => void }) {
+export function CalibrationPanel({ spent, superseded: s, routing, onClose }: { spent: Spent[]; superseded: { names: string[]; inChat: number }; routing: ApiRouting; onClose: () => void }) {
   const t = timeSpent(spent);
+  const superseded = s.names;
+  const chat = s.inChat ? `; ${s.inChat} you answered in chat ${s.inChat === 1 ? "isn't" : "aren't"} counted` : "";
   return (
     <Panel label="Your calibration" onClose={onClose} id="calibration-panel" wide>
       <AnswerBars routing={routing} />
@@ -201,10 +203,11 @@ export function CalibrationPanel({ spent, superseded, routing, onClose }: { spen
           {superseded.length ? (
             <>
               <b>{superseded.length}</b> of the decisions you settled here: {superseded.map((s) => `“${s}”`).join(", ")}
+              {chat}
             </>
           ) : (
             <>
-              <b>none</b> of the decisions you settled here
+              <b>none</b> of the decisions you settled here{chat}
             </>
           )}
         </span>

@@ -173,13 +173,14 @@ export const TODAY: Settings = { mode: "shadow", rows: PRESETS[0]!.rows, ...AUDI
 export const GATE_VERSION = "rules-1";
 
 /** What set a card's outcome (P16 section 3). */
-export type GateReason = "row" | "floor" | "one-way" | "agent" | "baesian" | "answer" | "error";
+export type GateReason = "row" | "floor" | "one-way" | "agent" | "baesian" | "answer" | "chat" | "error";
 
 /**
  * Who a card is from, for the gate: an agent's decision; a card Baesian files itself (conflicts, rule drafts, convention
- * and slider cards), which always reaches you; or a revision that follows your answer, or a reply, which is shown too.
+ * and slider cards), which always reaches you; a revision that follows your answer, or a reply, which is shown too; or a
+ * choice you already answered in chat (B-hswmx), shown so you confirm it.
  */
-export type GateSource = "agent" | "baesian" | "answer";
+export type GateSource = "agent" | "baesian" | "answer" | "chat";
 
 export interface GateInput {
   touches: readonly Fact[];
@@ -286,6 +287,15 @@ export function outcomeOf(verdicts: readonly { response: Response; at: string; f
   return { final, miss: asked || OVERTURNS.has(last.response), switched: last.response === "accept" && last.first_choice === "alternative" };
 }
 
+/**
+ * Whether a card was answered in chat (B-hswmx): its latest revision says so, or an answer on an earlier one was marked
+ * seen. Its choice wasn't made blind, so calibration leaves it out of every measure: the report's counts, the replay of
+ * past cards, and the slider proposals. It's in the record, and can become a rule, like any card.
+ */
+export function answeredInChat(c: { meta: { answered_in_chat?: string | undefined }; verdicts: readonly { seen?: true | undefined }[] }): boolean {
+  return c.meta.answered_in_chat !== undefined || c.verdicts.some((v) => v.seen === true);
+}
+
 // ---------------------------------------------------------------- Baesian's own cards
 
 /** The name Baesian files its own cards under: conflict, convention and slider cards. */
@@ -329,16 +339,27 @@ export interface Replay {
 }
 
 /**
- * A card as `GET /api/state` gives it, as the replay reads it, or undefined for one it leaves out: Baesian's own, and
- * withdrawn ones. So the client can replay any setting itself, a single row moved, say, as the server does for presets.
+ * A card as `GET /api/state` gives it, as the replay reads it, or undefined for one it leaves out: Baesian's own,
+ * withdrawn ones, and those answered in chat (B-hswmx). So the client can replay any setting itself, a single row moved,
+ * say, as the server does for presets.
  */
 export function replayCardOf(c: {
-  meta: { id: string; touches: readonly Fact[]; reverse: "cheap" | "moderate" | "one-way"; source_agent: string; rule?: string | undefined; convention?: string | undefined; pref_row?: string | undefined; conflict_of?: readonly string[] | undefined };
+  meta: {
+    id: string;
+    touches: readonly Fact[];
+    reverse: "cheap" | "moderate" | "one-way";
+    source_agent: string;
+    rule?: string | undefined;
+    convention?: string | undefined;
+    pref_row?: string | undefined;
+    conflict_of?: readonly string[] | undefined;
+    answered_in_chat?: string | undefined;
+  };
   status: string;
-  verdicts: Parameters<typeof outcomeOf>[0];
+  verdicts: readonly (Parameters<typeof outcomeOf>[0][number] & { seen?: true | undefined })[];
   gate?: { asked?: Level | undefined; source: GateSource } | undefined;
 }): ReplayCard | undefined {
-  if (isOwnCard(c.meta) || c.gate?.source === "baesian" || c.status === "withdrawn") return undefined;
+  if (isOwnCard(c.meta) || c.gate?.source === "baesian" || c.status === "withdrawn" || answeredInChat(c)) return undefined;
   return { id: c.meta.id, touches: c.meta.touches, reverse: c.meta.reverse, ...(c.gate?.asked ? { asked: c.gate.asked } : {}), source: c.gate?.source ?? "agent", outcome: outcomeOf(c.verdicts) };
 }
 

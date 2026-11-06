@@ -214,6 +214,23 @@ export function removedWords(r: ApiRemovedCard): { name: string; state: string }
  */
 export const isHeld = (card: ApiCard): boolean => card.status === "held";
 
+/**
+ * A choice you already answered in chat (B-hswmx): filed with your answer as the agent's pick, marked seen. Nothing on it
+ * is hidden, since you've seen the pick: it shows what you said and the pick, and one tap confirms it.
+ */
+export const isSeen = (card: ApiCard): boolean => card.meta.answered_in_chat !== undefined;
+
+/** What you said in chat, as the card shows it inside its own quotation marks: without a pair the agent already put round it. */
+export function chatWords(said: string): string {
+  const t = said.trim();
+  // Only a pair round the whole: “A” or “B” keeps its own.
+  for (const [open, close] of [["“", "”"], ['"', '"']] as const) {
+    const inner = t.slice(1, -1);
+    if (t.length > 1 && t.startsWith(open) && t.endsWith(close) && !inner.includes(open) && !inner.includes(close)) return inner.trim();
+  }
+  return t;
+}
+
 const STATE_WORDS: Record<Status, string> = {
   open: "waiting for you",
   held: "held back: its agent went ahead",

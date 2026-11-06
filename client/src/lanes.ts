@@ -87,6 +87,8 @@ export function saidOf(c: ApiCard, nowMs: number): { words: string; tone: MarkSt
     case "open":
       return { words: c.waiting.some((w) => nowMs - Date.parse(w.at) <= 90_000) ? `${agentOf(c)} has stopped: waiting for you` : "waiting for you", tone: st };
     default:
+      // A choice you answered in chat, confirmed here (B-hswmx): the pick was your answer.
+      if (st === "with" && last?.seen) return { words: `you confirmed “${c.meta.proposal}”, your answer in chat`, tone: st };
       if (st === "with") return { words: `you chose “${c.meta.proposal}”, the agent's pick${last?.first_choice === "alternative" ? ", after reading its case" : ""}`, tone: st };
       if (last?.response === "alternative") return { words: `you chose “${c.meta.alternative}”, not the agent's pick`, tone: st };
       return { words: `you answered “${last?.choice ?? c.decision ?? last?.response ?? "otherwise"}”`, tone: st };

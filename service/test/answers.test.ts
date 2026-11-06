@@ -212,6 +212,26 @@ describe("the relay's gate record on what it accepts (D158)", () => {
     expect(relay.draw_proof).toBeUndefined();
   });
 
+  it("takes a choice answered in chat, shows it whatever its row, and marks its answer seen, signed, so a machine counts it (B-hswmx)", async () => {
+    const laptop = machineStore();
+    const id = fileCard(laptop, { touches: ["dependency"], answered_in_chat: "Postgres, please", proposal: "Postgres", alternative: "SQLite" });
+    await push(laptop);
+    // The relay took the card, field and all (its upload is read through the card's schema). It has no blind choice, and only the store marks it seen.
+    expect((await json(await answer({ card: id, revision: 1, response: "accept", first_choice: "proposal" }))).body.error).toMatch(/no blind choice/);
+    expect((await json(await answer({ card: id, revision: 1, response: "accept", seen: true }))).body.error).toMatch(/unexpected fields: seen/);
+    const r = await json(await answer({ card: id, revision: 1, response: "accept", make_rule: true }));
+    expect(r.status).toBe(201);
+    expect(r.body.verdict).toMatchObject({ card: id, seen: true, make_rule: true, account: "acct-gus", project: "proj-a" });
+    const mine = await machineView();
+    expect(mine.card(id)!.meta.answered_in_chat).toBe("Postgres, please");
+    expect(mine.gateRecordBy(id, 1, "relay")).toMatchObject({ source: "chat", outcome: "shown" });
+    const file = mine.storage.list("verdicts").find((f) => f.includes(id) && f.endsWith(".json"))!;
+    expect(mine.judge(`verdicts/${file}`)).toEqual({ ok: true });
+    expect(mine.verdicts(id)).toEqual([expect.objectContaining({ seen: true })]);
+    expect(mine.status(id)).toBe("resolved");
+    expect(mine.ruleAsked(id)).toBe(true);
+  });
+
   it("gates the cards Baesian files after an answer, as the local server files them (D161)", async () => {
     const laptop = machineStore();
     const a = fileCard(laptop, { topic: "testing/runner", proposal: "Vitest", alternative: "Jest" });

@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 import type { ApiRouting, RowReport } from "../../src/api";
 import { isFixed } from "../../src/routing";
-import { type Bar, ENOUGH, THIN, barOf, leftOut, markAt, scaleOf, segmentWords, summaryWords } from "./calibration";
+import { type Bar, ENOUGH, THIN, barOf, leftOut, markAt, notCounted, scaleOf, segmentWords, summaryWords } from "./calibration";
 import { ALL_ROWS, type AnyRow, POSITION_NAMES, type Position, ROW_NAMES } from "./prefs";
 
 // Your calibration, row by row (D180): how your answers compare with the agents' picks, as one stacked bar per row at
@@ -36,7 +36,6 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
   const all: Line = { row: "all", name: "All rows", bar: barOf(report.pooled), report: report.pooled };
   const scale = scaleOf(lines.map((l) => l.bar));
   const [tip, setTip] = useState<Tip>();
-  const notCounted = (r: RowReport | undefined) => (r ? r.unanswered + r.unblind : 0);
   const anyLeft = notCounted(report.pooled) > 0;
 
   return (

@@ -383,7 +383,9 @@ function decisionHead(read: Reading, id: string, r: Resolution): string {
   );
   if (m.crux_fact) lines.push(`**The fact given:** ${sentence(m.crux_fact)}`);
   if (v.comment) lines.push(`**Comment:** ${quote(v.comment)}`);
-  const option = v.response === "accept" ? "proposal" : v.response === "alternative" ? "alternative" : undefined;
+  // B-hswmx: the reviewer answered it in chat first, and the agent filed that answer as its pick.
+  if (m.answered_in_chat) lines.push(`**Answered in chat first:** ${quote(m.answered_in_chat)}, which the agent filed as its pick.`);
+  const option =v.response === "accept" ? "proposal" : v.response === "alternative" ? "alternative" : undefined;
   if (v.first_choice && option && v.first_choice !== option) lines.push(`**First chose:** ${sentence(`${withoutStop(m[v.first_choice])}, then switched once the agent's pick was shown`)}`);
   if (m.rationale) lines.push(`**The agent's case:** ${sentence(m.rationale)}`);
   if (m.wrong_if) lines.push(`**Wrong if:** ${sentence(m.wrong_if)}${m.check ? ` **To check:** ${sentence(m.check)}` : ""}`);

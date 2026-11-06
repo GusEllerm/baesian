@@ -201,6 +201,10 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "crux_fact", value: '""', optional: true, note: "what the reviewer needs to choose, kept neutral: the only context they see first" },
   { field: "rationale", value: '""', optional: true, note: "why you pick the proposal" },
   {
+    field: "answered_in_chat", value: '""', optional: true,
+    note: "only if the reviewer already answered it in chat: what they said, quoted and short; your pick is their answer, which they confirm with one tap",
+  },
+  {
     field: "wrong_if", value: '""', optional: true,
     note: "what would show your pick is wrong: required if reverse is one-way, touches includes security or privacy, or a premise is set",
     line: "(what would show your pick is wrong: required if reverse is one-way,",

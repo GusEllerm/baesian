@@ -213,7 +213,7 @@ What the client may show, and where each piece of it comes from, is in [[Client 
   - `baesian file` raises an OS notification for a blocking or hard card.
 
   A configurable `notify` command receives the card as JSON. That's how phone push (ntfy, Pushover) or Slack get wired in later, without Baesian owning push infrastructure.
-- **Decisions made in conversation still go through the client.** If you tell the agent "use Postgres" in chat, it files a card with Postgres as the proposal, and you confirm it with one swipe.
+- **Decisions made in conversation still go through the client.** If you tell the agent "use Postgres" in chat, it files a card with Postgres as the proposal and what you said in `answered_in_chat`, which marks it seen (B-hswmx). The gate always shows it, and the client shows what you said and the pick, nothing hidden, so you confirm it with one tap, or answer otherwise if it isn't what you meant. Its verdict is marked `seen`, with no blind choice. It joins the record, and can become a rule and be matched by the gate like any card; calibration leaves it out, since a choice discussed in chat isn't made blind. Only you resolve it, in the client (D32). A choice you haven't answered yet is filed before it's asked, so you choose blind.
 - **Sorted by priority** (see Routing). It's one queue across all worktrees, with each card labelled by branch and agent.
 - **Routed to reviewers by domain tag.** Later, this connects to an external pool of experts (see the expert marketplace idea).
 

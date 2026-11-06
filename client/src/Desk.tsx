@@ -6,10 +6,10 @@ import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
 import { laterSuperseded, recap } from "./calibration";
-import { ARROW, Card, type CardProps, type Mode, type Side } from "./Card";
+import { ARROW, Card, type CardProps, type Mode, type Side, sideOfKind } from "./Card";
 import { usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
-import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { Outbox, postVerdictTo } from "./outbox";
 import { type Confirmed, confirmAnswers, postAnswer, useEndpoints } from "./endpoints";
@@ -115,9 +115,13 @@ interface Fly {
 function pathState(card: ApiCard, answer: Answer): string {
   const { proposal, alternative } = card.meta;
   if (answer.kind === "choose" && isHeld(card)) return answer.option === "proposal" ? `you kept ${quoted(proposal)}` : `you overturned it, for ${quoted(alternative)}`;
+  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `you confirmed ${quoted(proposal)}, your answer in chat`;
   if (answer.kind === "choose") return answer.option === "proposal" ? `you chose ${quoted(proposal)}` : `you chose ${quoted(alternative)}, not ${agentOf(card)}'s pick`;
   return answer.kind === "write" ? "you wrote an answer" : "you couldn't judge it";
 }
+
+/** Where a card starts: in the choice, or for one you answered in chat, showing what you said and the pick (B-hswmx). */
+const startMode = (card: ApiCard | undefined): Mode => (card && isSeen(card) ? { kind: "seen" } : { kind: "live" });
 
 /** What the toast says once an answer is recorded: a slider proposal accepted moves its row (B-y6jn6); Baesian's own cards go to no agent. */
 function sentWords(card: ApiCard, answer: Answer): string {
@@ -234,7 +238,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const [shownAt, setShownAt] = useState(() => performance.now());
   if (shownKey !== key) {
     setShownKey(key);
-    setMode(pastCard ? { kind: "past" } : reviewing && reviewing === key ? { kind: "review" } : { kind: "live" });
+    setMode(pastCard ? { kind: "past" } : reviewing && reviewing === key ? { kind: "review" } : startMode(current));
     setProblem(undefined);
     setLean(undefined);
     setHover(undefined);
@@ -251,7 +255,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     wasBehind.current = behind;
     if (!behind) setShownAt(performance.now());
   }
-  const dwell = r && mode.kind !== "review" ? READ_FIRST_MS[r.rarity] : 0;
+  // A card answered in chat asks for no reading first: you chose already, and it confirms what you said (B-hswmx).
+  const dwell = r && current && mode.kind !== "review" && !isSeen(current) ? READ_FIRST_MS[r.rarity] : 0;
   const [, setFrame] = useState(0);
   const readLeft = Math.max(0, dwell - (performance.now() - shownAt));
   useEffect(() => {
@@ -429,8 +434,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     const v = verdictFor(current, answer);
     if ("problem" in v) return setProblem(v.problem);
     const words = describeAnswer(current, answer);
-    // How long the card was in front of you, for your calibration: first answers only, not changes.
-    if (!reviewing) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
+    // How long the card was in front of you, for your calibration: first answers only, not changes, and never a card
+    // answered in chat, which calibration leaves out (B-hswmx).
+    if (!reviewing && !isSeen(current)) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
     exitDir.current = answer.kind === "choose" ? sideOf(answer.option) : answer.kind === "write" ? "up" : "down";
     // Your choice flies from the card into the path (round 5's one sequenced movement).
     if (answer.kind === "choose" && !reduced) {
@@ -453,6 +459,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       }),
     );
     const waiting = outbox.current!.hold(key, v.verdict);
+    // The arrow that answered it is let go on the next card: it answers nothing there.
+    keyHeld.current = undefined;
     // Round 5 took your answer out of this toast: the path shows it.
     say(isOwnCard(current.meta) ? "Recording it in" : `Sending to ${current.meta.source_agent} in`, waiting.until);
     setPick(undefined);
@@ -474,23 +482,33 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   };
 
   const reach = (dir: Dir) => {
-    if (!current || mode.kind !== "live") return;
+    if (!current || (mode.kind !== "live" && mode.kind !== "seen")) return;
     setLean(undefined);
     if (dir === "up") return setMode({ kind: "write", text: "" });
     if (dir === "down") return setMode({ kind: "pass", text: "" });
     if (readLeft > 0) return setNudged((n) => n + 1);
     const option = sides[dir];
+    // A card answered in chat (B-hswmx): its pick, your answer, is confirmed at once, or on a mythic card held (D67); the
+    // other option goes to the reveal, with no blind choice, since you'd seen the pick.
+    if (mode.kind === "seen") {
+      if (option === "alternative") return setMode({ kind: "reveal", option, side: dir, why: "", ...(mode.rule ? { rule: true } : {}) });
+      if (r?.rarity !== "mythic") return confirm();
+      setNudged((n) => n + 1);
+      return say(touch ? "Press and hold to confirm." : "Hold to confirm, until the bar fills.");
+    }
     // The choice made before the agent's pick was ever shown is the one recorded (D88), even after Esc.
     if (!firstChoice.current.has(key)) firstChoice.current.set(key, option);
     setMode({ kind: "reveal", option, side: dir, first: firstChoice.current.get(key)!, why: "" });
   };
 
   const confirm = () => {
+    // A card answered in chat: one tap confirms your answer, the pick (B-hswmx).
+    if (mode.kind === "seen") return commit({ kind: "choose", option: "proposal", ...(mode.rule ? { rule: true } : {}) });
     if (mode.kind !== "reveal") return;
     commit({
       kind: "choose",
       option: mode.option,
-      first: mode.first,
+      ...(mode.first ? { first: mode.first } : {}),
       ...(mode.why.trim() ? { why: mode.why } : {}),
       ...(mode.rule ? { rule: true } : {}),
       ...(mode.retire?.length ? { retire: mode.retire } : {}),
@@ -498,7 +516,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     });
   };
   // The other option breaks other rules, if any: what you meant to retire goes with the option you left.
-  const switchToPick = () => mode.kind === "reveal" && setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "", retire: [] });
+  // On a card answered in chat, back to what you said, and its one-tap confirm (B-hswmx).
+  const switchToPick = () =>
+    mode.kind === "reveal" && (current && isSeen(current) ? setMode({ kind: "seen", ...(mode.rule ? { rule: true } : {}) }) : setMode({ ...mode, option: "proposal", side: sideOf("proposal"), why: "", retire: [] }));
   const send = () => {
     if (mode.kind !== "write" && mode.kind !== "pass") return;
     if (!mode.reason) return setProblem("Choose a reason first.");
@@ -516,7 +536,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       setReviewing(undefined);
       return;
     }
-    setMode({ kind: "live" });
+    setMode(startMode(current));
   };
 
   /** Changing an answer you've already given (D81): the card comes back to the choice, where it was on the path. */
@@ -533,7 +553,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         return n;
       });
     }
-    setMode({ kind: "live" });
+    setMode(startMode(current));
     setShownAt(performance.now());
   };
 
@@ -671,7 +691,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   // A mythic card is held to confirm (D67): the bar fills over HOLD_MS; letting go early starts again.
   const holdStart = useRef<number>(undefined);
   const beginHold = () => {
-    if (mode.kind !== "reveal" || holdStart.current !== undefined) return;
+    if ((mode.kind !== "reveal" && mode.kind !== "seen") || holdStart.current !== undefined) return;
     holdStart.current = performance.now();
     const step = () => {
       if (holdStart.current === undefined) return;
@@ -694,8 +714,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   };
 
   // The keys, read through a ref so the listeners always see the latest state.
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway };
+  const pickSide = sideOf("proposal");
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
@@ -746,7 +767,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         }
         return;
       }
-      if ((e.key === "j" || e.key === "k") && h.mode.kind === "live" && h.ordered.length) {
+      if ((e.key === "j" || e.key === "k") && (h.mode.kind === "live" || h.mode.kind === "seen") && h.ordered.length) {
         const i = h.current ? h.ordered.indexOf(h.current) : -1;
         const next = h.ordered[(i + (e.key === "j" ? 1 : h.ordered.length - 1) + h.ordered.length) % h.ordered.length];
         exitDir.current = "fade";
@@ -769,7 +790,13 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         keyHeld.current = dir;
         return h.rarity === "mythic" ? h.beginHold() : h.confirm();
       }
-      if (h.mode.kind !== "live") return;
+      // A card answered in chat (B-hswmx): the arrow on your answer's side confirms it, held on a mythic card (D67).
+      if (h.mode.kind === "seen" && dir === h.pickSide) {
+        if (h.rarity !== "mythic") return h.confirm();
+        keyHeld.current = dir;
+        return h.beginHold();
+      }
+      if (h.mode.kind !== "live" && h.mode.kind !== "seen") return;
       if (dir === "up" || dir === "down") return h.reach(dir);
       // Holding an arrow leans the card toward that option; letting go chooses it.
       keyHeld.current = dir;
@@ -780,8 +807,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       if (!dir || keyHeld.current !== dir) return;
       keyHeld.current = undefined;
       const h = handlers.current;
-      if (h.mode.kind === "reveal") return h.endHold();
-      if (h.mode.kind === "live") h.reach(dir);
+      if (h.mode.kind === "reveal" || (h.mode.kind === "seen" && dir === h.pickSide)) return h.endHold();
+      if (h.mode.kind === "live" || h.mode.kind === "seen") h.reach(dir);
     };
     addEventListener("keydown", down);
     addEventListener("keyup", up);
@@ -818,7 +845,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     };
   });
   const leaning = lean ?? handLean ?? hover;
-  const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "reveal" ? mode.option : undefined;
+  const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "seen" ? (leaning ? sides[leaning] : "proposal") : mode.kind === "reveal" ? mode.option : undefined;
 
   // On a phone (D130). Each new card, survey step or briefing starts at its top.
   const faceKey = setup ? `setup:${setup.step}:${setup.step === "ask" ? setup.i : ""}` : briefing ? `brief:${briefing.meta.id}` : current ? key : "empty";
@@ -1195,7 +1222,8 @@ function LiveCard(p: {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const scale = useMotionValue(1);
-  const live = p.card.mode.kind === "live" && present;
+  // A card answered in chat is answered by the same gestures: toward your answer confirms it (B-hswmx).
+  const live = (p.card.mode.kind === "live" || p.card.mode.kind === "seen") && present;
   const el = useRef<HTMLElement>(null);
   // On a touch screen, a finger holds the card until it lifts; a mouse there drags it as on a desktop.
   const controls = useDragControls();

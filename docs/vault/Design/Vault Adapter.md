@@ -143,7 +143,7 @@ one that supersedes it: editing this note changes nothing.
 (the card's body, as the agent wrote it)
 ```
 
-Lines appear only when their field is set: the fact, the comment, the agent's case, and a line for first_choice when you switched after the reveal (D88).
+Lines appear only when their field is set: the fact, the comment, what you said in chat when the card was answered there first (B-hswmx), the agent's case, and a line for first_choice when you switched after the reveal (D88).
 
 ## 3. The rule note
 
