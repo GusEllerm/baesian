@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-qx0vq",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "publishes",
+    "user-facing"
+  ],
+  "reverse": "one-way",
+  "source": "agent",
+  "row": "publishes",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "at": "2026-11-06T20:40:45.072Z"
+}

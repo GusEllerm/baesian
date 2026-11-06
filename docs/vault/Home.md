@@ -17,6 +17,7 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-06.*
 
+- **The repo is public (2026-11-06, D182):** anyone can clone it and install the CLI from source, sign up at baesian.dev and link a repo; there's no licence yet (B-qx0vq, hard, with the user).
 - **Ready for `v0.1.9` on `main` at `1017746`, CI passed (2026-11-06)** ([[2026-11-06 Hook Test and the README]]): `v0.1.8` is live; the plugin's hooks pass a hand test in the VS Code extension; the README is redesigned as a front page with `docs/setup.md` beside it (B-3fgyc, B-k3451) and media remade from the real client; the release commit sets `package.json`'s version and the deploy checks the tag (B-3femd).
   - **Next:** tag `v0.1.9`; the critics' calibration fixes, if carded; real-device checks; then M10.
 
