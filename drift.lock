@@ -6228,7 +6228,7 @@ sig = "2afa110e149f0d84"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#findMerges"
-sig = "aa0501db94e00b32"
+sig = "dbe4903e6024b45e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6249,6 +6249,11 @@ sig = "3bb3d289bfc090f7"
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#noteSquash"
 sig = "e916c999a4764f9b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/merges.ts#ownWork"
+sig = "203997cc5765d30d"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

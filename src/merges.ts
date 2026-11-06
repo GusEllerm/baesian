@@ -521,6 +521,17 @@ function whereReached(top: string, chain: Chain[], tip: string, squash?: string)
   return chain.find((c) => c.parents.length > 1 && run(top, ["merge-base", "--is-ancestor", tip, c.commit]) !== undefined && run(top, ["merge-base", "--is-ancestor", tip, c.parents[0]!]) === undefined);
 }
 
+/**
+ * Whether a branch has work of its own (B-c4efj): a card filed on it, or a commit the ledger says was made on it that
+ * cites one, in the live layer or, where the record is committed, in the record before or after the movement.
+ */
+function ownWork(store: Store, top: string, branch: string, m: Moved, ledger: Ledger, recordCommittedHere: boolean): boolean {
+  const mine = (byCommit: Map<string, Cite[]>) => [...byCommit.values()].some((es) => es.some((e) => e.branch === branch));
+  if (store.cards().some((c) => c.meta.source_branch === branch)) return true;
+  if (mine(ledger())) return true;
+  return recordCommittedHere && mine(ledgerByCommit(store, top, m.from));
+}
+
 /** A merge as found, before git's ancestry is checked (`landed()`). */
 interface Draft {
   branch: string;
@@ -604,6 +615,12 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
   // and main brought up to it) is that branch's merge, if it brought anything; otherwise the pull is read merge by merge.
   const names = named && (named.upstream ? [...named.names].filter((b) => arrivals.some((a) => a.by.has(b))) : [...named.names]);
   const drafts: Draft[] = [];
+  // B-c4efj ("Where it began"): a branch with nothing of its own yet, brought up to another's tip by a fast-forward (or a
+  // rebase onto it, which is one), began there, as a worktree made from a stale base and brought up to v1/next as it
+  // starts does: no merge is recorded, and the branches panel draws its start. One with work of its own brought up to
+  // another is still a merge, and the repo's default branch is never one that's beginning, cards of its own or none.
+  let began: boolean | undefined;
+  const beganHere = () => (began ??= m.into !== store.defaultBranch() && !ownWork(store, top, m.into, m, ledger, det === RECORD));
   if (named && names?.length) {
     for (const branch of names) {
       let got: Got | undefined;
@@ -619,6 +636,7 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
       // A merge or squash commit this movement made says when; a fast-forward or a rebase onto the branch happened now,
       // even onto a merge commit made earlier elsewhere (D4, G-6), which is the tip itself.
       const byGit = (at.parents.length > 1 && at.commit !== tip) || !!m.squashed;
+      if (!byGit && beganHere()) continue;
       drafts.push({ branch, commit: at.commit, at: byGit ? at.at : now, dated: byGit ? "git" : "now", got, tip: m.squashed?.tip ?? tip, base: m.from });
     }
   } else {

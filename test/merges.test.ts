@@ -521,7 +521,9 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
   it("one branch fast-forwarded into two branches at one commit is two merges, each in a file of its own (D3)", async () => {
     const { dir } = repo();
     recorded(dir);
-    sh(dir, "branch", "-q", "release");
+    // release has a card of its own, so bringing it up to feat is a merge, not where it began (B-c4efj).
+    sh(dir, "checkout", "-q", "-b", "release");
+    await commitAs(dir, "release.txt", { card: true });
     sh(dir, "checkout", "-q", "-b", "feat");
     await commitAs(dir, "feat.txt", { card: true });
     const tip = head(dir);
@@ -530,7 +532,8 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
       sh(dir, "merge", "-q", "--ff-only", "feat");
       await hook(dir, "post-merge", "0");
     }
-    expect(merges(dir).map((m) => [m.branch, m.into, m.commit]).sort()).toEqual([
+    // (release, which feat began from, came into main with it too: D8.)
+    expect(merges(dir).filter((m) => m.branch === "feat").map((m) => [m.branch, m.into, m.commit]).sort()).toEqual([
       ["feat", "main", tip],
       ["feat", "release", tip],
     ]);
@@ -629,5 +632,70 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
     sh(d2, "merge", "-q", "--no-ff", "--no-edit", "v1");
     await hook(d2, "post-merge", "0");
     expect(into(d2, "main").map((x) => x.branch)).toEqual(["v1"]);
+  });
+});
+
+// B-c4efj ("Where it began"): a branch with nothing of its own yet, fast-forwarded to another's tip as it starts, began
+// there; one with work of its own brought up to another is still a merge.
+describe("where a branch began (B-c4efj)", () => {
+  it("a worktree made from a stale base and brought up to v1's tip records no merge; once it has work, bringing it up again does", async () => {
+    for (const how of ["merge", "rebase"] as const) {
+      const { dir } = repo();
+      recorded(dir);
+      sh(dir, "branch", "-q", "wt", "main");
+      sh(dir, "checkout", "-q", "-b", "v1");
+      await commitAs(dir, "v1-a.txt", { card: true });
+      // The worktree starts from main, behind v1, and catches up before any work of its own.
+      sh(dir, "checkout", "-q", "wt");
+      if (how === "merge") {
+        sh(dir, "merge", "-q", "--ff-only", "v1");
+        await hook(dir, "post-merge", "0");
+      } else {
+        sh(dir, "rebase", "-q", "v1");
+        await hook(dir, "post-rewrite", "rebase");
+      }
+      expect(into(dir, "wt"), how).toEqual([]);
+      // Its work goes into v1, v1 moves on, and the worktree is brought up to it again: a merge, since it has work now.
+      await commitAs(dir, "wt-work.txt", { card: true });
+      sh(dir, "checkout", "-q", "v1");
+      sh(dir, "merge", "-q", "--ff-only", "wt");
+      await hook(dir, "post-merge", "0");
+      await commitAs(dir, "v1-b.txt", { card: true });
+      sh(dir, "checkout", "-q", "wt");
+      sh(dir, "merge", "-q", "--ff-only", "v1");
+      await hook(dir, "post-merge", "0");
+      expect(into(dir, "wt").map((m) => [m.branch, m.commit]), how).toEqual([["v1", head(dir)]]);
+      expect(into(dir, "v1").map((m) => m.branch), how).toEqual(["wt"]);
+    }
+  });
+
+  it("the default branch is never one that's beginning: main, with no card of its own, brought up to a branch is its merge", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const c = await commitAs(dir, "feat.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    expect(into(dir, "main").map((m) => [m.branch, m.cards])).toEqual([["feat", [c.id]]]);
+  });
+
+  it("where the record is committed, work of its own another machine committed counts, though this machine never had it", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { other } = twoMachines(dir);
+    // Another machine's branch, with a commit citing its own card, pushed; v1 moves on past it.
+    sh(other, "checkout", "-q", "-b", "teammate");
+    await commitAs(other, "teammate.txt", { card: true });
+    await commitAs(other, "teammate-2.txt");
+    sh(other, "push", "-q", "origin", "teammate");
+    sh(dir, "fetch", "-q", "origin");
+    sh(dir, "checkout", "-q", "-b", "teammate", "origin/teammate");
+    sh(dir, "checkout", "-q", "-b", "v1");
+    await commitAs(dir, "v1.txt", { card: true });
+    sh(dir, "checkout", "-q", "teammate");
+    sh(dir, "merge", "-q", "--ff-only", "v1");
+    await hook(dir, "post-merge", "0");
+    expect(into(dir, "teammate").map((m) => m.branch)).toEqual(["v1"]);
   });
 });
