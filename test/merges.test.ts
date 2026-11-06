@@ -3,8 +3,9 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { main } from "../src/cli.js";
 import { runHook } from "../src/hooks.js";
-import { LEDGER, RECORD, detectorFor } from "../src/merges.js";
+import { LEDGER, RECORD, detectorFor, scanHistory } from "../src/merges.js";
 import type { MergeEvent } from "../src/schema.js";
 import { snapshot } from "../src/state.js";
 import { Store, mergeFile } from "../src/store.js";
@@ -773,5 +774,82 @@ describe("a branch pushed to the remote's default branch (B-h7rsv)", () => {
     said.length = 0;
     expect(await runHook(Store.open(dir), "pre-push", ["origin"], io, {}, "refs/heads/x 1234 refs/heads/main 5678\nnot a ref line\n")).toBe(0);
     expect(said).toEqual([]);
+  });
+});
+
+// B-dezkk ("The history scan finds them"): merges git's history shows that no hook saw, read once, as a pull reads them.
+describe("the history scan (B-dezkk)", () => {
+  /**
+   * This repo's shape, made with no hook running: a worktree's two commits merged into the overnight branch by a merge
+   * commit, the overnight branch merged into main, the worktree deleted; then v1 begun from main, taking another
+   * worktree's work by a fast-forward.
+   */
+  async function history() {
+    const { dir } = repo();
+    recorded(dir);
+    await commitAs(dir, "main-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "overnight");
+    await commitAs(dir, "overnight-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "wt");
+    const w1 = await commitAs(dir, "wt-a.txt", { card: true });
+    const w2 = await commitAs(dir, "wt-b.txt", { card: true });
+    sh(dir, "checkout", "-q", "overnight");
+    await commitAs(dir, "overnight-b.txt");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "wt");
+    const m1 = head(dir);
+    await commitAs(dir, "overnight-c.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "overnight");
+    const m2 = head(dir);
+    sh(dir, "branch", "-q", "-D", "wt");
+    sh(dir, "checkout", "-q", "-b", "v1");
+    await commitAs(dir, "v1-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "wt2");
+    const w3 = await commitAs(dir, "wt2.txt", { card: true });
+    sh(dir, "checkout", "-q", "v1");
+    sh(dir, "merge", "-q", "--ff-only", "wt2");
+    await commitAs(dir, "v1-b.txt", { card: true });
+    sh(dir, "branch", "-q", "-D", "wt2");
+    return { dir, w1, w2, w3, m1, m2 };
+  }
+
+  it("finds a branch merged into another before both reached main at its own merge commit, and nothing v1 inherited from main", async () => {
+    const { dir, w1, w2, w3, m1, m2 } = await history();
+    expect(merges(dir)).toEqual([]);
+    const scan = scanHistory(Store.open(dir));
+    expect(scan.found.map((f) => `${f.branch}>${f.into} ${f.commit}`).sort()).toEqual([`overnight>main ${m2}`, `wt2>v1 ${w3.commit}`, `wt>overnight ${m1}`]);
+    // As a pull would find them: the merge commit's time, its other parent the tip, the commits it brought that cite cards.
+    const of = (b: string) => scan.found.find((f) => f.branch === b);
+    expect(of("wt")).toMatchObject({ tip: w2.commit, cards: [w1.id, w2.id].sort(), commits: [w1.commit, w2.commit], at: new Date(sh(dir, "log", "-1", "--format=%cI", m1)).toISOString() });
+    expect(of("wt2")).toMatchObject({ tip: w3.commit, cards: [w3.id], commits: [w3.commit] });
+    // A dry run writes nothing.
+    expect(merges(dir)).toEqual([]);
+  });
+
+  it("records once: `baesian sync --history` records what it found, and finds it recorded the next time, as it does what a hook saw", async () => {
+    const { dir, m1 } = await history();
+    // A hook saw the overnight branch merge into main.
+    sh(dir, "checkout", "-q", "main");
+    const before = sh(dir, "rev-parse", "HEAD^1");
+    Store.open(dir).writeMerge({ branch: "overnight", into: "main", commit: head(dir), tip: sh(dir, "rev-parse", "HEAD^2"), at: new Date().toISOString(), cards: [], commits: [] });
+    expect(before).not.toBe(head(dir));
+    const out: string[] = [];
+    const cli = (...args: string[]) => main(["node", "baesian", ...args], { out: (l) => out.push(l), err: (l) => out.push(l), stdin: () => "", cwd: dir, notify: () => {} });
+    expect(await cli("sync", "--history")).toBe(0);
+    expect(out.join("\n")).toContain("recorded 2 merges from git's history that no hook saw; 1 merge it found was recorded already");
+    expect(out.join("\n")).toMatch(new RegExp(`wt merged into overnight +${m1.slice(0, 7)} +\\d{4}-\\d\\d-\\d\\d +2 cards and 2 commits citing cards`));
+    expect(merges(dir).map((m) => `${m.branch}>${m.into}`).sort()).toEqual(["overnight>main", "wt2>v1", "wt>overnight"]);
+    out.length = 0;
+    expect(await cli("sync", "--history")).toBe(0);
+    expect(out.join("\n")).toContain("git's history holds no merge that isn't recorded already; 3 merges it found were recorded already");
+    expect(merges(dir)).toHaveLength(3);
+  });
+
+  it("doesn't record again a merge a hook recorded at another commit: one listing the same commits is the same merge", async () => {
+    const { dir, w3 } = await history();
+    // A hook saw wt2's fast-forward into v1, at the tip v1 moved to.
+    sh(dir, "checkout", "-q", "v1");
+    Store.open(dir).writeMerge({ branch: "wt2", into: "v1", commit: head(dir), tip: head(dir), at: new Date().toISOString(), cards: [w3.id!], commits: [w3.commit] });
+    expect(scanHistory(Store.open(dir)).found.map((f) => f.branch).sort()).toEqual(["overnight", "wt"]);
   });
 });

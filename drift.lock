@@ -3528,7 +3528,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "258083b65c7defb6"
+sig = "721577ab2c7e773f"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -5273,7 +5273,7 @@ sig = "5538e9085f2626dc"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "258083b65c7defb6"
+sig = "721577ab2c7e773f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5359,6 +5359,11 @@ sig = "a56440c199050343"
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/merges.ts#Got"
 sig = "990bb3c401e436c1"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-cli.md"
+target = "src/merges.ts#scanHistory"
+sig = "70e4f08708c5a663"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5877,6 +5882,16 @@ sig = "07800ec790ce3e63"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
+target = "service/src/relay.ts#Relay"
+sig = "474513de7b79c3bc"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "service/src/sql-storage.ts#SqlFileStorage"
+sig = "72adb752ed0cc110"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
 target = "src/api.ts#ApiMerge"
 sig = "25763f2b9f14d2c3"
 
@@ -6213,7 +6228,7 @@ sig = "be9918f1596a1667"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#Moved"
-sig = "c151219218b097ff"
+sig = "a286bd3e98de6f73"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6233,7 +6248,7 @@ sig = "2afa110e149f0d84"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#findMerges"
-sig = "dbe4903e6024b45e"
+sig = "8c5695345a5a1f84"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6269,6 +6284,11 @@ sig = "98c756addc216d5c"
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#recordCommitted"
 sig = "3ea1ef87abb196a8"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/merges.ts#scanHistory"
+sig = "70e4f08708c5a663"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
