@@ -324,6 +324,43 @@ describe("the commits that cite a card, and merges (D181)", () => {
     expect((await state(o)).merges?.map((m) => m.commit).sort()).toEqual(["9".repeat(40), "b".repeat(40)]);
   });
 
+  it("a merge of commits whose ledger entries the relay never held stays while the project does: it ties to no card's text (B-15v62)", async () => {
+    const o = await owner();
+    const t0 = now;
+    const id = await file(o);
+    await answer(o, { card: id });
+    await pull(o);
+    expect(await sweep(o)).toEqual([]);
+    const put = async (path: string, text: string) => {
+      const r = await inObject(o, (relay) => relay.upload(o.project, path, new TextEncoder().encode(text), "laptop"));
+      expect(r.status, `${path}: ${JSON.stringify(r.body)}`).toBe(201);
+    };
+    // Found by a pull of commits whose ledger entries another machine committed in git, and which never came here; and
+    // one that also brought the answered card.
+    const merge = (sha: string, cards: string[]) => ({ path: mergeFile(sha, "feat/x", "main"), text: JSON.stringify({ type: "merge", format: 1, branch: "feat/x", into: "main", commit: sha, tip: sha, at: new Date(now).toISOString(), cards, commits: ["8".repeat(40), "6".repeat(40)] }) });
+    const loose = merge("7".repeat(40), []);
+    const withCard = merge("5".repeat(40), [id]);
+    for (const m of [loose, withCard]) await put(m.path, m.text);
+    // The next daily look keeps both.
+    at(t0 + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([]);
+    expect((await state(o)).merges?.map((m) => m.commit).sort()).toEqual(["5".repeat(40), "7".repeat(40)]);
+    // Thirty days on, the answered card's text goes; neither merge can be tied to commits whose entries went, so both stay.
+    at(t0 + 30 * DAY + MINUTE);
+    await keepSignedIn(o);
+    expect(await sweep(o)).toEqual([id]);
+    at(t0 + 400 * DAY);
+    await keepSignedIn(o);
+    await sweep(o);
+    expect((await state(o)).merges?.map((m) => m.commit).sort()).toEqual(["5".repeat(40), "7".repeat(40)]);
+    // Sent again, it's there already, with its bytes.
+    const again = await inObject(o, (relay) => relay.upload(o.project, loose.path, new TextEncoder().encode(loose.text), "laptop"));
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ unchanged: true });
+    expect((await pull(o)).find((e) => e.path === loose.path)?.body).toBeDefined();
+  });
+
   it("a merge of commits whose ledger entries go in two sweeps goes once the last of its commits' has", async () => {
     const o = await owner();
     const t0 = now;

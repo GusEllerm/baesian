@@ -7,7 +7,7 @@ import { Sheet, Shell, To } from "./Page";
 // service's code bears out; the note says where each comes from, and what still needs a lawyer's eye.
 
 /** When the policy last changed, as the page says it. */
-export const POLICY_CHANGED = "2026-11-05";
+export const POLICY_CHANGED = "2026-11-06";
 
 /** Where people write about their data (B-8xxrc): an address on the domain, forwarded to the operator. */
 export const PRIVACY_CONTACT = "privacy@baesian.dev";
@@ -31,7 +31,7 @@ const KEPT: [string, string][] = [
   ["A card's text, held back by your settings and never answered", "90 days after it arrived. Then only its ID, times, sizes and level stay."],
   ["A card's text, waiting for you", "Until it's answered or withdrawn."],
   ["A commit's ID, time and branch, for the card it cites", "As long as that card's text: removed with it."],
-  ["A merge: its two branches, its time, the IDs of its commit, of the branch's commit that landed and of the commits citing cards it brought, and the cards it brought", "Until the text of every card it brought is removed. One that brought commits citing cards: until the text of every card they cite is removed too. One that brought only a branch's deck: while the project exists."],
+  ["A merge: its two branches, its time, the IDs of its commit, of the branch's commit that landed and of the commits citing cards it brought, and the cards it brought", "Until the text of every card it brought is removed. One that brought commits citing cards: until the text of every card they cite is removed too, which the service can tell only for the commits it was told cite cards. One whose commits the service was never told cite cards (they were made where Baesian isn't signed in to the project), or that brought only a branch's deck: while the project exists, since nothing ties it to a card's text."],
   ["Your repository's default branch: its name", "While the project exists."],
   ["Your decks, each a branch's or a piece of work's, with its name", "While the project exists."],
   ["Your rules, topic merges and gate settings", "While the project exists."],

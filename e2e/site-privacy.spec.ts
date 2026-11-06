@@ -46,6 +46,8 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   // D181: the commits that cite cards and the merges, with how long; a commit's subject never reaches the service.
   await expect(kept.getByRole("listitem").filter({ hasText: "A commit's ID, time and branch" })).toContainText("As long as that card's text: removed with it.");
   await expect(kept.getByRole("listitem").filter({ hasText: "A merge: its two branches" })).toContainText("Until the text of every card it brought is removed.");
+  // B-15v62: a merge the service can't tie to any card's text is kept while the project exists, and the page says so.
+  await expect(kept.getByRole("listitem").filter({ hasText: "A merge: its two branches" })).toContainText("One whose commits the service was never told cite cards (they were made where Baesian isn't signed in to the project), or that brought only a branch's deck: while the project exists");
   await expect(page.getByRole("region", { name: "What it keeps, and why" })).toContainText("A commit's subject and message, and what it changed, never reach the service.");
   await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("For 14 days, signing in with your passkey can restore it");
   for (const name of ["Cloudflare, Inc.", "Globus"]) await expect(page.getByRole("region", { name: "Who else handles it" }).getByText(name, { exact: true })).toBeVisible();

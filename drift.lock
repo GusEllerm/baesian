@@ -588,7 +588,7 @@ sig = "5b9f9426d3e5e503"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Privacy.tsx"
-sig = "9ac93bd3da5983a7"
+sig = "f6e797acdb511a43"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -893,7 +893,7 @@ sig = "302b81e29da9fed5"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "service/src/retention.ts#RetentionLedger"
-sig = "a090d392c48ec4e7"
+sig = "6008c69f9ca91de0"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1533,7 +1533,7 @@ sig = "cd4af2280d048625"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/relay.ts#Relay"
-sig = "474513de7b79c3bc"
+sig = "821182ac298f4dc0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1548,7 +1548,7 @@ sig = "bddcfc29ee749e1f"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/retention.ts#RetentionLedger"
-sig = "a090d392c48ec4e7"
+sig = "6008c69f9ca91de0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3658,7 +3658,7 @@ sig = "de6a8263773b5276"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "client/src/site/Privacy.tsx"
-sig = "9ac93bd3da5983a7"
+sig = "f6e797acdb511a43"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -3718,12 +3718,12 @@ sig = "04b8e6460f25d470"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/relay.ts#Relay"
-sig = "474513de7b79c3bc"
+sig = "821182ac298f4dc0"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/retention.ts"
-sig = "cbcbb38d81b65ea0"
+sig = "3763be15d0088020"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -4668,7 +4668,7 @@ sig = "509350cb13abdd33"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#Relay"
-sig = "474513de7b79c3bc"
+sig = "821182ac298f4dc0"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -4688,7 +4688,7 @@ sig = "f48df2a05a9b6e50"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/retention.ts#RetentionLedger"
-sig = "a090d392c48ec4e7"
+sig = "6008c69f9ca91de0"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5883,7 +5883,7 @@ sig = "07800ec790ce3e63"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/src/relay.ts#Relay"
-sig = "474513de7b79c3bc"
+sig = "821182ac298f4dc0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -8383,7 +8383,7 @@ sig = "e1454a7c7b8d606e"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "service/src/relay.ts#Relay"
-sig = "474513de7b79c3bc"
+sig = "821182ac298f4dc0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
