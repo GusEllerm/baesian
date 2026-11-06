@@ -95,7 +95,7 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 
 .doing { margin: -6px 0 -4px; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink-soft); }
 .doing b { color: var(--ink); font-weight: 650; }
-.card h1 { margin: 0; font: var(--t-question); max-width: 32ch; text-wrap: pretty; }
+.card h1 { margin: 0; font: var(--t-question); text-wrap: pretty; }
 .crux { display: flex; flex-direction: column; gap: 3px; margin: -2px 0 -4px; }
 .crux p { font: var(--t-body); font-size: 16.5px; color: var(--ink); }
 .crux .lbl { margin-right: 6px; font: var(--t-meta); font-stretch: 88%; color: var(--ink-soft); }
@@ -285,7 +285,7 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .new-tag { display: inline-block; margin-right: 6px; padding: 0 5px 1px; border-radius: 3px; background: var(--right); color: #fff; font: 700 10.5px/1.4 var(--ui); vertical-align: 2px; }
 
 /* ------------------------------------------------------------ the empty desk: the recap, what's put aside, notifications */
-.empty .recap { max-width: 30rem; font: var(--t-body); font-size: 17px; }
+.empty .recap { font: var(--t-body); font-size: 17px; }
 .empty .parked { display: flex; flex-direction: column; gap: 4px; width: min(420px, 100%); margin-top: 8px; text-align: left; }
 .empty .parked-h { font: var(--t-small); font-stretch: 88%; font-weight: 700; color: var(--ink-faint); }
 .empty .parked-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; padding: 8px 12px; border: 0; border-radius: 8px; background: #ffffff55; text-align: left; cursor: pointer; }

@@ -137,3 +137,26 @@ for (const size of SIZES) {
     expect(problems).toEqual([]);
   });
 }
+
+// A card's question spans the card, at a desk's width and a tablet's: the card is the measure, and no cap on the
+// heading leaves its lines stopping halfway across (the user's report, an iPad mini, 2026-11-05).
+for (const size of [{ width: 1440, height: 900 }, { width: 744, height: 1133 }]) {
+  test(`a card's question spans the card (${size.width}×${size.height})`, async ({ page }) => {
+    const { store, dir } = repo();
+    fileRound5(store);
+    server = await startServer(store, { reviewer: "gus", writeServerFile: false, debounceMs: 20 });
+    await page.setViewportSize(size);
+    await skipSetup(page, dir);
+    await page.goto(server.url);
+    const h1 = page.locator(`${CARD} h1`);
+    await expect(h1).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    // A heading is as wide as its box unless something caps it, whether or not this question wraps.
+    const { width, room } = await h1.evaluate((el) => {
+      const box = el.parentElement!;
+      const cs = getComputedStyle(box);
+      return { width: el.getBoundingClientRect().width, room: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) };
+    });
+    expect(width).toBeGreaterThan(room - 1);
+  });
+}
