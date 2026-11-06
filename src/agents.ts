@@ -25,6 +25,10 @@ your pick, your case or the card's body; put what they need in order to choose, 
 \`crux_fact\`, and background in the body. The decision record is committed with the code, so don't paste
 secrets, credentials or private output into a card.
 
+A choice you'd put to the reviewer in chat goes as a card, even when they're in the conversation: say
+"it's in your deck" and don't list the options there, so they still choose before seeing your pick. A
+change that only restores what a card or rule decided cites it, and needs no card.
+
 **The commit gate** detects some of these decisions (dependencies, schemas and migrations, CI and
 deploy files) and blocks a commit until each one is covered. Either cite a card whose \`touches\`
 include it, \`Baesian-Card: <id>\`, or, for a two-way door, acknowledge it with a reason:
