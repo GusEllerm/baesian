@@ -293,7 +293,7 @@ What's logged: every file written once, uploaded or written by the relay. What i
 
 **Running the relay locally** (no Cloudflare account): from `service/`, `npm ci` (after the root's), then `npm run dev-vars`, which writes `service/.dev.vars`, ignored by git, with a fresh signing key, the stand-in's grants for the project `proj-dev` and Turnstile's test secret, and prints a `curl` line for a machine and one for a person; `npm run migrate:local` once, to make the local accounts database; then `npm run build` from the root, for the website it serves (M9e), and `npm run dev` (`wrangler dev`) serves it at `http://localhost:8787/`. Emails are simulated: logged, and saved under `service/.wrangler/tmp/email/`. `npm run test:service` from the root runs the service's tests in workerd. Deployed, only real sign-ins count (M9c).
 
-**Retention's state** (M9f, B-9jqt4, B-ec3kj, [[service#Retention (service/src/retention.ts)]]): four more tables in each project's object, kept by `RetentionLedger`, never logged, signed or sent. When a card's text goes, its files' rows (and their `.sig`s, and its waiting markers, and its ledger entries, D181) are deleted from `files`; their `log` rows stay, so `GET log` sends each entry without `body` or `sig`, and an upload of the same path is still known. A merge's row goes once every card it names has gone, and every commit it lists has no ledger entry left (each went with its card's text), so once every card its commits cite has gone too (B-w41p7); one naming no card and no commit stays. The default branch stays while the project does.
+**Retention's state** (M9f, B-9jqt4, B-ec3kj, [[service#Retention (service/src/retention.ts)]]): five more tables in each project's object, kept by `RetentionLedger`, never logged, signed or sent. When a card's text goes, its files' rows (and their `.sig`s, and its waiting markers, and its ledger entries, D181) are deleted from `files`; their `log` rows stay, so `GET log` sends each entry without `body` or `sig`, and an upload of the same path is still known. A merge's row goes once every card it names has gone, and every commit it lists had ledger entries here that went with their cards' text, none left (`retention_commits`), so once every card its commits cite has gone too (B-w41p7); one naming no card and no commit stays, and so does one listing a commit whose ledger entries never came (B-15v62): nothing ties it to a card's text. The default branch stays while the project does.
 
 | Table | One row per | Columns |
 |---|---|---|
@@ -301,6 +301,7 @@ What's logged: every file written once, uploaded or written by the relay. What i
 | `retention_delivered` | card found delivered | `seq`, the card's last entry then; `at`, when it was found (ms) |
 | `retention_removed` | card whose text went | `revision`, `level` (in force), `ended` (`answered`, `withdrawn` or `held`), `filed`, `settled`, `removed` (ISO times), `size` (its files' bytes) |
 | `retention_held` | writer and row | `n`: held cards' gate records removed, still counted by the burn-in |
+| `retention_commits` | commit whose ledger entries went with their cards' text (B-15v62) | `commit_id` |
 
 The state (`ApiState`) carries the removed cards as `removed`, a list of `ApiRemovedCard`: `id`, `revision`, `level`, `ended`, `filed`, `settled`, `removed`. Only the relay sets it.
 

@@ -9,6 +9,7 @@ import { CONFIG_PATH, stagedSnapshot } from "./facts.js";
 import { parseDoc } from "./frontmatter.js";
 import { describeReport, detectStaged, evaluate } from "./gate.js";
 import { personalProblems, runHook } from "./hooks.js";
+import { type Scan, scanHistory } from "./merges.js";
 import { initShared, initSharedMode, setUpPersonal } from "./modes.js";
 import { notifyFiled } from "./notify.js";
 import { openRepo } from "./git.js";
@@ -75,6 +76,7 @@ import {
   renderFor,
   settingsOf,
   strong,
+  table,
   text,
   warning,
 } from "./style.js";
@@ -192,6 +194,26 @@ async function readInput(path: string | undefined, io: Io): Promise<string> {
 }
 
 const files = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
+
+const mergesOf = (n: number) => (n === 1 ? "1 merge" : `${n} merges`);
+
+/**
+ * What the history scan recorded (B-dezkk): a headline, then each merge, oldest first: the branches, its commit, its
+ * day, and what it brought. A commit's subject is never shown.
+ */
+function scanLines(scan: Scan): Line[] {
+  const known = scan.known ? `; ${mergesOf(scan.known)} it found ${scan.known === 1 ? "was" : "were"} recorded already` : "";
+  if (!scan.found.length) return [head("done", `git's history holds no merge that isn't recorded already${known}`)];
+  const what = (cards: number, commits: number) =>
+    [cards ? `${cards} card${cards === 1 ? "" : "s"}` : "", commits ? `${commits} commit${commits === 1 ? "" : "s"} citing cards` : ""].filter(Boolean).join(" and ") || "its deck";
+  return [
+    head("done", `recorded ${mergesOf(scan.found.length)} from git's history that no hook saw${known}`),
+    ...table(
+      undefined,
+      scan.found.map((f) => [`${f.branch} merged into ${f.into}`, id(f.commit.slice(0, 7)), dim(f.at.slice(0, 10)), what(f.cards.length, f.commits.length)]),
+    ),
+  ];
+}
 
 /** The command's lines, as each of the two streams gets them: plain, or as a terminal shows them (B-eyrt5, B-qszqr). */
 function output(io: Io, settings: Settings) {
@@ -400,6 +422,17 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
       });
       writeGrant(grant);
       if (link) linkRepo(s, link);
+      // B-dezkk: a repo linked here records, once, the merges its history shows that no hook saw (made before it had
+      // Baesian's merge hooks), so they go up with the first sync. Linking never fails for it.
+      let scanned: Scan | undefined;
+      let unscanned: string | undefined;
+      if (link) {
+        try {
+          scanned = scanHistory(s, { write: true });
+        } catch (e) {
+          unscanned = e instanceof Error ? e.message.split("\n")[0] : String(e);
+        }
+      }
       // The first sync: the relay's files come down, and everything an agent wrote here goes up (B-6k0rk). A repo with a
       // history of cards sends hundreds of files, so it says how many before it starts.
       const relay = await syncRelay(s, { ...http(), sending: (n) => say(text(dim(`sending ${files(n)} to ${service}…`))) });
@@ -410,10 +443,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
         head("done", `signed in: ${grant.machine} can file cards and hear answers in this project, never answer them`),
         ...fields([
           { label: "project", value: project, ...(link ? { why: linkedIn } : {}) },
+          !!scanned?.found.length && { label: "history", value: mergesOf(scanned.found.length), why: `from git's history, made before this repo had Baesian's merge hooks: recorded once${cite("B-dezkk")}` },
           relay.state === "synced" && { label: "relay", value: `sent ${files(relay.pushed.length)}, received ${relay.pulled.length}` },
           { label: "answer", value: projectPage(service, project) },
         ]),
       ]);
+      if (unscanned) tell([warning(`couldn't read git's history for merges no hook saw (${unscanned})`), next("baesian sync --history", "to try again")]);
       notes(relay.notes);
       if (link && !s.personal) {
         // The link is a gate fact (B-w4g6c): a command to commit it with its ack, ready to run, the trailer its own paragraph.
@@ -531,9 +566,12 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
   program
     .command("sync")
     .description("in a linked repo, sync with the relay; then copy new verdicts and ledger entries into this branch's record (.baesian/), and write the vault's notes")
-    .action(async () => {
+    .option("--history", d(`first, record the merges git's history shows that no hook saw: made before this repo had Baesian's merge hooks, or where it isn't installed. Linking a repo does this once${cite("B-dezkk")}`))
+    .action(async (opts: { history?: boolean }) => {
       const s = store();
       s.requireInit();
+      // B-dezkk: the history scan, as at first link, so what it records goes up with this sync.
+      if (opts.history) say(scanLines(scanHistory(s, { write: true })));
       // M9d: pull the relay's log, and push what it doesn't have, before the record is brought up to date.
       const relay = await syncRelay(s, http());
       if (relay.state === "synced") say(head("done", `synced with the relay: received ${files(relay.pulled.length)}, sent ${relay.pushed.length}`));
@@ -819,13 +857,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
   program
     .command("hook", { hidden: true })
     .description("run a git hook (called by the hooks `baesian init` installs)")
-    .argument("<name>", "pre-commit, commit-msg, post-commit, post-merge or post-rewrite")
+    .argument("<name>", "pre-commit, commit-msg, post-commit, post-merge, post-rewrite or pre-push")
     .argument("[args...]", "the hook's arguments")
     .action(async (name: string, args: string[]) => {
       const s = store();
-      // Personal mode's post-rewrite hands Baesian the commits it rewrote, on standard input (B-4rwyz); shared mode's doesn't.
+      // Personal mode's post-rewrite hands Baesian the commits it rewrote, on standard input (B-4rwyz); shared mode's
+      // doesn't. pre-push hands it the refs being pushed (B-h7rsv).
       let input = "";
-      if (name === "post-rewrite" && s.personal) {
+      if ((name === "post-rewrite" && s.personal) || name === "pre-push") {
         try {
           input = await io.stdin();
         } catch {

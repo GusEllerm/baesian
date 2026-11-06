@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS retention_removed (
   size INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS retention_held (by TEXT NOT NULL, row TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (by, row));
+CREATE TABLE IF NOT EXISTS retention_commits (commit_id TEXT PRIMARY KEY);
 `;
 
 /** What the relay keeps of a card whose text it removed: its ID, latest revision, level, times and size. */
@@ -99,7 +100,9 @@ export interface RemovedRow extends ApiRemovedCard {
  * - `retention_sent`: per machine (its grant), the furthest it has been sent the log, so delivery can be known;
  * - `retention_delivered`: per card, when the relay first found it delivered, at which last entry;
  * - `retention_removed`: per card whose text went, what stays of it (`RemovedRow`);
- * - `retention_held`: per writer and row, how many held cards' gate records went, which the burn-in still counts.
+ * - `retention_held`: per writer and row, how many held cards' gate records went, which the burn-in still counts;
+ * - `retention_commits`: the commits whose ledger entries the relay held and removed, with their cards' text (B-15v62), so
+ *   a merge listing a commit goes only once its entries were here and went, never because they never came.
  */
 export class RetentionLedger {
   constructor(private readonly sql: SqlStorage) {
@@ -152,6 +155,16 @@ export class RetentionLedger {
       .exec<{ card: string; revision: number; level: Level; ended: Ended; filed: string; settled: string; removed: string }>("SELECT card, revision, level, ended, filed, settled, removed FROM retention_removed ORDER BY settled DESC")
       .toArray()
       .map((r) => ({ id: r.card, revision: r.revision, level: r.level, ended: r.ended, filed: r.filed, settled: r.settled, removed: r.removed }));
+  }
+
+  /** Note the commits whose ledger entries went with a card's text (B-15v62). */
+  commitsGone(commits: Iterable<string>): void {
+    for (const c of commits) this.sql.exec("INSERT OR IGNORE INTO retention_commits (commit_id) VALUES (?)", c);
+  }
+
+  /** The commits whose ledger entries the relay held and removed, with their cards' text (B-15v62). */
+  goneCommits(): Set<string> {
+    return new Set(this.sql.exec<{ commit_id: string }>("SELECT commit_id FROM retention_commits").toArray().map((r) => r.commit_id));
   }
 
   /** Whether a card's text went. */

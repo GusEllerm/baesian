@@ -66,7 +66,7 @@ describe("installing the gate (D54)", () => {
   it("creates versioned hooks and points git at them", async () => {
     const { dir } = repo();
     const out = await init(dir);
-    expect(out).toMatch(/git gate: +\.githooks\/ +pre-commit, commit-msg, post-commit, post-merge and post-rewrite; core\.hooksPath points here, so each clone runs `baesian init` once/);
+    expect(out).toMatch(/git gate: +\.githooks\/ +pre-commit, commit-msg, post-commit, post-merge, post-rewrite and pre-push; core\.hooksPath points here, so each clone runs `baesian init` once/);
     // Read the real setting: `sh` overrides core.hooksPath for its own commands.
     expect(spawnSync("git", ["config", "core.hooksPath"], { cwd: dir, encoding: "utf8" }).stdout.trim()).toBe(".githooks");
     expect(await init(dir)).not.toMatch(/git gate/); // unchanged the second time
@@ -89,7 +89,7 @@ describe("installing the gate (D54)", () => {
   it("keeps machine paths out of the committed hooks, in the clone's git config instead", async () => {
     const { dir } = repo();
     await init(dir);
-    const hooks = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite"].map((h) => readFileSync(join(dir, ".githooks", h), "utf8")).join("\n");
+    const hooks = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite", "pre-push"].map((h) => readFileSync(join(dir, ".githooks", h), "utf8")).join("\n");
     expect(hooks).not.toContain(ROOT);
     expect(hooks).not.toContain(process.execPath);
     const local = spawnSync("git", ["config", "--local", "--get", "baesian.fallback"], { cwd: dir, encoding: "utf8" });
@@ -141,6 +141,51 @@ describe("the hooks that find merges (D181)", { timeout: 60_000 }, () => {
     const rebased = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "rebase", "main"], { cwd: dir, encoding: "utf8", env: ENV });
     expect(rebased.status).toBe(0);
     expect(readFileSync(join(dir, "rewritten.txt"), "utf8")).toMatch(/^[0-9a-f]{40} [0-9a-f]{40}/);
+  });
+});
+
+describe("pre-push, which records a branch pushed to the remote's default branch (B-h7rsv)", { timeout: 60_000 }, () => {
+  /** A repo with the gate, its main pushed to a bare remote, and a branch with a commit citing a card. */
+  async function pushing() {
+    const { dir } = repo();
+    await init(dir);
+    put(dir, "README.md", "hi\n");
+    expect(commit(dir, "Set up Baesian\n").code).toBe(0);
+    const remote = realpathSync(mkdtempSync(join(tmpdir(), "baesian-remote-")));
+    sh(remote, "init", "-q", "--bare", "-b", "main");
+    sh(dir, "remote", "add", "origin", remote);
+    sh(dir, "push", "-q", "-u", "origin", "main");
+    sh(dir, "remote", "set-head", "origin", "main");
+    sh(dir, "checkout", "-q", "-b", "v1/next");
+    const id = Store.open(dir).fileCard(draft({ touches: [] }), BODY, { agent: "a" }).card.meta.id;
+    put(dir, "feature.txt", "a feature\n");
+    expect(commit(dir, `A feature\n\nBaesian-Card: ${id}\n`).code).toBe(0);
+    // The repo's own lines after Baesian's block read the refs being pushed too, as Git LFS's pre-push does.
+    writeFileSync(join(dir, ".githooks", "pre-push"), `${readFileSync(join(dir, ".githooks", "pre-push"), "utf8")}cat > "$(git rev-parse --git-common-dir)/pushed.txt"\n`);
+    const push = () => spawnSync("git", ["push", "origin", "v1/next:main"], { cwd: dir, encoding: "utf8", env: ENV });
+    return { dir, remote, id, push, pushed: () => readFileSync(join(sh(dir, "rev-parse", "--path-format=absolute", "--git-common-dir"), "pushed.txt"), "utf8") };
+  }
+
+  it("records the merge as git pushes, and leaves the refs on its input to the repo's own lines", async () => {
+    const { dir, remote, id, push, pushed } = await pushing();
+    const tip = sh(dir, "rev-parse", "HEAD");
+    const r = push();
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toContain("baesian: recorded v1/next merged into main, as it's pushed to origin, with 1 card and 1 commit citing cards");
+    expect(sh(remote, "rev-parse", "main")).toBe(tip);
+    expect(Store.open(dir).merges()).toMatchObject([{ branch: "v1/next", into: "main", commit: tip, tip, cards: [id] }]);
+    expect(pushed()).toMatch(new RegExp(`^refs/heads/v1/next ${tip} refs/heads/main [0-9a-f]{40}\n$`));
+    rmSync(remote, { recursive: true, force: true });
+  });
+
+  it("never stops a push: Baesian failing, or missing, and the push goes on", async () => {
+    const { dir, remote, push, pushed } = await pushing();
+    sh(dir, "config", "--local", "baesian.fallback", "sh -c 'exit 3'");
+    const r = push();
+    expect(r.status, r.stderr).toBe(0);
+    expect(sh(remote, "rev-parse", "main")).toBe(sh(dir, "rev-parse", "HEAD"));
+    expect(pushed()).toMatch(/^refs\/heads\/v1\/next /);
+    rmSync(remote, { recursive: true, force: true });
   });
 });
 

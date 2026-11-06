@@ -1,0 +1,13 @@
+#!/bin/sh
+# >>> baesian >>>
+# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.
+if baesian_refs="$(mktemp 2>/dev/null)"; then cat >"$baesian_refs"; exec <"$baesian_refs"; else baesian_refs=/dev/null; fi
+if command -v baesian >/dev/null 2>&1; then
+  baesian hook pre-push "$1" <"$baesian_refs" || :
+elif baesian_fallback="$(git config --get baesian.fallback)" && [ -n "$baesian_fallback" ]; then
+  eval "$baesian_fallback hook pre-push \"\$1\" <\"\$baesian_refs\"" || :
+else
+  :
+fi
+[ "$baesian_refs" = /dev/null ] || rm -f "$baesian_refs"
+# <<< baesian <<<

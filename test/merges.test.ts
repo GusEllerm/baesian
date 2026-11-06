@@ -3,8 +3,9 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { main } from "../src/cli.js";
 import { runHook } from "../src/hooks.js";
-import { LEDGER, RECORD, detectorFor } from "../src/merges.js";
+import { LEDGER, RECORD, detectorFor, scanHistory } from "../src/merges.js";
 import type { MergeEvent } from "../src/schema.js";
 import { snapshot } from "../src/state.js";
 import { Store, mergeFile } from "../src/store.js";
@@ -521,7 +522,9 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
   it("one branch fast-forwarded into two branches at one commit is two merges, each in a file of its own (D3)", async () => {
     const { dir } = repo();
     recorded(dir);
-    sh(dir, "branch", "-q", "release");
+    // release has a card of its own, so bringing it up to feat is a merge, not where it began (B-c4efj).
+    sh(dir, "checkout", "-q", "-b", "release");
+    await commitAs(dir, "release.txt", { card: true });
     sh(dir, "checkout", "-q", "-b", "feat");
     await commitAs(dir, "feat.txt", { card: true });
     const tip = head(dir);
@@ -530,7 +533,8 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
       sh(dir, "merge", "-q", "--ff-only", "feat");
       await hook(dir, "post-merge", "0");
     }
-    expect(merges(dir).map((m) => [m.branch, m.into, m.commit]).sort()).toEqual([
+    // (release, which feat began from, came into main with it too: D8.)
+    expect(merges(dir).filter((m) => m.branch === "feat").map((m) => [m.branch, m.into, m.commit]).sort()).toEqual([
       ["feat", "main", tip],
       ["feat", "release", tip],
     ]);
@@ -629,5 +633,223 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
     sh(d2, "merge", "-q", "--no-ff", "--no-edit", "v1");
     await hook(d2, "post-merge", "0");
     expect(into(d2, "main").map((x) => x.branch)).toEqual(["v1"]);
+  });
+});
+
+// B-c4efj ("Where it began"): a branch with nothing of its own yet, fast-forwarded to another's tip as it starts, began
+// there; one with work of its own brought up to another is still a merge.
+describe("where a branch began (B-c4efj)", () => {
+  it("a worktree made from a stale base and brought up to v1's tip records no merge; once it has work, bringing it up again does", async () => {
+    for (const how of ["merge", "rebase"] as const) {
+      const { dir } = repo();
+      recorded(dir);
+      sh(dir, "branch", "-q", "wt", "main");
+      sh(dir, "checkout", "-q", "-b", "v1");
+      await commitAs(dir, "v1-a.txt", { card: true });
+      // The worktree starts from main, behind v1, and catches up before any work of its own.
+      sh(dir, "checkout", "-q", "wt");
+      if (how === "merge") {
+        sh(dir, "merge", "-q", "--ff-only", "v1");
+        await hook(dir, "post-merge", "0");
+      } else {
+        sh(dir, "rebase", "-q", "v1");
+        await hook(dir, "post-rewrite", "rebase");
+      }
+      expect(into(dir, "wt"), how).toEqual([]);
+      // Its work goes into v1, v1 moves on, and the worktree is brought up to it again: a merge, since it has work now.
+      await commitAs(dir, "wt-work.txt", { card: true });
+      sh(dir, "checkout", "-q", "v1");
+      sh(dir, "merge", "-q", "--ff-only", "wt");
+      await hook(dir, "post-merge", "0");
+      await commitAs(dir, "v1-b.txt", { card: true });
+      sh(dir, "checkout", "-q", "wt");
+      sh(dir, "merge", "-q", "--ff-only", "v1");
+      await hook(dir, "post-merge", "0");
+      expect(into(dir, "wt").map((m) => [m.branch, m.commit]), how).toEqual([["v1", head(dir)]]);
+      expect(into(dir, "v1").map((m) => m.branch), how).toEqual(["wt"]);
+    }
+  });
+
+  it("the default branch is never one that's beginning: main, with no card of its own, brought up to a branch is its merge", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const c = await commitAs(dir, "feat.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "feat");
+    await hook(dir, "post-merge", "0");
+    expect(into(dir, "main").map((m) => [m.branch, m.cards])).toEqual([["feat", [c.id]]]);
+  });
+
+  it("where the record is committed, work of its own another machine committed counts, though this machine never had it", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { other } = twoMachines(dir);
+    // Another machine's branch, with a commit citing its own card, pushed; v1 moves on past it.
+    sh(other, "checkout", "-q", "-b", "teammate");
+    await commitAs(other, "teammate.txt", { card: true });
+    await commitAs(other, "teammate-2.txt");
+    sh(other, "push", "-q", "origin", "teammate");
+    sh(dir, "fetch", "-q", "origin");
+    sh(dir, "checkout", "-q", "-b", "teammate", "origin/teammate");
+    sh(dir, "checkout", "-q", "-b", "v1");
+    await commitAs(dir, "v1.txt", { card: true });
+    sh(dir, "checkout", "-q", "teammate");
+    sh(dir, "merge", "-q", "--ff-only", "v1");
+    await hook(dir, "post-merge", "0");
+    expect(into(dir, "teammate").map((m) => m.branch)).toEqual(["v1"]);
+  });
+});
+
+// B-h7rsv ("Record it at the push"): a push that moves the remote's default branch to a branch's tip records that branch
+// merged into it, as a fast-forward of the default branch is recorded; `pre-push` reads the refs from its input.
+describe("a branch pushed to the remote's default branch (B-h7rsv)", () => {
+  /** pre-push, as git runs it for `git push origin <local>:<remote>`, with the refs on its input. */
+  const prePush = (dir: string, local: string, remoteRef: string, remoteWas: string, localRef = `refs/heads/${local}`) =>
+    runHook(Store.open(dir), "pre-push", ["origin"], io, {}, `${localRef} ${sh(dir, "rev-parse", local)} ${remoteRef} ${remoteWas}\n`);
+
+  it("records v1/next merged into main as it's pushed there, once: bringing main up to it later finds the same merge", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    twoMachines(dir);
+    const was = sh(dir, "rev-parse", "origin/main");
+    sh(dir, "checkout", "-q", "-b", "v1/next");
+    const a = await commitAs(dir, "v1-a.txt", { card: true });
+    const b = await commitAs(dir, "v1-b.txt", { card: true });
+    await commitAs(dir, "v1-plain.txt");
+    const tip = head(dir);
+    expect(await prePush(dir, "v1/next", "refs/heads/main", was)).toBe(0);
+    const m = only(dir);
+    expect(m).toMatchObject({ branch: "v1/next", into: "main", commit: tip, tip, cards: [a.id, b.id].sort(), commits: [a.commit, b.commit] });
+    expect(said.at(-1)).toMatch(/recorded v1\/next merged into main, as it's pushed to origin, with 2 cards and 2 commits citing cards/);
+    // The push lands; later main is brought up to it here, and post-merge finds the merge already recorded.
+    sh(dir, "push", "-q", "origin", "v1/next:main");
+    sh(dir, "fetch", "-q", "origin");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "origin/main");
+    await hook(dir, "post-merge", "0");
+    expect(merges(dir)).toEqual([m]);
+  });
+
+  it("records nothing for a push that isn't a branch fast-forwarding the default branch", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    twoMachines(dir);
+    const was = sh(dir, "rev-parse", "origin/main");
+    sh(dir, "checkout", "-q", "-b", "feat");
+    await commitAs(dir, "feat.txt", { card: true });
+    // To another branch of the remote's; creating the remote's branch; deleting it; the default branch pushed itself.
+    expect(await prePush(dir, "feat", "refs/heads/feat", "0".repeat(40))).toBe(0);
+    expect(await prePush(dir, "feat", "refs/heads/release", was)).toBe(0);
+    await runHook(Store.open(dir), "pre-push", ["origin"], io, {}, `(delete) ${"0".repeat(40)} refs/heads/main ${was}\n`);
+    sh(dir, "checkout", "-q", "main");
+    await commitAs(dir, "main.txt");
+    expect(await prePush(dir, "main", "refs/heads/main", was)).toBe(0);
+    // A forced push that replaces the remote's main, and one from a tip this clone doesn't have.
+    sh(dir, "checkout", "-q", "-b", "other", "main~1");
+    await commitAs(dir, "other.txt", { card: true });
+    expect(await prePush(dir, "other", "refs/heads/main", sh(dir, "rev-parse", "main"))).toBe(0);
+    expect(await prePush(dir, "feat", "refs/heads/main", "f".repeat(40))).toBe(0);
+    expect(merges(dir)).toEqual([]);
+  });
+
+  it("finds the branch pushed as HEAD, and the remote's default branch by its HEAD, whatever it's called", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { remote } = twoMachines(dir);
+    sh(dir, "push", "-q", "origin", "main:trunk");
+    sh(remote, "symbolic-ref", "HEAD", "refs/heads/trunk");
+    sh(dir, "remote", "set-head", "origin", "-a");
+    const was = sh(dir, "rev-parse", "origin/trunk");
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const c = await commitAs(dir, "feat.txt", { card: true });
+    expect(await prePush(dir, "feat", "refs/heads/main", was)).toBe(0);
+    expect(merges(dir)).toEqual([]);
+    expect(await prePush(dir, "feat", "refs/heads/trunk", was, "HEAD")).toBe(0);
+    expect(only(dir)).toMatchObject({ branch: "feat", into: "trunk", commit: c.commit, cards: [c.id] });
+  });
+
+  it("never fails, and says nothing, when it can't look", async () => {
+    const { dir } = repo();
+    said.length = 0;
+    expect(await runHook(Store.open(dir), "pre-push", ["origin"], io, {}, "refs/heads/x 1234 refs/heads/main 5678\nnot a ref line\n")).toBe(0);
+    expect(said).toEqual([]);
+  });
+});
+
+// B-dezkk ("The history scan finds them"): merges git's history shows that no hook saw, read once, as a pull reads them.
+describe("the history scan (B-dezkk)", () => {
+  /**
+   * This repo's shape, made with no hook running: a worktree's two commits merged into the overnight branch by a merge
+   * commit, the overnight branch merged into main, the worktree deleted; then v1 begun from main, taking another
+   * worktree's work by a fast-forward.
+   */
+  async function history() {
+    const { dir } = repo();
+    recorded(dir);
+    await commitAs(dir, "main-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "overnight");
+    await commitAs(dir, "overnight-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "wt");
+    const w1 = await commitAs(dir, "wt-a.txt", { card: true });
+    const w2 = await commitAs(dir, "wt-b.txt", { card: true });
+    sh(dir, "checkout", "-q", "overnight");
+    await commitAs(dir, "overnight-b.txt");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "wt");
+    const m1 = head(dir);
+    await commitAs(dir, "overnight-c.txt", { card: true });
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--no-ff", "--no-edit", "overnight");
+    const m2 = head(dir);
+    sh(dir, "branch", "-q", "-D", "wt");
+    sh(dir, "checkout", "-q", "-b", "v1");
+    await commitAs(dir, "v1-a.txt", { card: true });
+    sh(dir, "checkout", "-q", "-b", "wt2");
+    const w3 = await commitAs(dir, "wt2.txt", { card: true });
+    sh(dir, "checkout", "-q", "v1");
+    sh(dir, "merge", "-q", "--ff-only", "wt2");
+    await commitAs(dir, "v1-b.txt", { card: true });
+    sh(dir, "branch", "-q", "-D", "wt2");
+    return { dir, w1, w2, w3, m1, m2 };
+  }
+
+  it("finds a branch merged into another before both reached main at its own merge commit, and nothing v1 inherited from main", async () => {
+    const { dir, w1, w2, w3, m1, m2 } = await history();
+    expect(merges(dir)).toEqual([]);
+    const scan = scanHistory(Store.open(dir));
+    expect(scan.found.map((f) => `${f.branch}>${f.into} ${f.commit}`).sort()).toEqual([`overnight>main ${m2}`, `wt2>v1 ${w3.commit}`, `wt>overnight ${m1}`]);
+    // As a pull would find them: the merge commit's time, its other parent the tip, the commits it brought that cite cards.
+    const of = (b: string) => scan.found.find((f) => f.branch === b);
+    expect(of("wt")).toMatchObject({ tip: w2.commit, cards: [w1.id, w2.id].sort(), commits: [w1.commit, w2.commit], at: new Date(sh(dir, "log", "-1", "--format=%cI", m1)).toISOString() });
+    expect(of("wt2")).toMatchObject({ tip: w3.commit, cards: [w3.id], commits: [w3.commit] });
+    // A dry run writes nothing.
+    expect(merges(dir)).toEqual([]);
+  });
+
+  it("records once: `baesian sync --history` records what it found, and finds it recorded the next time, as it does what a hook saw", async () => {
+    const { dir, m1 } = await history();
+    // A hook saw the overnight branch merge into main.
+    sh(dir, "checkout", "-q", "main");
+    const before = sh(dir, "rev-parse", "HEAD^1");
+    Store.open(dir).writeMerge({ branch: "overnight", into: "main", commit: head(dir), tip: sh(dir, "rev-parse", "HEAD^2"), at: new Date().toISOString(), cards: [], commits: [] });
+    expect(before).not.toBe(head(dir));
+    const out: string[] = [];
+    const cli = (...args: string[]) => main(["node", "baesian", ...args], { out: (l) => out.push(l), err: (l) => out.push(l), stdin: () => "", cwd: dir, notify: () => {} });
+    expect(await cli("sync", "--history")).toBe(0);
+    expect(out.join("\n")).toContain("recorded 2 merges from git's history that no hook saw; 1 merge it found was recorded already");
+    expect(out.join("\n")).toMatch(new RegExp(`wt merged into overnight +${m1.slice(0, 7)} +\\d{4}-\\d\\d-\\d\\d +2 cards and 2 commits citing cards`));
+    expect(merges(dir).map((m) => `${m.branch}>${m.into}`).sort()).toEqual(["overnight>main", "wt2>v1", "wt>overnight"]);
+    out.length = 0;
+    expect(await cli("sync", "--history")).toBe(0);
+    expect(out.join("\n")).toContain("git's history holds no merge that isn't recorded already; 3 merges it found were recorded already");
+    expect(merges(dir)).toHaveLength(3);
+  });
+
+  it("doesn't record again a merge a hook recorded at another commit: one listing the same commits is the same merge", async () => {
+    const { dir, w3 } = await history();
+    // A hook saw wt2's fast-forward into v1, at the tip v1 moved to.
+    sh(dir, "checkout", "-q", "v1");
+    Store.open(dir).writeMerge({ branch: "wt2", into: "v1", commit: head(dir), tip: head(dir), at: new Date().toISOString(), cards: [w3.id!], commits: [w3.commit] });
+    expect(scanHistory(Store.open(dir)).found.map((f) => f.branch).sort()).toEqual(["overnight", "wt"]);
   });
 });

@@ -40,6 +40,17 @@ export interface Moved {
   squashed?: { tip: string; commits: string[] };
   /** Match by patch ID too: only for a merge, a pull or a rebase, never a plain commit. */
   deep?: boolean;
+  /**
+   * A movement of the branch rather than a commit made on it, whose commits were all made here (a push, B-h7rsv): where
+   * the record is committed, the ledger is read for the commits it brought, as `deep` reads it, with no patch-ID matching.
+   */
+  moved?: boolean;
+  /**
+   * Found after the fact, in git's history (the history scan, B-dezkk): A's line is read as a pull reads it, merge commit
+   * by merge commit and run by run, with no branch named by its ref; and a run of another branch's commits ends before
+   * A's own next commit, not at the next arrival.
+   */
+  after?: boolean;
   /** When this is happening: a fast-forward's time, which git doesn't record. Default now. */
   now?: Date;
 }
@@ -270,7 +281,7 @@ export const RECORD: MergeDetector = {
   arrivals(store, top, chain, m, ledger) {
     const filed = filedArrivals(store, top, chain, m);
     // A plain commit brings no other branch's commits: the ledger is read for a merge, a squash or a movement only.
-    if (!m.deep && !m.squashed && chain.every((c) => c.parents.length < 2)) return filed;
+    if (!m.deep && !m.moved && !m.squashed && chain.every((c) => c.parents.length < 2)) return filed;
     const byCommit = ledger();
     const direct = citedArrivals(top, chain, m, byCommit);
     const came = new Set(direct.arrivals.flatMap((a) => [...a.by.keys()]));
@@ -521,6 +532,17 @@ function whereReached(top: string, chain: Chain[], tip: string, squash?: string)
   return chain.find((c) => c.parents.length > 1 && run(top, ["merge-base", "--is-ancestor", tip, c.commit]) !== undefined && run(top, ["merge-base", "--is-ancestor", tip, c.parents[0]!]) === undefined);
 }
 
+/**
+ * Whether a branch has work of its own (B-c4efj): a card filed on it, or a commit the ledger says was made on it that
+ * cites one, in the live layer or, where the record is committed, in the record before or after the movement.
+ */
+function ownWork(store: Store, top: string, branch: string, m: Moved, ledger: Ledger, recordCommittedHere: boolean): boolean {
+  const mine = (byCommit: Map<string, Cite[]>) => [...byCommit.values()].some((es) => es.some((e) => e.branch === branch));
+  if (store.cards().some((c) => c.meta.source_branch === branch)) return true;
+  if (mine(ledger())) return true;
+  return recordCommittedHere && mine(ledgerByCommit(store, top, m.from));
+}
+
 /** A merge as found, before git's ancestry is checked (`landed()`). */
 interface Draft {
   branch: string;
@@ -599,11 +621,17 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
   });
   if (!arrivals.length) return [];
   const now = (m.now ?? new Date()).toISOString();
-  const named = cameIn(top, m, store.merges());
+  const named = m.after ? undefined : cameIn(top, m, store.merges());
   // A pull of A's own upstream that also brought a branch named at the tip (D1: v1/next, pushed to the remote's main,
   // and main brought up to it) is that branch's merge, if it brought anything; otherwise the pull is read merge by merge.
   const names = named && (named.upstream ? [...named.names].filter((b) => arrivals.some((a) => a.by.has(b))) : [...named.names]);
   const drafts: Draft[] = [];
+  // B-c4efj ("Where it began"): a branch with nothing of its own yet, brought up to another's tip by a fast-forward (or a
+  // rebase onto it, which is one), began there, as a worktree made from a stale base and brought up to v1/next as it
+  // starts does: no merge is recorded, and the branches panel draws its start. One with work of its own brought up to
+  // another is still a merge, and the repo's default branch is never one that's beginning, cards of its own or none.
+  let began: boolean | undefined;
+  const beganHere = () => (began ??= m.into !== store.defaultBranch() && !ownWork(store, top, m.into, m, ledger, det === RECORD));
   if (named && names?.length) {
     for (const branch of names) {
       let got: Got | undefined;
@@ -619,6 +647,7 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
       // A merge or squash commit this movement made says when; a fast-forward or a rebase onto the branch happened now,
       // even onto a merge commit made earlier elsewhere (D4, G-6), which is the tip itself.
       const byGit = (at.parents.length > 1 && at.commit !== tip) || !!m.squashed;
+      if (!byGit && beganHere()) continue;
       drafts.push({ branch, commit: at.commit, at: byGit ? at.at : now, dated: byGit ? "git" : "now", got, tip: m.squashed?.tip ?? tip, base: m.from });
     }
   } else {
@@ -627,9 +656,11 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
     // at the tip the merging machine fast-forwarded to, and in the same file.
     const index = new Map(chain.map((c, i) => [c.commit, i]));
     const arrived = new Set(arrivals.map((a) => a.commit));
+    // In git's history (B-dezkk), A's own commits come between runs: a run ends before A's next one.
+    const own = (c: string) => !!m.after && (ledger().get(c) ?? []).some((e) => e.branch === m.into);
     const runEnd = (last: Arrival): Chain => {
       let i = index.get(last.commit)!;
-      while (i + 1 < chain.length && !arrived.has(chain[i + 1]!.commit) && chain[i + 1]!.parents.length < 2) i++;
+      while (i + 1 < chain.length && !arrived.has(chain[i + 1]!.commit) && chain[i + 1]!.parents.length < 2 && !own(chain[i + 1]!.commit)) i++;
       return chain[i]!;
     };
     let span: { branch: string; first: Arrival; last: Arrival; got: Got } | undefined;
@@ -662,6 +693,159 @@ export function findMerges(store: Store, m: Moved, detector?: MergeDetector): Fo
     flush();
   }
   return drafts.map((d) => landed(top, m.into, d, ledger(), det === LEDGER));
+}
+
+// ---------------------------------------------------------------- the history scan (B-dezkk)
+
+/** What the history scan found: the merges it would record, oldest first, and how many it found recorded already. */
+export interface Scan {
+  found: Found[];
+  known: number;
+}
+
+/** A branch as the scan reads it: its name, its tip, and whether it's a local branch. */
+interface Ref {
+  name: string;
+  tip: string;
+  local: boolean;
+}
+
+/**
+ * The branches, local and remote-tracking (`all`), each named as a merge names it, without its remote; and one per name
+ * (`branches`): the local branch, where there's one of the name, else the remote's.
+ */
+function branchRefs(top: string): { branches: Ref[]; all: Ref[] } {
+  const all: Ref[] = [];
+  const one = new Map<string, Ref>();
+  for (const l of (run(top, ["for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/remotes"]) ?? "").split("\n")) {
+    const [tip, ref] = l.split(" ");
+    if (!tip || !ref || ref.endsWith("/HEAD")) continue;
+    const local = ref.startsWith("refs/heads/");
+    const name = local ? ref.slice("refs/heads/".length) : ref.split("/").slice(3).join("/");
+    if (!name || notABranch(name)) continue;
+    all.push({ name, tip, local });
+    if (!one.get(name)?.local) one.set(name, { name, tip, local });
+  }
+  return { branches: [...one.values()], all };
+}
+
+/** A merge's subject as git writes one, for the branch it merged: `Merge branch 'x'`, a remote-tracking one, a pull request's. */
+function mergedName(subject: string): string | undefined {
+  const m =
+    /^Merge (?:remote-tracking )?branch '([^']+)'/.exec(subject) ??
+    /^Merge pull request #\d+ from [^/\s]+\/(\S+)/.exec(subject);
+  return m?.[1]?.replace(/^(?:origin|upstream)\//, "");
+}
+
+/**
+ * The history scan (B-dezkk, "The history scan finds them"): the merges git's history shows that no hook saw, made before
+ * this repo had Baesian's merge hooks, or where it isn't installed. Each branch's own line is read as a pull of it reads
+ * it (`findMerges()`, `after`): each merge commit on it merged the branches whose cards or citing commits it brought, and
+ * each run of another branch's commits on it was that branch's fast-forward. A branch's own line is its first-parent line
+ * from where it left the lines read before it: the default branch's first, from its first commit, then each other branch
+ * by how much history it holds, so one fast-forwarded into another adds nothing of its own. The line a merge commit
+ * brought is read in turn, as the merged branch's (named by a ref at it, its subject, or the one branch it brought), so a
+ * branch merged into another before both reached the default branch is found merged into that other, at its own merge
+ * commit, and it's read from no further back than the first card or ledger entry here, a day early: nothing older brought
+ * a card.
+ *
+ * What's recorded already isn't found again: a merge of the same branch at the same commit, or one listing a card or a
+ * commit a merge of that branch recorded already lists (the same merge, read another way: a hook's fast-forward at its
+ * tip, or an older reading of the same run). With `write`, each merge found is recorded (`Store.writeMerge`).
+ */
+export function scanHistory(store: Store, o: { write?: boolean } = {}): Scan {
+  if (!store.hasRepo) return { found: [], known: 0 };
+  const top = store.repo.toplevel;
+  // Nothing older than the first card, or ledger entry, brought one.
+  const firsts = [...store.cards().map((c) => c.meta.created), ...store.ledgerEntries().map((e) => e.meta.at)].map((t) => Date.parse(t)).filter((t) => !Number.isNaN(t));
+  if (!firsts.length) return { found: [], known: 0 };
+  const since = Math.min(...firsts) - 86_400_000;
+  const trunk = store.defaultBranch();
+  const { branches, all } = branchRefs(top);
+  const count = (tip: string) => Number(run(top, ["rev-list", "--count", tip])?.trim() ?? 0);
+  const order = branches.map((r) => ({ ...r, n: count(r.tip) })).sort((a, b) => Number(b.name === trunk) - Number(a.name === trunk) || b.n - a.n || a.name.localeCompare(b.name));
+  // First-parent lines, as sets, for telling whose a merged line is.
+  const lines = new Map<string, Set<string>>();
+  const lineOf = (tip: string) => lines.get(tip) ?? lines.set(tip, new Set((run(top, ["rev-list", "--first-parent", tip]) ?? "").split("\n").filter(Boolean))).get(tip)!;
+  const found: Found[] = [];
+  const read = new Set<string>();
+  const scanLine = (into: string, from: string, to: string): void => {
+    const key = `${into}\0${from}\0${to}`;
+    if (read.has(key)) return;
+    read.add(key);
+    const here = findMerges(store, { into, from, to, deep: true, after: true });
+    const merges = (run(top, ["rev-list", "--first-parent", "--merges", "--format=%P", `${from}..${to}`]) ?? "").split("\n");
+    const sides: { into: string; from: string; to: string }[] = [];
+    for (let i = 0; i < merges.length; i++) {
+      const m = /^commit ([0-9a-f]+)$/.exec(merges[i]!);
+      if (!m) continue;
+      const commit = m[1]!;
+      const [p1, ...others] = (merges[i + 1] ?? "").split(" ").filter(Boolean);
+      const at = here.filter((f) => f.commit === commit);
+      if (!p1 || !at.length) continue;
+      const candidates = new Set(at.map((f) => f.branch));
+      for (const side of others) {
+        // Whose line it brought: a branch whose ref is on it (A's own upstream, pulled, is A's), the branch its subject
+        // names, or the one branch it brought.
+        const byRef = new Set(all.filter((r) => (r.name === into || candidates.has(r.name)) && (r.tip === side || lineOf(r.tip).has(side)) && !lineOf(r.tip).has(commit)).map((r) => r.name));
+        const named = mergedName(run(top, ["log", "-1", "--format=%s", commit])?.trim() ?? "");
+        const owner = byRef.size === 1 ? [...byRef][0] : named && (named === into || candidates.has(named)) ? named : candidates.size === 1 ? [...candidates][0] : undefined;
+        if (!owner) continue;
+        // The branches it brought that came to the owner first are found on the owner's line, merged into it.
+        for (let j = here.length - 1; j >= 0; j--) if (here[j]!.commit === commit && here[j]!.branch !== owner) here.splice(j, 1);
+        if (owner === into) for (let j = here.length - 1; j >= 0; j--) if (here[j]!.commit === commit) here.splice(j, 1);
+        sides.push({ into: owner, from: p1, to: side });
+      }
+    }
+    found.push(...here);
+    for (const s of sides) scanLine(s.into, s.from, s.to);
+  };
+  const done: string[] = [];
+  for (const r of order) {
+    const own = (run(top, ["rev-list", "--first-parent", "--reverse", "--format=%P%x00%ct", r.tip, ...(done.length ? ["--not", ...done] : [])]) ?? "").split("\n");
+    done.push(r.tip);
+    // From the parent of the first commit of its own, or the last commit before the first card, whichever is later.
+    let from: string | undefined;
+    let first = true;
+    for (let i = 0; i < own.length; i++) {
+      const m = /^commit ([0-9a-f]+)$/.exec(own[i]!);
+      if (!m) continue;
+      const [parents = "", t = "0"] = (own[i + 1] ?? "").split("\0");
+      if (first) from = parents.split(" ")[0] || undefined;
+      first = false;
+      if (Number(t) * 1000 < since) from = m[1];
+      else break;
+    }
+    if (first) continue; // nothing of its own
+    if (!from) from = (run(top, ["rev-list", "--max-parents=0", r.tip]) ?? "").split("\n").filter(Boolean).at(-1);
+    if (from && from !== r.tip) scanLine(r.name, from, r.tip);
+  }
+  // What's recorded already, by branch: the commits its merges are at, and the cards and commits they list.
+  const knownOf = new Map<string, { at: Set<string>; listed: Set<string> }>();
+  const note = (f: { branch: string; commit: string; cards: readonly string[]; commits: readonly string[] }) => {
+    const k = knownOf.get(f.branch) ?? { at: new Set<string>(), listed: new Set<string>() };
+    k.at.add(f.commit);
+    for (const x of [...f.cards, ...f.commits]) k.listed.add(x);
+    knownOf.set(f.branch, k);
+  };
+  for (const m of store.merges()) note(m);
+  const out: Found[] = [];
+  let known = 0;
+  const seen = new Set<string>();
+  for (const f of found.sort((a, b) => a.at.localeCompare(b.at) || a.commit.localeCompare(b.commit))) {
+    const id = `${f.commit} ${f.branch} ${f.into}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const k = knownOf.get(f.branch);
+    if (f.branch === f.into || (k && (k.at.has(f.commit) || [...f.cards, ...f.commits].some((x) => k.listed.has(x))))) {
+      known += 1;
+      continue;
+    }
+    note(f);
+    out.push(f);
+    if (o.write) store.writeMerge(f);
+  }
+  return { found: out, known };
 }
 
 // ---------------------------------------------------------------- the squash marker

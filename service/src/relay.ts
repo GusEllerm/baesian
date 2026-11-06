@@ -14,7 +14,7 @@ import { batchChallenge } from "../../src/passkey.js";
 import { checkSigned, readTrustFile } from "../../src/trust.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
 import type { Waiting } from "./notify.js";
-import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due } from "./retention.js";
+import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due, isLedgerPath } from "./retention.js";
 import { harnessOf } from "./usage.js";
 import type { ServiceSigner } from "./signer.js";
 import { NoKey } from "./signer.js";
@@ -412,31 +412,36 @@ export class Relay {
     return removed;
   }
 
+  /** The commit a ledger entry here names, if it's here and names one. */
+  private ledgerCommit(path: string): string | undefined {
+    const bytes = this.files.read(path);
+    if (!bytes) return undefined;
+    try {
+      const commit = (parseDoc(new TextDecoder().decode(bytes)).meta as { commit?: unknown }).commit;
+      return typeof commit === "string" ? commit : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * A merge (D181) names its branches, commit and time, the cards it brought, and since B-w41p7 the commits citing cards
-   * it brought: once every one of those cards' text has gone, and every one of those commits' ledger entries with its
-   * card's (so every card they cite has gone too), so do its bytes, its log entry kept, as a card's are. One that names no
-   * card and no commit, a branch's deck alone, stays while the project does, as decks do. Returns the paths removed.
+   * it brought: once every one of those cards' text has gone, and every one of those commits' ledger entries was here and
+   * went with its card's (so every card they cite has gone too), so do its bytes, its log entry kept, as a card's are.
+   * B-15v62 ("Keep it, and say so"): a commit whose ledger entries never came here (made on a machine that isn't signed
+   * in to the project, or before ledger entries left their machine) hasn't gone, so a merge listing one stays while the
+   * project does, as one that names no card and no commit, a branch's deck alone, does: the relay can't tie it to any
+   * card's text. Returns the paths removed.
    */
   private dropMerges(): string[] {
     const ledger = this.retention;
     if (!ledger) return [];
-    // The commits whose ledger entries are still here: a ledger entry goes with its card's text (D181).
+    // The commits whose ledger entries are still here, and those whose entries were here and went with their cards' text.
     let cited: Set<string> | undefined;
-    const stillCited = () =>
-      (cited ??= new Set(
-        this.files.list("ledger").flatMap((name) => {
-          const bytes = this.files.read(`ledger/${name}`);
-          if (!bytes) return [];
-          try {
-            const commit = (parseDoc(new TextDecoder().decode(bytes)).meta as { commit?: unknown }).commit;
-            return typeof commit === "string" ? [commit] : [];
-          } catch {
-            return [];
-          }
-        }),
-      ));
-    const gone: string[] = [];
+    const stillCited = () => (cited ??= new Set(this.files.list("ledger").flatMap((name) => this.ledgerCommit(`ledger/${name}`) ?? [])));
+    let went: Set<string> | undefined;
+    const gone = (c: string) => !stillCited().has(c) && (went ??= ledger.goneCommits()).has(c);
+    const dropped: string[] = [];
     for (const name of this.files.list("merges")) {
       const path = `merges/${name}`;
       const bytes = this.files.read(path);
@@ -444,13 +449,13 @@ export class Relay {
       try {
         const { cards, commits } = MergeEvent.parse(upgradeFile("merge", JSON.parse(new TextDecoder().decode(bytes)), path));
         if (!cards.length && !commits.length) continue;
-        if (cards.every((c) => ledger.isRemoved(c)) && (!commits.length || !commits.some((c) => stillCited().has(c)))) gone.push(path);
+        if (cards.every((c) => ledger.isRemoved(c)) && commits.every(gone)) dropped.push(path);
       } catch {
         // not a merge the relay took: left as it is
       }
     }
-    this.files.dropFiles(gone);
-    return gone;
+    this.files.dropFiles(dropped);
+    return dropped;
   }
 
   private sweepCards(now: number, live: ReadonlySet<string>, r: Retention): string[] {
@@ -513,8 +518,11 @@ export class Relay {
       this.files.transaction(() => {
         for (const x of batch) {
           for (const h of x.held) ledger.heldGone(h.by, h.row);
+          // The commits its ledger entries named, read before they go: a merge listing them goes once they all have (B-15v62).
+          const commits = x.paths.filter(isLedgerPath).flatMap((p) => this.ledgerCommit(p) ?? []);
           this.files.dropCard(x.row.id, x.paths);
           ledger.removed(x.row);
+          ledger.commitsGone(commits);
         }
         const after = this.fingerprint(ids);
         if (after.size !== before.size || [...before].some(([id, f]) => after.get(id) !== f)) throw new WouldChange();

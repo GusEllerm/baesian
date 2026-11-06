@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,5 +111,24 @@ describe("cli", () => {
     const r = await run(dir, ["--help"]);
     expect(r.code).toBe(0);
     expect(r.out).toContain("file [options] [path]");
+  });
+});
+
+describe("a reader that stops early", () => {
+  it("leaves the command to end quietly: `baesian show B-x | head -1` crashed on the closed pipe (EPIPE)", async () => {
+    const { dir } = repo();
+    const filed = await run(dir, ["file", "--json"], draftFile());
+    const id: string = JSON.parse(filed.out).card.meta.id;
+    const root = join(import.meta.dirname, "..");
+    for (const args of [["show", id], ["--help"]]) {
+      // The reader's end of the pipe is closed before the command writes, as `head -1` closes it after its line.
+      const child = spawn(join(root, "node_modules", ".bin", "tsx"), [join(root, "src", "bin.ts"), ...args], { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
+      child.stdout.destroy();
+      let err = "";
+      child.stderr.on("data", (b: Buffer) => (err += b.toString()));
+      const code = await new Promise<number | null>((done) => child.on("close", done));
+      expect(err, args.join(" ")).toBe("");
+      expect(code, args.join(" ")).toBe(0);
+    }
   });
 });

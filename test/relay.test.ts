@@ -363,6 +363,33 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(before.indexOf(`cards/${gone}/withdrawn.json`)).toBeGreaterThan(before.indexOf(`cards/${kept}/r1.md`));
     });
 
+    it("records, at first link, the merges git's history shows that no hook saw, and sends them with the rest (B-dezkk)", async () => {
+      const { dir, store } = repo();
+      sh(dir, "add", ".baesian");
+      sh(dir, "commit", "-q", "-m", "Set up Baesian");
+      // A branch with a commit citing its card, merged into main with no hook running, as before Baesian's merge hooks.
+      sh(dir, "checkout", "-q", "-b", "feat/old");
+      const feat = Store.open(dir);
+      const id = feat.fileCard(draftFileFields({ title: "Old work" }), "", { agent: "claude-code" }).card.meta.id;
+      feat.syncRecord();
+      writeFileSync(join(dir, "old.txt"), "old\n");
+      sh(dir, "add", "-A");
+      sh(dir, "commit", "-q", "-m", `Old work\n\nBaesian-Card: ${id}`);
+      await runHook(Store.open(dir), "post-commit", [], { out: () => {}, err: () => {} });
+      sh(dir, "checkout", "-q", "main");
+      writeFileSync(join(dir, "main.txt"), "main\n");
+      sh(dir, "add", "-A");
+      sh(dir, "commit", "-q", "-m", "Main moves on");
+      sh(dir, "merge", "-q", "--no-ff", "--no-edit", "feat/old");
+      const merged = sh(dir, "rev-parse", "HEAD");
+      expect(store.merges()).toEqual([]);
+      const r = await run(dir, ["login", "--service", relay.url, "--machine", "laptop"]);
+      expect(r.code, r.err).toBe(0);
+      expect(r.out).toMatch(/history: +1 merge +from git's history, made before this repo had Baesian's merge hooks: recorded once/);
+      expect(Store.open(dir).merges()).toMatchObject([{ branch: "feat/old", into: "main", commit: merged, cards: [id] }]);
+      expect(await relayPaths(store.config().project!)).toContain(mergeFile(merged, "feat/old", "main"));
+    });
+
     it("tells the agent when a revision was revised elsewhere first, and takes the relay's (409)", async () => {
       const a = await signedIn("proj-5");
       const id = await fileCard(a.dir, { title: "Contested" });

@@ -413,6 +413,31 @@ describe("`baesian init --personal` (B-4rwyz)", { timeout: 60_000 }, () => {
     expect(readFileSync(join(commonDir(dir), "team-rewritten.txt"), "utf8")).toContain(`${before} ${after}`);
   });
 
+  it("records a branch pushed to the remote's default branch, then runs the team's pre-push with the same input (B-h7rsv)", async () => {
+    const dir = teamRepo();
+    // The team's pre-push reads the refs being pushed, as Git LFS's does.
+    writeFileSync(join(dir, ".githooks", "pre-push"), `#!/bin/sh\necho "team pre-push $1" >> "$(git rev-parse --git-common-dir)/team.log"\ncat > "$(git rev-parse --git-common-dir)/team-pushed.txt"\n`);
+    chmodSync(join(dir, ".githooks", "pre-push"), 0o755);
+    await run(dir, "init", "--personal");
+    const remote = realpathSync(mkdtempSync(join(tmpdir(), "baesian-remote-")));
+    made.push(remote);
+    sh(remote, "init", "-q", "--bare", "-b", "main");
+    sh(dir, "remote", "add", "origin", remote);
+    sh(dir, "push", "-q", "origin", "main");
+    sh(dir, "remote", "set-head", "origin", "main");
+    git(dir, "checkout", "-q", "-b", "feat");
+    const id = fileCard(dir, { touches: [] });
+    put(dir, "feature.txt", "a feature\n");
+    expect(commit(dir, `A feature\n\nBaesian-Card: ${id}\n`).code).toBe(0);
+    const tip = sh(dir, "rev-parse", "HEAD");
+    const pushed = git(dir, "push", "origin", "feat:main");
+    expect(pushed.code, pushed.err).toBe(0);
+    expect(pushed.err).toContain("baesian: recorded feat merged into main, as it's pushed to origin, with 1 card and 1 commit citing cards");
+    expect(Store.open(dir).merges()).toMatchObject([{ branch: "feat", into: "main", commit: tip, cards: [id], commits: [tip] }]);
+    expect(teamLog(dir)).toContain("team pre-push origin");
+    expect(readFileSync(join(commonDir(dir), "team-pushed.txt"), "utf8")).toMatch(new RegExp(`^refs/heads/feat ${tip} refs/heads/main [0-9a-f]{40}\n$`));
+  });
+
   it("tells the agent once a session, through the plugin's hook and the MCP server, since AGENTS.md says nothing", async () => {
     const dir = teamRepo();
     await run(dir, "init", "--personal");

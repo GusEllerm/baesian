@@ -6,10 +6,14 @@ import { basename } from "node:path";
 
 /**
  * The hooks Baesian installs. `post-merge` and `post-rewrite` find merges (D181): git runs the first after a merge or a
- * fast-forward (`git pull` too), never `post-commit`; the second after a rebase (`git pull --rebase` too).
+ * fast-forward (`git pull` too), never `post-commit`; the second after a rebase (`git pull --rebase` too). `pre-push`
+ * records a branch pushed to the remote's default branch as merged into it (B-h7rsv), and never stops a push.
  */
-export const HOOKS = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite"] as const;
+export const HOOKS = ["pre-commit", "commit-msg", "post-commit", "post-merge", "post-rewrite", "pre-push"] as const;
 export type HookName = (typeof HOOKS)[number];
+
+/** The hooks that can't stop anything, or mustn't (B-h7rsv): with Baesian missing, or failing, they carry on quietly. */
+const NEVER_STOPS: readonly HookName[] = ["post-commit", "post-merge", "post-rewrite", "pre-push"];
 
 export const BEGIN = "# >>> baesian >>>";
 export const END = "# <<< baesian <<<";
@@ -34,37 +38,48 @@ const dq = (s: string) => s.replace(/[\\"$`]/g, (c) => `\\${c}`);
  * the machine-specific fallback lives in the clone's own git config, never in the file.
  *
  * In personal mode (B-4rwyz) it's in the clone's own hooks instead, written by `baesian init --personal`, before the line
- * that runs the repo's hook. There `post-rewrite`'s standard input has been read into `$baesian_input` first, and Baesian
- * gets a copy of it (it carries the ledger over to the rewritten commits), as the repo's hook does; and a missing Baesian
- * says how to stop using it in this clone, rather than to commit with `--no-verify`.
+ * that runs the repo's hook. There `post-rewrite`'s and `pre-push`'s standard input has been read into `$baesian_input`
+ * first, and Baesian gets a copy of it, as the repo's hook does; and a missing Baesian says how to stop using it in this
+ * clone, rather than to commit with `--no-verify`.
+ *
+ * `pre-push` (B-h7rsv) reads the refs being pushed from its standard input. In shared mode the block sits at the top of
+ * the repo's own hook, whose lines after it may read them too (Git LFS's do): the input is copied to a temporary file,
+ * which Baesian reads and which becomes the script's standard input again, whole. It never stops a push: whatever
+ * Baesian does, the hook carries on.
  */
 export function hookBlock(name: HookName, personal?: PersonalBlock): string {
-  // commit-msg gets the message file; post-merge whether it was a squash; post-rewrite what rewrote (D181). post-rewrite's
-  // standard input (the commits rewritten) is left for the repo's own lines after the block: Baesian doesn't read it.
-  const withArg = name === "commit-msg" || name === "post-merge" || name === "post-rewrite";
-  const stdin = name === "post-rewrite" && !personal ? " </dev/null" : "";
-  const pipe = name === "post-rewrite" && personal ? `printf '%s' "$baesian_input" | ` : "";
+  // commit-msg gets the message file; post-merge whether it was a squash; post-rewrite what rewrote (D181); pre-push the
+  // remote's name. post-rewrite's standard input (the commits rewritten) is left for the repo's own lines after the
+  // block: Baesian doesn't read it.
+  const withArg = name === "commit-msg" || name === "post-merge" || name === "post-rewrite" || name === "pre-push";
+  const pushing = name === "pre-push" && !personal;
+  const stdin = name === "post-rewrite" && !personal ? " </dev/null" : pushing ? ` <"$baesian_refs"` : "";
+  const pipe = (name === "post-rewrite" || name === "pre-push") && personal ? `printf '%s' "$baesian_input" | ` : "";
   const args = withArg ? ` ${name} "$1"${stdin}` : ` ${name}`;
-  const evalArgs = withArg ? ` ${name} \\"\\$1\\"${stdin}` : ` ${name}`;
-  // The hooks after the fact can't stop anything: they record the ledger and merges, so a missing binary is skipped quietly.
-  const missing =
-    name === "post-commit" || name === "post-merge" || name === "post-rewrite"
-      ? "  :"
-      : personal
-        ? `  echo "baesian: not on PATH; this clone's hooks run Baesian's gate (personal mode). Install it, or stop using it here: ${dq(personal.restore)}" >&2\n  exit 1`
-        : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
+  const evalArgs = withArg ? ` ${name} \\"\\$1\\"${stdin.replace(/"/g, '\\"').replace(/\$/g, "\\$")}` : ` ${name}`;
+  const never = NEVER_STOPS.includes(name);
+  // The hooks after the fact can't stop anything: they record the ledger and merges, so a missing binary is skipped
+  // quietly. Nor does pre-push stop a push, whatever happens (B-h7rsv).
+  const missing = never
+    ? "  :"
+    : personal
+      ? `  echo "baesian: not on PATH; this clone's hooks run Baesian's gate (personal mode). Install it, or stop using it here: ${dq(personal.restore)}" >&2\n  exit 1`
+      : `  echo "baesian: not on PATH; install it (npm i -g baesian) or commit with --no-verify (CI runs the same check)." >&2\n  exit 1`;
+  const after = name === "pre-push" ? " || :" : " || exit $?";
   return [
     BEGIN,
     personal
       ? "# Baesian's commit gate, for this clone only (B-4rwyz). Managed by `baesian init --personal`."
       : "# Baesian's commit gate (D54). Managed by `baesian init`: edit outside the markers.",
+    ...(pushing ? ['if baesian_refs="$(mktemp 2>/dev/null)"; then cat >"$baesian_refs"; exec <"$baesian_refs"; else baesian_refs=/dev/null; fi'] : []),
     "if command -v baesian >/dev/null 2>&1; then",
-    `  ${pipe}baesian hook${args} || exit $?`,
+    `  ${pipe}baesian hook${args}${after}`,
     `elif baesian_fallback="$(git config --get ${FALLBACK_KEY})" && [ -n "$baesian_fallback" ]; then`,
-    `  ${pipe}eval "$baesian_fallback hook${evalArgs}" || exit $?`,
+    `  ${pipe}eval "$baesian_fallback hook${evalArgs}"${after}`,
     "else",
     missing,
     "fi",
+    ...(pushing ? ['[ "$baesian_refs" = /dev/null ] || rm -f "$baesian_refs"'] : []),
     END,
   ].join("\n");
 }
