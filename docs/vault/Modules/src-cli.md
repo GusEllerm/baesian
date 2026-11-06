@@ -11,7 +11,7 @@ tags: [baesian, module]
 
 # src/cli.ts
 
-The CLI is tier 0 (D27): every harness can run it. `buildProgram` defines the commands, and `main` runs them and returns the exit code. `src/bin.ts` is the npm entry point.
+The CLI is tier 0 (D27): every harness can run it. `buildProgram` defines the commands, and `main` runs them and returns the exit code. `src/bin.ts` is the npm entry point. A reader that stops early (`baesian show B-x | head -1`) closes the pipe the command writes to: `src/bin.ts` ends the command there, quietly and with exit code 0, as a shell's own tools do, where it used to crash on Node's unhandled `EPIPE`.
 
 All output goes through an `Io` object, and Commander's own output and exits are routed through it too (`exitOverride`), so tests drive `main` directly. Stdin is read as a stream (`readStdin`), because `readFileSync(0)` fails with `EAGAIN` on a pipe whose writer hasn't written yet.
 

@@ -5218,7 +5218,7 @@ sig = "15d779da349933ad"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/bin.ts"
-sig = "2540e01ffa9d34c6"
+sig = "6a792d37c7f6b91c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
