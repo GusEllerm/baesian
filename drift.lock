@@ -4282,8 +4282,18 @@ sig = "f93d8955844312ac"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = "package.json"
+sig = "558343f37cfb340f"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "plugins/baesian/hooks/baesian.mjs"
 sig = "fe458262d20ef072"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
+target = "service/package.json"
+sig = "4bcfed05774a6378"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
