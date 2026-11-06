@@ -215,6 +215,18 @@ describe("cli: wait on several cards, or a deck's (B-xnae9)", () => {
     expect((await run(dir, ["inbox"])).out).not.toContain(a);
   });
 
+  it("names a deck that doesn't exist with a command that creates it, title and all (the hook test, 2026-11-06)", async () => {
+    const { dir } = repo();
+    const fileIt = () => run(dir, ["--agent", "claude-code", "file", "--new"], draftFile({ title: "What the cache is called", topic: "area/cache", deck: "hook-test" }));
+    const r = await fileIt();
+    expect(r.code).toBe(1);
+    const hint = /create it with `([^`]+)`/.exec(r.err)?.[1];
+    expect(hint).toBe('baesian deck hook-test --title "<what it decides>"');
+    // Run as given, with its placeholder filled, it creates the deck: the card then files.
+    expect((await run(dir, hint!.replace("<what it decides>", "What the cache is called").match(/"[^"]*"|\S+/g)!.slice(1).map((a) => a.replace(/^"|"$/g, "")))).code).toBe(0);
+    expect((await fileIt()).code).toBe(0);
+  });
+
   it("says what's wrong with no card, an unknown deck, or a deck with none of yours open", async () => {
     const { dir, store } = repo();
     expect(await run(dir, ["wait"])).toMatchObject({ code: 1, err: "name a card to wait on, or several, or a deck with --deck\nnext: baesian list  # the cards still with the reviewer" });

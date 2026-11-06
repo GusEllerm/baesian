@@ -48,7 +48,7 @@ sig = "dcb44488cded38e2"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1253,7 +1253,7 @@ sig = "3ee3d53ddf719a25"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -2263,7 +2263,7 @@ sig = "65ed111c83509e7a"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3918,7 +3918,7 @@ sig = "b1c325b272d50953"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -4033,7 +4033,7 @@ sig = "13bac2fb32723ff0"
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
@@ -4193,7 +4193,7 @@ sig = "f57a570a62f13ea9"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -4298,7 +4298,7 @@ sig = "6746675d46ad0648"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -7573,7 +7573,7 @@ sig = "69d7b63372cb6df6"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -8988,7 +8988,7 @@ sig = "7845908818f54ba2"
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"
 target = "src/store.ts#Store"
-sig = "08dab230c6b553ec"
+sig = "48022ac7b71eac77"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-verify.md"

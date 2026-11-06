@@ -1511,7 +1511,7 @@ export class Store {
 
   private writeRevision(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
-    if (!this.deck(deck)) throw new NoDeck(`no deck "${deck}": create it with \`baesian deck ${deck}\``);
+    if (!this.deck(deck)) throw new NoDeck(`no deck "${deck}": create it with \`baesian deck ${deck} --title "<what it decides>"\``);
     const meta = parse(
       CardMeta,
       {
