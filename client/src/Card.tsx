@@ -349,7 +349,6 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const chat = isSeen(card);
   const same = mode.option === "proposal";
   const switched = same && mode.first !== "proposal" && !chat;
-  const key = ARROW[mode.side];
   const confirmWords = held ? (same ? `Keep ${quoted(m.proposal)}` : `Overturn it: ${quoted(m.alternative)}`) : `Confirm ${quoted(m[mode.option])}`;
   const overturn = held && !same ? `Overturning it sends ${agent} a brief of what to redo.` : "";
   // On a touch screen, Esc's way back is a button.

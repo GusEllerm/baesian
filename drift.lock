@@ -73,7 +73,7 @@ sig = "50b6565f95d7d3f1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "6aa4d7b7154c3f49"
+sig = "4872420fdf40e43e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1073,7 +1073,7 @@ sig = "1c454fed636d4328"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/Card.tsx"
-sig = "6aa4d7b7154c3f49"
+sig = "4872420fdf40e43e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1273,7 +1273,7 @@ sig = "b346b2b146c7c63e"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Card.tsx"
-sig = "6aa4d7b7154c3f49"
+sig = "4872420fdf40e43e"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
