@@ -520,7 +520,7 @@ body.drawer-open .drawer { transform: none; visibility: visible; transition: tra
 .br-row { position: relative; }
 /* Each row's gutter reaches 1px into the next, so a line crossing rows at a fractional height has no hairline seam where
    the two meet (IF-14); a quiet line is a solid colour, not a translucent one, so the overlap doesn't darken it. */
-.br-row > .br-g { position: absolute; left: 0; top: 0; z-index: 1; height: calc(100% + 1px); overflow: visible; pointer-events: none; }
+.br-row > .br-g { position: absolute; left: 0; top: 0; z-index: 1; width: var(--gw); height: calc(100% + 1px); overflow: visible; pointer-events: none; }
 .br-row.is-day > .br-g { height: calc(100% + 2px); }
 .br-g line { stroke: var(--lane); stroke-width: 2.2; stroke-linecap: butt; }
 .br-g line.quiet { stroke-width: 1.2; stroke: color-mix(in srgb, var(--lane) 55%, var(--paper)); }

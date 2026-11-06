@@ -63,7 +63,7 @@ sig = "c6905b99e0842ec1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Branches.tsx"
-sig = "4d939ef8e27ed856"
+sig = "50b6565f95d7d3f1"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -217,18 +217,33 @@ sig = "304e02fc692e2263"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
-target = "client/src/lanes.ts#COLUMNS"
-sig = "240797e99616d6fa"
-
-[[bindings]]
-doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#IDLE_MS"
 sig = "7c397137a35cf437"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#Lane"
+sig = "3598444652f0b240"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#LaneEnd"
+sig = "4f1e050b4e1e461b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#Merge"
+sig = "49cd702a4ad61103"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#Model"
+sig = "7916912dbb176a64"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#branchModel"
-sig = "7e7c18de997ecd3d"
+sig = "0e39e11b8910cc60"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -257,13 +272,18 @@ sig = "dc60721817f9ee18"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#gutterOf"
+sig = "d8571c368f02ef3b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#linkedKeys"
 sig = "e7e1be2ea609d1c2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#listRows"
-sig = "7629b5d3c21bd516"
+sig = "0e634a5457f37f1a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -277,23 +297,28 @@ sig = "895337d4b50cfaea"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/lanes.ts#reachOf"
+sig = "dfa7df40aa46ba31"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#saidOf"
 sig = "5a4b2389018e802b"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#shortNames"
-sig = "f049ce1af27440e4"
+sig = "c9edea050d2c8792"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#spansOf"
-sig = "16c8724d36b96ff8"
+sig = "0701960a3a601e51"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#statusOf"
-sig = "8e15bf7acb0649d4"
+sig = "a7ded0b3f22509f2"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -303,7 +328,7 @@ sig = "4e0c870922dd1f5a"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#trunkOf"
-sig = "acd066c50ac44509"
+sig = "81be54c39b881d09"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1223,12 +1248,12 @@ sig = "a79a099b23c2ece5"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/lanes.ts#Lane"
-sig = "fe29dd40f7bcdd99"
+sig = "3598444652f0b240"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/lanes.ts#Model"
-sig = "fadc26221bb58bae"
+sig = "7916912dbb176a64"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -4128,7 +4153,7 @@ sig = "13bac2fb32723ff0"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/lanes.ts#Merge"
-sig = "97972c51739c198e"
+sig = "49cd702a4ad61103"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5068,7 +5093,7 @@ sig = "030d6295cf6d1a84"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "client/src/Branches.tsx"
-sig = "4d939ef8e27ed856"
+sig = "50b6565f95d7d3f1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5828,7 +5853,7 @@ sig = "1ebada7599d6a7b9"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "client/src/Branches.tsx"
-sig = "4d939ef8e27ed856"
+sig = "50b6565f95d7d3f1"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -5843,12 +5868,12 @@ sig = "a79a099b23c2ece5"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "client/src/lanes.ts#Lane"
-sig = "fe29dd40f7bcdd99"
+sig = "3598444652f0b240"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "client/src/lanes.ts#Model"
-sig = "fadc26221bb58bae"
+sig = "7916912dbb176a64"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -8868,7 +8893,7 @@ sig = "dc9d944f2ac47f29"
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
 target = "client/src/lanes.ts#branchModel"
-sig = "7e7c18de997ecd3d"
+sig = "0e39e11b8910cc60"
 
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
@@ -8878,7 +8903,7 @@ sig = "72f187496365e346"
 [[bindings]]
 doc = "docs/vault/Research/Graph Libraries for the Branches View.md"
 target = "client/src/lanes.ts#listRows"
-sig = "7629b5d3c21bd516"
+sig = "0e634a5457f37f1a"
 
 [[bindings]]
 doc = "docs/vault/Research/Preference Sliders and the Gate.md"

@@ -1,6 +1,6 @@
 import { type CSSProperties, Fragment, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ApiCard } from "../../src/api";
-import { type BCard, type BranchesState, CHILD_Y, type Commit, FORK_Y, type Lane, type Live, MARK_Y, type Merge, type Model, type Row, SOURCE_Y, type Stroke, TARGET_Y, branchModel, columnsOf, dayKey, daysOf, endWords, linkedKeys, listRows, openingKey, plural, saidOf, statusOf, strokesOf } from "./lanes";
+import { type BCard, type BranchesState, CHILD_Y, type Commit, FORK_Y, type Lane, type Live, MARK_Y, type Merge, type Model, type Row, SOURCE_Y, type Stroke, TARGET_Y, branchModel, columnsOf, dayKey, daysOf, endWords, gutterOf, linkedKeys, listRows, openingKey, plural, reachOf, saidOf, statusOf, strokesOf } from "./lanes";
 
 /** What a merge brought, in words: its cards, and the commits citing cards that came with it (B-w41p7). */
 const broughtWords = (m: { cards: string[]; commits?: string[] | undefined }) => {
@@ -439,10 +439,14 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   };
 
   // ---------------------------------------------------------------------------------------------- the gutter
+  // A column for each branch open at once (B-cjqxz), as far apart as the gutter's width allows, down to 6 px; past that
+  // the gutter widens where that many are drawn (a day's rows, or the Now row), and their text is narrower there alone.
   const cols = P.cols + (P.loose ? 1 : 0);
-  const PITCH = cols <= 5 ? (p.wide ? 18 : 14) : Math.max(10, Math.floor((p.wide ? 100 : 70) / Math.max(1, cols - 1)));
-  const cx = (c: number) => 11 + c * PITCH;
-  const gw = cx(Math.max(0, cols - 1)) + 13;
+  const G = gutterOf(cols, p.wide);
+  const cx = G.x;
+  const gw = G.width(G.fits);
+  /** The gutter's width, and the text's indent, for rows that reach `n` columns, where that's wider than usual. */
+  const widened = (n: number): CSSProperties | undefined => (n > G.fits ? ({ "--gw": `${G.width(n)}px`, "--pad": `${G.width(n) + 4}px` } as CSSProperties) : undefined);
   const MY = MARK_Y;
   const quiet = (name: string, t: number) => {
     const e = L(name).end;
@@ -451,7 +455,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   const line = (k: string, c: number, y1: number | string, y2: number | string, cls?: string) => <line key={k} x1={cx(c)} x2={cx(c)} y1={y1} y2={y2} className={cls} />;
   const liveLines = (live: Live, t: number, skip: (number | null | undefined)[] = []) => [...live].filter(([c]) => !skip.includes(c)).map(([c, name]) => line(`l${c}`, c, 0, "100%", quiet(name, t)));
   const gutter = (children: ReactNode) => (
-    <svg className="br-g" width={gw} aria-hidden="true">
+    <svg className="br-g" aria-hidden="true">
       {children}
     </svg>
   );
@@ -596,7 +600,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
           </span>
           <span className="br-meta">
             {mg.branch} · {broughtWords(mg)} it brought
-            {mg.ends ? "" : `. It ended nothing: ${mg.branch === model.trunk || Ln.end.kind === "trunk" ? `${sn(mg.branch)} is the trunk` : `more happened on ${sn(mg.branch)} after it`}`}
+            {mg.ends ? "" : `. It ended nothing: ${mg.branch === model.trunk || Ln.end.kind === "trunk" ? `${sn(mg.branch)} is the trunk` : mg.sync ? `${sn(mg.into)} began from ${sn(mg.branch)}` : `more happened on ${sn(mg.branch)} after it`}`}
           </span>
           {mg.cards.length > 0 && (
             <div className="br-links">
@@ -632,6 +636,11 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
               Where {sn(mg.branch)} began isn't recorded: it's drawn, dashed, from {sn(mg.into)}, which it merged into, just before its first card or commit.
             </span>
           )}
+          {mg.ends && Ln.parentWhy === "began" && Ln.began && (
+            <span className="br-note">
+              {sn(mg.branch)} began from {sn(Ln.began.branch)}: it was brought up to {sn(Ln.began.branch)} on {when(Ln.began.gitT)}, before any work of its own, and its start is drawn, dashed, there.
+            </span>
+          )}
           <div className="br-acts">
             <button type="button" className="br-btn soft" onClick={() => aboutLane(mg.branch)}>
               About this branch
@@ -650,7 +659,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     const n = (st: BCard["state"]) => cs.filter((c) => c.state === st).length;
     const kids = [...model.lanes.values()].filter((o) => o.parent === name).map((o) => o.short);
     const began = Ln.parent
-      ? `from ${sn(Ln.parent)}${Ln.parentWhy === "merged" ? ", which it merged into" : ": a guess, nothing records it (the branch busiest before it)"}`
+      ? `from ${sn(Ln.parent)}${Ln.parentWhy === "began" && Ln.began ? `, brought up to it on ${when(Ln.began.gitT)} before any work of its own` : Ln.parentWhy === "merged" ? ", which it merged into" : ": a guess, nothing records it (the branch busiest before it)"}`
       : name === model.trunk
         ? "it's the trunk"
         : "not known";
@@ -701,8 +710,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       </>
     );
   }
-  const detailRow = (live: Live, t: number, inner: ReactNode, extra?: ReactNode) => (
-    <li className="br-row is-detail" id={DETAIL_ID}>
+  const detailRow = (live: Live, t: number, inner: ReactNode, extra?: ReactNode, style?: CSSProperties) => (
+    <li className="br-row is-detail" id={DETAIL_ID} style={style}>
       {gutter(
         <>
           {liveLines(live, t)}
@@ -745,16 +754,19 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
 
   function rowOf(r: Row): ReactNode {
     if (r.kind === "now") {
-      if (!r.tags.length && !model.trunk) return null;
+      const strokes = strokesOf(r, P, model);
+      if (!strokes) return null;
       const open = r.tags.find((n) => sel === `lane:${n}`);
+      const wide = widened(reachOf(strokes));
       return (
         <>
-          <li className="br-row is-now">
-            {gutter(draw(strokesOf(r, P, model), r.t))}
-            <span className="br-nowh">Now, {hm(model.nowT)}</span>
+          <li className="br-row is-now" style={wide}>
+            {gutter(draw(strokes, r.t))}
+            {/* Its day too, when the newest day below isn't today's (B-srtcs). */}
+            <span className="br-nowh">Now, {r.dated ? `${dayW(model.nowT)}, ` : ""}{hm(model.nowT)}</span>
             {r.tags.length > 0 && <div className="br-tags">{r.tags.map((n) => endTag(L(n), true))}</div>}
           </li>
-          {open && detailRow(r.live, r.t, laneDetail(open))}
+          {open && detailRow(r.live, r.t, laneDetail(open), undefined, wide)}
         </>
       );
     }
@@ -1064,7 +1076,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
                 </>,
                 <>A merge <span className="fine">(recorded)</span></>,
               ],
-              [<path key="k" d="M-6,11 C-6,2 6,2 6,-9" className="key-curve fork" />, <>Where a branch began <span className="fine">(not recorded: placed just before its first event)</span></>],
+              [<path key="k" d="M-6,11 C-6,2 6,2 6,-9" className="key-curve fork" />, <>Where a branch began <span className="fine">(placed just before its first event, or where it was brought up to another)</span></>],
             ] as [ReactNode, ReactNode][]
           ).map(([g, t], i) => (
             <div key={i}>
@@ -1087,10 +1099,10 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       {model.lanes.size === 0 ? (
         <p className="br-empty">No branches yet: a branch appears here once an agent files a card on it.</p>
       ) : (
-        <ol className="br-list" ref={list} aria-label="Your decisions by branch, newest first" style={{ "--pad": `${gw + 4}px` } as CSSProperties} onKeyDown={onKey}>
+        <ol className="br-list" ref={list} aria-label="Your decisions by branch, newest first" style={{ "--gw": `${gw}px`, "--pad": `${gw + 4}px` } as CSSProperties} onKeyDown={onKey}>
           {groups.map((grp, gi) =>
             grp.head ? (
-              <li key={grp.head.key} className="br-day" aria-label={dayW(grp.head.t)}>
+              <li key={grp.head.key} className="br-day" aria-label={dayW(grp.head.t)} style={widened(Math.max(...[grp.head, ...grp.rows].map((r) => reachOf(strokesOf(r, P, model)))))}>
                 <ol className="br-dayrows">
                   <li className="br-row is-day" data-day={grp.head.dk}>
                     {gutter(liveLines(grp.head.live, grp.head.t))}
@@ -1115,7 +1127,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       <p className="br-foot">
         {st.cites ? `${st.cites} ` : ""}
         Merges are found by Baesian's command line on the machine where they happen: at a merge, a pull, a squash's commit or a rebase; one made on GitHub shows once a machine with Baesian pulls it. Git doesn't record where a branch began, so each one starts, dashed, just before its first card
-        or commit: from the branch it merged into, or, if it hasn't merged, the branch busiest in the hours before. The commits shown are those whose messages cite a card; their messages never leave your machine.
+        or commit: from the branch it merged into, or, if it hasn't merged, the branch busiest in the hours before. One brought up to another branch before any work of its own starts there, from that branch. The commits shown are those whose messages cite a card; their messages never leave your machine.
         {model.offLane ? ` ${plural(model.offLane, "card")} filed on Baesian's own branch or a detached HEAD ${model.offLane === 1 ? "isn't" : "aren't"} shown.` : ""}
       </p>
     </>
