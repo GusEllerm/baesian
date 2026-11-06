@@ -1,0 +1,8 @@
+{
+  "type": "withdrawal",
+  "format": 1,
+  "card": "B-xrvqa",
+  "reason": "the user gave new wording in chat before confirming; refiled with it",
+  "by": "claude-code",
+  "at": "2026-11-06T15:36:45.690Z"
+}
