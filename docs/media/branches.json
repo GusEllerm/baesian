@@ -1,0 +1,422 @@
+{
+ "about": "Baesian's own decision record, as the Branches drawer reads it, for docs/media/branches.png: made by `npm run readme-media -- drawer-data` (scripts/readme-media.ts), drawn by `-- drawer`.",
+ "from": "2026-11-06T02:35:00.000Z",
+ "to": "2026-11-06T05:00:00.000Z",
+ "now": "2026-11-06T05:00:00.000Z",
+ "timeZone": "America/Chicago",
+ "defaultBranch": "main",
+ "cards": [
+  {
+   "meta": {
+    "id": "B-xz5m9",
+    "revision": 1,
+    "title": "A rule from “A pattern in your answers on gate”",
+    "created": "2026-11-06T02:44:56.904Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-b0dzp",
+    "revision": 1,
+    "title": "How an option's outcome reads after 'then'",
+    "created": "2026-11-06T03:04:44.444Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-qrdhh",
+    "revision": 2,
+    "title": "Holding agents to filing cards",
+    "created": "2026-11-06T03:16:14.939Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 2,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-5s5h2",
+    "revision": 1,
+    "title": "How wide a run of text runs",
+    "created": "2026-11-06T03:20:04.136Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-hswmx",
+    "revision": 1,
+    "title": "A choice answered in chat",
+    "created": "2026-11-06T03:20:05.882Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-x179n",
+    "revision": 1,
+    "title": "How the history scan is run on a repo already linked",
+    "created": "2026-11-06T03:30:53.422Z",
+    "source_branch": "worktree-agent-aea976db0fba35121",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-bf29j",
+    "revision": 1,
+    "title": "Where a repo lists its user-facing paths",
+    "created": "2026-11-06T03:39:12.130Z",
+    "source_branch": "worktree-agent-a68aef9ae1c20d6c8",
+    "level": "provisional",
+    "source_agent": "claude-code",
+    "proposal": "In the committed config",
+    "alternative": "In the preference files"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept",
+     "first_choice": "alternative"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-d860s",
+    "revision": 1,
+    "title": "Whether a seen card can be held back",
+    "created": "2026-11-06T04:26:31.161Z",
+    "source_branch": "v1/next",
+    "level": "provisional"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ]
+  },
+  {
+   "meta": {
+    "id": "B-nxhtx",
+    "revision": 1,
+    "title": "Seen answers in the usage counts",
+    "created": "2026-11-06T04:26:32.251Z",
+    "source_branch": "v1/next",
+    "level": "hard"
+   },
+   "status": "resolved",
+   "verdicts": [
+    {
+     "revision": 1,
+     "response": "accept"
+    }
+   ],
+   "gate": {
+    "outcome": "shown",
+    "level": "hard"
+   }
+  }
+ ],
+ "merges": [
+  {
+   "branch": "v1/next",
+   "into": "worktree-agent-aea976db0fba35121",
+   "commit": "27a48adcf7f07373ef34fa8c2e78ed3c49860f61",
+   "tip": "27a48adcf7f07373ef34fa8c2e78ed3c49860f61",
+   "at": "2026-11-06T02:50:39.694Z",
+   "cards": [
+    "B-xz5m9"
+   ],
+   "commits": []
+  },
+  {
+   "branch": "v1/next",
+   "into": "worktree-agent-a68aef9ae1c20d6c8",
+   "commit": "cdf848715d99b9a7ae900f320bba74caf6747ed1",
+   "tip": "cdf848715d99b9a7ae900f320bba74caf6747ed1",
+   "at": "2026-11-06T03:21:00.722Z",
+   "cards": [
+    "B-5s5h2",
+    "B-b0dzp",
+    "B-hswmx",
+    "B-qrdhh",
+    "B-xz5m9"
+   ],
+   "commits": [
+    "670bcbfb359128668c1598e7a7ce5d3c792571cf"
+   ]
+  },
+  {
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "into": "v1/next",
+   "commit": "40fac89e9ece4222e23ad98a6574a4f50848d2cc",
+   "tip": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "at": "2026-11-06T03:30:53.000Z",
+   "cards": [],
+   "commits": [
+    "ad9b54a932a9869bfa0a814830c298aa5b5b87c8"
+   ]
+  },
+  {
+   "branch": "worktree-agent-aea976db0fba35121",
+   "into": "v1/next",
+   "commit": "06cb4aa9a93c54c6ec0f0d0a6458fee0927e50b9",
+   "tip": "f534ad6855e09a4d4c65c7319073beb6be2d48cd",
+   "at": "2026-11-06T03:35:35.000Z",
+   "cards": [
+    "B-x179n"
+   ],
+   "commits": [
+    "f2efffb52b33c0d65c50b2182d15f0d58ab3d9ed",
+    "6892107a1e9eebf6e2f07679d49f3ceb824eb541",
+    "55f375ab7e7705f420d481aae3d9df0f3e74777b",
+    "a4f550e76027c80cd07ab8252920cf4d3507b35b",
+    "f534ad6855e09a4d4c65c7319073beb6be2d48cd"
+   ]
+  },
+  {
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "into": "v1/next",
+   "commit": "67ffefa65d803e33de52d6807354f1ff201abf45",
+   "tip": "66de13434ec3b608d27850b5bbbeaa75cb01dfaf",
+   "at": "2026-11-06T03:57:02.000Z",
+   "cards": [
+    "B-bf29j"
+   ],
+   "commits": [
+    "18613fc33385f803a2e2151a9d7780ceaaae3980",
+    "48e1ccf2598bc494d85ab8a9d1f7d8dd07b0f5cb",
+    "66de13434ec3b608d27850b5bbbeaa75cb01dfaf"
+   ]
+  },
+  {
+   "branch": "v1/next",
+   "into": "main",
+   "commit": "291ce5dd7805c50ef2896e804e05ab79180466a1",
+   "tip": "291ce5dd7805c50ef2896e804e05ab79180466a1",
+   "at": "2026-11-06T03:57:20.082Z",
+   "cards": [
+    "B-5s5h2",
+    "B-b0dzp",
+    "B-hswmx",
+    "B-qrdhh",
+    "B-xz5m9"
+   ],
+   "commits": [
+    "670bcbfb359128668c1598e7a7ce5d3c792571cf"
+   ]
+  },
+  {
+   "branch": "worktree-agent-ad4e3d9725ca0e09b",
+   "into": "v1/next",
+   "commit": "87fe46fd7ed1cd1752f2906186f7179f615c7a17",
+   "tip": "5b18284b9719e5f8610007fb8397b8644a87f976",
+   "at": "2026-11-06T04:25:38.000Z",
+   "cards": [],
+   "commits": [
+    "09db4d048cf17ab64cfcd4d38ef61a5dc05c974e",
+    "2b555f8b9e4f360fd444d1db8d7dd7679ca5563d",
+    "5b18284b9719e5f8610007fb8397b8644a87f976"
+   ]
+  },
+  {
+   "branch": "v1/next",
+   "into": "main",
+   "commit": "3a8cac0e478060d452489925e758e54728b4f72f",
+   "tip": "3a8cac0e478060d452489925e758e54728b4f72f",
+   "at": "2026-11-06T04:54:32.341Z",
+   "cards": [
+    "B-d860s",
+    "B-nxhtx"
+   ],
+   "commits": [
+    "3a8cac0e478060d452489925e758e54728b4f72f"
+   ]
+  }
+ ],
+ "commits": [
+  {
+   "commit": "f2efffb52b33c0d65c50b2182d15f0d58ab3d9ed",
+   "branch": "worktree-agent-aea976db0fba35121",
+   "card": "B-c4efj",
+   "at": "2026-11-06T03:07:14.137Z"
+  },
+  {
+   "commit": "670bcbfb359128668c1598e7a7ce5d3c792571cf",
+   "branch": "v1/next",
+   "card": "B-b0dzp",
+   "at": "2026-11-06T03:12:28.904Z"
+  },
+  {
+   "commit": "6892107a1e9eebf6e2f07679d49f3ceb824eb541",
+   "branch": "worktree-agent-aea976db0fba35121",
+   "card": "B-h7rsv",
+   "at": "2026-11-06T03:15:05.920Z"
+  },
+  {
+   "commit": "55f375ab7e7705f420d481aae3d9df0f3e74777b",
+   "branch": "worktree-agent-aea976db0fba35121",
+   "card": "B-dezkk",
+   "at": "2026-11-06T03:24:19.102Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-c4efj",
+   "at": "2026-11-06T03:26:43.708Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-9v07y",
+   "at": "2026-11-06T03:26:43.713Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-cjqxz",
+   "at": "2026-11-06T03:26:43.715Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-my3az",
+   "at": "2026-11-06T03:26:43.716Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-zshw5",
+   "at": "2026-11-06T03:26:43.719Z"
+  },
+  {
+   "commit": "ad9b54a932a9869bfa0a814830c298aa5b5b87c8",
+   "branch": "worktree-agent-a6f631f7f1d039fe7",
+   "card": "B-srtcs",
+   "at": "2026-11-06T03:26:43.720Z"
+  },
+  {
+   "commit": "a4f550e76027c80cd07ab8252920cf4d3507b35b",
+   "branch": "worktree-agent-aea976db0fba35121",
+   "card": "B-15v62",
+   "at": "2026-11-06T03:27:43.560Z"
+  },
+  {
+   "commit": "f534ad6855e09a4d4c65c7319073beb6be2d48cd",
+   "branch": "worktree-agent-aea976db0fba35121",
+   "card": "B-x179n",
+   "at": "2026-11-06T03:31:36.338Z"
+  },
+  {
+   "commit": "18613fc33385f803a2e2151a9d7780ceaaae3980",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-qrdhh",
+   "at": "2026-11-06T03:39:22.257Z"
+  },
+  {
+   "commit": "18613fc33385f803a2e2151a9d7780ceaaae3980",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-bf29j",
+   "at": "2026-11-06T03:39:22.262Z"
+  },
+  {
+   "commit": "48e1ccf2598bc494d85ab8a9d1f7d8dd07b0f5cb",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-qrdhh",
+   "at": "2026-11-06T03:49:51.984Z"
+  },
+  {
+   "commit": "48e1ccf2598bc494d85ab8a9d1f7d8dd07b0f5cb",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-bf29j",
+   "at": "2026-11-06T03:49:51.989Z"
+  },
+  {
+   "commit": "66de13434ec3b608d27850b5bbbeaa75cb01dfaf",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-qrdhh",
+   "at": "2026-11-06T03:50:36.797Z"
+  },
+  {
+   "commit": "66de13434ec3b608d27850b5bbbeaa75cb01dfaf",
+   "branch": "worktree-agent-a68aef9ae1c20d6c8",
+   "card": "B-bf29j",
+   "at": "2026-11-06T03:50:36.802Z"
+  },
+  {
+   "commit": "09db4d048cf17ab64cfcd4d38ef61a5dc05c974e",
+   "branch": "worktree-agent-ad4e3d9725ca0e09b",
+   "card": "B-hswmx",
+   "at": "2026-11-06T04:15:32.005Z"
+  },
+  {
+   "commit": "2b555f8b9e4f360fd444d1db8d7dd7679ca5563d",
+   "branch": "worktree-agent-ad4e3d9725ca0e09b",
+   "card": "B-hswmx",
+   "at": "2026-11-06T04:18:20.625Z"
+  },
+  {
+   "commit": "5b18284b9719e5f8610007fb8397b8644a87f976",
+   "branch": "worktree-agent-ad4e3d9725ca0e09b",
+   "card": "B-hswmx",
+   "at": "2026-11-06T04:21:16.372Z"
+  },
+  {
+   "commit": "3a8cac0e478060d452489925e758e54728b4f72f",
+   "branch": "v1/next",
+   "card": "B-nxhtx",
+   "at": "2026-11-06T04:54:18.673Z"
+  }
+ ]
+}
