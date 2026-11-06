@@ -1,128 +1,104 @@
 <!doctype html>
-<!-- The README's figure of commits as checkpoints. `npm run readme-media -- figures` renders it to checkpoints.png. -->
+<!-- The README's figure of commits as checkpoints. `npm run readme-media -- figures` renders it to checkpoints.png, framed.
+     It's drawn 880 px wide, so GitHub shows it at about its own size: its smallest type, 13 px, stays 13 px there.
+     The lane, the commits and the arcs are the SVG; every word is HTML, and spans the box it sits in (B-5s5h2). -->
 <html>
 <head>
 <meta charset="utf-8">
 <style>
-@font-face { font-family: "Archivo"; src: url(../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Archivo"; src: url(../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2) format("woff2-variations"); font-weight: 100 900; font-stretch: 62% 125%; }
 @font-face { font-family: "Alegreya"; src: url(../../node_modules/@fontsource-variable/alegreya/files/alegreya-latin-wght-normal.woff2) format("woff2"); font-weight: 400 900; }
+:root { --ink: #2e2343; --soft: #5a4d6e; --faint: #6f6382; --rose: #8e3a5f; --face: #f7eed3; --line: #d9c68e; --ok: #3f8f5a; --mono: "SF Mono", Menlo, monospace; }
+* { box-sizing: border-box; }
 body { margin: 0; }
-figure { margin: 0; width: 1200px; height: 510px; background: radial-gradient(120% 90% at 50% 0%, #d9d0da 0%, #cbc0cd 100%); }
-svg { display: block; }
-.lane { fill: none; stroke: #8e3a5f; stroke-width: 3; stroke-linecap: round; }
-.commit { fill: #f7eed3; stroke: #8e3a5f; stroke-width: 2.5; }
-.branch-name { font: 700 14px "Archivo", sans-serif; fill: #2e2343; }
-.branch-who { font: 500 13px "Archivo", sans-serif; fill: #5a4d6e; }
-.commit-name { font: 600 12.5px "Archivo", sans-serif; fill: #2e2343; }
-.mono { font: 11.5px "SF Mono", Menlo, monospace; fill: #5a4d6e; }
-.record { fill: #f7eed3; stroke: #d9c68e; stroke-width: 1.5; }
-.record-h { font: 600 11px "Archivo", sans-serif; fill: #8c809b; }
-.row { font: 500 14.5px "Alegreya", serif; fill: #2e2343; }
-.row-wait { font: 500 14.5px "Alegreya", serif; fill: #8e3a5f; }
+figure { position: relative; margin: 0; width: 880px; height: 532px; background: radial-gradient(120% 90% at 50% 0%, #d9d0da 0%, #cbc0cd 100%); color: var(--ink); }
+svg { position: absolute; inset: 0; }
+.lane { fill: none; stroke: var(--rose); stroke-width: 3; stroke-linecap: round; }
+.commit { fill: var(--face); stroke: var(--rose); stroke-width: 2.5; }
 .stem { stroke: #8c809b; stroke-width: 1.4; stroke-dasharray: 3 4; }
-.chip { fill: #f7eed3; stroke: #8e3a5f; stroke-width: 1.8; }
-.chip-title { font: 700 15.5px "Alegreya", serif; fill: #2e2343; }
-.changed { font: 600 12px "Archivo", sans-serif; fill: #8e3a5f; }
-.arc { fill: none; stroke: #8e3a5f; stroke-width: 1.8; stroke-dasharray: 5 5; }
-.arc-label { font: 600 12.5px "Archivo", sans-serif; fill: #8e3a5f; }
-.term { fill: #2e2343; }
-.term-dim { font: 12px "SF Mono", Menlo, monospace; fill: #a99cbb; }
-.term-text { font: 12px "SF Mono", Menlo, monospace; fill: #f0e4be; }
-.note { font: 400 15px "Alegreya", serif; fill: #5a4d6e; }
-.note b { font-weight: 700; fill: #2e2343; }
+.arc { fill: none; stroke: var(--rose); stroke-width: 1.8; stroke-dasharray: 5 5; }
+
+.branch { position: absolute; left: 32px; top: 104px; font: 700 16px/20px "Archivo"; font-stretch: 90%; }
+.branch span { margin-left: 6px; font-weight: 500; color: var(--soft); }
+.arc-label { position: absolute; left: 330px; top: 22px; font: 650 14px/18px "Archivo"; font-stretch: 90%; color: var(--rose); }
+
+/* Later, the answer changes: what the agent built on before is named. */
+.chip { position: absolute; left: 600px; top: 22px; width: 248px; display: grid; grid-template-columns: 22px 1fr; column-gap: 10px; padding: 11px 14px 12px 14px; background: var(--face); border: 1.8px solid var(--rose); border-radius: 10px; }
+.chip svg { position: static; margin-top: 3px; }
+.chip b { display: block; font: 700 17px/21px "Alegreya"; }
+.chip span { display: block; font: 600 13.5px/18px "Archivo"; font-stretch: 90%; color: var(--rose); }
+
+/* Each commit, and the record it carries: four columns, 204 px each. */
+.col { position: absolute; top: 158px; width: 204px; display: flex; flex-direction: column; align-items: center; }
+.name { font: 650 15px/20px "Archivo"; font-stretch: 90%; }
+.mono { font: 13px/18px var(--mono); color: var(--soft); }
+.record { position: absolute; top: 76px; left: 4px; width: 196px; height: 92px; padding: 10px 12px; background: var(--face); border: 1.5px solid var(--line); border-radius: 9px; }
+.record h4 { margin: 0 0 6px; font: 600 13px/17px "Archivo"; font-stretch: 90%; color: var(--faint); }
+.row { display: flex; align-items: center; gap: 7px; font: 500 15px/22px "Alegreya"; }
+.row.wait { color: var(--rose); }
+.row i { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: var(--rose); }
+.row.ok i { background: var(--ok); position: relative; }
+.row.ok i::after { content: ""; position: absolute; left: 3.4px; top: 2px; width: 3px; height: 5.4px; border: solid #fff; border-width: 0 1.4px 1.4px 0; transform: rotate(40deg); }
+
+/* What the agent hears: the terminal, as wide as the lane. */
+.term { position: absolute; left: 32px; top: 354px; width: 816px; padding: 16px 22px 18px; background: var(--ink); border-radius: 10px; font: 14px/21px var(--mono); color: #f0e4be; }
+.term p { margin: 0; }
+.term p + p { margin-top: 9px; }
+.term .dim { color: #a99cbb; }
 </style>
 </head>
 <body>
-<figure>
-<svg width="1200" height="510" viewBox="0 0 1200 510" role="img" aria-label="Four commits on feat/checkout, each carrying the decisions as they stood. Later the answer on the session card changes, and the agent is told which commits built on the old answer.">
-  <defs>
-    <path id="crown" d="M -6.8 4.7 L -6.8 -2.6 L -3.1 0.5 L 0 -5.7 L 3.1 0.5 L 6.8 -2.6 L 6.8 4.7 Z" />
-    <g id="tick"><circle cx="5" cy="4.6" r="3.6" fill="#3f8f5a" /><path d="M3.3 4.7 L4.6 6 L6.8 3.4" stroke="#fff" stroke-width="1.2" fill="none" /></g>
-    <g id="dot"><circle cx="0" cy="0" r="4" fill="#8E3A5F" /></g>
-    <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8e3a5f" /></marker>
-  </defs>
+<figure role="img" aria-label="Four commits on feat/checkout, each carrying the decisions as they stood. Later the answer on the session card changes, and the agent is told which commits built on the old answer.">
+  <svg width="880" height="532" viewBox="0 0 880 532" aria-hidden="true">
+    <defs>
+      <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8e3a5f" /></marker>
+    </defs>
+    <path class="lane" d="M 32 142 H 848" />
+    <path class="arc" d="M 598 48 C 520 30, 380 34, 342 128" marker-end="url(#head)" />
+    <path class="arc" d="M 598 76 C 572 82, 552 100, 545 128" marker-end="url(#head)" />
+    <circle class="commit" cx="134" cy="142" r="7" />
+    <circle class="commit" cx="338" cy="142" r="7" />
+    <circle class="commit" cx="542" cy="142" r="7" />
+    <circle class="commit" cx="746" cy="142" r="7" />
+    <path class="stem" d="M 134 216 V 232 M 338 216 V 232 M 542 216 V 232 M 746 216 V 232" />
+  </svg>
 
-  <path class="lane" d="M 40 130 H 950" />
-  <text x="40" y="112"><tspan class="branch-name">feat/checkout</tspan><tspan class="branch-who" dx="6">claude-code</tspan></text>
+  <div class="branch">feat/checkout<span>claude-code</span></div>
+  <div class="arc-label">built on the old answer</div>
+  <div class="chip">
+    <svg width="22" height="16" viewBox="-8 -7 16 13" aria-hidden="true"><path d="M -6.8 4.7 L -6.8 -2.6 L -3.1 0.5 L 0 -5.7 L 3.1 0.5 L 6.8 -2.6 L 6.8 4.7 Z" fill="#f3d58a" stroke="#6e1f2e" stroke-width="1.3" /></svg>
+    <div><b>Later: the session</b><span>you change your answer to</span><span>“A token in localStorage”</span></div>
+  </div>
 
-  <!-- Later, the answer changes; the commits that cite the card are named. -->
-  <path class="arc" d="M 1000 100 C 960 28, 560 22, 420 118" marker-end="url(#head)" />
-  <path class="arc" d="M 1016 100 C 990 50, 740 44, 640 118" marker-end="url(#head)" />
-  <text class="arc-label" x="700" y="38" text-anchor="middle">built on the old answer</text>
+  <div class="col" style="left: 32px">
+    <div class="name">Sign-in endpoint</div>
+    <div class="mono">a41e7b0</div>
+    <div class="record"><h4>.baesian/ in this commit</h4><div class="row wait"><i></i>Session: waiting</div></div>
+  </div>
+  <div class="col" style="left: 236px">
+    <div class="name">Session cookie</div>
+    <div class="mono">3f9c2a1</div>
+    <div class="mono">Baesian-Card: B-4h2mx</div>
+    <div class="record"><h4>.baesian/ in this commit</h4><div class="row ok"><i></i>Session: cookie</div></div>
+  </div>
+  <div class="col" style="left: 440px">
+    <div class="name">CSRF tokens on forms</div>
+    <div class="mono">8b07d4e</div>
+    <div class="mono">Baesian-Card: B-4h2mx</div>
+    <div class="record"><h4>.baesian/ in this commit</h4><div class="row ok"><i></i>Session: cookie</div><div class="row wait"><i></i>Deleting: waiting</div></div>
+  </div>
+  <div class="col" style="left: 644px">
+    <div class="name">Delete my account</div>
+    <div class="mono">c52d19f</div>
+    <div class="mono">Baesian-Card: B-9wq3t</div>
+    <div class="record"><h4>.baesian/ in this commit</h4><div class="row ok"><i></i>Session: cookie</div><div class="row ok"><i></i>Deleting: erase at once</div></div>
+  </div>
 
-  <g transform="translate(962 100)">
-    <rect class="chip" width="228" height="66" rx="9" />
-    <g transform="translate(20 25) scale(1.15)"><use href="#crown" fill="#f3d58a" stroke="#6E1F2E" stroke-width="1.4" /></g>
-    <text class="chip-title" x="38" y="25">Later: the session</text>
-    <text class="changed" x="38" y="43">you change your answer to</text>
-    <text class="changed" x="38" y="58" font-weight="500">“A token in localStorage”</text>
-  </g>
-
-  <!-- the commits, each with the record it carries -->
-  <g>
-    <circle class="commit" cx="200" cy="130" r="7" />
-    <text class="commit-name" x="200" y="156" text-anchor="middle">Sign-in endpoint</text>
-    <text class="mono" x="200" y="172" text-anchor="middle">a41e7b0</text>
-    <path class="stem" d="M 200 194 V 212" />
-    <rect class="record" x="105" y="212" width="190" height="86" rx="8" />
-    <text class="record-h" x="119" y="232">.baesian/ in this commit</text>
-    <use href="#dot" x="125" y="256" />
-    <text class="row-wait" x="137" y="261">Session: waiting</text>
-  </g>
-  <g>
-    <circle class="commit" cx="420" cy="130" r="7" />
-    <text class="commit-name" x="420" y="156" text-anchor="middle">Session cookie</text>
-    <text class="mono" x="420" y="172" text-anchor="middle">3f9c2a1</text>
-    <text class="mono" x="420" y="187" text-anchor="middle">Baesian-Card: B-4h2mx</text>
-    <path class="stem" d="M 420 194 V 212" />
-    <rect class="record" x="325" y="212" width="190" height="86" rx="8" />
-    <text class="record-h" x="339" y="232">.baesian/ in this commit</text>
-    <use href="#tick" x="340" y="251" />
-    <text class="row" x="357" y="261">Session: cookie</text>
-  </g>
-  <g>
-    <circle class="commit" cx="640" cy="130" r="7" />
-    <text class="commit-name" x="640" y="156" text-anchor="middle">CSRF tokens on forms</text>
-    <text class="mono" x="640" y="172" text-anchor="middle">8b07d4e</text>
-    <text class="mono" x="640" y="187" text-anchor="middle">Baesian-Card: B-4h2mx</text>
-    <path class="stem" d="M 640 194 V 212" />
-    <rect class="record" x="545" y="212" width="190" height="86" rx="8" />
-    <text class="record-h" x="559" y="232">.baesian/ in this commit</text>
-    <use href="#tick" x="560" y="251" />
-    <text class="row" x="577" y="261">Session: cookie</text>
-    <use href="#dot" x="565" y="280" />
-    <text class="row-wait" x="577" y="285">Deleting: waiting</text>
-  </g>
-  <g>
-    <circle class="commit" cx="860" cy="130" r="7" />
-    <text class="commit-name" x="860" y="156" text-anchor="middle">Delete my account</text>
-    <text class="mono" x="860" y="172" text-anchor="middle">c52d19f</text>
-    <text class="mono" x="860" y="187" text-anchor="middle">Baesian-Card: B-9wq3t</text>
-    <path class="stem" d="M 860 194 V 212" />
-    <rect class="record" x="765" y="212" width="190" height="86" rx="8" />
-    <text class="record-h" x="779" y="232">.baesian/ in this commit</text>
-    <use href="#tick" x="780" y="251" />
-    <text class="row" x="797" y="261">Session: cookie</text>
-    <use href="#tick" x="780" y="275" />
-    <text class="row" x="797" y="285">Deleting: erase at once</text>
-  </g>
-
-  <!-- what the agent hears -->
-  <rect class="term" x="470" y="330" width="720" height="152" rx="10" />
-  <text class="term-dim" x="492" y="358">claude-code, at its next stopping point:</text>
-  <text class="term-text" x="492" y="384">The answer on B-4h2mx changed: it was "An HttpOnly cookie",</text>
-  <text class="term-text" x="492" y="402">and now it's "A token in localStorage".</text>
-  <text class="term-text" x="492" y="428">Commits that cite B-4h2mx, built on the old answer:</text>
-  <text class="term-text" x="492" y="446">3f9c2a1 (feat/checkout), 8b07d4e (feat/checkout).</text>
-  <text class="term-text" x="492" y="464">Rework them to match.</text>
-
-  <text class="note" x="40" y="350">Every commit carries the decisions</text>
-  <text class="note" x="40" y="370">as they stood, and names the cards</text>
-  <text class="note" x="40" y="390">it builds on. CI checks each commit</text>
-  <text class="note" x="40" y="410">against its own record, and if you</text>
-  <text class="note" x="40" y="430">change an answer, the agent hears</text>
-  <text class="note" x="40" y="450">which commits to rework.</text>
-</svg>
+  <div class="term">
+    <p class="dim">claude-code, at its next stopping point:</p>
+    <p>The answer on B-4h2mx changed: it was "An HttpOnly cookie", and now it's "A token in localStorage".</p>
+    <p>Commits that cite B-4h2mx, built on the old answer: 3f9c2a1 (feat/checkout), 8b07d4e (feat/checkout). Rework them to match.</p>
+  </div>
 </figure>
 </body>
 </html>
