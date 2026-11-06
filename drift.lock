@@ -288,7 +288,7 @@ sig = "f049ce1af27440e4"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/lanes.ts#spansOf"
-sig = "9fadabb209741316"
+sig = "16c8724d36b96ff8"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"

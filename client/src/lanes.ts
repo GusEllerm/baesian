@@ -9,8 +9,10 @@ import { agentOf, isHard } from "./model";
 // brought, not to infer it).
 //
 //   branchModel(state, opts) -> Model   what happened: lanes, parents, ends, one entry per commit, events in order
+//   spansOf(model)           -> Map     each lane's stretch of the events' order, from its fork to its merge or end
 //   columnsOf(model)         -> Map     each lane's column in the gutter, reused once a lane has merged
-//   listRows(model, cols, o) -> rows    the history as rows, newest first, with what each row's gutter draws
+//   listRows(model, cols, o) -> rows    the history as rows, newest first, with the lanes live through each
+//   strokesOf(row, rows, m)  -> Stroke[] what a row's gutter draws, as the drawer draws it
 //   statusOf(model)          -> words   the opening sentences
 //   shortNames(names)        -> Map     names that keep the part that tells branches apart
 
@@ -480,12 +482,9 @@ export interface Span {
 export function spansOf(model: Model): Map<string, Span> {
   const index = new Map(model.events.map((e, i) => [e.key, i]));
   const fork = new Map<string, number>();
-  const first = new Map<string, number>();
   const last = new Map<string, number>();
   const touch = (n: string | null, i: number) => {
-    if (!n) return;
-    if (!first.has(n)) first.set(n, i);
-    last.set(n, i);
+    if (n) last.set(n, i);
   };
   model.events.forEach((e, i) => {
     if (e.kind === "fork") fork.set(e.lane, i), touch(e.from, i);
