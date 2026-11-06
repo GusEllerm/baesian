@@ -1,18 +1,28 @@
-// The README's media, made from the real thing: `docs/media/demo.gif`, recorded from a run of the demo (scripts/
-// demo.ts) in a headless browser, and the figures in `docs/media/*.html`, rendered to PNG. Run it with
-// `npm run readme-media`, or `npm run readme-media -- gif` or `-- figures` for one of them. The GIF needs ffmpeg.
+// The README's media, made from the real thing, by the built client in a headless browser:
+//
+//   docs/media/demo.gif      a run of the demo (scripts/demo.ts), answered as you would, ending on the Branches drawer
+//   docs/media/branches.png  the Branches drawer over a stretch of this repo's own history, from branches.json
+//   docs/media/phone.png     the demo's first card on a phone, held until it lifts
+//   docs/media/*.png         each figure drawn by hand in docs/media/*.html (checkpoints.html)
+//
+// Run it with `npm run readme-media` for all of them, or name one part: `gif`, `figures` (every PNG), `drawer` or
+// `phone`. The GIF needs ffmpeg. `drawer-data` makes branches.json again, from this clone's decision record.
 //
 // The GIF puts two things side by side: the client, as you'd answer in it, and a panel with what's going on and
 // what each agent's terminal says. The panel's terminal lines are the demo's own output, so what an agent hears in
 // the GIF is what `baesian wait` printed.
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type Interface, createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { type Page, chromium } from "@playwright/test";
+import type { ApiCard, ApiCommit, ApiMerge, ApiState } from "../src/api.js";
+import { blankRow } from "../src/report.js";
+import { TODAY } from "../src/routing.js";
+import type { CardMeta, GateRecord, Verdict } from "../src/schema.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MEDIA = join(ROOT, "docs", "media");
@@ -34,11 +44,211 @@ async function figures(): Promise<void> {
   await browser.close();
 }
 
+// ------------------------------------------------------------------ the Branches drawer, on Baesian's own history
+
+/**
+ * The stretch of this repo's own history that `docs/media/branches.png` shows, by git's clock in UTC, and the time zone
+ * it's read in, the one its commits were made in: Thursday 5 November, 8:35 to 11 p.m. in Chicago. In it, v1/next merges
+ * into main twice, and four worktrees start from v1/next and merge back, two with a card of their own.
+ */
+const HISTORY = {
+  file: join(MEDIA, "branches.json"),
+  from: "2026-11-06T02:35:00.000Z",
+  to: "2026-11-06T05:00:00.000Z",
+  timeZone: "America/Chicago",
+  /** The card the figure opens: one a worktree brought back, with the commits citing it. */
+  pick: "B-bf29j",
+};
+
+/** A card as the drawer draws it: what `ApiCard` says, less everything it doesn't draw. */
+interface HistoryCard {
+  /** Its agent and options only on the card the figure opens (`HISTORY.pick`): the rows draw neither. */
+  meta: Pick<CardMeta, "id" | "revision" | "title" | "created" | "source_branch" | "level"> & Partial<Pick<CardMeta, "source_agent" | "proposal" | "alternative">>;
+  status: ApiCard["status"];
+  decision?: string;
+  /** Its last answer on its latest revision, without who gave it: what it chose, and how, only on the card opened. */
+  verdicts: Pick<Verdict, "revision" | "response" | "first_choice" | "seen" | "choice">[];
+  waiting?: { agent: string; at: string }[];
+  /** Only a gate record that makes it hard. */
+  gate?: Pick<GateRecord, "outcome" | "level">;
+}
+
+/** `docs/media/branches.json`: the state the drawer reads (`snapshot()`), trimmed to the window and to what it draws. */
+interface History {
+  about: string;
+  from: string;
+  to: string;
+  /** The drawer's "now": the window's end. */
+  now: string;
+  timeZone: string;
+  defaultBranch?: string;
+  cards: HistoryCard[];
+  merges: ApiMerge[];
+  commits: ApiCommit[];
+}
+
+/** The branches the drawer draws no lane for: Baesian's own cards on the relay, and a detached HEAD's. */
+const offLane = (b: string | undefined) => !b || b === "relay" || b.startsWith("detached-");
+
+/**
+ * `-- drawer-data`: `docs/media/branches.json` made again from this clone's decision record. A scratch clone of the repo,
+ * with a copy of its live layer (`.git/baesian`), is read by the store as `baesian serve` reads it; nothing in the repo,
+ * and nothing on the relay, is touched. Then it's trimmed to the window: no card bodies, no reviewer, no accounts.
+ */
+async function drawerData(): Promise<void> {
+  const { Store } = await import("../src/store.js");
+  const { snapshot } = await import("../src/state.js");
+  const { defaultBranch } = await import("../src/git.js");
+  const sh = (...args: string[]) => {
+    const r = spawnSync("git", args, { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.trim()}`);
+    return r.stdout.trim();
+  };
+  const work = mkdtempSync(join(tmpdir(), "baesian-history-"));
+  try {
+    const clone = join(work, "repo");
+    sh("-c", "core.hooksPath=/dev/null", "clone", "-q", ROOT, clone);
+    cpSync(join(sh("-C", ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir"), "baesian"), join(clone, ".git", "baesian"), { recursive: true });
+    const state = snapshot(Store.open(clone), { version: 1, server: { started: HISTORY.to, watch: "poll" }, project: { name: "baesian", branch: "main" }, now: Date.parse(HISTORY.to) });
+    // The repo's own default branch, the trunk: the clone's would be whatever this checkout has out.
+    const trunk = defaultBranch(ROOT)?.branch;
+    const inside = (at: string) => Date.parse(at) >= Date.parse(HISTORY.from) && Date.parse(at) <= Date.parse(HISTORY.to);
+    const cards = state.cards
+      .filter((c) => inside(c.meta.created) && !offLane(c.meta.source_branch))
+      .map((c): HistoryCard => {
+        const { id, revision, title, created, source_branch, source_agent, level, proposal, alternative } = c.meta;
+        const last = c.verdicts.filter((v) => v.revision === revision).at(-1);
+        const chose = last?.response === "accept" || last?.response === "alternative";
+        // The card the figure opens says who filed it, what was chosen and how; a row says only its mark.
+        const opened = id === HISTORY.pick;
+        const how = opened && last ? { ...(last.first_choice ? { first_choice: last.first_choice } : {}), ...(last.seen ? { seen: last.seen } : {}), ...(last.choice && !chose ? { choice: last.choice } : {}) } : {};
+        return {
+          meta: { id, revision, title, created, source_branch, level, ...(opened ? { source_agent, proposal, alternative } : {}) },
+          status: c.status,
+          ...(opened && c.decision !== undefined && last && !chose ? { decision: c.decision } : {}),
+          verdicts: last ? [{ revision: last.revision, response: last.response, ...how }] : [],
+          ...(opened && c.status === "open" && c.waiting.length ? { waiting: c.waiting.map((w) => ({ agent: w.agent, at: w.at })) } : {}),
+          ...(c.gate?.outcome === "shown" && c.gate.level === "hard" ? { gate: { outcome: c.gate.outcome, level: c.gate.level } } : {}),
+        };
+      })
+      .sort((a, b) => a.meta.created.localeCompare(b.meta.created));
+    const history: History = {
+      about: "Baesian's own decision record, as the Branches drawer reads it, for docs/media/branches.png: made by `npm run readme-media -- drawer-data` (scripts/readme-media.ts), drawn by `-- drawer`.",
+      from: HISTORY.from,
+      to: HISTORY.to,
+      now: HISTORY.to,
+      timeZone: HISTORY.timeZone,
+      ...(trunk ? { defaultBranch: trunk } : {}),
+      cards,
+      merges: (state.merges ?? []).filter((m) => inside(m.at)),
+      commits: (state.commits ?? []).filter((c) => inside(c.at)),
+    };
+    writeFileSync(HISTORY.file, `${JSON.stringify(history, null, 1)}\n`);
+    console.log(`made ${HISTORY.file} (${cards.length} cards, ${history.merges.length} merges, ${history.commits.length} commits)`);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+/** Where the built client is served from to a page, with no server: `serveState()`. */
+const ORIGIN = "http://baesian.readme";
+
+/** The built client, served to a page from dist/client, with `state` at /api/state; nothing else answers, or is written. */
+async function serveState(page: Page, state: ApiState): Promise<void> {
+  const dist = join(ROOT, "dist", "client");
+  await page.route(`${ORIGIN}/**`, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/state") return route.fulfill({ json: state });
+    // The change events, the presence heartbeat: no content, so the page doesn't try again.
+    if (path.startsWith("/api/")) return route.fulfill({ status: 204 });
+    const file = join(dist, path === "/" ? "index.html" : path);
+    return route.fulfill(existsSync(file) ? { path: file } : { status: 404 });
+  });
+}
+
+/** The state the client reads, from `docs/media/branches.json`: what the drawer doesn't draw, left empty. */
+function historyState(h: History): ApiState {
+  const cards = h.cards.map(
+    (c): ApiCard => ({
+      meta: { type: "card", format: 1, question: c.meta.title, doing: "", source_agent: "", proposal: "", alternative: "", topic: "history/q", deck: "history", touches: [], reverse: "moderate", proposal_then: "", alternative_then: "", also_considered: [], crux: "", crux_proposal: "", crux_alternative: "", rules: [], proposal_breaks: [], alternative_breaks: [], depends_on: [], ...c.meta } as unknown as CardMeta,
+      body: "",
+      revisions: c.meta.revision,
+      replied: false,
+      status: c.status,
+      ...(c.decision !== undefined ? { decision: c.decision } : {}),
+      canonicalTopic: "history/q",
+      verdicts: c.verdicts.map((v) => ({ type: "verdict", format: 1, card: c.meta.id, reviewer: "you", ...v }) as Verdict),
+      dependents: [],
+      briefs: [],
+      waiting: (c.waiting ?? []).map((w) => ({ ...w, since: w.at, stale: false })),
+      fallbacks: [],
+      attachments: 0,
+      ...(c.gate ? { gate: c.gate as GateRecord } : {}),
+    }),
+  );
+  return {
+    version: 1,
+    server: { started: h.now, now: h.now, watch: "poll" },
+    project: { name: "baesian", branch: h.defaultBranch ?? "main" },
+    ...(h.defaultBranch ? { defaultBranch: h.defaultBranch } : {}),
+    decks: [],
+    rules: [],
+    cards,
+    routing: { settings: TODAY, history: [], report: { rows: {}, pooled: blankRow(), beforeGate: 0 } },
+    problems: [],
+    merges: h.merges,
+    commits: h.commits,
+  };
+}
+
+/**
+ * `docs/media/branches.png`: the Branches drawer, Wider (880 px, so GitHub shows it at its own size), over the window of
+ * this repo's history in `branches.json`, drawn by the built client at the window's end, in its time zone. One card is
+ * picked (`HISTORY.pick`), so its detail lists the commits citing it. Cropped to the drawer, less the grip on its edge,
+ * which the crop would cut in half; as tall as a laptop's screen shows it.
+ */
+async function drawer(): Promise<void> {
+  const h = JSON.parse(readFileSync(HISTORY.file, "utf8")) as History;
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1040 }, deviceScaleFactor: 2, timezoneId: h.timeZone, locale: "en-GB", reducedMotion: "reduce" });
+    await page.clock.setFixedTime(new Date(h.now));
+    await serveState(page, historyState(h));
+    // No preference file, so the client would first offer the setup survey (B-5na1k): this is about the drawer.
+    await page.addInitScript(() => localStorage.setItem("baesian:baesian:setup", "true"));
+    await page.goto(ORIGIN);
+    await page.locator("main.desk").waitFor();
+    await page.evaluate("document.fonts.ready.then(() => true)");
+    await page.addStyleTag({ content: ".drawer-grip { display: none; }" });
+    await page.getByRole("button", { name: /^Branches/ }).click();
+    const d = page.getByRole("dialog", { name: "Your decisions, by branch" });
+    await d.getByRole("button", { name: "Wider" }).click();
+    await d.locator(`[data-row="card:${HISTORY.pick}"]`).click();
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(300);
+    await d.locator(".drawer-scroll").evaluate((el) => el.scrollTo(0, 0));
+    await page.waitForTimeout(100);
+    const out = join(MEDIA, "branches.png");
+    await d.screenshot({ path: out });
+    console.log(`made ${out}`);
+  } finally {
+    await browser.close();
+  }
+}
+
 // ------------------------------------------------------------------ the GIF
 
 const FPS = 12;
-const CLIENT = { width: 1280, height: 800 };
-const PANEL = { width: 460, height: 800 };
+/**
+ * The client and the panel, side by side, and the GIF's width over theirs. The client is as narrow as the desk goes with
+ * its path beside the card, and as tall as a card's reveal, so the GIF's text still reads when GitHub shows it 880 px
+ * wide; the GIF is 1020 px wide, a little more for screens that have the pixels, and about 3 MB.
+ */
+const CLIENT = { width: 1000, height: 800 };
+const PANEL = { width: 360, height: 800 };
+const GIF_SCALE = 0.75;
+/** The demo's project and decks (scripts/demo.ts), as the client keeps what it has offered in the browser's storage. */
+const DEMO = { project: "crumb", decks: ["checkout", "catalog"] };
 /** The cards the GIF answers, in order: which option it chooses, and what the panel says before and after. */
 const PLAN = [
   {
@@ -68,7 +278,7 @@ interface Panel {
 async function gif(): Promise<void> {
   if (spawnSync("ffmpeg", ["-version"]).status !== 0) throw new Error("the GIF needs ffmpeg on PATH");
   const work = mkdtempSync(join(tmpdir(), "baesian-media-"));
-  const demo = spawn(TSX, [join(ROOT, "scripts", "demo.ts"), join(work, "repo"), "--no-open"], { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"] });
+  const demo = startDemo(work);
   const out = createInterface({ input: demo.stdout! });
   const browser = await chromium.launch();
   try {
@@ -87,6 +297,7 @@ async function gif(): Promise<void> {
     }
 
     const client = await (await browser.newContext({ viewport: CLIENT })).newPage();
+    await skipOffers(client);
     const side = await (await browser.newContext({ viewport: PANEL })).newPage();
     await side.setContent(panelPage());
     const frames = join(work, "frames");
@@ -102,10 +313,8 @@ async function gif(): Promise<void> {
     watchDemo(out, panel, () => void drawPanel());
 
     await client.goto(url);
-    await client.waitForSelector("article.card");
-    // The demo repo has no preferences, so the client first offers the setup survey (B-5na1k): the GIF is about cards.
-    const notNow = client.getByRole("button", { name: /^Not now/ });
-    if (await notNow.count()) await notNow.click();
+    await client.waitForSelector(".opt");
+    await client.evaluate("document.fonts.ready.then(() => true)");
     await drawPanel();
     const stop = await screencast(client, frames, shots);
     const start = Date.now();
@@ -142,30 +351,89 @@ async function gif(): Promise<void> {
         await client.waitForTimeout(1300);
         await client.keyboard.up(key);
       }
-      await client.waitForTimeout(600);
       if (i === 0) {
         await caption("Your answer joins your path. It goes to the agent once the five seconds to undo it are up.");
-        await client.waitForTimeout(3500);
-      }
+        await client.waitForTimeout(3800);
+      } else await client.waitForTimeout(600);
     }
     await caption("When you overrule an agent, it may reply once, with a fact you lacked. Not its pick again.");
     await waitFor(() => panel.agents[1]!.entries[0]!.lines.length > 1, 15_000);
     await client.waitForTimeout(4500);
-    await caption("Every answer is stored in git, beside the code it decides.");
-    await client.waitForTimeout(3500);
+    // The answers by branch, in the Branches drawer (B): each branch's merge is held while a card on it waits.
+    await caption("Every answer is stored in git, by branch. A branch's merge is held while a card on it waits for you.");
+    await client.waitForTimeout(700);
+    await client.keyboard.press("b");
+    await client.waitForTimeout(4800);
     await stop();
     await encode(work, shots, start, Date.now());
   } finally {
     await browser.close();
-    if (demo.exitCode === null) {
-      demo.kill("SIGINT");
-      await new Promise((done) => demo.once("close", done));
-    }
+    await stopDemo(demo);
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// ------------------------------------------------------------------ the phone
+
+/**
+ * `docs/media/phone.png`: the demo's first card on a phone, 390×844, held until it lifts (B-yfehp), with its four
+ * answers named at the screen's edges. The finger is Chromium's own touch events, as the phone's browser tests send them.
+ */
+async function phone(): Promise<void> {
+  const work = mkdtempSync(join(tmpdir(), "baesian-media-"));
+  const demo = startDemo(work);
+  const browser = await chromium.launch();
+  try {
+    const { url } = await started(demo, createInterface({ input: demo.stdout! }));
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+    await skipOffers(page);
+    await page.goto(url);
+    // Past its reading time: a card can't be answered, or lifted, before it.
+    await page.waitForSelector(`${LIVE}:not([data-locked]) .opt`, { timeout: 20_000 });
+    await page.evaluate("document.fonts.ready.then(() => true)");
+    const box = (await page.locator(`${LIVE} h1`).boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
+    await page.locator(`${LIVE}[data-lift="lifted"]`).waitFor();
+    await page.waitForTimeout(700);
+    const out = join(MEDIA, "phone.png");
+    await page.screenshot({ path: out });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    console.log(`made ${out}`);
+  } finally {
+    await browser.close();
+    await stopDemo(demo);
     rmSync(work, { recursive: true, force: true });
   }
 }
 
 const LIVE = "article.card:not([data-leaving])";
+
+/**
+ * The demo (scripts/demo.ts), in a folder of `work`, with the client left for us to open. Its reviewer is made up, as
+ * the bakery is: `baesian serve` names whoever answers by git's `user.name`, and an agent hears that name, so a recording
+ * would otherwise show the name of whoever made it.
+ */
+function startDemo(work: string): ChildProcess {
+  const reviewer = { GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_0: "user.name", GIT_CONFIG_VALUE_0: "Robin", GIT_CONFIG_KEY_1: "user.email", GIT_CONFIG_VALUE_1: "robin@crumb.example" };
+  return spawn(TSX, [join(ROOT, "scripts", "demo.ts"), join(work, "repo"), "--no-open"], { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"], env: { ...process.env, ...reviewer } });
+}
+
+async function stopDemo(demo: ChildProcess): Promise<void> {
+  if (demo.exitCode !== null) return;
+  demo.kill("SIGINT");
+  await new Promise((done) => demo.once("close", done));
+}
+
+/**
+ * The demo's repo has no preferences and its decks have briefings, so the client would first offer the setup survey
+ * (B-5na1k) and each deck's briefing card (B-j6b75): marked offered, as the client keeps them, since this is about cards.
+ */
+const skipOffers = (page: Page) =>
+  page.addInitScript((d) => {
+    localStorage.setItem(`baesian:${d.project}:setup`, "true");
+    localStorage.setItem(`baesian:${d.project}:briefed`, JSON.stringify(d.decks));
+  }, DEMO);
 
 /** Whether the card on the desk is the one with this title: the path's current node sits between the answered rows and "Next". */
 async function isUp(page: Page, title: string): Promise<boolean> {
@@ -263,8 +531,8 @@ async function encode(work: string, shots: { t: number; file: string; side: bool
   }
   mkdirSync(MEDIA, { recursive: true });
   const out = join(MEDIA, "demo.gif");
-  const width = Math.round((CLIENT.width + PANEL.width) * 0.75);
-  const filter = `[0][1]hstack=inputs=2,scale=${width}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=160:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
+  const width = Math.round((CLIENT.width + PANEL.width) * GIF_SCALE);
+  const filter = `[0][1]hstack=inputs=2,scale=${width}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
   const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-framerate", String(FPS), "-i", join(seq.client, "%05d.jpg"), "-framerate", String(FPS), "-i", join(seq.side, "%05d.png"), "-filter_complex", filter, "-loop", "0", out], { stdio: "inherit" });
   if (r.status !== 0) throw new Error("ffmpeg couldn't make the GIF");
   console.log(`made ${out} (${ticks} frames, ${(readFileSync(out).length / 1e6).toFixed(1)} MB)`);
@@ -281,8 +549,8 @@ function panelPage(): string {
 html, body { margin: 0; height: 100%; }
 body { background: #2e2343; color: #f7eed3; display: flex; }
 main { display: flex; flex-direction: column; width: 100%; }
-.caption { background: #cbc0cd; color: #2e2343; font: 600 22px/1.3 "Alegreya", Georgia, serif; padding: 26px 28px; min-height: 120px; display: flex; align-items: center; border-left: 1px solid #b6a9ba; }
-.term { flex: 1; padding: 20px 22px; font: 13px/1.5 "SF Mono", Menlo, monospace; }
+.caption { background: #cbc0cd; color: #2e2343; font: 600 22px/1.3 "Alegreya", Georgia, serif; padding: 22px 22px; min-height: 172px; box-sizing: border-box; display: flex; align-items: center; border-left: 1px solid #b6a9ba; }
+.term { flex: 1; padding: 18px 22px; font: 13px/1.5 "SF Mono", Menlo, monospace; }
 .label { font: 600 12px/1 "Archivo", system-ui, sans-serif; color: #a99cbb; margin: 0 0 18px; }
 .agent { margin-bottom: 22px; }
 .who { font: 700 13px/1.4 "Archivo", system-ui, sans-serif; color: #f0e4be; }
@@ -321,10 +589,18 @@ function panelHtml(p: Panel): string {
 
 // ------------------------------------------------------------------ run
 
+// The parts, by name; `figures` is every PNG, and nothing is everything. `drawer-data` is never run unasked: it reads this
+// clone's own decision record, which differs from machine to machine.
+const PARTS: Record<string, (() => Promise<void>)[]> = {
+  gif: [gif],
+  figures: [figures, drawer, phone],
+  drawer: [drawer],
+  phone: [phone],
+  "drawer-data": [drawerData],
+};
 const what = process.argv[2];
-if (what && what !== "gif" && what !== "figures") {
-  console.error("readme-media: say `gif` or `figures`, or nothing for both");
+if (what && !PARTS[what]) {
+  console.error(`readme-media: say ${Object.keys(PARTS).map((p) => `\`${p}\``).join(", ")}, or nothing for the GIF and every figure`);
   process.exit(1);
 }
-if (what !== "gif") await figures();
-if (what !== "figures") await gif();
+for (const part of what ? PARTS[what]! : [...PARTS.figures!, gif]) await part();

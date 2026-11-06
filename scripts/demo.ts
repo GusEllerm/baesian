@@ -235,8 +235,15 @@ function git(cwd: string, ...args: string[]): void {
   if (r.status !== 0) fail(`git ${args.join(" ")}: ${r.stderr.trim()}`);
 }
 
+/**
+ * The demo's own setup runs the CLI with the desktop's notifications off (`BAESIAN_OS_NOTIFY=0`): its blocking and hard
+ * cards would each pop one up, for someone already looking at the client, and once per run when the README's media
+ * are made.
+ */
+const SETUP_ENV = { ...process.env, BAESIAN_OS_NOTIFY: "0" };
+
 function baesian(cwd: string, args: string[], input?: string): string {
-  const r = spawnSync(CLI[0]!, [...CLI.slice(1), ...args], { cwd, input, encoding: "utf8" });
+  const r = spawnSync(CLI[0]!, [...CLI.slice(1), ...args], { cwd, input, encoding: "utf8", env: SETUP_ENV });
   if (r.status !== 0) fail(`baesian ${args.join(" ")} exited ${r.status}:\n${r.stderr || r.stdout}`);
   return r.stdout;
 }
