@@ -699,3 +699,79 @@ describe("where a branch began (B-c4efj)", () => {
     expect(into(dir, "teammate").map((m) => m.branch)).toEqual(["v1"]);
   });
 });
+
+// B-h7rsv ("Record it at the push"): a push that moves the remote's default branch to a branch's tip records that branch
+// merged into it, as a fast-forward of the default branch is recorded; `pre-push` reads the refs from its input.
+describe("a branch pushed to the remote's default branch (B-h7rsv)", () => {
+  /** pre-push, as git runs it for `git push origin <local>:<remote>`, with the refs on its input. */
+  const prePush = (dir: string, local: string, remoteRef: string, remoteWas: string, localRef = `refs/heads/${local}`) =>
+    runHook(Store.open(dir), "pre-push", ["origin"], io, {}, `${localRef} ${sh(dir, "rev-parse", local)} ${remoteRef} ${remoteWas}\n`);
+
+  it("records v1/next merged into main as it's pushed there, once: bringing main up to it later finds the same merge", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    twoMachines(dir);
+    const was = sh(dir, "rev-parse", "origin/main");
+    sh(dir, "checkout", "-q", "-b", "v1/next");
+    const a = await commitAs(dir, "v1-a.txt", { card: true });
+    const b = await commitAs(dir, "v1-b.txt", { card: true });
+    await commitAs(dir, "v1-plain.txt");
+    const tip = head(dir);
+    expect(await prePush(dir, "v1/next", "refs/heads/main", was)).toBe(0);
+    const m = only(dir);
+    expect(m).toMatchObject({ branch: "v1/next", into: "main", commit: tip, tip, cards: [a.id, b.id].sort(), commits: [a.commit, b.commit] });
+    expect(said.at(-1)).toMatch(/recorded v1\/next merged into main, as it's pushed to origin, with 2 cards and 2 commits citing cards/);
+    // The push lands; later main is brought up to it here, and post-merge finds the merge already recorded.
+    sh(dir, "push", "-q", "origin", "v1/next:main");
+    sh(dir, "fetch", "-q", "origin");
+    sh(dir, "checkout", "-q", "main");
+    sh(dir, "merge", "-q", "--ff-only", "origin/main");
+    await hook(dir, "post-merge", "0");
+    expect(merges(dir)).toEqual([m]);
+  });
+
+  it("records nothing for a push that isn't a branch fast-forwarding the default branch", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    twoMachines(dir);
+    const was = sh(dir, "rev-parse", "origin/main");
+    sh(dir, "checkout", "-q", "-b", "feat");
+    await commitAs(dir, "feat.txt", { card: true });
+    // To another branch of the remote's; creating the remote's branch; deleting it; the default branch pushed itself.
+    expect(await prePush(dir, "feat", "refs/heads/feat", "0".repeat(40))).toBe(0);
+    expect(await prePush(dir, "feat", "refs/heads/release", was)).toBe(0);
+    await runHook(Store.open(dir), "pre-push", ["origin"], io, {}, `(delete) ${"0".repeat(40)} refs/heads/main ${was}\n`);
+    sh(dir, "checkout", "-q", "main");
+    await commitAs(dir, "main.txt");
+    expect(await prePush(dir, "main", "refs/heads/main", was)).toBe(0);
+    // A forced push that replaces the remote's main, and one from a tip this clone doesn't have.
+    sh(dir, "checkout", "-q", "-b", "other", "main~1");
+    await commitAs(dir, "other.txt", { card: true });
+    expect(await prePush(dir, "other", "refs/heads/main", sh(dir, "rev-parse", "main"))).toBe(0);
+    expect(await prePush(dir, "feat", "refs/heads/main", "f".repeat(40))).toBe(0);
+    expect(merges(dir)).toEqual([]);
+  });
+
+  it("finds the branch pushed as HEAD, and the remote's default branch by its HEAD, whatever it's called", async () => {
+    const { dir } = repo();
+    recorded(dir);
+    const { remote } = twoMachines(dir);
+    sh(dir, "push", "-q", "origin", "main:trunk");
+    sh(remote, "symbolic-ref", "HEAD", "refs/heads/trunk");
+    sh(dir, "remote", "set-head", "origin", "-a");
+    const was = sh(dir, "rev-parse", "origin/trunk");
+    sh(dir, "checkout", "-q", "-b", "feat");
+    const c = await commitAs(dir, "feat.txt", { card: true });
+    expect(await prePush(dir, "feat", "refs/heads/main", was)).toBe(0);
+    expect(merges(dir)).toEqual([]);
+    expect(await prePush(dir, "feat", "refs/heads/trunk", was, "HEAD")).toBe(0);
+    expect(only(dir)).toMatchObject({ branch: "feat", into: "trunk", commit: c.commit, cards: [c.id] });
+  });
+
+  it("never fails, and says nothing, when it can't look", async () => {
+    const { dir } = repo();
+    said.length = 0;
+    expect(await runHook(Store.open(dir), "pre-push", ["origin"], io, {}, "refs/heads/x 1234 refs/heads/main 5678\nnot a ref line\n")).toBe(0);
+    expect(said).toEqual([]);
+  });
+});

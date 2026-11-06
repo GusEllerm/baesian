@@ -819,13 +819,14 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
   program
     .command("hook", { hidden: true })
     .description("run a git hook (called by the hooks `baesian init` installs)")
-    .argument("<name>", "pre-commit, commit-msg, post-commit, post-merge or post-rewrite")
+    .argument("<name>", "pre-commit, commit-msg, post-commit, post-merge, post-rewrite or pre-push")
     .argument("[args...]", "the hook's arguments")
     .action(async (name: string, args: string[]) => {
       const s = store();
-      // Personal mode's post-rewrite hands Baesian the commits it rewrote, on standard input (B-4rwyz); shared mode's doesn't.
+      // Personal mode's post-rewrite hands Baesian the commits it rewrote, on standard input (B-4rwyz); shared mode's
+      // doesn't. pre-push hands it the refs being pushed (B-h7rsv).
       let input = "";
-      if (name === "post-rewrite" && s.personal) {
+      if ((name === "post-rewrite" && s.personal) || name === "pre-push") {
         try {
           input = await io.stdin();
         } catch {

@@ -3528,7 +3528,7 @@ sig = "c5536d7543c333b1"
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
 target = "src/cli.ts#buildProgram"
-sig = "3b8ccfff8c2b986e"
+sig = "258083b65c7defb6"
 
 [[bindings]]
 doc = "docs/vault/Design/MCP Server.md"
@@ -5273,7 +5273,7 @@ sig = "5538e9085f2626dc"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/cli.ts#buildProgram"
-sig = "3b8ccfff8c2b986e"
+sig = "258083b65c7defb6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -5333,7 +5333,7 @@ sig = "94b932d3409c0be1"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "src/hooks.ts#runHook"
-sig = "a5111863703f3a2c"
+sig = "32477028676da366"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -6053,7 +6053,7 @@ sig = "9259b0418d425979"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hookblock.ts"
-sig = "5f3bde288101e016"
+sig = "9192b7c5a165829f"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6063,7 +6063,7 @@ sig = "48be4cdec96dc473"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hookblock.ts#HOOKS"
-sig = "7274ab60279195a1"
+sig = "ff157c13a00f1655"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6073,7 +6073,7 @@ sig = "7ed80624c5e1228e"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hookblock.ts#hookBlock"
-sig = "7947713536bf4714"
+sig = "8239e5aded94c1a6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6143,7 +6143,7 @@ sig = "7ba5e875dd9f2ab1"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#personalHook"
-sig = "37e2c74949fe6786"
+sig = "9556ec96689f6014"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6154,6 +6154,11 @@ sig = "c6f9e1149113a883"
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#personalProblems"
 sig = "94b932d3409c0be1"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/hooks.ts#pushedRefs"
+sig = "9d7d29b5f7f7dca2"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6168,7 +6173,7 @@ sig = "0ad1e80550962f9a"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/hooks.ts#runHook"
-sig = "a5111863703f3a2c"
+sig = "32477028676da366"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6208,12 +6213,12 @@ sig = "be9918f1596a1667"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#Moved"
-sig = "45272934337da0f3"
+sig = "c151219218b097ff"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/merges.ts#RECORD"
-sig = "053027c60ebdd6e7"
+sig = "70d7de35a9a50c14"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -6334,6 +6339,11 @@ sig = "780527b2e0bc98c7"
 doc = "docs/vault/Modules/src-gate.md"
 target = "src/store.ts#Store"
 sig = "979741f7b6499642"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-gate.md"
+target = "src/store.ts#mergeFile"
+sig = "79d5bc2aaedc102b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -7508,7 +7518,7 @@ sig = "28af1dbe575e9f36"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "src/hooks.ts#runHook"
-sig = "a5111863703f3a2c"
+sig = "32477028676da366"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
@@ -8533,7 +8543,7 @@ sig = "19da8b178a90e203"
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"
 target = "src/hooks.ts#runHook"
-sig = "a5111863703f3a2c"
+sig = "32477028676da366"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-vault.md"

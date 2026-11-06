@@ -12,7 +12,7 @@ import { LIVE_DIR, RECORD_DIR, type Store, ValidationError } from "./store.js";
 import { syncRelay } from "./sync.js";
 import { type Trailers, parseTrailers } from "./trailers.js";
 import { DECISIONS, type PlannedNote, RULES, vaultOf, writeNotes } from "./vault.js";
-import { findMerges, noteSquash, rebasing, recordCommitted, takeSquash } from "./merges.js";
+import { type Found, findMerges, noteSquash, rebasing, recordCommitted, takeSquash } from "./merges.js";
 import { clearCited, noteCited, rewrites, takeCited, withoutBaesianTrailers } from "./personal.js";
 import { ledgerBody } from "./schema.js";
 
@@ -264,12 +264,12 @@ function hookNames(dir: string): string[] {
  * The repo's folder is found as the hook runs, as `repoHooks()` finds it (the last `core.hooksPath` git reads other than
  * `at.hooks`, Baesian's own, else `at.gitHooks`, git's own), so when a team points `core.hooksPath` somewhere new, its
  * hooks run from there. A hook that is one of these (`PERSONAL_MARK`: from Baesian's own folder, however it's named, or
- * a copy or a link of one) is never run from here, so the chain can't loop. `post-rewrite`'s input is read first, so
- * Baesian and the repo's hook each get it.
+ * a copy or a link of one) is never run from here, so the chain can't loop. `post-rewrite`'s and `pre-push`'s input is
+ * read first, so Baesian and the repo's hook each get it.
  */
 export function personalHook(name: string, at: { hooks: string; gitHooks: string }): string {
   const gate = (HOOKS as readonly string[]).includes(name);
-  const rewrite = name === "post-rewrite";
+  const rewrite = name === "post-rewrite" || name === "pre-push";
   const lines = [
     "#!/bin/sh",
     `${PERSONAL_MARK} ${name} hook, written by \`baesian init --personal\`, never`,
@@ -672,12 +672,104 @@ function recordMerges(store: Store, hook: "post-commit" | "post-merge" | "post-r
     for (const f of findMerges(store, { into, from, to, ...(squashed ? { squashed } : {}), deep: hook !== "post-commit" })) {
       if (!store.writeMerge(f)) continue;
       n += 1;
-      const what = [f.cards.length ? `${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : "", f.commits.length ? `${f.commits.length} commit${f.commits.length === 1 ? "" : "s"} citing cards` : ""].filter(Boolean).join(" and ");
-      say(io, text(`recorded ${f.branch} merged into ${f.into}${what ? `, with ${what}` : ""} (${f.commit.slice(0, 7)})`));
+      say(io, recordedLine(f));
     }
     return n;
   } catch (e) {
     say(io, warning(`couldn't look for merges (${e instanceof Error ? e.message.split("\n")[0] : String(e)})`));
+    return 0;
+  }
+}
+
+/** What a hook says of a merge it recorded: the branches, what it brought, and its commit. */
+function recordedLine(f: Found, how = ""): Line {
+  const what = [f.cards.length ? `${f.cards.length} card${f.cards.length === 1 ? "" : "s"}` : "", f.commits.length ? `${f.commits.length} commit${f.commits.length === 1 ? "" : "s"} citing cards` : ""].filter(Boolean).join(" and ");
+  return text(`recorded ${f.branch} merged into ${f.into}${how}${what ? `, with ${what}` : ""} (${f.commit.slice(0, 7)})`);
+}
+
+/** An object name of all zeros: in a push's input, a ref created (the remote's) or deleted (the local). */
+const NONE = /^0+$/;
+
+/** A ref update a push sends, as git hands `pre-push` each one on its standard input. */
+interface Pushed {
+  localRef: string;
+  local: string;
+  remoteRef: string;
+  remote: string;
+}
+
+/** `pre-push`'s standard input: a line per ref update, `<local ref> <local object> <remote ref> <remote object>`. */
+export function pushedRefs(input: string): Pushed[] {
+  return input.split("\n").flatMap((line) => {
+    const [localRef, local, remoteRef, remote] = line.trim().split(/\s+/);
+    return localRef && local && remoteRef && remote ? [{ localRef, local, remoteRef, remote }] : [];
+  });
+}
+
+/** The remote's default branch (B-jr8mk): its HEAD, as the last fetch saw it, else the repo's own, as git says it. */
+function remoteDefault(store: Store, remote: string | undefined): string | undefined {
+  if (remote) {
+    try {
+      const ref = git(store.repo.toplevel, ["symbolic-ref", "-q", `refs/remotes/${remote}/HEAD`]);
+      if (ref.startsWith(`refs/remotes/${remote}/`)) return ref.slice(`refs/remotes/${remote}/`.length);
+    } catch {
+      // a URL, or a remote whose HEAD isn't known here
+    }
+  }
+  return store.defaultBranch();
+}
+
+/** The branch a push sent: its local ref's, HEAD's when that's what was pushed, or the one local branch at the object. */
+function pushedBranch(store: Store, u: Pushed, target: string): string | undefined {
+  const top = store.repo.toplevel;
+  if (u.localRef.startsWith("refs/heads/")) return u.localRef.slice("refs/heads/".length);
+  if (u.localRef === "HEAD") {
+    try {
+      return git(top, ["symbolic-ref", "-q", "--short", "HEAD"]);
+    } catch {
+      // detached: look for the branch at the object
+    }
+  }
+  const at = git(top, ["for-each-ref", "--points-at", u.local, "--format=%(refname:short)", "refs/heads"])
+    .split("\n")
+    .filter((b) => b && b !== target);
+  return at.length === 1 ? at[0] : undefined;
+}
+
+/**
+ * B-h7rsv ("Record it at the push"): a push that moves the remote's default branch to a branch's tip, as
+ * `git push origin v1/next:main` does, records that branch merged into it, at the push, as a fast-forward of the default
+ * branch here is recorded (`findMerges()`). Only a fast-forward of the remote's branch, from a tip this clone has: a
+ * forced push isn't a merge, and one the remote would refuse isn't recorded. Pushing the default branch itself records
+ * nothing: its own movement here was recorded when it moved. Nothing goes to the relay here, so the push never waits on
+ * it: the merge goes up at the next sync. Never fails, and says nothing when it couldn't look. Returns how many it
+ * recorded.
+ */
+function recordPush(store: Store, remote: string | undefined, input: string, io: HookIo): number {
+  try {
+    const top = store.repo.toplevel;
+    const updates = pushedRefs(input);
+    if (!updates.length) return 0;
+    const target = remoteDefault(store, remote);
+    if (!target) return 0;
+    let n = 0;
+    for (const u of updates) {
+      if (u.remoteRef !== `refs/heads/${target}` || NONE.test(u.local) || NONE.test(u.remote) || u.local === u.remote) continue;
+      const branch = pushedBranch(store, u, target);
+      if (!branch || branch === target) continue;
+      try {
+        git(top, ["merge-base", "--is-ancestor", u.remote, u.local]);
+      } catch {
+        continue; // not a fast-forward, or the remote's tip isn't here
+      }
+      for (const f of findMerges(store, { into: target, from: u.remote, to: u.local, moved: true })) {
+        if (f.branch !== branch || !store.writeMerge(f)) continue;
+        n += 1;
+        say(io, recordedLine(f, `, as it's pushed to ${remote ?? "the remote"}`));
+      }
+    }
+    return n;
+  } catch {
     return 0;
   }
 }
@@ -689,8 +781,10 @@ async function sendMerges(store: Store, io: HookIo, http: Http): Promise<void> {
 }
 
 /**
- * The hooks Baesian installs that this repo's hooks folder lacks, its block included (D181 added two): a repo set up
- * before them gets them by running `baesian init` again, which `pre-commit` says.
+ * The hooks Baesian installs that this repo's hooks folder lacks, its block included (D181 added two, and B-h7rsv
+ * `pre-push`): a repo set up before them gets them by running `baesian init` again, which `pre-commit` says. A clone in
+ * personal mode has a `pre-push` of its own already, which passes the push on to the repo's: it lacks the block, so it's
+ * listed too, and `baesian init`, which keeps a personal clone personal, writes it again.
  */
 export function missingHooks(store: Store): HookName[] {
   let dir: string;
@@ -753,7 +847,8 @@ function carryLedger(store: Store, input: string): number {
 
 /**
  * Run one hook. Returns the exit code git sees. A repo without Baesian set up is never blocked. `input` is the hook's
- * standard input, which only personal mode's `post-rewrite` reads (B-4rwyz).
+ * standard input, which `pre-push` reads (the refs being pushed, B-h7rsv), as personal mode's `post-rewrite` does
+ * (B-4rwyz).
  */
 export async function runHook(store: Store, name: string, args: string[], io: HookIo, http: Http = {}, input = ""): Promise<number> {
   if (!store.isInitialised()) return 0;
@@ -766,7 +861,8 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       say(io, pulled.notes.map((n) => text(n)));
       // A repo set up before D181 lacks the hooks that find merges until `baesian init` runs again.
       const missing = missingHooks(store);
-      if (missing.length) say(io, [warning(`this repo's hooks lack ${missing.join(" and ")}, which find merges`), next("baesian init", `to add ${missing.length === 1 ? "it" : "them"}`)]);
+      const lacking = missing.length < 2 ? missing.join("") : `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}`;
+      if (missing.length) say(io, [warning(`this repo's hooks lack ${lacking}, which find merges`), next("baesian init", `to add ${missing.length === 1 ? "it" : "them"}`)]);
       // Personal mode (B-4rwyz) commits no record and no notes: the live layer is the record. Each commit starts afresh.
       if (store.personal) {
         clearCited(top);
@@ -839,6 +935,10 @@ export async function runHook(store: Store, name: string, args: string[], io: Ho
       if (store.personal) carryLedger(store, input);
       // D181: a rebase, `git pull --rebase` included, may bring in merges made upstream. An amend brings nothing.
       if (args[0] === "rebase" && recordMerges(store, "post-rewrite", io)) await sendMerges(store, io, http);
+      return 0;
+    case "pre-push":
+      // B-h7rsv: a branch pushed to the remote's default branch merged into it. Never stops the push.
+      recordPush(store, args[0], input, io);
       return 0;
     default:
       say(io, failed(`unknown hook "${name}"`));

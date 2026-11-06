@@ -40,6 +40,11 @@ export interface Moved {
   squashed?: { tip: string; commits: string[] };
   /** Match by patch ID too: only for a merge, a pull or a rebase, never a plain commit. */
   deep?: boolean;
+  /**
+   * A movement of the branch rather than a commit made on it, whose commits were all made here (a push, B-h7rsv): where
+   * the record is committed, the ledger is read for the commits it brought, as `deep` reads it, with no patch-ID matching.
+   */
+  moved?: boolean;
   /** When this is happening: a fast-forward's time, which git doesn't record. Default now. */
   now?: Date;
 }
@@ -270,7 +275,7 @@ export const RECORD: MergeDetector = {
   arrivals(store, top, chain, m, ledger) {
     const filed = filedArrivals(store, top, chain, m);
     // A plain commit brings no other branch's commits: the ledger is read for a merge, a squash or a movement only.
-    if (!m.deep && !m.squashed && chain.every((c) => c.parents.length < 2)) return filed;
+    if (!m.deep && !m.moved && !m.squashed && chain.every((c) => c.parents.length < 2)) return filed;
     const byCommit = ledger();
     const direct = citedArrivals(top, chain, m, byCommit);
     const came = new Set(direct.arrivals.flatMap((a) => [...a.by.keys()]));
