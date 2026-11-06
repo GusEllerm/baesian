@@ -517,7 +517,7 @@ describe("merges as the bug sweep found them (2026-11-05)", () => {
       expect(into(dir, "main").map((m) => [m.branch, m.commit, m.tip]), how).toEqual([["v1/next", tip, tip]]);
       expect(into(dir, "main")[0]!.cards, how).toHaveLength(3);
     }
-  });
+  }, 20_000); // two repos and real git, twice: about 2.5 s alone, past the 5 s default when the suite runs in parallel
 
   it("one branch fast-forwarded into two branches at one commit is two merges, each in a file of its own (D3)", async () => {
     const { dir } = repo();
