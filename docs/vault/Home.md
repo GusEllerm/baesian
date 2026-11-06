@@ -17,6 +17,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-05.*
 
+- **The bug sweep's data-path cards, built (2026-11-05, night)** ([[2026-11-05 Merges After the Sweep]]), on a builder's branch for `v1/next`, each as the user decided it: a branch brought up to another's tip before any work of its own began there, no merge (B-c4efj); a branch pushed to the remote's default branch is recorded as merged into it, by a new `pre-push` hook that never stops a push (B-h7rsv); the history scan, once at first link and on request with `baesian sync --history` (B-dezkk; the flag itself is B-x179n, provisional), which in this repo records one merge, worktree-agent-aaba362 into overnight/2026-11-03; and the relay keeps a merge it can't tie to any card's text, as /privacy now says (B-15v62). Also: a command whose reader stops early (`| head -1`) ends quietly.
+  - **To pick them up:** run `baesian init` once in each repo set up before `pre-push` (this repo's `.githooks/pre-push` is committed), and rebuild the `baesian` on PATH; then, here, `baesian sync --history` once.
+  - **Next:** the drawer's side of B-c4efj (records of this kind already made), and the rest of the deck branches-view.
+
 - **A bug sweep of the branches view (2026-11-05, late)** ([[2026-11-05 Linking This Repo]]), on `v1/next` for `v0.1.7`: 43 findings, all reproduced; 27 bugs fixed with tests, the gutter's drawing checked by invariant tests; merges recorded once per movement, on every machine that finds them, in files named by target too (B-ttn2c).
   - **Next:** the deck branches-view: a worktree brought up to v1/next as it starts, drawn as a merge into it and again as its start (B-c4efj), whether that ends v1/next (B-9v07y), how a sync is drawn (B-gm915), seven smaller cards, and B-15v62 (hard: a commits-only merge the relay can't tie to cards, against the privacy page's promise).
 
