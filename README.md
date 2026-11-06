@@ -149,3 +149,11 @@ npm run readme-media   # remakes this README's GIF and figures (needs ffmpeg)
 
 The project's memory is the Obsidian vault in [`docs/vault/`](docs/vault/Home.md): the design, the decision log,
 and a log of each working session. Start at `Home.md`.
+
+## Why "Baesian"
+
+It's a dating app for decisions. Your agents line up their options, you swipe on the one you'd pick before they
+show you theirs, and over time you find out how compatible you are: your calibration is the match rate. The
+decisions you keep agreeing on become rules, which is about as committed as it gets.
+
+Any resemblance to *Bayesian* is coincidental. It does update on the evidence, though.
