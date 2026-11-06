@@ -1,0 +1,15 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-fjbt5",
+  "revision": 1,
+  "response": "alternative",
+  "choice": "Withdraw and refile, as now",
+  "first_choice": "alternative",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "04fe843d863465a28b9c28bf628af571f9ab090ec273fb6c2d268debbb876899",
+  "client": "hosted-desktop",
+  "at": "2026-11-06T15:37:38.333Z"
+}
