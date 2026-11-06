@@ -4272,6 +4272,11 @@ sig = "e0fbb29477bf0c92"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = "docs/media/branches.json"
+sig = "cdb30caced4f3814"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "plugins/baesian/hooks/baesian.mjs"
 sig = "fe458262d20ef072"
 
