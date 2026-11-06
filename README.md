@@ -25,8 +25,8 @@ overrule one, and each agent's terminal gets your answer. On your phone, you hol
 an answer.</sub></p>
 
 > [!NOTE]
-> Baesian is in development, and not released yet. The hosted client at [baesian.dev](https://baesian.dev) runs
-> v0.1.8; the CLI and the plugin install from this repo; file formats may change before v1.
+> Baesian is in development, and not released yet. The hosted client at [baesian.dev](https://baesian.dev) is live;
+> the CLI and the plugin install from this repo; file formats may change before v1.
 
 Your Claude Code and Codex agents make design decisions all day, and a few of them are hard to undo: where a
 signed-in user's session lives, how prices are stored, what deleting an account removes. Baesian has the agent put

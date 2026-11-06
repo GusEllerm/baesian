@@ -1,6 +1,6 @@
 {
   "name": "baesian",
-  "version": "0.0.0",
+  "version": "0.1.9",
   "private": true,
   "description": "Swipe review for agent decisions: agents file decision cards, a human answers them, verdicts flow back through git.",
   "type": "module",
