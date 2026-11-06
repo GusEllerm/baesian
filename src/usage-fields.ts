@@ -90,7 +90,7 @@ export const USAGE_KINDS: Record<string, UsageKind> = {
       client: { value: oneOf(["desktop", "phone"]), what: "the desktop layout or the phone's" },
       level: { value: oneOf(USAGE_LEVELS), what: "the card's level in force" },
       minutes_waiting: { value: NUMBER, what: "minutes from the card's filing to the answer" },
-      blind_match: { value: YES_NO, what: "whether your choice before the agent's pick was shown matched it" },
+      blind_match: { value: YES_NO, what: "whether your choice before the agent's pick was shown matched it; left out for a card you'd answered in chat first" },
       switched: { value: YES_NO, what: "whether you changed your choice after seeing the agent's pick" },
       was_held: { value: YES_NO, what: "whether the gate had held the card back" },
       made_rule: { value: YES_NO, what: "whether you asked for a rule from it" },

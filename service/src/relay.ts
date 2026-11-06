@@ -276,7 +276,8 @@ export class Relay {
       client: v.client === "hosted-phone" ? "phone" : "desktop",
       level: store.levelOf(v.card, v.revision) ?? card.meta.level,
       minutes_waiting: Math.max(0, Math.round((Date.parse(v.at) - Date.parse(card.meta.created)) / 60_000)),
-      blind_match: v.first_choice === "proposal",
+      // A card answered in chat first had no blind choice, so there is nothing to match: left out, not counted a miss (B-nxhtx).
+      ...(v.seen ? {} : { blind_match: v.first_choice === "proposal" }),
       switched: v.first_choice !== undefined && final !== undefined && v.first_choice !== final,
       was_held: g?.mode === "enforce" && g.outcome === "held",
       made_rule: v.make_rule === true,

@@ -1633,7 +1633,7 @@ sig = "cd4af2280d048625"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/relay.ts#Relay"
-sig = "821182ac298f4dc0"
+sig = "07b0dff5a8de19a4"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2398,7 +2398,7 @@ sig = "8b0f7dbe2c0374ae"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/usage-fields.ts#USAGE_KINDS"
-sig = "a17cdb3efd63752c"
+sig = "5f260d4646f447ed"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3833,7 +3833,7 @@ sig = "04b8e6460f25d470"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "service/src/relay.ts#Relay"
-sig = "821182ac298f4dc0"
+sig = "07b0dff5a8de19a4"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -3933,7 +3933,7 @@ sig = "29838e1bb7961e66"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "src/usage-fields.ts#USAGE_KINDS"
-sig = "a17cdb3efd63752c"
+sig = "5f260d4646f447ed"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -4038,12 +4038,12 @@ sig = "08dab230c6b553ec"
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
 target = "src/usage-fields.ts"
-sig = "94c9c42cf71088ab"
+sig = "4668974dd8e66604"
 
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
 target = "src/usage-fields.ts#USAGE_KINDS"
-sig = "a17cdb3efd63752c"
+sig = "5f260d4646f447ed"
 
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
@@ -4108,7 +4108,7 @@ sig = "4781fab8a91512d8"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "service/src/relay.ts#Relay"
-sig = "821182ac298f4dc0"
+sig = "07b0dff5a8de19a4"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"

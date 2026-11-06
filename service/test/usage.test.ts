@@ -115,6 +115,23 @@ describe("what's counted (B-7nq85)", () => {
     expect(all.find((r) => r.kind === "account_created")!.hour).toBe("2027-02-01T09");
   });
 
+  it("leaves blind_match out for a card answered in chat first, which had no blind choice to match (B-nxhtx)", async () => {
+    const project = `p-usage-${Math.random().toString(36).slice(2, 8)}`;
+    const person = await signUp({ handle: `ada-${Math.random().toString(36).slice(2, 7)}` });
+    const { access } = await machineLogin(person, project, "ada-laptop");
+    const store = machineStore(new MemoryStorage(), project);
+    const seen = fileCard(store, { answered_in_chat: "Postgres, please", proposal: "Postgres", alternative: "SQLite" });
+    await upload(store, seen, project, access);
+    const answered = await person.browser.post(`/v1/projects/${project}/verdicts`, { card: seen, revision: 1, response: "accept" });
+    expect(answered.status, JSON.stringify(answered.body)).toBe(201);
+    const key = (await db().prepare("SELECT usage_key FROM projects WHERE id = ?").bind(project).first<{ usage_key: string }>())!.usage_key;
+    const events = (await rows()).filter((r) => r.project === key && r.kind === "card_answered").map((r) => JSON.parse(r.fields) as Record<string, unknown>);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ response: "accept", switched: false });
+    expect(events[0]).not.toHaveProperty("blind_match");
+    expect(usageProblem("card_answered", events[0]!)).toBeUndefined();
+  });
+
   it("opting out stops counting and deletes the account's events at once; back in, it's a new ID, unlinked to before", async () => {
     const project = `p-optout-${Math.random().toString(36).slice(2, 8)}`;
     const person = await signUp();
