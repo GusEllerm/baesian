@@ -39,6 +39,9 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   await expect(who).toContainText("Gus Ellerm runs the service, as an individual");
   await expect(who).toContainText("It isn't a service of the University of Chicago or of Globus");
   await expect(who.getByRole("link", { name: "privacy@baesian.dev" })).toHaveAttribute("href", "mailto:privacy@baesian.dev");
+  // B-ew5e8: what your agents file names the model each ran on, beside the agent (B-k0w7d).
+  await expect(page.getByRole("region", { name: "What it keeps, and why" })).toContainText("the agent that filed it and the model it ran on, the machine it came from");
+  await expect(page.getByText("Last changed 10 November 2026.")).toBeVisible();
   const kept = page.getByRole("region", { name: "How long it's kept" });
   await expect(kept.getByRole("listitem").filter({ hasText: "once answered or withdrawn" })).toContainText("30 days after every machine signed in to the project has the answer or the withdrawal");
   await expect(kept.getByRole("listitem").filter({ hasText: "held back by your settings" })).toContainText("90 days after it arrived");

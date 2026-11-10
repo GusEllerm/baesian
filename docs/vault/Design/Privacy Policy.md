@@ -4,7 +4,7 @@ status: draft
 authority: proposes
 summary: "The hosted service's privacy policy, which Hosted Service section 6 puts before anything is published: who runs it (Gus Ellerm, as an individual, B-mkryw), what it keeps and why, the lawful basis, how long (B-9jqt4, B-ec3kj, B-dsqyd), who else handles it, deleting an account (B-b46z3), people's rights, and where to write (privacy@baesian.dev, forwarded, B-8xxrc). The website's /privacy page carries this text. Not legal advice; what needs a lawyer is listed at the end."
 created: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-10
 reviewed: 2026-11-04
 tags: [baesian, design, hosted, privacy]
 ---
@@ -15,7 +15,9 @@ tags: [baesian, design, hosted, privacy]
 
 ## The policy, as the page says it
 
-*Last changed 6 November 2026* (`POLICY_CHANGED`). Changed for B-15v62 ("Keep it, and say so", decided by the user): a merge whose commits the service was never told cite cards (made on a machine that isn't signed in to the project) is kept while the project exists, as one that brought only a deck is, since nothing ties it to a card's text; the relay had dropped it at its next daily look, reading "never had their ledger entries" as "they all went". Corrected on 2026-11-05 (B-nkbqs): it had said branch names never reach the service, but every card carries `source_branch`, written by the CLI; what's kept didn't change, only what the page says about it. Changed the same day for D181: the commits that cite cards and the merges the CLI finds go up to the service (their IDs, times, branches and cards, never a commit's subject or message), with how long each is kept; and a second correction, that a branch's deck, which names the branch, is kept while the project is, as decks always were. Changed again the same day for B-w41p7 and B-jr8mk: a merge also keeps the ID of the branch's commit that landed and the IDs of the commits citing cards it brought, and is kept until the text of every card those commits cite is removed too; and the name of the repository's default branch is kept, while the project exists. Both only add what the page lists; nothing new reaches the service but commit IDs it already had and one branch name.
+*Last changed 10 November 2026* (`POLICY_CHANGED`). Changed for B-ew5e8 ("Name it beside the agent", decided by the user): a card records the model its agent ran on (`source_model`, B-k0w7d), a name like "claude-opus-5-5" the plugin writes from what the harness says, so the list of what your agents file names it beside the agent; it travels and is deleted with the card's text, and was already under "each card's full text". The date is the day of the change; if the release that ships it comes later, move it to that day.
+
+*Before that, 6 November 2026.* Changed for B-15v62 ("Keep it, and say so", decided by the user): a merge whose commits the service was never told cite cards (made on a machine that isn't signed in to the project) is kept while the project exists, as one that brought only a deck is, since nothing ties it to a card's text; the relay had dropped it at its next daily look, reading "never had their ledger entries" as "they all went". Corrected on 2026-11-05 (B-nkbqs): it had said branch names never reach the service, but every card carries `source_branch`, written by the CLI; what's kept didn't change, only what the page says about it. Changed the same day for D181: the commits that cite cards and the merges the CLI finds go up to the service (their IDs, times, branches and cards, never a commit's subject or message), with how long each is kept; and a second correction, that a branch's deck, which names the branch, is kept while the project is, as decks always were. Changed again the same day for B-w41p7 and B-jr8mk: a merge also keeps the ID of the branch's commit that landed and the IDs of the commits citing cards it brought, and is kept until the text of every card those commits cite is removed too; and the name of the repository's default branch is kept, while the project exists. Both only add what the page lists; nothing new reaches the service but commit IDs it already had and one branch name.
 
 Baesian's hosted service, at baesian.dev, passes your coding agents' design decisions to you as cards, and your answers back to them. This page says what it keeps about you and your projects, why, for how long, who else handles it, and how to have it corrected or deleted.
 
@@ -43,7 +45,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 **Your projects, to pass cards and answers between your machines and you:**
 - Each project's name, as you typed it, and its random ID.
 - Each machine you approve with `baesian login`: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
-- What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.
+- What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it and the model it ran on, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.
 - What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; for each merge of a branch with cards, or with commits citing them, into another, the two branches, when, the ID of the merge's commit and of the branch's commit that landed, the cards it brought, and the IDs of the commits citing cards it brought; and the name of your repository's default branch, to show it as the trunk. A commit's subject and message, and what it changed, never reach the service.
 - What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.
 - While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.
@@ -135,6 +137,7 @@ When this policy changes, the date at the top changes. If a change affects what'
 - **Usage counts:** `USAGE_KINDS` and `NEVER_COUNTED`, which `/counts` shows.
 - **In the browser:** the client's `storageKey()` (seen cards, time spent, notifications), never sent.
 - **The secret check:** B-jfkv9, `secret_reason` on `CardMeta`.
+- **The model an agent ran on:** B-k0w7d, `source_model` on `CardMeta`, filled in by the CLI from the session's model the plugin's hooks keep (`SessionModel`), never by the agent; named on the page by B-ew5e8.
 - **Where:** the accounts database in eastern North America (`service/wrangler.jsonc#d1_databases`); one default location for every project (B-grrr9).
 
 ## Before it's published
