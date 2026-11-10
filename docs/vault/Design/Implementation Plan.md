@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Baesian's build plan: the stack (D47–D51), the repo layout, and milestones M1–M7 following the D33 order, with what each delivers and how it is tested. M1 (store and core CLI) is done."
 created: 2026-10-23
-updated: 2026-11-04
+updated: 2026-11-10
 reviewed: 2026-10-23
 tags: [baesian, design, plan]
 ---
@@ -18,7 +18,7 @@ Follows the v1 order in [[Baesian Design#First version]] (D33).
 - **TypeScript end to end** (D47) on **Node LTS**, distributed with npm (D48). Single-file binaries come later.
 - **Dependencies** (D49): Zod 4 for the schema, Commander 15 for the CLI, `yaml` for frontmatter. Dev: TypeScript 7, Vitest 5, tsx.
 - **Client** (D50): React + Vite + Motion, built at release and served as static files (M4).
-- `package.json` is `private: true` until the licence and the release are decided.
+- `package.json` was `private: true` until the licence and the release were decided; M10 step 7 took it out, for the first npm release, 1.0.0 (B-h0vyy), which the deploy workflow publishes (B-xr2fa).
 
 ## Layout
 

@@ -2,21 +2,40 @@
   "name": "baesian",
   "version": "0.1.10",
   "license": "FSL-1.1-ALv2",
-  "private": true,
   "description": "Swipe review for agent decisions: agents file decision cards, a human answers them, verdicts flow back through git.",
+  "keywords": [
+    "decisions",
+    "review",
+    "agents",
+    "coding-agents",
+    "claude-code",
+    "codex",
+    "mcp",
+    "git-hooks"
+  ],
+  "homepage": "https://baesian.dev",
+  "bugs": {
+    "url": "https://github.com/GusEllerm/baesian/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GusEllerm/baesian.git"
+  },
   "type": "module",
   "bin": {
     "baesian": "dist/bin.js"
   },
   "files": [
     "dist",
-    "!dist/site"
+    "!dist/site",
+    "!dist/**/*.map"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && vite build --config client/vite.config.ts && vite build --config client/vite.config.ts --mode site --logLevel warn",
+    "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build",
     "typecheck": "tsc --noEmit && tsc -p client --noEmit",
     "test": "vitest run",
     "test:service": "npm --prefix service run typecheck && npm --prefix service test",
