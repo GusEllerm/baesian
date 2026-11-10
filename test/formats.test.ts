@@ -8,7 +8,8 @@ import { main } from "../src/cli.js";
 import { parseDoc } from "../src/frontmatter.js";
 import { openRepo } from "../src/git.js";
 import { userConfig } from "../src/notify.js";
-import { type RunningServer, findRunningServer, serverState, startServer } from "../src/server.js";
+import { practiceEntry } from "../src/practice-answers.js";
+import { type RunningServer, findRunningServer, serverState, startServer, writePractice } from "../src/server.js";
 import { FILE_KINDS, type FileKindName, NewerFormat, newestFormat, upgradeFile } from "../src/schema.js";
 import { Store, ValidationError } from "../src/store.js";
 import { verify } from "../src/verify.js";
@@ -75,6 +76,8 @@ function everyKind() {
   store.inbox({ advance: true, session: "session-1" });
   // A session's model, as the plugin's hooks keep it (B-k0w7d).
   store.noteSessionModel("session-1", "claude-opus-5-5");
+  // The blind test's start, a practice entry, as `baesian serve` keeps it in the live layer (B-rehdw).
+  writePractice(store.live, practiceEntry({ kind: "test-start" }, { reviewer: "gus", client: "web" }, []));
   store.addVerdict({ card: d, revision: 1, response: "defer", comment: "Later.", ...REVIEWER });
   store.markDelivered(d, { verdict: store.verdicts(d).at(-1)!, briefs: [] });
   // The vault's notes.

@@ -6,12 +6,14 @@ import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
 import { laterSuperseded, recap } from "./calibration";
-import { ARROW, Card, type CardProps, type Mode, type Side, sideOfKind } from "./Card";
-import { usePresence } from "./live";
+import { ARROW, Card, type CardProps, MARKS, type Mode, type Side, sideOfKind } from "./Card";
+import { usePractice, usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
-import { type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
+import { type DeskCard, type Practice, type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, practiceOf, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
-import { Outbox, postVerdictTo } from "./outbox";
+import { type Outgoing, Outbox, postPractice, postVerdictTo } from "./outbox";
+import { TEST_SIZE, draws, phaseOf, practiceAnswer, practicePath, practiceWords, practised, rebuild, sources, statusOf } from "./practice";
+import { PracticeResultPanel } from "./PracticePanel";
 import { type Confirmed, confirmAnswers, postAnswer, useEndpoints } from "./endpoints";
 import { NotConfirmed, ProofPrompt } from "./proof";
 import { ASK_BEFORE_EXPIRY_MS, type Wait, askNow, confirmedLine, expiredLine, loadWaiting, saveWaiting, waitingLine } from "./waiting";
@@ -82,6 +84,13 @@ interface Answered {
   hard?: boolean;
   /** While it waits for your passkey: the relay's hold on it. */
   wait?: Wait;
+  /** Answered in the blind test (B-xx49m): the toast and the reopened card say only that it's recorded, whatever the card. */
+  test?: boolean;
+  /**
+   * A practice card's (B-kb5yt): the card as it was shown, whether it said an agent had stopped (B-zw55w), and what the
+   * path says of it once it may say it was practice: at once, or in the blind test once the test ends.
+   */
+  practice?: { card: DeskCard & { practice: Practice }; stopped: boolean; said: string };
 }
 
 /**
@@ -120,12 +129,36 @@ function pathState(card: ApiCard, answer: Answer): string {
   return answer.kind === "write" ? "you wrote an answer" : "you couldn't judge it";
 }
 
+/**
+ * What a card reopened from the path says of your answer (`CardProps.review`): in the blind test, only that it's recorded,
+ * whatever the card (B-xx49m); a practice card's, outside it or once it has ended, that it was practice (B-kb5yt).
+ */
+function reviewOf(a: Answered, testing: boolean): NonNullable<CardProps["review"]> {
+  const quiet = !!a.test && testing;
+  return {
+    words: a.words,
+    sent: a.phase === "sent",
+    waiting: a.phase === "waiting",
+    ...(quiet ? { test: true } : {}),
+    ...(a.practice && !quiet ? { practice: practiceWords(a.practice.card, a.practice.stopped) } : {}),
+  };
+}
+
 /** Where a card starts: in the choice, or for one you answered in chat, showing what you said and the pick (B-hswmx). */
 const startMode = (card: ApiCard | undefined): Mode => (card && isSeen(card) ? { kind: "seen" } : { kind: "live" });
 
-/** What the toast says once an answer is recorded: a slider proposal accepted moves its row (B-y6jn6); Baesian's own cards go to no agent. */
-function sentWords(card: ApiCard, answer: Answer): string {
+/** What a card in the blind test asks before it's answered (B-xx49m). */
+const MARK_FIRST = "Say whether you think it was rebuilt from a past card first.";
+
+/**
+ * What the toast says once an answer is recorded: a slider proposal accepted moves its row (B-y6jn6); Baesian's own cards
+ * go to no agent. In the blind test, every card's says only that it's recorded (B-xx49m); a practice card's outside it
+ * says it was practice (B-kb5yt).
+ */
+function sentWords(card: DeskCard, answer: Answer, test: boolean): string {
   const m = card.meta;
+  if (test) return "Recorded.";
+  if (practiceOf(card)) return "Recorded: it was practice.";
   if (m.pref_row && m.pref_to && answer.kind === "choose") {
     return answer.option === "proposal" ? `Saved: ${ROW_NAMES[m.pref_row]} is at “${POSITION_NAMES[m.pref_to]}” now.` : `Recorded: the setting for ${rowInSentence(m.pref_row)} stays as it is.`;
   }
@@ -199,6 +232,22 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const briefed = useBriefed(state);
   const setupOffered = useSetupOffered(state);
 
+  // Practice cards with planted picks (B-kb5yt, docs/vault/Design/Practice Cards.md): your practice answers, from their own
+  // address (B-rehdw); where the blind test is (B-xx49m, B-bb7ga); and whether practice cards come now. Nothing until the
+  // answers have been read, so a card never comes back twice; never before the blind test, nor once it spotted them.
+  const practice = usePractice(endpoints);
+  const pStatus = statusOf(practice.entries);
+  const phase = practice.ready ? phaseOf(pStatus) : undefined;
+  const testing = phase === "test";
+  /** A practice card drawn to come next, and whether the real card answered before it said its agent had stopped (B-zw55w). */
+  const [planted, setPlanted] = useState<{ card: DeskCard & { practice: Practice }; stopped: boolean }>();
+  /** Real answers since the last practice card this sitting: none came yet, so the first may follow the first answer. */
+  const sinceLast = useRef(Number.POSITIVE_INFINITY);
+  /** The cards drawn as practice this sitting, before their answers are kept. */
+  const drawnHere = useRef(new Set<string>());
+  /** What a practice card said once answered (Practice Cards section 4), until you dismiss it. */
+  const [practiceNote, setPracticeNote] = useState<string>();
+
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
   const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
@@ -206,7 +255,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const held = heldBack(state).filter((c) => !answered.has(keyOf(c)));
   // Held back, never answered, past 90 days: listed without their text (B-ec3kj, M9f).
   const heldGone = heldRemoved(state);
-  const reviewCard = reviewing ? state.cards.find((c) => keyOf(c) === reviewing) : undefined;
+  // A practice card you answered isn't in the state: reopened from the path, it's the card as it was shown.
+  const reviewCard: DeskCard | undefined = reviewing ? (state.cards.find((c) => keyOf(c) === reviewing) ?? answered.get(reviewing)?.practice?.card) : undefined;
   // The card in front of you stays until you answer it or move on. When the queue re-sorts (an answer reaching
   // the server, an agent starting to wait), that changes what comes next, never the card you're reading (5f).
   const [shownKey, setShownKey] = useState("");
@@ -215,18 +265,25 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const picked = pick ? (ordered.find((c) => c.meta.id === pick) ?? aside.find((c) => c.meta.id === pick) ?? held.find((c) => c.meta.id === pick)) : undefined;
   // A settled card opened from your decisions, by branch (B-v8jzy): on the desk to look at, not to answer.
   const pastCard = viewing ? state.cards.find((c) => c.meta.id === viewing) : undefined;
-  const current = pastCard ?? reviewCard ?? picked ?? staying ?? ordered[0];
+  // A practice card drawn after your last answer comes next, as a card in the queue does (B-kb5yt).
+  const current: DeskCard | undefined = pastCard ?? reviewCard ?? picked ?? planted?.card ?? staying ?? ordered[0];
   const key = current ? keyOf(current) : "";
   const deck = current ? state.decks.find((d) => d.meta.id === current.meta.deck) : undefined;
+  /**
+   * Whether an agent is waiting on a card now (D90). A practice card has none: it says one has stopped when the real card
+   * before it did, until you've answered it (B-zw55w).
+   */
+  const stoppedFor = (c: DeskCard): boolean | undefined => (planted?.card === c ? planted.stopped : [...answered.values()].find((a) => a.practice?.card === c)?.practice?.stopped);
+  const waitOf = (c: DeskCard) => (practiceOf(c) ? (stoppedFor(c) ? "waiting" : "none") : waitState(c, now));
   // With no preference file, the setup survey is offered once, before the cards (B-5na1k), unless an agent has
-  // stopped for you: then it waits until none has.
-  const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length;
+  // stopped for you: then it waits until none has. A practice card in the queue counts as any card there does.
+  const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length + (planted?.stopped ? 1 : 0);
   const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked && !pastCard;
   const setup: Setup | undefined = setupStep ?? (offerDue ? { step: "offer" } : undefined);
   const presets = usePresets(panel === "preferences" || setup !== undefined, state.version);
   // The first card you reach from a deck with a briefing comes after its briefing card, once per deck (B-j6b75).
-  // A card reopened from the path is one you've already reached.
-  const briefing = !setup && !reviewCard && !pastCard && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
+  // A card reopened from the path is one you've already reached; a practice card never comes after one (B-kb5yt).
+  const briefing = !setup && !reviewCard && !pastCard && !practiceOf(current) && hasBriefing(deck) && !briefed.has(deck.meta.id) ? deck : undefined;
   const deps = current ? liveDependents(current, cards).length : 0;
   const r = current ? rarityOf(current, deps) : undefined;
   const sides = current ? sidesFor(current.meta.id, salt) : { left: "alternative" as const, right: "proposal" as const };
@@ -268,19 +325,29 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const say = (text: string, undoUntil?: number) => setToast({ text, ...(undoUntil ? { undoUntil } : {}), id: Date.now() + Math.random() });
 
   // The undo window (D82): one answer waits; undo takes it back; the next answer, or closing the page, sends it.
+  const addPractice = practice.add;
   const outbox = useRef<Outbox>(undefined);
   if (!outbox.current) {
     outbox.current = new Outbox(postVerdictTo(endpoints), UNDO_MS, {
       sent: (k, posted) => {
         const a = answeredRef.current.get(k);
+        // A practice card's answer, or a mark in the blind test, is kept with your practice answers (B-rehdw).
+        if (posted?.practice) addPractice(posted.practice);
+        // An answer sent because you gave the next one keeps quiet: the next one's toast, with its Undo, stays. The path,
+        // and the strip of answers waiting for your passkey, say what became of it.
+        const quiet = !!outbox.current?.waiting();
         // On the website, a hard answer waits for your passkey, with any others waiting, and you go on (B-a6xpc).
         const wait = posted?.waiting;
         if (wait) {
           setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "waiting", wait }) : m));
+          if (quiet) return;
           return say(`${a?.hard === false ? "Accepting it lets more cards past you, so it" : "It"} waits for your passkey.`);
         }
         setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "sent" }) : m));
-        say(`${a?.sent ?? "Sent."}${filedWords(posted?.filed?.length ?? 0)}`);
+        // Outside the blind test, a practice card says it was practice once it's recorded (B-kb5yt); in it, nothing does,
+        // and no card says Baesian proposed something from it, which a practice card never could (B-xx49m).
+        if (a?.practice && !a.test) setPracticeNote(practiceWords(a.practice.card, a.practice.stopped));
+        if (!quiet) say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0)}`);
       },
       failed: (k, error) => {
         setAnswered((m) => {
@@ -429,14 +496,39 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     return () => removeEventListener("beforeunload", warn);
   }, [unconfirmed]);
 
+  /**
+   * After a real answer (not a change), maybe a practice card comes next (Practice Cards section 4, B-kb5yt): drawn at the
+   * phase's rate (`draws()`), never two pending, and in the blind test only until ten have come (B-xx49m). It says an agent
+   * has stopped when the card just answered did (B-zw55w).
+   */
+  const drawAfter = (answeredCard: DeskCard) => {
+    if (!phase) return;
+    sinceLast.current += 1;
+    if (planted) return;
+    const inFlight = [...answered.values()].filter((a) => a.practice && a.test && a.phase !== "sent").length;
+    if (pStatus.kind === "test" && pStatus.practice + inFlight >= TEST_SIZE) return;
+    const pool = sources(state, now, new Set([...practised(practice.entries), ...drawnHere.current]));
+    const realLeft = ordered.filter((c) => keyOf(c) !== keyOf(answeredCard)).length;
+    if (!draws({ phase, since: sinceLast.current, realLeft, pool: pool.length, roll: Math.random() })) return;
+    const from = pool[Math.floor(Math.random() * pool.length)]!;
+    drawnHere.current.add(from.meta.id);
+    sinceLast.current = 0;
+    setPlanted({ card: rebuild(from), stopped: waitState(answeredCard, now) === "waiting" });
+  };
+
   const commit = (answer: Answer) => {
     if (!current) return;
     const v = verdictFor(current, answer);
     if ("problem" in v) return setProblem(v.problem);
+    // In the blind test, every card you answer is marked (B-xx49m), but one you answered in chat, which you'd know.
+    const test = testing && !isSeen(current);
+    const mark = mode.kind === "reveal" || mode.kind === "write" || mode.kind === "pass" ? mode.mark : undefined;
+    if (test && !mark) return setProblem(MARK_FIRST);
+    const pr = practiceOf(current);
     const words = describeAnswer(current, answer);
     // How long the card was in front of you, for your calibration: first answers only, not changes, and never a card
-    // answered in chat, which calibration leaves out (B-hswmx).
-    if (!reviewing && !isSeen(current)) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
+    // answered in chat, which calibration leaves out (B-hswmx), nor a practice card, which isn't one of your real cards.
+    if (!reviewing && !isSeen(current) && !pr) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
     exitDir.current = answer.kind === "choose" ? sideOf(answer.option) : answer.kind === "write" ? "up" : "down";
     // Your choice flies from the card into the path (round 5's one sequenced movement).
     if (answer.kind === "choose" && !reduced) {
@@ -444,6 +536,12 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       const rect = h2?.getBoundingClientRect();
       if (rect) setFly({ key, from: { x: rect.left, y: rect.top }, text: current.meta[answer.option] });
     }
+    // A practice card's answer goes to the practice answers, never to an agent (B-rehdw); a real card's verdict, with its
+    // mark in the blind test, goes as any does.
+    const item: Outgoing = pr
+      ? { practice: practiceAnswer(pr, answer, test ? mark : undefined) }
+      : { verdict: v.verdict, ...(test && mark ? { mark: { kind: "mark" as const, card: current.meta.id, revision: current.meta.revision, mark } } : {}) };
+    const stopped = pr ? (stoppedFor(current) ?? false) : false;
     // A changed answer keeps its place on the path (Map.set keeps the order) and replaces what was there.
     setAnswered((m) =>
       new Map(m).set(key, {
@@ -451,25 +549,32 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         phase: "held",
         words,
         agent: agentOf(current),
-        sent: sentWords(current, answer),
+        sent: sentWords(current, answer, test),
         name: current.meta.title,
         rarity: r!.rarity,
-        state: pathState(current, answer),
+        // A practice card says so on the path at once, or in the blind test once the test ends.
+        state: pr && !test ? practicePath(current, answer) : pathState(current, answer),
         ...(endpoints.hosted ? { hard: isHard(current) } : {}),
+        ...(test ? { test: true } : {}),
+        ...(pr ? { practice: { card: current as DeskCard & { practice: Practice }, stopped, said: practicePath(current, answer) } } : {}),
       }),
     );
-    const waiting = outbox.current!.hold(key, v.verdict);
+    const waiting = outbox.current!.hold(key, item);
     // The arrow that answered it is let go on the next card: it answers nothing there.
     keyHeld.current = undefined;
-    // Round 5 took your answer out of this toast: the path shows it.
-    say(isOwnCard(current.meta) ? "Recording it in" : `Sending to ${current.meta.source_agent} in`, waiting.until);
+    // Round 5 took your answer out of this toast: the path shows it. In the blind test every card's is the same; outside
+    // it, a practice card says it was practice once you've answered it.
+    say(test || isOwnCard(current.meta) ? "Recording it in" : pr ? "That was practice. Recording it in" : `Sending to ${current.meta.source_agent} in`, waiting.until);
     setPick(undefined);
     setReviewing(undefined);
+    if (pr) setPlanted(undefined);
+    else if (!reviewing) drawAfter(current);
   };
 
   const undo = () => {
     const k = outbox.current!.undo();
     if (!k) return;
+    const a = answeredRef.current.get(k);
     setAnswered((m) => {
       const n = new Map(m);
       n.delete(k);
@@ -477,7 +582,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     });
     exitDir.current = "fade";
     setReviewing(undefined);
-    setPick(k.split("@")[0]);
+    // A practice card comes back as it was, in front of you; a real one from the queue or its list.
+    if (a?.practice) {
+      setPick(undefined);
+      setPlanted({ card: a.practice.card, stopped: a.practice.stopped });
+    } else setPick(k.split("@")[0]);
     say("Undone. The card is back.");
   };
 
@@ -552,6 +661,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         n.delete(reviewing);
         return n;
       });
+      // A practice card isn't in the state: taken back, it's in front of you again, as after an undo.
+      if (a.practice) {
+        setReviewing(undefined);
+        setPlanted({ card: a.practice.card, stopped: a.practice.stopped });
+      }
     }
     setMode(startMode(current));
     setShownAt(performance.now());
@@ -579,7 +693,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   // Baesian names its own cards' topics after the decisions they come from, so they look alike by design: never offered.
   const topicCounts = new Map<string, number>();
   for (const c of state.cards) if (!isOwnCard(c.meta)) topicCounts.set(c.canonicalTopic, (topicCounts.get(c.canonicalTopic) ?? 0) + 1);
-  const near = current && !isOwnCard(current.meta) ? nearTopics(current.canonicalTopic, topicCounts.keys()).map((topic) => ({ topic, count: topicCounts.get(topic)! })) : [];
+  // A practice card offers none: merging its topic would merge its original's, a real change.
+  const near = current && !isOwnCard(current.meta) && !practiceOf(current) ? nearTopics(current.canonicalTopic, topicCounts.keys()).map((topic) => ({ topic, count: topicCounts.get(topic)! })) : [];
   const merge = async (into: string) => {
     if (!current) return;
     const from = current.canonicalTopic;
@@ -592,6 +707,28 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       say(`The topics weren't merged: ${e instanceof Error ? e.message : String(e)}.`);
     }
   };
+
+  // ---------------------------------------------------------------- the blind test (B-xx49m)
+  // You start it yourself, from your calibration, once there are ten past cards to rebuild; when the tenth practice card
+  // has been answered, its result opens.
+  const [starting, setStarting] = useState(false);
+  const startTest = async () => {
+    setStarting(true);
+    try {
+      practice.add(await postPractice(endpoints, { kind: "test-start" }));
+      setPanel(undefined);
+      say("The blind test is on. Mark each card you answer.");
+    } catch (e) {
+      say(`The blind test didn't start: ${e instanceof Error ? e.message : String(e)}.`);
+    } finally {
+      setStarting(false);
+    }
+  };
+  const wasTesting = useRef(false);
+  useEffect(() => {
+    if (wasTesting.current && (pStatus.kind === "spotted" || pStatus.kind === "on")) setPanel("practice");
+    wasTesting.current = pStatus.kind === "test";
+  }, [pStatus.kind]);
 
   const notifications = useNotifications(state, goTo);
   const toggleNotify = async () => {
@@ -715,8 +852,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   // The keys, read through a ref so the listeners always see the latest state.
   const pickSide = sideOf("proposal");
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway };
+  const marking = testing && !!current && !isSeen(current);
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
@@ -782,6 +920,13 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         }
         return;
       }
+      // In the blind test, 1, 2 and 3 mark the card you're answering: no, maybe, sure (B-xx49m).
+      const marked = MARKS.find((m) => m.key === e.key);
+      if (marked && h.marking && (h.mode.kind === "reveal" || h.mode.kind === "write" || h.mode.kind === "pass")) {
+        e.preventDefault();
+        setProblem(undefined);
+        return setMode({ ...h.mode, mark: marked.mark });
+      }
       if (!dir || !h.current) return;
       e.preventDefault();
       if (e.repeat) return;
@@ -830,7 +975,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     .map(([k, a]) => {
       const id = k.split("@")[0]!;
       const link = relById.get(id);
-      return { key: k, id, name: a.name, state: a.state, rarity: a.rarity, ...(a.phase === "waiting" ? { waiting: true } : {}), ...(link ? { link } : {}) };
+      // A practice card answered in the blind test says so on the path once the test has ended (B-xx49m).
+      const says = a.practice && a.test && !testing ? a.practice.said : a.state;
+      return { key: k, id, name: a.name, state: says, rarity: a.rarity, ...(a.phase === "waiting" ? { waiting: true } : {}), ...(link ? { link } : {}) };
     });
   const ahead = inPlay ? ordered.filter((c) => c.meta.id !== inPlay.meta.id) : setup ? ordered : [];
   const nextUp = ahead.slice(0, NEXT_MAX).map((c) => {
@@ -891,7 +1038,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const openSheet = (open: boolean) => setPanel((p) => (open ? "path" : p === "path" ? undefined : p));
   const pathProps: PathProps = {
     trail,
-    current: inPlay && r ? { id: inPlay.meta.id, name: inPlay.meta.title, rarity: r.rarity, stopped: waitState(inPlay, now) === "waiting", conflict: (inPlay.meta.conflict_of?.length ?? 0) > 0 } : undefined,
+    current: inPlay && r ? { id: inPlay.meta.id, name: inPlay.meta.title, rarity: r.rarity, stopped: waitOf(inPlay) === "waiting", conflict: (inPlay.meta.conflict_of?.length ?? 0) > 0 } : undefined,
     relations,
     upcoming: nextUp,
     more: Math.max(0, ahead.length - NEXT_MAX),
@@ -909,9 +1056,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       ? ahead.filter((c) => areaOf(c) === areaOf(inPlay)).slice(0, 4).map((c) => c.meta.id)
       : [];
 
-  const summary = ordered.length ? (
+  // A practice card waiting to come counts as any card in the queue does (Practice Cards section 3); notifications never count one.
+  const toAnswer = ordered.length + (planted ? 1 : 0);
+  const summary = toAnswer ? (
     <>
-      <b>{ordered.length} to answer.</b>
+      <b>{toAnswer} to answer.</b>
       {waitingNow > 0 && (
         <>
           {" "}
@@ -958,7 +1107,19 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       </header>
       {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
-      {panel === "calibration" && <CalibrationPanel spent={loadSpent(project)} superseded={laterSuperseded(state)} routing={state.routing} onClose={() => setPanel(undefined)} />}
+      {panel === "calibration" && (
+        <CalibrationPanel
+          spent={loadSpent(project)}
+          superseded={laterSuperseded(state)}
+          routing={state.routing}
+          practice={{ status: pStatus, entries: practice.entries, ready: practice.ready, state, now, starting, onStart: () => void startTest(), onResult: () => setPanel("practice") }}
+          onClose={() => setPanel(undefined)}
+        />
+      )}
+      {/* The blind test's result (B-xx49m, B-bb7ga): shown when the tenth practice card is answered, and from your calibration. */}
+      {panel === "practice" && (pStatus.kind === "spotted" || pStatus.kind === "on") && (
+        <PracticeResultPanel status={pStatus} titleOf={(id) => cards.get(id)?.meta.title} onClose={() => setPanel(undefined)} />
+      )}
       {/* D181, B-v8jzy: your decisions by branch, in a drawer beside the desk, or filling a phone's screen. */}
       <BranchesDrawer state={state} nowMs={now} open={drawerOpen} phone={phone} touch={touch} onClose={() => setPanel(undefined)} onOpenCard={openFromBranches} />
       {panel === "held" && (
@@ -1006,6 +1167,15 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
             </p>
           )}
           {/* On the website: answers waiting for your passkey, confirmed together (B-a6xpc); and any that waited too long. */}
+          {/* B-kb5yt: a practice card says it was practice once you've answered it, where a real card would say it was sent. */}
+          {practiceNote && (
+            <div className="passkey-wait practice-note" role="status">
+              <p>{practiceNote}</p>
+              <button type="button" className="cancel" onClick={() => setPracticeNote(undefined)}>
+                Got it
+              </button>
+            </div>
+          )}
           {expired.length > 0 && (
             <div className="passkey-wait lapsed" role="alert">
               <p>{expiredLine(expired)}</p>
@@ -1121,7 +1291,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     card: forPeople(current, cards),
                     rarity: r.rarity,
                     stakes: stakesLine(current, deps),
-                    wait: waitState(current, now),
+                    wait: waitOf(current),
                     sides,
                     mode,
                     rules: state.rules,
@@ -1129,7 +1299,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     readFraction: dwell ? 1 - readLeft / dwell : 1,
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
-                    ...(reviewing && answered.get(reviewing) ? { review: { words: answered.get(reviewing)!.words, sent: answered.get(reviewing)!.phase === "sent", waiting: answered.get(reviewing)!.phase === "waiting" } } : {}),
+                    ...(reviewing && answered.get(reviewing) ? { review: reviewOf(answered.get(reviewing)!, testing) } : {}),
+                    ...(marking && mode.kind !== "review" && mode.kind !== "past" ? { test: true } : {}),
                     ...(pastCard ? { past: { words: saidOf(pastCard, now).words, chosen: chosenOf(pastCard), onBranches: () => setPanel("branches") } } : {}),
                     ...(near.length && !pastCard ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
@@ -1151,7 +1322,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
               ) : (
                 <motion.div key="empty" className="empty" initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
                   <EmptyDesk
-                    recap={recap([...answered.values()].map((a) => a.answer))}
+                    recap={recap([...answered.values()].filter((a) => !a.practice).map((a) => a.answer))}
                     parked={aside}
                     held={held}
                     notify={notifications.status}

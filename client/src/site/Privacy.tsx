@@ -35,6 +35,7 @@ const KEPT: [string, string][] = [
   ["Your repository's default branch: its name", "While the project exists."],
   ["Your decks, each a branch's or a piece of work's, with its name", "While the project exists."],
   ["Your rules, topic merges and gate settings", "While the project exists."],
+  ["Your answers on practice cards, and your marks in the blind test", "While the project exists. They name a card only by its ID, so they keep none of its text."],
   ["Usage events", "90 days, then only daily totals, with no ID."],
   ["A sign-in", "Until you sign out, or 30 days unused, or 90 days in all."],
   ["A machine", "Until you sign it out, or 30 days unused."],
@@ -87,6 +88,9 @@ export function Privacy({ who }: { who?: string | undefined }) {
           <li>What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it and the model it ran on, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.</li>
           <li>What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; for each merge of a branch with cards, or with commits citing them, into another, the two branches, when, the ID of the merge's commit and of the branch's commit that landed, the cards it brought, and the IDs of the commits citing cards it brought; and the name of your repository's default branch, to show it as the trunk. A commit's subject and message, and what it changed, never reach the service.</li>
           <li>What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.</li>
+          <li>
+            Your answers on practice cards: past cards brought back with the other option shown as the agent's pick, to see how often you come round to a pick an agent didn't make. For each, the card it was rebuilt from, when you answered that card, which option you chose before seeing the pick shown and which after, or that you answered another way, your handle, whether you answered on a phone or a desktop, and when. In the blind test that comes first, also whether you thought each card you answered was rebuilt, and when you started it. Never what you wrote on a practice card. They're kept apart from your cards: no machine or agent is ever sent them.
+          </li>
           <li>While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.</li>
         </List>
         <h3 className="site-sub">Notifications, if you turn them on</h3>
@@ -158,7 +162,7 @@ export function Privacy({ who }: { who?: string | undefined }) {
 
       <Sheet title="Deleting your account" sub>
         <p>Deleting it, on your account page, asks for your passkey and your handle. The account is closed at once: every sign-in and machine is signed out, nothing more is relayed or counted, and a notice is emailed to you.</p>
-        <p>For 14 days, signing in with your passkey can restore it as it was. Then everything goes for good: your account, email addresses, passkeys, recovery code, Globus link, sign-ins, machines, notifications and raw usage events, and every project you own, with all its cards and answers on the service. Daily usage totals, which name no one, stay. Your repositories keep their own record.</p>
+        <p>For 14 days, signing in with your passkey can restore it as it was. Then everything goes for good: your account, email addresses, passkeys, recovery code, Globus link, sign-ins, machines, notifications and raw usage events, and every project you own, with all its cards and answers on the service, practice answers included. Daily usage totals, which name no one, stay. Your repositories keep their own record.</p>
       </Sheet>
 
       <Sheet title="Security" sub>

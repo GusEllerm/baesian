@@ -74,6 +74,8 @@ export const FILE_KINDS = {
   grant: { name: "machine grant", upgrades: [] },
   // B-4rwyz, personal mode: what a clone that commits nothing held when it was linked, in the record's place.
   "before-linking": { name: "before-linking snapshot", upgrades: [] },
+  // B-rehdw: an answer on a practice card, a mark in the blind test, or the test's start. Never in the record or the log.
+  practice: { name: "practice answer", upgrades: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
@@ -228,6 +230,12 @@ export const CardMeta = z.strictObject({
   crux_fact: Text.optional(),
   // The agent's case (D77): the rationale is optional; "wrong if" and its check are required when a facet asks.
   rationale: Text.optional(),
+  /**
+   * The agent's best case for its alternative, as it would write its rationale if the alternative were its pick (B-sy0kz).
+   * Never shown on the card itself: it's the case a practice card gives its planted pick, when the card comes back with
+   * its options swapped (B-kb5yt), and only a card that carries one can.
+   */
+  alternative_rationale: Text.optional(),
   wrong_if: Text.optional(),
   check: Text.optional(),
   // The trial facets (D75).
@@ -519,6 +527,56 @@ export const Verdict = z
     if (v.seen && v.first_choice) ctx.addIssue({ code: "custom", path: ["first_choice"], message: "a verdict on a card answered in chat has no blind choice" });
   });
 export type Verdict = z.infer<typeof Verdict>;
+
+/** In the blind test (B-xx49m, B-bb7ga), whether you think a card you answered was rebuilt from a past one. */
+export const PracticeMark = z.enum(["no", "maybe", "sure"]);
+export type PracticeMark = z.infer<typeof PracticeMark>;
+
+/** Who wrote a practice entry, with which client, and when: set by the server, never sent. */
+const practiceWho = {
+  type: z.literal("practice"),
+  format: formatOf("practice"),
+  reviewer: z.string().min(1),
+  /** The account that wrote it, on the hosted service: set by the relay, beside the handle. */
+  account: AccountId.optional(),
+  client: z.string().min(1),
+  at: Timestamp,
+};
+
+/**
+ * Practice (B-kb5yt, B-rehdw): one entry per file, `practice/<at>-<suffix>.json` in the live layer of a clone that isn't
+ * linked, or one row of the relay's practice table (`PracticeTable`), apart from its log. Never a verdict, never in the
+ * record or the log a machine reads, and never read by anything an agent runs. Never what you typed: only the kind of
+ * answer. Three kinds:
+ * - `test-start`: you started the blind test (B-xx49m). Once.
+ * - `answer`: your answer on a practice card: the card it was rebuilt from and its revision, when that card's final answer
+ *   was given (`answered`, for B-j583c's check), your blind choice against the planted pick (`blind`), and your final
+ *   answer (`final`): the planted pick, the other option, a written answer or "can't judge". In the blind test, `test` and
+ *   your mark.
+ * - `mark`: in the blind test, your mark on a real card you answered.
+ */
+export const PracticeEntry = z
+  .discriminatedUnion("kind", [
+    z.strictObject({ ...practiceWho, kind: z.literal("test-start") }),
+    z.strictObject({
+      ...practiceWho,
+      kind: z.literal("answer"),
+      card: CardId,
+      revision: z.number().int().min(1),
+      answered: Timestamp,
+      blind: z.enum(["planted", "other"]).optional(),
+      final: z.enum(["planted", "other", "write", "pass"]),
+      test: z.literal(true).optional(),
+      mark: PracticeMark.optional(),
+    }),
+    z.strictObject({ ...practiceWho, kind: z.literal("mark"), card: CardId, revision: z.number().int().min(1), mark: PracticeMark }),
+  ])
+  .superRefine((e, ctx) => {
+    if (e.kind === "answer" && (e.test === true) !== (e.mark !== undefined)) {
+      ctx.addIssue({ code: "custom", path: ["mark"], message: "an answer in the blind test has a mark, and only one in the test does" });
+    }
+  });
+export type PracticeEntry = z.infer<typeof PracticeEntry>;
 
 /** The agent withdrawing its own card: `cards/<id>/withdrawn.json`. */
 export const Withdrawal = z.strictObject({

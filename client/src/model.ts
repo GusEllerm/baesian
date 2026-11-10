@@ -39,6 +39,23 @@ export function replyOf(card: ApiCard): { reply: string; to: string | undefined 
 export const keyOf = (c: ApiCard) => `${c.meta.id}@${c.meta.revision}`;
 
 /**
+ * What a practice card was rebuilt from (B-kb5yt, docs/vault/Design/Practice Cards.md): the past card, its revision, and
+ * when its final answer was given. Only the desk knows a card is practice: nothing on the card itself says so until
+ * you've answered it.
+ */
+export interface Practice {
+  of: string;
+  revision: number;
+  answered: string;
+}
+
+/** A card on the desk: one the server sent, or a practice card the client rebuilt (`rebuild()`, practice.ts). */
+export type DeskCard = ApiCard & { practice?: Practice };
+
+/** What a practice card was rebuilt from, or nothing for a real card. */
+export const practiceOf = (c: DeskCard | undefined): Practice | undefined => c?.practice;
+
+/**
  * Whether a card is hard: its own level, or the level its gate showed it at, which can only raise it (D144). On the
  * website, an answer on a hard card waits for your passkey (D139, B-a6xpc).
  */
@@ -266,11 +283,13 @@ export const ruleName = (body: string): string => body.split("\n").map((l) => l.
  * Everything a card is connected to, in the order the path shows them: what it builds on, what it conflicts
  * with, the rules it bears on, what relies on it, and its precedent. Each from a field a card or rule states.
  */
-export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
+export function relationsOf(card: DeskCard, state: ApiState): Relation[] {
   const cards = byId(state);
   const rules = new Map(state.rules.map((r) => [r.meta.id, r]));
   const removed = new Map((state.removed ?? []).map((r) => [r.id, r]));
   const m = card.meta;
+  // A practice card's original is left out (B-kb5yt): on its topic, it would show as your precedent, settled, by its title.
+  const original = practiceOf(card)?.of;
   const out = new Map<string, Relation>();
   const describe = (id: string): { name: string; state: string } | undefined => {
     const c = cards.get(id);
@@ -284,7 +303,7 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
     return undefined;
   };
   const add = (id: string, rel: Omit<Relation, "id" | "name" | "state">) => {
-    if (id === m.id || out.has(id)) return;
+    if (id === m.id || id === original || out.has(id)) return;
     const d = describe(id);
     if (d) out.set(id, { id, ...rel, ...d });
   };
@@ -322,7 +341,7 @@ export function relationsOf(card: ApiCard, state: ApiState): Relation[] {
   // The precedent: the newest settled decision on the same topic that isn't already shown (Client Data Contract:
   // partial, so it says which).
   const precedent = state.cards
-    .filter((c) => c.status === "resolved" && c.canonicalTopic === card.canonicalTopic && c.meta.id !== m.id && !out.has(c.meta.id))
+    .filter((c) => c.status === "resolved" && c.canonicalTopic === card.canonicalTopic && c.meta.id !== m.id && c.meta.id !== original && !out.has(c.meta.id))
     .sort((a, b) => b.meta.created.localeCompare(a.meta.created))[0];
   if (precedent) add(precedent.meta.id, { kind: "precedent", label: "your precedent, on the same topic", where: "down" });
 

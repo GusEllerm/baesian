@@ -40,8 +40,9 @@ reverse. Otherwise decide yourself. Every card states its strongest alternative,
 the choice turns on (the crux). A topic names one question: reuse one from `baesian topics` only for the
 same question, and give a follow-on question its own, narrower topic. The reviewer chooses before seeing
 your pick, your case or the card's body; put what they need in order to choose, kept neutral, in
-`crux_fact`, and background in the body. The decision record is committed with the code, so don't paste
-secrets, credentials or private output into a card.
+`crux_fact`, and background in the body. Make your case in `rationale`, and the alternative's best case
+in `alternative_rationale`, as you'd argue it if it were your pick. The decision record is committed
+with the code, so don't paste secrets, credentials or private output into a card.
 
 A choice you'd put to the reviewer in chat goes as a card, even when they're in the conversation: say
 "it's in your deck" and don't list the options there, so they still choose before seeing your pick. A

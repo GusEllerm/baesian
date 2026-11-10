@@ -8,6 +8,7 @@ import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, cros
 import { Accounts } from "./accounts.js";
 import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { PracticeTable } from "./practice-table.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";
@@ -77,11 +78,14 @@ export function servicesFor(env: Env, given: Partial<Services> = {}): Services {
   };
 }
 
-/** Who an address is for: reading (a machine or a person), uploading (a machine), or answering (a person, in a browser). */
-type Who = "read" | "upload" | "answer";
+/**
+ * Who an address is for: reading (a machine or a person), uploading (a machine), answering (a person, in a browser), or
+ * a person's own (a person, in a browser, reading or writing): practice answers (B-rehdw), which no machine reads.
+ */
+type Who = "read" | "upload" | "answer" | "person";
 
 interface Route {
-  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "batches" | "proofs";
+  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "batches" | "proofs" | "practice";
   who: Who;
   path?: string;
 }
@@ -105,7 +109,9 @@ function routeOf(method: string, rest: string): Route | Response {
   if (read) return method === "GET" ? { name: read, who: "read" } : fail(405, `${rest} is read with GET`);
   const answer = answers[rest];
   if (answer) return method === "POST" ? { name: answer, who: "answer" } : fail(405, `${rest} takes a POST`);
-  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, batches, proofs and presence`);
+  // Practice answers (B-rehdw): read and written by a person in a browser, never by a machine.
+  if (rest === "practice") return method === "GET" || method === "POST" ? { name: "practice", who: "person" } : fail(405, "practice is read with GET and written with POST");
+  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, batches, proofs, presence and practice`);
 }
 
 /** Why `who` may not use a route, or nothing (Hosted Service section 3). Each grant is for one project; a session, for its own. */
@@ -114,6 +120,7 @@ function refusal(route: Route, who: Principal, project: string): string | undefi
   if (who.project !== project) return `this ${who.kind === "machine" ? "machine's grant" : "session"} is for project ${who.project}, not ${project}: each is for one project`;
   if (route.who === "upload" && who.kind !== "machine") return "only a machine uploads the files an agent writes";
   if (route.who === "answer" && who.kind !== "session") return "a machine never answers: answers come only from a person signed in in a browser";
+  if (route.who === "person" && who.kind !== "session") return "practice answers are a person's own: only someone signed in in a browser reads or writes them, never a machine";
   return undefined;
 }
 
@@ -149,6 +156,10 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
   // whatever it holds, so no token can ever answer (Hosted Service section 3).
   if (route.who === "answer" && request.headers.has("authorization")) {
     return fail(403, "an answer comes only from a person signed in in a browser: a request with an Authorization header is refused, whatever it holds");
+  }
+  // So does anything at a person's own address (B-rehdw): no token reads or writes practice answers.
+  if (route.who === "person" && request.headers.has("authorization")) {
+    return fail(403, "practice answers are a person's own: a request with an Authorization header is refused, whatever it holds");
   }
   const who = await services.access.identify(request, project);
   if (!who) {
@@ -202,6 +213,12 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       const input = await readJson(request);
       if (input instanceof Response) return input;
       return proofRequest(input, project, person!, stub, env, services);
+    }
+    case "practice": {
+      if (request.method === "GET") return reply(await stub.practiceRead(project));
+      const input = await readJson(request);
+      if (input instanceof Response) return input;
+      return reply(await stub.practiceWrite(project, input, person!));
     }
     default:
       // An answer that takes the passkey replies 202 and waits, to be confirmed with others or alone (B-a6xpc).
@@ -338,6 +355,8 @@ export class ProjectRelay extends DurableObject<Env> {
   private readonly visited = new Set<string>();
   /** Retention's tables (M9f, B-9jqt4, B-ec3kj). */
   private retention!: RetentionLedger;
+  /** Practice answers (B-rehdw): a table of their own, never in the files or the log. */
+  private practice!: PracticeTable;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -359,6 +378,7 @@ export class ProjectRelay extends DurableObject<Env> {
   private open(): void {
     this.ledger = new PushLedger(this.ctx.storage.sql);
     this.retention = new RetentionLedger(this.ctx.storage.sql);
+    this.practice = new PracticeTable(this.ctx.storage.sql);
     this.files = new SqlFileStorage(this.ctx.storage, {
       sign: (path, bytes) => {
         if (!signedFile(path)) return undefined;
@@ -592,6 +612,20 @@ export class ProjectRelay extends DurableObject<Env> {
     for (const a of written) await this.countAnswer(project, account, a.kind!, { status: a.status, body: a.body }, before);
     if (written.length) await this.keepAlarm();
     return out;
+  }
+
+  /**
+   * Practice answers (B-rehdw), a person's own: read and written in their own table, never through the store, so nothing
+   * is logged, signed, announced or counted.
+   */
+  async practiceRead(project: string): Promise<Reply> {
+    this.relay(project);
+    return this.practice.read();
+  }
+
+  async practiceWrite(project: string, input: unknown, who: { account: string; handle: string }): Promise<Reply> {
+    this.relay(project);
+    return this.practice.write(input, who);
   }
 
   async putKeys(project: string, keys: PasskeyKey[]): Promise<Reply> {
