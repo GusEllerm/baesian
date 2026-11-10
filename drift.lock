@@ -4698,7 +4698,7 @@ sig = "0406b42d0614950c"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = ".github/workflows/deploy.yml"
-sig = "22f1c2b0039e0891"
+sig = "30b9c293045b2b02"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
