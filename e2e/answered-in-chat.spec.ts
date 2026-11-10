@@ -169,7 +169,7 @@ test("your calibration says how many it left out (B-hswmx)", async ({ page }) =>
   await page.getByRole("button", { name: "More" }).click();
   await page.getByRole("menuitem", { name: "Your calibration" }).click();
   const panel = page.locator("#calibration-panel");
-  await expect(panel).toContainText("Of 1 card, you chose as the agent did once without seeing its pick, came round to it 0 times after reading its case, and overturned it 0 times. 2 more aren't counted: 1 not answered and 1 answered in chat.");
+  await expect(panel).toContainText("Of 1 card, you chose as the agent did once without seeing its pick and came round to it 0 times after reading its case; 0 were misses. 2 more aren't counted: 1 not answered and 1 answered in chat.");
   await expect(panel).toContainText("Later superseded: none of the decisions you settled here; 1 you answered in chat isn't counted");
 });
 

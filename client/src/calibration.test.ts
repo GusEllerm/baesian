@@ -56,12 +56,12 @@ const blank: RowReport = {
 };
 
 describe("your answers, row by row (D180)", () => {
-  it("reads each row's bar from the report: overturned is its misses", () => {
-    expect(barOf({ ...blank, agreed: 23, cameRound: 19, misses: 1 })).toEqual({ agreed: 23, cameRound: 19, overturned: 1, total: 43 });
+  it("reads each row's bar from the report: missed is its misses (B-87tkc, B-ab06a)", () => {
+    expect(barOf({ ...blank, agreed: 23, cameRound: 19, misses: 1 })).toEqual({ agreed: 23, cameRound: 19, missed: 1, total: 43 });
   });
 
   it("puts every row on one scale, the longest filling the track, or the answers it takes to judge a row until one has them", () => {
-    const bar = (total: number) => ({ agreed: total, cameRound: 0, overturned: 0, total });
+    const bar = (total: number) => ({ agreed: total, cameRound: 0, missed: 0, total });
     expect(scaleOf([bar(17), bar(43), bar(2)])).toBe(43);
     expect(scaleOf([bar(5), bar(2)])).toBe(ENOUGH);
     expect(ENOUGH).toBe(29);
@@ -70,10 +70,10 @@ describe("your answers, row by row (D180)", () => {
 
   it("sums up every card, and says what the bars leave out", () => {
     expect(summaryWords({ ...blank, agreed: 75, cameRound: 46, misses: 8 })).toBe(
-      "Of 129 cards, you chose as the agent did 75 times without seeing its pick, came round to it 46 times after reading its case, and overturned it 8 times.",
+      "Of 129 cards, you chose as the agent did 75 times without seeing its pick and came round to it 46 times after reading its case; 8 were misses.",
     );
     expect(summaryWords({ ...blank, agreed: 1, misses: 1, unanswered: 4, heldWaiting: 3, auditsUnanswered: 1, unblind: 1 })).toBe(
-      "Of 2 cards, you chose as the agent did once without seeing its pick, came round to it 0 times after reading its case, and overturned it once. 5\u00a0more aren't counted: 1 not answered, 2 held back, 1 audit waiting and 1 kept without a blind choice.",
+      "Of 2 cards, you chose as the agent did once without seeing its pick and came round to it 0 times after reading its case; 1 was a miss. 5\u00a0more aren't counted: 1 not answered, 2 held back, 1 audit waiting and 1 kept without a blind choice.",
     );
     expect(summaryWords(blank)).toBe("No answers yet: each row's bar fills in as you answer its cards.");
     expect(summaryWords({ ...blank, unanswered: 1 })).toBe("No answers to count yet: 1 not answered.");
@@ -85,14 +85,15 @@ describe("your answers, row by row (D180)", () => {
     expect(notCounted({ ...blank, unanswered: 1, unblind: 1, inChat: 2 })).toBe(4);
     expect(notCounted(undefined)).toBe(0);
     expect(summaryWords({ ...blank, agreed: 3, inChat: 1 })).toBe(
-      "Of 3 cards, you chose as the agent did 3 times without seeing its pick, came round to it 0 times after reading its case, and overturned it 0 times. 1 more isn't counted: 1 answered in chat.",
+      "Of 3 cards, you chose as the agent did 3 times without seeing its pick and came round to it 0 times after reading its case; 0 were misses. 1 more isn't counted: 1 answered in chat.",
     );
     expect(summaryWords({ ...blank, inChat: 2 })).toBe("No answers to count yet: 2 answered in chat.");
   });
 
   it("names a segment's count in its tooltip", () => {
     expect(segmentWords("Security", "agreed", 23, 43)).toBe("Security: you chose as the agent did, blind, on 23 of 43 cards");
-    expect(segmentWords("Privacy", "overturned", 1, 5)).toBe("Privacy: you overturned it, on 1 of 5 cards");
+    expect(segmentWords("Privacy", "missed", 1, 5)).toBe("Privacy: a miss, on 1 of 5 cards");
+    expect(segmentWords("Privacy", "missed", 2, 5)).toBe("Privacy: misses, on 2 of 5 cards");
     expect(segmentWords("Spending", "cameRound", 1, 1)).toBe("Spending: you came round to its pick, on 1 of 1 card");
   });
 });

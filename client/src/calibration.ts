@@ -58,15 +58,19 @@ export const THIN = 10;
 /** The answers it takes to judge a row: Baesian proposes a lower stop after this many in a row without a miss (B-y6jn6). */
 export const ENOUGH = LOOSEN_AFTER;
 
-/** A row's bar, from the report: each card once, by how its answers compare with the agent's pick. */
+/**
+ * A row's bar, from the report: each card once, by how its answers compare with the agent's pick. `missed` is the
+ * report's misses: overturned, should have been asked, or on a question of what you value chosen otherwise blind
+ * (B-87tkc, B-ab06a).
+ */
 export interface Bar {
   agreed: number;
   cameRound: number;
-  overturned: number;
+  missed: number;
   total: number;
 }
 
-export const barOf = (r: RowReport): Bar => ({ agreed: r.agreed, cameRound: r.cameRound, overturned: r.misses, total: r.agreed + r.cameRound + r.misses });
+export const barOf = (r: RowReport): Bar => ({ agreed: r.agreed, cameRound: r.cameRound, missed: r.misses, total: r.agreed + r.cameRound + r.misses });
 
 /**
  * The rows' one scale: the longest row's answers, so it fills the track, or the answers it takes to judge a row while
@@ -103,14 +107,14 @@ export function summaryWords(pooled: RowReport): string {
   const left = leftOut(pooled);
   const more = notCounted(pooled);
   if (!b.total) return more ? `No answers to count yet: ${listWords(left)}.` : "No answers yet: each row's bar fills in as you answer its cards.";
-  const said = `Of ${plural(b.total, "card")}, you chose as the agent did ${times(b.agreed)} without seeing its pick, came round to it ${times(b.cameRound)} after reading its case, and overturned it ${times(b.overturned)}.`;
+  const said = `Of ${plural(b.total, "card")}, you chose as the agent did ${times(b.agreed)} without seeing its pick and came round to it ${times(b.cameRound)} after reading its case; ${b.missed === 1 ? "1 was a miss" : `${b.missed} were misses`}.`;
   return more ? `${said} ${more}\u00a0more ${more === 1 ? "isn't" : "aren't"} counted: ${listWords(left)}.` : said;
 }
 
-/** A segment's tooltip: "Security: you chose as the agent did, blind, on 23 of 43 cards". */
+/** A segment's tooltip: "Security: you chose as the agent did, blind, on 23 of 43 cards"; "Security: a miss, on 1 of 43 cards". */
 export function segmentWords(row: string, kind: keyof Omit<Bar, "total">, n: number, total: number): string {
-  const what = { agreed: "chose as the agent did, blind", cameRound: "came round to its pick", overturned: "overturned it" }[kind];
-  return `${row}: you ${what}, on ${n} of ${plural(total, "card")}`;
+  const what = { agreed: "you chose as the agent did, blind", cameRound: "you came round to its pick", missed: n === 1 ? "a miss" : "misses" }[kind];
+  return `${row}: ${what}, on ${n} of ${plural(total, "card")}`;
 }
 
 /** Where the mark sits on a row's track, as a fraction of it. */

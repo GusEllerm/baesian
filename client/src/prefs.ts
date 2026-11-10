@@ -236,13 +236,13 @@ export function stopMeans(position: Position, mode: Mode, s: Pick<Settings, "rat
 export function rowEvidence(r: RowReport | undefined, replayed: { cards: number; held: number; heldMissed: number } | undefined, holdsBack: boolean): string {
   const cards = r ? r.shown + r.held + r.wouldHold : 0;
   if (!cards) return "No cards in this row yet.";
-  const said = r!.misses ? `${plural(cards, "card")} so far: you overturned the agent on ${r!.misses}.` : `${plural(cards, "card")} so far: you haven't overturned the agent here.`;
+  const said = r!.misses ? `${plural(cards, "card")} so far: ${plural(r!.misses, "miss", "misses")}.` : `${plural(cards, "card")} so far: no misses.`;
   if (!holdsBack || !replayed?.cards) return said;
   const n = replayed.cards;
   const one = n === 1 && cards === 1;
   const of = n === cards ? "them" : `its ${plural(n, "past card")}`;
   const which = one ? (replayed.held ? "it would" : "it wouldn't") : !replayed.held ? `none of ${of} would` : replayed.held === n && of === "them" ? "all of them would" : `${replayed.held} of ${of} would`;
-  const missed = replayed.heldMissed ? (one ? ", and you overturned it" : `, including ${replayed.heldMissed} you overturned`) : "";
+  const missed = replayed.heldMissed ? (one ? ", and it was a miss" : `, including ${plural(replayed.heldMissed, "miss", "misses")}`) : "";
   return `${said} At this stop, ${which} have been held back${missed}.`;
 }
 

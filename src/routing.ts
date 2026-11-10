@@ -262,29 +262,53 @@ export function levelInForce(d: GateDecision, mode: Mode, asked: Level | undefin
   return mode === "enforce" ? "provisional" : higherLevel("provisional", asked);
 }
 
-// ---------------------------------------------------------------- misses (B-87tkc)
+// ---------------------------------------------------------------- misses (B-87tkc, B-ab06a)
 
 /** Answers that end a card one way or the other: a choice, the reviewer's own answer, or a rejection. */
 export const FINAL: ReadonlySet<Response> = new Set(["accept", "alternative", "correction", "reject"]);
 /** Final answers that overturn the agent's pick. */
 export const OVERTURNS: ReadonlySet<Response> = new Set(["alternative", "correction", "reject"]);
 
-/** What a card's answers say for its row: its final answer, and whether it's a miss (B-87tkc). */
+/**
+ * Why a card is a miss, the first that applies: a final answer that overturns the agent's pick; any answer marked "you
+ * should have asked me" (B-87tkc); or, on a crux of preference, a blind choice against the agent's pick, whatever the
+ * final answer (B-ab06a).
+ */
+export type MissBy = "overturn" | "asked" | "blind";
+
+/** What a card's answers say for its row: its final answer, and whether it's a miss (B-87tkc, B-ab06a). */
 export interface Outcome {
   /** The latest final answer, if any: its response, when, and the blind choice made before it. */
   final?: { response: Response; at: string; first_choice?: "proposal" | "alternative" };
-  /** A final answer that overturns the agent's pick, or any answer marked "you should have asked me". */
+  /**
+   * A final answer that overturns the agent's pick, or any answer marked "you should have asked me"; and on a crux of
+   * preference, a final answer whose blind choice went against the pick, even when the final answer kept it.
+   */
   miss: boolean;
-  /** A blind choice against the agent's pick that the final answer kept: reported, never counted (B-87tkc). */
+  /** Why, when it's a miss. */
+  missBy?: MissBy;
+  /**
+   * A blind choice against the agent's pick that the final answer kept (B-87tkc): on a crux of fact it's reported and
+   * never counted; on one of preference it's a miss as well (B-ab06a).
+   */
   switched: boolean;
 }
 
-export function outcomeOf(verdicts: readonly { response: Response; at: string; first_choice?: "proposal" | "alternative" | undefined; should_have_asked?: boolean | undefined }[]): Outcome {
+/**
+ * A card's outcome from its verdicts. `preference` is whether its crux is one of preference (`crux_preference`, on its
+ * latest revision): then the blind choice is the answer that counts, since the agent's case can persuade you of what to
+ * value but holds no fact you lacked (B-ab06a). On a crux of fact B-87tkc stands: coming round after the case isn't a miss.
+ */
+export function outcomeOf(
+  verdicts: readonly { response: Response; at: string; first_choice?: "proposal" | "alternative" | undefined; should_have_asked?: boolean | undefined }[],
+  opts: { preference?: boolean | undefined } = {},
+): Outcome {
   const last = [...verdicts].reverse().find((v) => FINAL.has(v.response));
   const asked = verdicts.some((v) => v.should_have_asked === true);
-  if (!last) return { miss: asked, switched: false };
+  if (!last) return asked ? { miss: true, missBy: "asked", switched: false } : { miss: false, switched: false };
   const final = { response: last.response, at: last.at, ...(last.first_choice ? { first_choice: last.first_choice } : {}) };
-  return { final, miss: asked || OVERTURNS.has(last.response), switched: last.response === "accept" && last.first_choice === "alternative" };
+  const missBy: MissBy | undefined = OVERTURNS.has(last.response) ? "overturn" : asked ? "asked" : opts.preference === true && last.first_choice === "alternative" ? "blind" : undefined;
+  return { final, miss: missBy !== undefined, ...(missBy ? { missBy } : {}), switched: last.response === "accept" && last.first_choice === "alternative" };
 }
 
 /**
@@ -325,7 +349,7 @@ export interface ReplayRow {
   cards: number;
   shown: number;
   held: number;
-  /** Held cards whose final answer went against the agent's pick, or that you marked "you should have asked me". */
+  /** Held cards that were misses (`Outcome.miss`): overturned, marked "you should have asked me", or on a crux of preference chosen against blind. */
   heldMissed: number;
   /** About how many of the held cards would have come back as audits: each row's burn-in, then each card's chance. */
   audits: number;
@@ -354,13 +378,14 @@ export function replayCardOf(c: {
     pref_row?: string | undefined;
     conflict_of?: readonly string[] | undefined;
     answered_in_chat?: string | undefined;
+    crux_preference?: boolean | undefined;
   };
   status: string;
   verdicts: readonly (Parameters<typeof outcomeOf>[0][number] & { seen?: true | undefined })[];
   gate?: { asked?: Level | undefined; source: GateSource } | undefined;
 }): ReplayCard | undefined {
   if (isOwnCard(c.meta) || c.gate?.source === "baesian" || c.status === "withdrawn" || answeredInChat(c)) return undefined;
-  return { id: c.meta.id, touches: c.meta.touches, reverse: c.meta.reverse, ...(c.gate?.asked ? { asked: c.gate.asked } : {}), source: c.gate?.source ?? "agent", outcome: outcomeOf(c.verdicts) };
+  return { id: c.meta.id, touches: c.meta.touches, reverse: c.meta.reverse, ...(c.gate?.asked ? { asked: c.gate.asked } : {}), source: c.gate?.source ?? "agent", outcome: outcomeOf(c.verdicts, { preference: c.meta.crux_preference }) };
 }
 
 /**

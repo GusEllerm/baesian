@@ -210,9 +210,15 @@ export interface RowReport {
   auditsUnanswered: number;
   /** Cards with a final answer: a choice, the reviewer's own answer, or a rejection. */
   answered: number;
-  /** Final answers that overturned the agent's pick, and answers marked "you should have asked me" (B-87tkc). */
+  /**
+   * Misses: final answers that overturned the agent's pick, and answers marked "you should have asked me" (B-87tkc);
+   * and on a crux of preference, a blind choice against the pick, whatever the final answer (B-ab06a).
+   */
   misses: number;
-  /** A blind choice against the agent's pick that the final answer then kept: reported, not counted (B-87tkc). */
+  /**
+   * A blind choice against the agent's pick that the final answer then kept: on a crux of fact reported, not counted
+   * (B-87tkc); on one of preference it's a miss too (B-ab06a), so it's in `misses` as well, and not in `cameRound`.
+   */
   switched: number;
   /** Final answers with a blind choice, and those whose blind choice matched the agent's pick. */
   blind: number;
@@ -228,8 +234,8 @@ export interface RowReport {
   recentMisses: number;
   /**
    * Your calibration's bar (D180): each card once, by its answers. `agreed`: a final accept whose blind choice was the
-   * agent's pick. `cameRound`: a blind choice against it that the final answer kept (`switched`). Overturned is
-   * `misses`, and a miss counts only there, so the three don't overlap.
+   * agent's pick. `cameRound`: a blind choice against it that the final answer kept (`switched`), on a crux of fact. The
+   * misses are `misses`, and a miss counts only there, so the three don't overlap.
    */
   agreed: number;
   cameRound: number;

@@ -1,5 +1,5 @@
 import { type Counted, countedCards, replayCards, rowWindows } from "./report.js";
-import { LEVEL_AT, LOOSEN_AFTER, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
+import { LEVEL_AT, LOOSEN_AFTER, type MissBy, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
 import type { Verdict } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, tokens } from "./similarity.js";
 import { type Card, PENDING, type Store } from "./store.js";
@@ -155,7 +155,7 @@ function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down",
   const history = after && !LEVEL_AT[to] ? ` Of the ${cards(after.cards)} on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
   const fact =
     dir === "up"
-      ? `“${name}” is at ${named(from)}. On ${evidence.card.meta.id}, “${evidence.card.meta.title}”, ${evidence.answers.final?.response === "accept" ? "you kept the agent's pick, and marked that you should have been asked" : "your final answer went against the agent's pick"}. Misses on this row at ${named(from)}: ${misses.length} in ${answered.length} final ${answered.length === 1 ? "answer" : "answers"}.${history}`
+      ? `“${name}” is at ${named(from)}. On ${evidence.card.meta.id}, “${evidence.card.meta.title}”, ${MISSED_BY[evidence.answers.missBy ?? "overturn"]}. Misses on this row at ${named(from)}: ${misses.length} in ${answered.length} final ${answered.length === 1 ? "answer" : "answers"}.${history}`
       : `“${name}” is at ${named(from)}. Your last ${answered.length} final answers on it kept the agent's pick, and none was marked “you should have asked me”: with no misses in ${answered.length}, the miss rate is under about 1 in ${Math.floor(answered.length / 3)}.${history}`;
   return {
     title: `The setting for ${lower}`,
@@ -179,5 +179,16 @@ function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down",
   };
 }
 
+/** What made a card a miss, in the words of a slider card's evidence (B-87tkc, B-ab06a). */
+const MISSED_BY: Record<MissBy, string> = {
+  overturn: "your final answer went against the agent's pick",
+  asked: "you kept the agent's pick, and marked that you should have been asked",
+  blind: "a question of what you value, you chose against the agent's pick before seeing its case",
+};
+
+/** What a miss is, as a slider card says it (B-87tkc, B-ab06a). */
+export const MISS_WORDS =
+  "A miss is a final answer that overturns the agent's pick, or one marked “you should have asked me” (B-87tkc); and on a question of what you value, a blind choice against the agent's pick, whatever you answer after its case (B-ab06a).";
+
 const sliderBody = (dir: "up" | "down") =>
-  `Baesian files this itself from the record, with no model (B-y6jn6): ${dir === "up" ? "one stop up after a miss on a row" : `one stop down after ${LOOSEN_AFTER} final answers in a row on it without a miss`}. A miss is a final answer that overturns the agent's pick, or one marked “you should have asked me” (B-87tkc). Accepting writes a new preference file; Baesian never moves a row on its own.\n`;
+  `Baesian files this itself from the record, with no model (B-y6jn6): ${dir === "up" ? "one stop up after a miss on a row" : `one stop down after ${LOOSEN_AFTER} final answers in a row on it without a miss`}. ${MISS_WORDS} Accepting writes a new preference file; Baesian never moves a row on its own.\n`;

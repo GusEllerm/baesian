@@ -181,16 +181,16 @@ describe("what each stop does, in words (D180)", () => {
 
   it("gives a row's evidence from the report, and at a stop that holds back, what it would have held of the row's past cards", () => {
     expect(rowEvidence(undefined, undefined, false)).toBe("No cards in this row yet.");
-    expect(rowEvidence({ ...blank, shown: 17, misses: 1 }, undefined, false)).toBe("17 cards so far: you overturned the agent on 1.");
-    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 0, heldMissed: 0 }, false)).toBe("2 cards so far: you haven't overturned the agent here.");
+    expect(rowEvidence({ ...blank, shown: 17, misses: 1 }, undefined, false)).toBe("17 cards so far: 1 miss.");
+    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 0, heldMissed: 0 }, false)).toBe("2 cards so far: no misses.");
     expect(rowEvidence({ ...blank, shown: 4, misses: 1 }, { cards: 4, held: 3, heldMissed: 1 }, true)).toBe(
-      "4 cards so far: you overturned the agent on 1. At this stop, 3 of them would have been held back, including 1 you overturned.",
+      "4 cards so far: 1 miss. At this stop, 3 of them would have been held back, including 1 miss.",
     );
-    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 2, heldMissed: 0 }, true)).toBe("2 cards so far: you haven't overturned the agent here. At this stop, all of them would have been held back.");
-    expect(rowEvidence({ ...blank, shown: 1 }, { cards: 1, held: 0, heldMissed: 0 }, true)).toBe("1 card so far: you haven't overturned the agent here. At this stop, it wouldn't have been held back.");
-    expect(rowEvidence({ ...blank, held: 1, misses: 1 }, { cards: 1, held: 1, heldMissed: 1 }, true)).toBe("1 card so far: you overturned the agent on 1. At this stop, it would have been held back, and you overturned it.");
+    expect(rowEvidence({ ...blank, shown: 2 }, { cards: 2, held: 2, heldMissed: 0 }, true)).toBe("2 cards so far: no misses. At this stop, all of them would have been held back.");
+    expect(rowEvidence({ ...blank, shown: 1 }, { cards: 1, held: 0, heldMissed: 0 }, true)).toBe("1 card so far: no misses. At this stop, it wouldn't have been held back.");
+    expect(rowEvidence({ ...blank, held: 1, misses: 1 }, { cards: 1, held: 1, heldMissed: 1 }, true)).toBe("1 card so far: 1 miss. At this stop, it would have been held back, and it was a miss.");
     // The replay puts a card with several facts on its strictest row under the draft, which can differ from the record's.
-    expect(rowEvidence({ ...blank, shown: 3 }, { cards: 2, held: 1, heldMissed: 0 }, true)).toBe("3 cards so far: you haven't overturned the agent here. At this stop, 1 of its 2 past cards would have been held back.");
+    expect(rowEvidence({ ...blank, shown: 3 }, { cards: 2, held: 1, heldMissed: 0 }, true)).toBe("3 cards so far: no misses. At this stop, 1 of its 2 past cards would have been held back.");
   });
 
   it("describes every row, and names each stop short enough for a phone", () => {
