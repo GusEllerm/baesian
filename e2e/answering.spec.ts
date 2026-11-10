@@ -45,6 +45,22 @@ test("every card goes through the reveal, and the verdict is recorded once the u
   await expect(page.getByText("All caught up.")).toBeVisible();
 });
 
+test("the model a card's agent ran on is named with its pick, once you've chosen, never before (B-k0w7d, B-fvx91)", async ({ page }) => {
+  const r = repo();
+  r.store.fileCard(draft({ reverse: "cheap" }), BODY, { agent: "claude-code", model: "claude-opus-5-5", force: true });
+  server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await skipSetup(page, r.dir);
+  await page.clock.install();
+  await page.goto(server.url);
+  await expect(page.locator(CARD)).toBeVisible();
+  await expect(page.locator(`${CARD} .doing`)).toHaveText("claude-code is writing the run-metadata layer");
+  await expect(page.locator(CARD)).not.toContainText("claude-opus-5-5");
+  await option(page, "alternative").click();
+  await expect(page.locator(`${CARD} .verdict`)).toHaveText("You chose Postgres. claude-code (claude-opus-5-5) picked SQLite (WAL mode).");
+  await page.locator(CARD).getByRole("button", { name: "Switch to claude-code's pick" }).click();
+  await expect(page.locator(`${CARD} .verdict`)).toHaveText("You switched to SQLite (WAL mode), claude-code's pick (claude-opus-5-5).");
+});
+
 test("disagreeing asks why, optionally, and a switch keeps the first choice (D87, D88)", async ({ page }) => {
   const { store, ids } = await open(page, [{}, {}]);
   await option(page, "alternative").click();

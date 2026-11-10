@@ -9,7 +9,7 @@ import type { Verdict } from "./schema.js";
 export type Author = { person: string } | { agent: string; branch: string };
 
 /** A name or branch as it's printed: as it is when it's plain, else as a JSON string, since names are self-declared. */
-function plain(name: string): string {
+export function plain(name: string): string {
   return /^[\w][\w .@/+-]*$/.test(name) && !name.endsWith(" ") ? name : JSON.stringify(name);
 }
 

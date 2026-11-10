@@ -155,11 +155,64 @@ export const PRESETS: readonly Preset[] = [
   },
 ];
 
+// ---------------------------------------------------------------- when Baesian proposes moving a row (B-jtsfh)
+
+/** The miss rate a row is tested against (B-jtsfh): 1 in 10. */
+export const MISS_RATE = 0.1;
+/** How sure the test must be before Baesian proposes a move (B-jtsfh): 95%. */
+export const SURE = 0.95;
+
 /**
- * Final answers in a row without a miss before Baesian proposes loosening a row (B-y6jn6): the count that bounds a miss
- * rate under 10% (P14). The calibration panel marks it on each row's bar, as what it takes to judge a row (D180).
+ * How likely a row's miss rate is under `MISS_RATE`, from `answers` final answers with `misses` among them (B-jtsfh):
+ * the posterior from a uniform prior, Beta(misses + 1, answers - misses + 1). For whole numbers a and b, P(p < x) under
+ * Beta(a, b) is P(Binomial(a + b - 1, x) ≥ a), so it's one minus a binomial's first `misses + 1` terms.
  */
-export const LOOSEN_AFTER = 29;
+export function chanceUnder(answers: number, misses: number, x = MISS_RATE): number {
+  const n = answers + 1;
+  let log = n * Math.log(1 - x);
+  let below = 0;
+  for (let i = 0; i <= misses && i < n; i++) {
+    below += Math.exp(log);
+    log += Math.log((n - i) / (i + 1)) + Math.log(x / (1 - x));
+  }
+  return Math.max(0, Math.min(1, 1 - below));
+}
+
+/**
+ * The one test, both ways (B-jtsfh): "down" once Baesian is `SURE` a row's miss rate is under `MISS_RATE`, "up" once it's
+ * as sure it's over, or undefined. Loosening after 28 final answers with no miss, 45 with one, 60 with two, 75 with three;
+ * tightening at a miss in the first two answers, 2 in 3, 3 in 10, 5 in 20, 8 in 42.
+ */
+export function rowTest(answers: number, misses: number): "down" | "up" | undefined {
+  const under = chanceUnder(answers, misses);
+  if (under >= SURE) return "down";
+  if (1 - under >= SURE) return "up";
+  return undefined;
+}
+
+/** More final answers, all without a miss, before the test proposes a lower stop: 0 once it would. */
+export function toLoosen(answers: number, misses: number): number {
+  let more = 0;
+  while (chanceUnder(answers + more, misses) < SURE) more++;
+  return more;
+}
+
+/** Final answers it takes, from none, before the test proposes a lower stop, with `misses` among them: 28 with none. */
+export const loosenAfter = (misses = 0): number => toLoosen(misses, misses) + misses;
+
+/** The most final answers in which a single miss proposes a higher stop: a miss in the first 2. */
+export function oneMissWithin(): number {
+  let answers = 1;
+  while (rowTest(answers + 1, 1) === "up") answers++;
+  return answers;
+}
+
+/** The fewest misses in `answers` final answers at which the test proposes a higher stop: 1 in 2, 3 in 10, 5 in 20. */
+export function tightenAt(answers: number): number {
+  let misses = 0;
+  while (misses <= answers && rowTest(answers, misses) !== "up") misses++;
+  return misses;
+}
 
 /** The audit rates and burn-in every preset starts with (B-fgc4y): 1 in 10, 1 in 3, and each row's first 10 held cards. */
 export const AUDIT_DEFAULTS = { rate_agent_decides: 0.1, rate_sample: 1 / 3, burn_in: 10 } as const;
@@ -262,29 +315,53 @@ export function levelInForce(d: GateDecision, mode: Mode, asked: Level | undefin
   return mode === "enforce" ? "provisional" : higherLevel("provisional", asked);
 }
 
-// ---------------------------------------------------------------- misses (B-87tkc)
+// ---------------------------------------------------------------- misses (B-87tkc, B-ab06a)
 
 /** Answers that end a card one way or the other: a choice, the reviewer's own answer, or a rejection. */
 export const FINAL: ReadonlySet<Response> = new Set(["accept", "alternative", "correction", "reject"]);
 /** Final answers that overturn the agent's pick. */
 export const OVERTURNS: ReadonlySet<Response> = new Set(["alternative", "correction", "reject"]);
 
-/** What a card's answers say for its row: its final answer, and whether it's a miss (B-87tkc). */
+/**
+ * Why a card is a miss, the first that applies: a final answer that overturns the agent's pick; any answer marked "you
+ * should have asked me" (B-87tkc); or, on a crux of preference, a blind choice against the agent's pick, whatever the
+ * final answer (B-ab06a).
+ */
+export type MissBy = "overturn" | "asked" | "blind";
+
+/** What a card's answers say for its row: its final answer, and whether it's a miss (B-87tkc, B-ab06a). */
 export interface Outcome {
   /** The latest final answer, if any: its response, when, and the blind choice made before it. */
   final?: { response: Response; at: string; first_choice?: "proposal" | "alternative" };
-  /** A final answer that overturns the agent's pick, or any answer marked "you should have asked me". */
+  /**
+   * A final answer that overturns the agent's pick, or any answer marked "you should have asked me"; and on a crux of
+   * preference, a final answer whose blind choice went against the pick, even when the final answer kept it.
+   */
   miss: boolean;
-  /** A blind choice against the agent's pick that the final answer kept: reported, never counted (B-87tkc). */
+  /** Why, when it's a miss. */
+  missBy?: MissBy;
+  /**
+   * A blind choice against the agent's pick that the final answer kept (B-87tkc): on a crux of fact it's reported and
+   * never counted; on one of preference it's a miss as well (B-ab06a).
+   */
   switched: boolean;
 }
 
-export function outcomeOf(verdicts: readonly { response: Response; at: string; first_choice?: "proposal" | "alternative" | undefined; should_have_asked?: boolean | undefined }[]): Outcome {
+/**
+ * A card's outcome from its verdicts. `preference` is whether its crux is one of preference (`crux_preference`, on its
+ * latest revision): then the blind choice is the answer that counts, since the agent's case can persuade you of what to
+ * value but holds no fact you lacked (B-ab06a). On a crux of fact B-87tkc stands: coming round after the case isn't a miss.
+ */
+export function outcomeOf(
+  verdicts: readonly { response: Response; at: string; first_choice?: "proposal" | "alternative" | undefined; should_have_asked?: boolean | undefined }[],
+  opts: { preference?: boolean | undefined } = {},
+): Outcome {
   const last = [...verdicts].reverse().find((v) => FINAL.has(v.response));
   const asked = verdicts.some((v) => v.should_have_asked === true);
-  if (!last) return { miss: asked, switched: false };
+  if (!last) return asked ? { miss: true, missBy: "asked", switched: false } : { miss: false, switched: false };
   const final = { response: last.response, at: last.at, ...(last.first_choice ? { first_choice: last.first_choice } : {}) };
-  return { final, miss: asked || OVERTURNS.has(last.response), switched: last.response === "accept" && last.first_choice === "alternative" };
+  const missBy: MissBy | undefined = OVERTURNS.has(last.response) ? "overturn" : asked ? "asked" : opts.preference === true && last.first_choice === "alternative" ? "blind" : undefined;
+  return { final, miss: missBy !== undefined, ...(missBy ? { missBy } : {}), switched: last.response === "accept" && last.first_choice === "alternative" };
 }
 
 /**
@@ -325,7 +402,7 @@ export interface ReplayRow {
   cards: number;
   shown: number;
   held: number;
-  /** Held cards whose final answer went against the agent's pick, or that you marked "you should have asked me". */
+  /** Held cards that were misses (`Outcome.miss`): overturned, marked "you should have asked me", or on a crux of preference chosen against blind. */
   heldMissed: number;
   /** About how many of the held cards would have come back as audits: each row's burn-in, then each card's chance. */
   audits: number;
@@ -354,13 +431,14 @@ export function replayCardOf(c: {
     pref_row?: string | undefined;
     conflict_of?: readonly string[] | undefined;
     answered_in_chat?: string | undefined;
+    crux_preference?: boolean | undefined;
   };
   status: string;
   verdicts: readonly (Parameters<typeof outcomeOf>[0][number] & { seen?: true | undefined })[];
   gate?: { asked?: Level | undefined; source: GateSource } | undefined;
 }): ReplayCard | undefined {
   if (isOwnCard(c.meta) || c.gate?.source === "baesian" || c.status === "withdrawn" || answeredInChat(c)) return undefined;
-  return { id: c.meta.id, touches: c.meta.touches, reverse: c.meta.reverse, ...(c.gate?.asked ? { asked: c.gate.asked } : {}), source: c.gate?.source ?? "agent", outcome: outcomeOf(c.verdicts) };
+  return { id: c.meta.id, touches: c.meta.touches, reverse: c.meta.reverse, ...(c.gate?.asked ? { asked: c.gate.asked } : {}), source: c.gate?.source ?? "agent", outcome: outcomeOf(c.verdicts, { preference: c.meta.crux_preference }) };
 }
 
 /**

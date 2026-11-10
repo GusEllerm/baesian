@@ -140,7 +140,7 @@ describe("calibration leaves it out of every measure (B-hswmx)", () => {
     ux(); // waiting for the tap: not "not answered"
     answer(store, ux({}, null), { first_choice: "proposal" }); // an ordinary card, chosen blind
     const r = routingReport(store);
-    expect(r.rows.user_facing).toMatchObject({ shown: 1, answered: 1, agreed: 1, cameRound: 0, misses: 0, unblind: 0, unanswered: 0, blind: 1, matched: 1, streak: 1, inChat: 3 });
+    expect(r.rows.user_facing).toMatchObject({ shown: 1, answered: 1, agreed: 1, cameRound: 0, misses: 0, unblind: 0, unanswered: 0, blind: 1, matched: 1, test: { answers: 1, misses: 0, toLoosen: 27, waiting: false }, inChat: 3 });
     expect(r.pooled).toMatchObject({ shown: 1, answered: 1, misses: 0, inChat: 3 });
     // Every card counted falls in exactly one place; those answered in chat in none of them.
     for (const row of [...Object.values(r.rows), r.pooled]) {

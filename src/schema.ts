@@ -48,6 +48,8 @@ export const FILE_KINDS = {
   // B-jr8mk: the repo's default branch, as the CLI read it, which it sends the relay for the website.
   "default-branch": { name: "default branch", upgrades: [] },
   cursor: { name: "inbox cursor", upgrades: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
+  // B-k0w7d: a harness session's model, as the plugin's hooks last heard it, for the cards the session files.
+  "session-model": { name: "session model", upgrades: [] },
   presence: { name: "presence", upgrades: [] },
   waiting: { name: "waiting marker", upgrades: [] },
   server: { name: "server file", upgrades: [] },
@@ -285,6 +287,12 @@ export const CardMeta = z.strictObject({
   domain: z.array(z.string().min(1)).default([]),
   evidence: z.array(z.string().min(1)).default([]),
   source_agent: z.string().min(1),
+  /**
+   * The model the agent ran on when it filed this revision, as its harness named it to the plugin's hooks (B-k0w7d):
+   * Baesian fills it in from the session's model file (`SessionModel`), never the agent. Absent when the card was filed
+   * without the plugin, outside a harness session, or before the harness named a model.
+   */
+  source_model: z.string().min(1).max(200).optional(),
   source_branch: z.string().min(1),
   created: Timestamp,
 });
@@ -300,6 +308,7 @@ export const CardDraft = CardMeta.omit({
   id: true,
   revision: true,
   source_agent: true,
+  source_model: true,
   source_branch: true,
   created: true,
   reply: true,
@@ -751,6 +760,21 @@ export const Cursor = z.strictObject({
   delivered: z.array(z.string().min(1)).optional(),
 });
 export type Cursor = z.infer<typeof Cursor>;
+
+/**
+ * A harness session's model (B-k0w7d), `models/<session>.json` in the live layer: what the plugin's hooks last heard
+ * from the harness, when a session starts (Claude Code's `SessionStart` may leave it out, after /clear for one) and when
+ * it switches (Claude Code's `PostModelSwitch`; Codex names it to every hook). The plugin writes it, as
+ * `plugins/baesian/hooks/baesian.mjs`'s `noteModel()`, and `baesian file` reads it by the session the harness gives its
+ * commands, for the card's `source_model`. Mutable, replaced whole; never in the record.
+ */
+export const SessionModel = z.strictObject({
+  type: z.literal("session-model"),
+  format: formatOf("session-model"),
+  model: z.string().min(1).max(200),
+  at: Timestamp,
+});
+export type SessionModel = z.infer<typeof SessionModel>;
 
 // ---------------------------------------------------------------- routing (M8: D144–D151, P16 sections 2 and 3)
 

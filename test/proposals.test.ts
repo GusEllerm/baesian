@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ApiPresets, ApiState } from "../src/api.js";
 import { inboxOp } from "../src/ops.js";
-import { LOOSEN_AFTER, afterVerdict, proposeConvention, proposeSliderMoves } from "../src/proposals.js";
-import { routingReport } from "../src/report.js";
+import { afterVerdict, proposeConvention, proposeSliderMoves, sliderBody } from "../src/proposals.js";
+import { modelChange, routingReport } from "../src/report.js";
+import { chanceUnder, loosenAfter, rowTest, tightenAt, toLoosen } from "../src/routing.js";
 import { type RunningServer, startServer } from "../src/server.js";
 import type { Store } from "../src/store.js";
 import { BODY, REVIEWER, cleanup, draft, repo, worktree } from "./helpers.js";
@@ -57,7 +58,7 @@ describe("the report per row (P14 section 3)", () => {
     for (const id of ids) answer(store, id);
     const r = routingReport(store);
     expect(r.beforeGate).toBe(1);
-    expect(r.rows.schema).toMatchObject({ position: "tell-me", shown: 3, answered: 3, misses: 0, bound: 1, streak: 3 });
+    expect(r.rows.schema).toMatchObject({ position: "tell-me", shown: 3, answered: 3, misses: 0, bound: 1, test: { answers: 3, misses: 0, toLoosen: 25, waiting: false } });
   });
 
   it("counts your calibration's bar per row (D180): chose as the agent did blind, came round, overturned, and what it leaves out", () => {
@@ -140,22 +141,125 @@ describe("slider proposals (B-y6jn6)", () => {
     expect(store.inForce().file?.row_infra).toBe("tell-me");
   });
 
-  it(`propose one stop down, as a hard card, after ${LOOSEN_AFTER} final answers in a row without a miss`, () => {
+  it(`propose one stop down, as a hard card, after ${loosenAfter(0)} final answers without a miss (B-jtsfh)`, () => {
     const { store } = repo();
-    for (let i = 0; i < LOOSEN_AFTER - 1; i++) answer(store, file(store, { touches: ["user-facing"] }));
+    for (let i = 0; i < loosenAfter(0) - 1; i++) answer(store, file(store, { touches: ["user-facing"] }));
     expect(proposeSliderMoves(store)).toEqual([]);
+    expect(routingReport(store).rows.user_facing?.test).toEqual({ answers: 27, misses: 0, toLoosen: 1, waiting: false });
     answer(store, file(store, { touches: ["user-facing"] }));
     const [down] = proposeSliderMoves(store);
     expect(down?.meta).toMatchObject({ pref_row: "user_facing", pref_from: "tell-me", pref_to: "sample", level: "hard" });
-    expect(down?.meta.crux_fact).toMatch(/last 29 final answers on it kept the agent's pick/);
-    expect(routingReport(store).rows.user_facing).toMatchObject({ streak: 0, since: down!.meta.created });
+    expect(down?.meta.crux_fact).toBe(
+      "“Product behaviour” is at “tell me but carry on”. Of your 28 final answers on it so far, none was a miss: Baesian is 95.2% sure the row's misses are under 1 in 10. Of the 28 cards on this row so far, 28 would have been held back at “check a sample afterwards”.",
+    );
+    expect(down?.meta.alternative_then).toBe("nothing changes, and Baesian proposes this move again only once your answers from now on pass the same test on their own");
+    expect(routingReport(store).rows.user_facing?.test).toEqual({ answers: 28, misses: 0, toLoosen: 0, waiting: true });
   });
 
   it("never propose loosening security below \"tell me but carry on\" (D146)", () => {
     const { store } = repo();
     store.writePreferences({ row_security: "tell-me" }, WHO);
-    for (let i = 0; i < LOOSEN_AFTER; i++) answer(store, file(store, { touches: ["security"], wrong_if: "a", check: "b" }));
+    for (let i = 0; i < loosenAfter(0); i++) answer(store, file(store, { touches: ["security"], wrong_if: "a", check: "b" }));
     expect(proposeSliderMoves(store)).toEqual([]);
+    // The report says it can't go lower: no answers to go.
+    expect(routingReport(store).rows.security?.test).toEqual({ since: expect.any(String), why: "moved", answers: 28, misses: 0, waiting: false });
+  });
+});
+
+describe("one test, both ways (B-jtsfh)", () => {
+  /** `answers` final answers on the user-facing row, the ones in `missAt` overturned, oldest first. */
+  const run = (store: Store, answers: number, missAt: number[] = [], over: Record<string, unknown> = {}) => {
+    for (let i = 0; i < answers; i++) {
+      const id = file(store, { touches: ["user-facing"] });
+      answer(store, id, missAt.includes(i) ? { response: "alternative", choice: "Postgres", ...over } : over);
+    }
+  };
+  const ux = (store: Store) => routingReport(store).rows.user_facing!.test!;
+
+  it("gives the card's numbers: a posterior from a uniform prior, 95% sure either side of 1 in 10", () => {
+    expect([0, 1, 2, 3].map((k) => loosenAfter(k))).toEqual([28, 45, 60, 75]);
+    expect([1, 2, 3, 10, 20, 42].map(tightenAt)).toEqual([1, 1, 2, 3, 5, 8]);
+    expect([rowTest(1, 1), rowTest(2, 1), rowTest(3, 1), rowTest(3, 2), rowTest(10, 3), rowTest(42, 8), rowTest(42, 4)]).toEqual(["up", "up", undefined, "up", "up", "up", undefined]);
+    expect([rowTest(27, 0), rowTest(28, 0), rowTest(44, 1), rowTest(45, 1)]).toEqual([undefined, "down", undefined, "down"]);
+    // P(p < x) under Beta(a, b) is P(Binomial(a + b - 1, x) ≥ a): with no misses, 1 - 0.9^(n + 1).
+    expect(chanceUnder(28, 0)).toBeCloseTo(1 - 0.9 ** 29, 12);
+    expect(toLoosen(10, 0)).toBe(18);
+    expect(toLoosen(10, 1)).toBe(35);
+  });
+
+  it("counts a miss toward what loosening needs, never wiping out the answers before it", () => {
+    const { store } = repo();
+    run(store, 44, [20]);
+    expect(proposeSliderMoves(store)).toEqual([]);
+    expect(ux(store)).toEqual({ answers: 44, misses: 1, toLoosen: 1, waiting: false });
+    run(store, 1);
+    expect(proposeSliderMoves(store).map((c) => c.meta.pref_to)).toEqual(["sample"]);
+  });
+
+  it("proposes tightening only once misses look common: not one miss after a good record, but 3 in 10", () => {
+    const { store } = repo();
+    run(store, 20, [19]);
+    expect(proposeSliderMoves(store)).toEqual([]);
+    const other = repo().store;
+    run(other, 10, [3, 6, 9]);
+    const [up] = proposeSliderMoves(other);
+    expect(up?.meta).toMatchObject({ pref_row: "user_facing", pref_to: "stop-and-ask", level: "provisional", crux: "Are these misses a sign of this kind of decision, or chance?" });
+    expect(up?.meta.crux_fact).toMatch(/your final answer went against the agent's pick\. Of your 10 final answers on it so far, 3 were misses: Baesian is 98\.1% sure the row's misses are over 1 in 10\.$/);
+    const two = repo().store;
+    run(two, 10, [3, 9]);
+    expect(proposeSliderMoves(two)).toEqual([]);
+  });
+
+  it("after you keep a row where it is, proposes that move again only once the answers since pass the test on their own", () => {
+    const { store } = repo();
+    run(store, 28);
+    const [down] = proposeSliderMoves(store);
+    answer(store, down!.meta.id, { response: "alternative", choice: down!.meta.alternative });
+    run(store, 1);
+    expect(proposeSliderMoves(store)).toEqual([]);
+    expect(ux(store)).toMatchObject({ why: "kept", answers: 1, misses: 0, toLoosen: 27 });
+    run(store, 26);
+    expect(proposeSliderMoves(store)).toEqual([]);
+    run(store, 1);
+    expect(proposeSliderMoves(store).map((c) => c.meta.pref_to)).toEqual(["sample"]);
+  });
+
+  it("keeps the misses before a declined loosening toward tightening, and starts tightening's count again after a declined tightening", () => {
+    const { store } = repo();
+    run(store, 1, [0]);
+    const [up] = proposeSliderMoves(store);
+    answer(store, up!.meta.id, { response: "alternative", choice: up!.meta.alternative });
+    // 1 miss in 2, counted afresh from the decline: one answer since, without a miss, proposes nothing.
+    run(store, 1);
+    expect(proposeSliderMoves(store)).toEqual([]);
+    run(store, 1, [0]);
+    expect(proposeSliderMoves(store).map((c) => c.meta.pref_to)).toEqual(["stop-and-ask"]);
+  });
+
+  it("starts the count again when the agents' model changes; a card with no model changes nothing", () => {
+    const { store } = repo();
+    const filed = (model?: string) => {
+      const id = store.fileCard(draft({ title: `Decision ${++n} on its own`, topic: `area${n}/q`, touches: ["user-facing"] }), BODY, { ...AGENT, ...(model ? { model } : {}), force: true }).card.meta.id;
+      answer(store, id);
+    };
+    for (let i = 0; i < 26; i++) filed("claude-sonnet-5");
+    filed();
+    expect(ux(store)).toEqual({ answers: 27, misses: 0, toLoosen: 1, waiting: false });
+    filed("claude-opus-5-5");
+    expect(proposeSliderMoves(store)).toEqual([]);
+    expect(ux(store)).toMatchObject({ why: "model", answers: 1, misses: 0, toLoosen: 27 });
+    expect(modelChange([])).toBeUndefined();
+    // The card says why the count is short.
+    for (let i = 0; i < 27; i++) filed();
+    const [down] = proposeSliderMoves(store);
+    expect(down?.meta.crux_fact).toContain("Of your 28 final answers on it since the agents' model changed to claude-opus-5-5, none was a miss");
+  });
+
+  it("says the rule and its numbers on every card it files", () => {
+    expect(sliderBody("down")).toContain("one stop down once it's 95% sure the row's misses are under 1 in 10, from every final answer on the row since it last moved");
+    expect(sliderBody("down")).toContain("That's 28 answers with no miss, 45 with one, or 60 with two.");
+    expect(sliderBody("up")).toContain("That's a miss in the first 2 answers, 3 in 10, or 5 in 20.");
+    expect(sliderBody("up")).toContain("A change of the agents' model starts the count again, and after you keep a row where it is, Baesian proposes that move again only from the answers since.");
   });
 });
 

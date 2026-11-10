@@ -309,7 +309,7 @@ function notChosen(r: Resolution): { name: string; then: string; pick: boolean }
 const DECISION_KEYS = [
   "type", "format", "status", "authority", "livedocs", "summary", "created", "updated", "tags", "aliases",
   "card", "revision", "title", "question", "answer", "response", "not_chosen", "answered", "answered_by",
-  "topic", "deck", "level", "reverse", "touches", "filed", "filed_by", "branch",
+  "topic", "deck", "level", "reverse", "touches", "filed", "filed_by", "filed_model", "branch",
   "depends_on", "supersedes", "superseded_by", "conflict_of",
 ] as const;
 
@@ -359,6 +359,7 @@ function decisionNote(read: Reading, id: string, h: History): Rendered {
     touches: m.touches,
     filed: r1.meta.created,
     filed_by: r1.meta.source_agent,
+    filed_model: r1.meta.source_model,
     branch: r1.meta.source_branch,
     depends_on: m.depends_on.map((p) => read.linkIfNoted(p)),
     supersedes: m.supersedes ? read.linkIfNoted(m.supersedes) : undefined,
@@ -367,6 +368,9 @@ function decisionNote(read: Reading, id: string, h: History): Rendered {
   };
   return { kind: "decision-note", meta, owned: DECISION_KEYS, head: decisionHead(read, id, h.first), sections: h.sections };
 }
+
+/** Who filed a card: its agent, and the model it ran on when its harness named one (B-k0w7d): "claude-code (claude-opus-5-5)". */
+const filedBy = (m: { source_agent: string; source_model?: string | undefined }): string => (m.source_model ? `${m.source_agent} (${m.source_model})` : m.source_agent);
 
 /** The body as a person reads it, in the client's order: the question, what was decided, then the rest (P17 §2). */
 function decisionHead(read: Reading, id: string, r: Resolution): string {
@@ -395,7 +399,7 @@ function decisionHead(read: Reading, id: string, r: Resolution): string {
   lines.push(
     [
       `Answered by ${v.reviewer} on ${day(v.at)}, through Baesian (card ${id}, revision ${m.revision}).`,
-      `Filed by ${r1.meta.source_agent} on ${r1.meta.source_branch}, in the deck ${deck ? `“${deck.meta.title}”` : m.deck}.`,
+      `Filed by ${filedBy(r1.meta)} on ${r1.meta.source_branch}, in the deck ${deck ? `“${deck.meta.title}”` : m.deck}.`,
       context.length ? `Context: ${context.join(", ")}.` : "",
     ]
       .filter(Boolean)

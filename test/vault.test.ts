@@ -114,6 +114,22 @@ describe("a decision note (D171, D172)", () => {
     expect(note.body).not.toContain("**Comment:**");
   });
 
+  it("says which model filed it, when its harness named one (B-k0w7d)", () => {
+    const { dir, store } = vaultRepo();
+    const id = store.fileCard(draft(), BODY, { ...AGENT, model: "claude-opus-5-5", force: true }).card.meta.id;
+    store.addVerdict({ card: id, revision: 1, response: "accept", ...REVIEWER });
+    const plain = file(store, { title: "Where run files are kept", topic: "storage/run-files" });
+    store.addVerdict({ card: plain, revision: 1, response: "accept", ...REVIEWER });
+    write(store);
+    const note = noteFor(dir, id);
+    expect(note.meta).toMatchObject({ filed_by: "claude-code", filed_model: "claude-opus-5-5", branch: "main" });
+    expect(Object.keys(note.meta).slice(Object.keys(note.meta).indexOf("filed_by"), Object.keys(note.meta).indexOf("filed_by") + 3)).toEqual(["filed_by", "filed_model", "branch"]);
+    expect(note.body).toContain("Filed by claude-code (claude-opus-5-5) on main, in the deck");
+    const without = noteFor(dir, plain);
+    expect(without.meta).not.toHaveProperty("filed_model");
+    expect(without.body).toContain("Filed by claude-code on main, in the deck");
+  });
+
   it("names what was chosen and not chosen, for the alternative and for the reviewer's own answer", () => {
     const { dir, store } = vaultRepo();
     const alt = file(store);

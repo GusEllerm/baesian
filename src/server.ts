@@ -66,8 +66,9 @@ export interface RunningServer {
  */
 const cookieName = (port: number) => `baesian-${port}`;
 const MAX_BODY = 64 * 1024;
-/** The live layer's own bookkeeping, which never changes what the client shows. */
-const IGNORED = (rel: string) => rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel === "port.json" || rel.startsWith(`cursors${sep}`) || rel.startsWith("cursors/");
+/** The live layer's own bookkeeping, which never changes what the client shows: sessions' models among it (B-k0w7d). */
+const IGNORED = (rel: string) =>
+  rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel === "port.json" || ["cursors", "models"].some((d) => rel.startsWith(`${d}${sep}`) || rel.startsWith(`${d}/`));
 
 /** Who answers in the client: git's `user.name`, or the account name. */
 export function reviewerName(toplevel: string): string {

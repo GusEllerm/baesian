@@ -28,7 +28,7 @@ function card(over: Partial<ApiCard["meta"]> = {}, rest: Partial<Omit<ApiCard, "
   };
 }
 /** No preference file: "Today", in shadow (M8). */
-const pooled = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0 };
+const pooled = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0 };
 const ROUTING: ApiState["routing"] = { settings: TODAY, history: [], report: { rows: {}, pooled, beforeGate: 0 } };
 function snapshot(cards: ApiCard[], rules: ApiState["rules"] = []): ApiState {
   // Dependents, as the server computes them.

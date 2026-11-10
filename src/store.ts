@@ -53,6 +53,7 @@ import {
   RuleRetirement,
   type ServiceKey,
   type ServiceKeyRevocation,
+  SessionModel,
   TopicAlias,
   Verdict,
   Waiting,
@@ -112,6 +113,12 @@ export function drawOf(id: string, revision: number): number {
   return createHash("sha256").update(`${id} r${revision}`).digest().readUIntBE(0, 6) / 2 ** 48;
 }
 
+/**
+ * Where a harness session's model is kept in the live layer (B-k0w7d): `models/<session>.json`, by the session's ID as
+ * `slug()` makes it, which the plugin's hooks repeat.
+ */
+export const modelPath = (session: string): string => `models/${slug(session)}.json`;
+
 /** A change to the preferences, as the client asks for it (D147): any field over the file in force, a preset, or the survey's answers. */
 export type PreferenceChange = Partial<Omit<Preferences, "type" | "format" | "replaces" | "from_card" | "by" | "client" | "at">> & {
   replaces?: string | undefined;
@@ -133,6 +140,12 @@ export function settingsOf(p: Preferences): Settings {
 export interface Card {
   meta: CardMeta;
   body: string;
+}
+
+/** Who files a revision: the agent, by name (D102), and the model it ran on, when its harness named one (B-k0w7d). */
+interface Filer {
+  agent: string;
+  model?: string | undefined;
 }
 
 /** The card fields only Baesian sets, never a draft: a reply, a drafted rule, a convention, a slider move. */
@@ -1307,10 +1320,10 @@ export class Store {
     return facts.length ? facts : undefined;
   }
 
-  /** Write a revision the gate has seen, and its record beside it. */
-  private writeGated(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string, source: GateSource): { card: Card; gate: GateRecord; hardBecause?: string[]; warnings: string[] } {
+  /** Write a revision the gate has seen, and its record beside it, filed by `by`: its agent, and the model it ran on, if known. */
+  private writeGated(id: string, revision: number, draft: CardDraft & OwnFields, body: string, by: Filer, source: GateSource): { card: Card; gate: GateRecord; hardBecause?: string[]; warnings: string[] } {
     const gate = this.view(() => this.runGate(id, revision, draft, source));
-    const card = this.writeRevision(id, revision, { ...draft, level: gate.level }, body, agent);
+    const card = this.writeRevision(id, revision, { ...draft, level: gate.level }, body, by);
     const rel = `cards/${id}/gate-r${revision}-cli.json`;
     this.writeOnce(rel, `${JSON.stringify(gate.record, null, 2)}\n`);
     this.toRecord(rel);
@@ -1349,7 +1362,7 @@ export class Store {
    * File a new card. Unless `force`, refuses with `PossibleDuplicate` when an open card or a resolved
    * decision may already cover it: attach to the open card, or follow the decision (D36, D38).
    */
-  fileCard(draft: unknown, body: string, opts: { agent: string; force?: boolean }): FileResult {
+  fileCard(draft: unknown, body: string, opts: { agent: string; force?: boolean; model?: string | undefined }): FileResult {
     this.requireInit();
     // The checks read every card: once, in a view, which ends before anything is written.
     const { prep, matches } = this.view(() => {
@@ -1360,7 +1373,7 @@ export class Store {
     const id = this.freeCardId();
     // Baesian's own cards always reach you; the store files them under its name (conflict cards, D35).
     // A choice the reviewer answered in chat is shown too, for them to confirm (B-hswmx).
-    const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts.agent, opts.agent === BAESIAN ? "baesian" : chatOr(prep.draft, "agent"));
+    const { warnings, ...gated } = this.writeGated(id, 1, prep.draft, body, opts, opts.agent === BAESIAN ? "baesian" : chatOr(prep.draft, "agent"));
     return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
   }
 
@@ -1381,11 +1394,11 @@ export class Store {
     const prep = this.view(() => this.prepare({ ...rest, deck: deck.id }, body));
     const id = this.freeCardId();
     const own = { ...(convention ? { convention } : {}), ...(pref_row ? { pref_row, pref_from, pref_to } : {}) };
-    return this.writeGated(id, 1, { ...prep.draft, ...own }, body, BAESIAN, "baesian").card;
+    return this.writeGated(id, 1, { ...prep.draft, ...own }, body, { agent: BAESIAN }, "baesian").card;
   }
 
   /** File the next revision of a returned card: the agent's reply to a verdict. */
-  reviseCard(id: string, draft: unknown, body: string, opts: { agent: string }): FileResult {
+  reviseCard(id: string, draft: unknown, body: string, opts: { agent: string; model?: string | undefined }): FileResult {
     this.requireInit();
     const latest = this.card(id);
     if (!latest) throw new NoCard(id);
@@ -1396,7 +1409,7 @@ export class Store {
     // decision, so it's gated as one (P16 section 3).
     const own = this.latestVerdict(latest);
     const source: GateSource = this.parentReturns(latest).length === 0 && own !== undefined && RETURNS.has(own.response) ? "answer" : chatOr(prep.draft, "agent");
-    const { warnings, ...gated } = this.writeGated(id, latest.meta.revision + 1, prep.draft, body, opts.agent, source);
+    const { warnings, ...gated } = this.writeGated(id, latest.meta.revision + 1, prep.draft, body, opts, source);
     return { ...gated, nearTopics: prep.nearTopics, warnings: [...prep.warnings, ...warnings] };
   }
 
@@ -1416,7 +1429,7 @@ export class Store {
    * The agent's one reply to an answer that went against its pick (D89, D104): the card's next revision, the same
    * as the last but for the fact or check in `reply`. It reopens the card for the reviewer.
    */
-  replyToCard(id: string, reply: string, opts: { agent: string }): Card {
+  replyToCard(id: string, reply: string, opts: { agent: string; model?: string | undefined }): Card {
     this.requireInit();
     const latest = this.card(id);
     if (!latest) throw new NoCard(id);
@@ -1426,9 +1439,9 @@ export class Store {
     }
     const text = reply.trim();
     if (!text) throw new ValidationError("the reply is empty: give the fact or the check, in a line");
-    const { type: _t, format: _f, id: _i, revision: _r, source_agent: _a, source_branch: _b, created: _c, ...draft } = latest.meta;
+    const { type: _t, format: _f, id: _i, revision: _r, source_agent: _a, source_model: _m, source_branch: _b, created: _c, ...draft } = latest.meta;
     // A reply follows an answer, so the gate shows it, at least at the level the card had (P16 section 3).
-    return this.writeGated(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts.agent, "answer").card;
+    return this.writeGated(id, latest.meta.revision + 1, { ...draft, reply: text }, latest.body, opts, "answer").card;
   }
 
   /** The cards that draft a rule from decision `id` (D110), whatever became of them, short of being withdrawn. */
@@ -1457,7 +1470,7 @@ export class Store {
    * `rule` a rule covering `covers`. Accepting it saves the rule. It builds on the decision, in the same topic and
    * deck, so it isn't a duplicate of it.
    */
-  draftRule(id: string, rule: string, covers: string[], opts: { agent: string }): Card {
+  draftRule(id: string, rule: string, covers: string[], opts: { agent: string; model?: string | undefined }): Card {
     this.requireInit();
     const from = this.card(id);
     if (!from) throw new NoCard(id);
@@ -1487,7 +1500,7 @@ export class Store {
     });
     const newCard = this.freeCardId();
     // A rule draft is Baesian's own card, filed by an agent: the gate always shows it.
-    return this.writeGated(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts.agent, "baesian").card;
+    return this.writeGated(newCard, 1, { ...prep.draft, rule: text, rule_covers: covers }, "", opts, "baesian").card;
   }
 
   /**
@@ -1509,7 +1522,7 @@ export class Store {
     this.toRecord(rel);
   }
 
-  private writeRevision(id: string, revision: number, draft: CardDraft & OwnFields, body: string, agent: string): Card {
+  private writeRevision(id: string, revision: number, draft: CardDraft & OwnFields, body: string, by: Filer): Card {
     const deck = draft.deck ?? this.ensureBranchDeck();
     if (!this.deck(deck)) throw new NoDeck(`no deck "${deck}": create it with \`baesian deck ${deck} --title "<what it decides>"\``);
     const meta = parse(
@@ -1521,7 +1534,8 @@ export class Store {
         id,
         revision,
         deck,
-        source_agent: agent,
+        source_agent: by.agent,
+        ...(by.model ? { source_model: by.model } : {}),
         source_branch: this.branch,
         created: now(),
       },
@@ -2287,6 +2301,29 @@ export class Store {
       .map(inboxKey);
     if (keys.every((k) => cursor.delivered.includes(k))) return;
     this.writeCursor({ at: cursor.at, delivered: [...new Set([...cursor.delivered, ...keys])] });
+  }
+
+  /**
+   * The model a harness session runs on, as the plugin's hooks last heard it (B-k0w7d): `models/<session>.json`, the
+   * first of `sessions` that has one, or undefined. A file that can't be read names no model, and never fails a filing.
+   */
+  sessionModel(sessions: readonly string[]): string | undefined {
+    for (const session of sessions) {
+      const rel = modelPath(session);
+      try {
+        const text = this.text(rel);
+        if (text !== undefined) return readAs("session-model", SessionModel, JSON.parse(text), rel).model;
+      } catch {
+        // unreadable: no model from this session's file
+      }
+    }
+    return undefined;
+  }
+
+  /** Note a session's model, as the plugin's hooks do (B-k0w7d): replaced whole, in the newest format. */
+  noteSessionModel(session: string, model: string): void {
+    const file = parse(SessionModel, { type: "session-model", format: newestFormat("session-model"), model, at: now() }, "the session's model");
+    this.storage.replace(modelPath(session), encode(`${JSON.stringify(file)}\n`));
   }
 
   /** Whether a harness's session has read this branch's inbox before: its own cursor is written at its first read. */

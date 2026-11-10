@@ -1,16 +1,16 @@
 import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 import type { ApiRouting, RowReport } from "../../src/api";
 import { isFixed } from "../../src/routing";
-import { type Bar, ENOUGH, THIN, barOf, leftOut, markAt, notCounted, scaleOf, segmentWords, summaryWords } from "./calibration";
+import { type Bar, THIN, barOf, leftOut, needsWords, notCounted, ruleWords, scaleOf, segmentWords, summaryWords } from "./calibration";
 import { ALL_ROWS, type AnyRow, POSITION_NAMES, type Position, ROW_NAMES } from "./prefs";
 
 // Your calibration, row by row (D180): how your answers compare with the agents' picks, as one stacked bar per row at
-// its true length, all rows on one scale, with a mark at the answers it takes to judge a row, and the same as a table.
-// The counts are the report's (`routingReport()`, src/report.ts), so nothing here counts twice.
+// its true length, all rows on one scale, with what each row now needs for a lower stop beside it (B-jtsfh), and the
+// same as a table. The counts are the report's (`routingReport()`, src/report.ts), so nothing here counts twice.
 
-const KINDS = ["agreed", "cameRound", "overturned"] as const;
+const KINDS = ["agreed", "cameRound", "missed"] as const;
 type Kind = (typeof KINDS)[number];
-const KIND_CLASS: Record<Kind, string> = { agreed: "a", cameRound: "r", overturned: "o" };
+const KIND_CLASS: Record<Kind, string> = { agreed: "a", cameRound: "r", missed: "o" };
 
 /** A segment's tooltip, and the segment it names. */
 type Tip = { text: string; el: Element };
@@ -31,7 +31,7 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
     // The report has every row the repo sets, and a fixed row once it has cards.
     const r = report.rows[row];
     const position = (r?.position ?? (isFixed(row) ? "never-without-me" : routing.settings.rows[row])) as Position;
-    return { row, name: ROW_NAMES[row], stop: POSITION_NAMES[position] ?? position, bar: r ? barOf(r) : { agreed: 0, cameRound: 0, overturned: 0, total: 0 }, report: r };
+    return { row, name: ROW_NAMES[row], stop: POSITION_NAMES[position] ?? position, bar: r ? barOf(r) : { agreed: 0, cameRound: 0, missed: 0, total: 0 }, report: r };
   });
   const all: Line = { row: "all", name: "All rows", bar: barOf(report.pooled), report: report.pooled };
   const scale = scaleOf(lines.map((l) => l.bar));
@@ -59,7 +59,7 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
           </span>
           <span>
             <i className="sw o" />
-            Overturned it, or said you should have been asked
+            A miss: you overturned it or should have been asked, or chose otherwise blind on what you value
           </span>
         </div>
       </div>
@@ -72,8 +72,8 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
         }}
       >
         <BarRow line={all} scale={all.bar.total} onTip={setTip} />
-        {lines.map((line, i) => (
-          <BarRow key={line.row} line={line} scale={scale} mark={markAt(scale)} label={i === 0} onTip={setTip} />
+        {lines.map((line) => (
+          <BarRow key={line.row} line={line} scale={scale} onTip={setTip} />
         ))}
       </div>
       <TipBox tip={tip} />
@@ -89,7 +89,7 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
               </th>
               <th scope="col">As the agent</th>
               <th scope="col">Came round</th>
-              <th scope="col">Overturned</th>
+              <th scope="col">Misses</th>
               <th scope="col">Cards</th>
               {anyLeft && <th scope="col">Not counted</th>}
             </tr>
@@ -104,7 +104,7 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
                 <td className="col-stop">{l.stop ?? ""}</td>
                 <td>{l.bar.agreed}</td>
                 <td>{l.bar.cameRound}</td>
-                <td>{l.bar.overturned}</td>
+                <td>{l.bar.missed}</td>
                 <td>{l.bar.total}</td>
                 {anyLeft && <td>{notCounted(l.report)}</td>}
               </tr>
@@ -116,12 +116,14 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
 
       <div className="cal-reading">
         <div>
-          <b>Mostly indigo, and past the line</b>
-          You and the agents agree here, over enough cards to tell. Baesian will suggest a lower stop after {ENOUGH} answers in a row with no miss, where the row can go lower.
+          <b>Mostly indigo</b>
+          You and the agents agree here. Baesian suggests a lower stop once it's 95% sure a row's misses are under 1 in 10, from its answers since it last moved: {ruleWords.down}.
+          Each row says how many more it needs.
         </div>
         <div>
           <b>Any rose</b>
-          Each is a decision you'd have got wrong to leave to the agent. A row with several should stay where you see it.
+          Each is a decision you'd have got wrong to leave to the agent. On a question of what you value, your choice before its case is the one that counts: choosing otherwise is a miss even
+          if its case then won you round. Once Baesian is 95% sure a row's misses are over 1 in 10 ({ruleWords.up}), it suggests a higher stop.
         </div>
         <div>
           <b>Short and faded</b>
@@ -133,16 +135,18 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
 }
 
 /**
- * One row: its name and stop, its bar at its true length on the common scale, and "M overturned of N", with what the
- * bar leaves out beside it. Hover a segment, or tap it, for its count; focus the row and the arrows step through them.
+ * One row: its name and stop, its bar at its true length on the common scale, and "M misses in N", with what the bar
+ * leaves out and what the row now needs for a lower stop beside it. Hover a segment, or tap it, for its count; focus the
+ * row and the arrows step through them.
  */
-function BarRow(p: { line: Line; scale: number; mark?: number; label?: boolean; onTip: (t: Tip | undefined) => void }) {
+function BarRow(p: { line: Line; scale: number; onTip: (t: Tip | undefined) => void }) {
   const { line } = p;
   const { bar } = line;
   const [at, setAt] = useState(0);
   const row = useRef<HTMLDivElement>(null);
   const kinds = KINDS.filter((k) => bar[k] > 0);
   const left = line.report ? leftOut(line.report) : [];
+  const needs = needsWords(line.report?.test);
   const show = (i: number) => {
     const el = row.current?.querySelectorAll(".seg")[i];
     if (!el) return;
@@ -154,11 +158,11 @@ function BarRow(p: { line: Line; scale: number; mark?: number; label?: boolean; 
     e.preventDefault();
     if (kinds.length) show((at + (e.key === "ArrowRight" ? 1 : kinds.length - 1)) % kinds.length);
   };
-  const described = `${line.name}${line.stop ? `, ${line.stop}` : ""}: ${bar.agreed} chose as the agent did, ${bar.cameRound} came round, ${bar.overturned} overturned, of ${bar.total}.`;
+  const described = `${line.name}${line.stop ? `, ${line.stop}` : ""}: ${bar.agreed} chose as the agent did, ${bar.cameRound} came round, ${bar.missed} ${bar.missed === 1 ? "miss" : "misses"}, of ${bar.total}.${needs ? ` ${needs}.` : ""}`;
   return (
     <div
       ref={row}
-      className={["cal-row", line.row === "all" ? "all" : "", p.label ? "first" : "", line.row !== "all" && bar.total < THIN ? "thin" : ""].filter(Boolean).join(" ")}
+      className={["cal-row", line.row === "all" ? "all" : "", line.row !== "all" && bar.total < THIN ? "thin" : ""].filter(Boolean).join(" ")}
       data-row={line.row}
       role="group"
       aria-label={described}
@@ -186,22 +190,17 @@ function BarRow(p: { line: Line; scale: number; mark?: number; label?: boolean; 
             />
           ))}
         </div>
-        {p.mark !== undefined && <i className="cal-enough" style={{ left: pct(p.mark) }} aria-hidden="true" />}
-        {p.label && p.mark !== undefined && (
-          <span className="cal-axis" data-anchor={p.mark > 0.75 ? "end" : p.mark < 0.25 ? "start" : undefined} style={{ left: pct(p.mark) }}>
-            {ENOUGH}: enough to judge
-          </span>
-        )}
       </div>
       <div className="num">
         {bar.total ? (
           <span>
-            <b>{bar.overturned}</b> overturned of {bar.total}
+            <b>{bar.missed}</b> {bar.missed === 1 ? "miss" : "misses"} in {bar.total}
           </span>
         ) : (
           !left.length && <span>no cards</span>
         )}
         {left.length > 0 && <span className="left">{bar.total ? `and ${left.join(", ")}` : left.join(", ")}</span>}
+        {needs && <span className="needs">{needs}</span>}
       </div>
     </div>
   );

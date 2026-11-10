@@ -1,9 +1,9 @@
 // Running the CLI from the plugin's hooks. `missing` means it isn't installed, so the hook says nothing.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export function baesian(args, input, cwd) {
   const r = spawnSync("baesian", args, { input, cwd, encoding: "utf8" });
@@ -58,6 +58,65 @@ export function sessionMemory(kind, dir = join(tmpdir(), "baesian-plugin")) {
       }
     },
   };
+}
+
+/** `feat/run-store` to `feat-run-store`: the names Baesian gives its files, as its own `slug()` makes them (src/git.ts). */
+export function slug(text) {
+  return (
+    String(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "x"
+  );
+}
+
+/** The clone's live layer, `<git common dir>/baesian`, if the clone uses Baesian: what it keeps outside the record. */
+export function liveDirOf(cwd) {
+  const r = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8" });
+  if (r.error || r.status !== 0) return undefined;
+  const dir = join(r.stdout.trim(), "baesian");
+  return existsSync(dir) ? dir : undefined;
+}
+
+/**
+ * The model a hook's input names (B-k0w7d): Claude Code's `PostModelSwitch` gives `to_model`, and its `SessionStart`
+ * gives `model`, which it may leave out (after /clear, for one); Codex gives every hook `model`.
+ */
+export function modelOf(input) {
+  for (const value of [input?.to_model, input?.model]) {
+    const model = typeof value === "string" ? value.trim() : "";
+    if (model && model.length <= 200) return model;
+  }
+  return undefined;
+}
+
+/**
+ * Keep the session's model where `baesian file` finds it (B-k0w7d): `models/<session>.json` in the live layer, by the
+ * session ID the harness gives the hook, which it also gives the commands an agent runs. Neither harness tells those
+ * commands the model, so the plugin keeps it for them. Written when it changes, replaced whole, never committed; it
+ * never fails the hook. The file is Baesian's `SessionModel` (src/schema.ts). Returns whether it wrote.
+ */
+export function noteModel(input, now = () => new Date().toISOString()) {
+  try {
+    const model = modelOf(input);
+    const session = typeof input?.session_id === "string" ? input.session_id.trim() : "";
+    if (!model || !session) return false;
+    const live = liveDirOf(typeof input.cwd === "string" && input.cwd ? input.cwd : undefined);
+    if (!live) return false;
+    const file = join(live, "models", `${slug(session)}.json`);
+    try {
+      if (JSON.parse(readFileSync(file, "utf8")).model === model) return false;
+    } catch {
+      // none yet, or unreadable: write it
+    }
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify({ type: "session-model", format: 1, model, at: now() })}\n`);
+    renameSync(tmp, file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The session reading the inbox, so each session on a branch keeps its own place (B-ghhym). Both harnesses give it. */

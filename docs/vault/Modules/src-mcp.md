@@ -71,6 +71,8 @@ One name per call, as P18 section 6 has it: the global `--agent` from the regist
 
 `check_inbox` reads the session the harness names in the server's environment (`harnessSession`), or the one the call gives; otherwise the branch's place, as `baesian inbox` does.
 
+The filing tools record the card's model as `baesian file` does (B-k0w7d): by the sessions the server's environment names (`modelSessions`), so only where the harness gives its MCP server the session's variables. Codex passes a stdio server only a short list of variables (below), so a card filed through Codex's MCP server has no model unless its configuration passes `CODEX_THREAD_ID`; whether Claude Code gives its MCP servers `CLAUDE_CODE_SESSION_ID`, and keeps it current after /clear, is *unverified*.
+
 ## What it never does
 
 - **Answer a card** (D32, D62). None of `Store.addVerdict`, `Store.mergeTopics`, `Store.touchPresence` or `Store.recordFallback` is named in `src/mcp.ts` or `src/ops.ts`, and a test reads both to keep it so. Another test calls every tool on every path and finds no new verdict, rule or alias, and presence unchanged. A fallback is recorded only by `waitForVerdict`, as for the CLI.

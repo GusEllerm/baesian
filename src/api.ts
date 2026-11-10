@@ -210,26 +210,27 @@ export interface RowReport {
   auditsUnanswered: number;
   /** Cards with a final answer: a choice, the reviewer's own answer, or a rejection. */
   answered: number;
-  /** Final answers that overturned the agent's pick, and answers marked "you should have asked me" (B-87tkc). */
+  /**
+   * Misses: final answers that overturned the agent's pick, and answers marked "you should have asked me" (B-87tkc);
+   * and on a crux of preference, a blind choice against the pick, whatever the final answer (B-ab06a).
+   */
   misses: number;
-  /** A blind choice against the agent's pick that the final answer then kept: reported, not counted (B-87tkc). */
+  /**
+   * A blind choice against the agent's pick that the final answer then kept: on a crux of fact reported, not counted
+   * (B-87tkc); on one of preference it's a miss too (B-ab06a), so it's in `misses` as well, and not in `cameRound`.
+   */
   switched: number;
   /** Final answers with a blind choice, and those whose blind choice matched the agent's pick. */
   blind: number;
   matched: number;
   /** With no misses in `answered`, the miss rate is under about this, at 95% confidence: 3 in n. */
   bound?: number;
-  /**
-   * Since the row last moved, or Baesian last proposed moving it (`since`): the final answers at its position without
-   * a miss, and the misses. Slider proposals read these (B-y6jn6).
-   */
-  since?: string;
-  streak: number;
-  recentMisses: number;
+  /** What the row's record says for a lower stop (B-jtsfh), as the slider proposals read it: on the rows a repo sets. */
+  test?: RowTest;
   /**
    * Your calibration's bar (D180): each card once, by its answers. `agreed`: a final accept whose blind choice was the
-   * agent's pick. `cameRound`: a blind choice against it that the final answer kept (`switched`). Overturned is
-   * `misses`, and a miss counts only there, so the three don't overlap.
+   * agent's pick. `cameRound`: a blind choice against it that the final answer kept (`switched`), on a crux of fact. The
+   * misses are `misses`, and a miss counts only there, so the three don't overlap.
    */
   agreed: number;
   cameRound: number;
@@ -244,6 +245,22 @@ export interface RowReport {
    * and counted here so what's left out can be said.
    */
   inChat: number;
+}
+
+/**
+ * A row's count toward a lower stop (B-jtsfh): the final answers at its position since its count began, and what it still
+ * needs before Baesian is 95% sure its misses are under 1 in 10 and proposes one.
+ */
+export interface RowTest {
+  /** When the count began, and why: the row's last move, a change of the agents' model, or your keeping it where it was. */
+  since?: string;
+  why?: "moved" | "model" | "kept";
+  answers: number;
+  misses: number;
+  /** Final answers still to go, all without a miss, before Baesian proposes a lower stop: 0 once it would. Absent where the row can't go lower. */
+  toLoosen?: number;
+  /** A proposal to move the row is waiting for your answer. */
+  waiting: boolean;
 }
 
 export interface RoutingReport {

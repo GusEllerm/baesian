@@ -187,7 +187,7 @@ test("Baesian's own cards say what they propose, with no card IDs; accepting a s
   await expect(slider.locator(".doing")).toHaveText("Baesian is reading the record of your answers, row by row");
   await expect(slider.locator(".stakes")).toContainText("Easy to undo, a change to your preferences");
   await expect(slider.locator(".crux .fact")).toHaveText(
-    "“Runtime dependencies” is at “tell me but carry on”. On “The date library”, your final answer went against the agent's pick. Misses on this row at “tell me but carry on”: 1 in 1 final answer.",
+    "“Runtime dependencies” is at “tell me but carry on”. On “The date library”, your final answer went against the agent's pick. Of your 1 final answer on it so far, 1 was a miss: Baesian is 99.0% sure the row's misses are over 1 in 10.",
   );
   await expect(slider).not.toContainText(/B-[0-9a-z]{5}/);
   await expect(slider.locator('.opt[data-kind="proposal"] h2')).toHaveText("Move it to “stop and ask”");
@@ -271,7 +271,7 @@ test("your preferences: five stops a row, fixed rows locked, floors kept, preset
 
 const width = (l: Locator) => l.evaluate((e) => e.getBoundingClientRect().width);
 
-test("your calibration: a stacked bar per row at its true length, on one scale, with the mark at 29, faded rows, tooltips and the table (D180)", async ({ page }) => {
+test("your calibration: a stacked bar per row at its true length, on one scale, with what each row needs for a lower stop, faded rows, tooltips and the table (D180, B-jtsfh)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page, (s) => {
     fileAnswered(s);
@@ -280,9 +280,9 @@ test("your calibration: a stacked bar per row at its true length, on one scale, 
   await menu(page, "Your calibration");
   const panel = page.getByRole("complementary", { name: "Your calibration" });
   await expect(panel.locator(".cal-summary")).toHaveText(
-    "Of 129 cards, you chose as the agent did 75 times without seeing its pick, came round to it 46 times after reading its case, and overturned it 8 times. 1 more isn't counted: 1 not answered.",
+    "Of 129 cards, you chose as the agent did 75 times without seeing its pick and came round to it 46 times after reading its case; 8 were misses. 1 more isn't counted: 1 not answered.",
   );
-  await expect(panel.locator(".cal-legend span")).toHaveText(["Chose as the agent did, without seeing its pick", "Came round to its pick, after reading its case", "Overturned it, or said you should have been asked"]);
+  await expect(panel.locator(".cal-legend span")).toHaveText(["Chose as the agent did, without seeing its pick", "Came round to its pick, after reading its case", "A miss: you overturned it or should have been asked, or chose otherwise blind on what you value"]);
   const row = (r: string) => panel.locator(`.cal-row[data-row="${r}"]`);
   await expect(panel.locator(".cal-row")).toHaveCount(12);
 
@@ -292,9 +292,13 @@ test("your calibration: a stacked bar per row at its true length, on one scale, 
   expect(await security.locator(".seg").evaluateAll((els) => els.map((e) => [(e as HTMLElement).dataset.kind, Number((e as HTMLElement).dataset.count)]))).toEqual([
     ["agreed", 23],
     ["cameRound", 19],
-    ["overturned", 1],
+    ["missed", 1],
   ]);
-  await expect(security.locator(".num")).toHaveText("1 overturned of 43");
+  await expect(security.locator(".num > span").first()).toHaveText("1 miss in 43");
+  // What the row now needs for a lower stop (B-jtsfh): with 1 miss in 43, 45 answers in all, so 2 more without one.
+  await expect(security.locator(".needs")).toHaveText("2 more without a miss for a lower stop");
+  await expect(row("user_facing").locator(".needs")).toHaveText("37 more without a miss for a lower stop");
+  await expect(row("money").locator(".needs")).toHaveCount(0);
   await expect(row("infra").locator(".seg")).toHaveCount(1);
 
   // True lengths: the longest row fills the track, the rest in proportion; the segments share a bar by their counts.
@@ -308,18 +312,15 @@ test("your calibration: a stacked bar per row at its true length, on one scale, 
   const all = row("all");
   expect(await width(all.locator(".cal-bar"))).toBeCloseTo(await width(all.locator(".cal-track")), 0);
   await expect(all.locator(".nm")).toHaveText("All rowsscaled to its own width");
-  await expect(all.locator(".num")).toHaveText("8 overturned of 129and 1 not answered");
-
-  // The mark at 29 answers, on every row's track, labelled once.
-  const at = await security.locator(".cal-enough").evaluate((e) => e.getBoundingClientRect().left - e.parentElement!.getBoundingClientRect().left);
-  expect(at / track).toBeCloseTo(29 / 43, 2);
-  await expect(panel.locator(".cal-enough")).toHaveCount(11);
-  await expect(panel.locator(".cal-axis")).toHaveText(["29: enough to judge"]);
+  await expect(all.locator(".num")).toHaveText("8 misses in 129and 1 not answered");
+  await expect(all.locator(".needs")).toHaveCount(0);
+  // No mark on the tracks: what each row needs is said beside it instead.
+  await expect(panel.locator(".cal-enough, .cal-axis")).toHaveCount(0);
 
   // Fewer than 10 answers: faded. What the bar leaves out is said beside it.
   await expect(row("privacy")).toHaveClass(/\bthin\b/);
   await expect(row("security")).not.toHaveClass(/\bthin\b/);
-  await expect(row("schema").locator(".num")).toHaveText("1 overturned of 23and 1 not answered");
+  await expect(row("schema").locator(".num")).toHaveText("1 miss in 23and 1 not answered22 more without a miss for a lower stop");
 
   // A tooltip names a segment's count: on hover, and on focus, where the arrows step through them.
   const tip = page.getByRole("tooltip");
@@ -332,11 +333,14 @@ test("your calibration: a stacked bar per row at its true length, on one scale, 
   await page.keyboard.press("ArrowRight");
   await expect(tip).toHaveText("Data formats: you came round to its pick, on 6 of 23 cards");
   await page.keyboard.press("ArrowRight");
-  await expect(tip).toHaveText("Data formats: you overturned it, on 1 of 23 cards");
+  await expect(tip).toHaveText("Data formats: a miss, on 1 of 23 cards");
   await shot(page, "calibration-tooltip");
   await panel.locator("h4").click();
   await expect(tip).toHaveCount(0);
-  await expect(panel.locator(".cal-reading")).toContainText("Baesian will suggest a lower stop after 29 answers in a row with no miss, where the row can go lower.");
+  await expect(panel.locator(".cal-reading")).toContainText(
+    "Baesian suggests a lower stop once it's 95% sure a row's misses are under 1 in 10, from its answers since it last moved: after 28 answers with none, 45 with one, 60 with two. Each row says how many more it needs.",
+  );
+  await expect(panel.locator(".cal-reading")).toContainText("Once Baesian is 95% sure a row's misses are over 1 in 10 (a miss in its first 2 answers, 3 in 10, 5 in 20), it suggests a higher stop.");
   await expect(panel.locator(".cal-time")).toContainText("Later superseded: none of the decisions you settled here");
   await layout(page);
   await shot(page, "calibration");
@@ -344,7 +348,7 @@ test("your calibration: a stacked bar per row at its true length, on one scale, 
   // The same numbers as a table.
   await panel.getByText("Show the numbers as a table").click();
   const table = panel.locator(".cal-table table");
-  await expect(table.locator("thead th")).toHaveText(["Row", "Stop", "As the agent", "Came round", "Overturned", "Cards", "Not counted"]);
+  await expect(table.locator("thead th")).toHaveText(["Row", "Stop", "As the agent", "Came round", "Misses", "Cards", "Not counted"]);
   await expect(table.locator("tbody tr", { hasText: "Security" }).locator("td")).toHaveText(["never without me", "23", "19", "1", "43", "0"]);
   await expect(table.locator("tbody tr.all td")).toHaveText(["", "75", "46", "8", "129", "1"]);
   await panel.evaluate((el) => el.scrollTo(0, el.scrollHeight));
@@ -363,14 +367,14 @@ test("your calibration says what's held back and the audits waiting beside a row
   await menu(page, "Your calibration");
   const panel = page.getByRole("complementary", { name: "Your calibration" });
   await expect(panel.locator(".cal-summary")).toHaveText(
-    "Of 1 card, you chose as the agent did once without seeing its pick, came round to it 0 times after reading its case, and overturned it 0 times. 3 more aren't counted: 1 not answered, 1 held back and 1 audit waiting.",
+    "Of 1 card, you chose as the agent did once without seeing its pick and came round to it 0 times after reading its case; 0 were misses. 3 more aren't counted: 1 not answered, 1 held back and 1 audit waiting.",
   );
   const row = (r: string) => panel.locator(`.cal-row[data-row="${r}"]`);
-  await expect(row("dependency").locator(".num")).toHaveText("0 overturned of 1and 1 audit waiting");
+  await expect(row("dependency").locator(".num")).toHaveText("0 misses in 1and 1 audit waitingAs low as it can go");
   await expect(row("dependency").locator(".nm span")).toHaveText("let the agent decide");
-  await expect(row("infra").locator(".num")).toHaveText("1 held back");
+  await expect(row("infra").locator(".num")).toHaveText("1 held back28 more without a miss for a lower stop");
   await expect(row("infra").locator(".seg")).toHaveCount(0);
-  await expect(row("user_facing").locator(".num")).toHaveText("1 not answered");
+  await expect(row("user_facing").locator(".num")).toHaveText("1 not answered28 more without a miss for a lower stop");
   await expect(row("money").locator(".num")).toHaveText("no cards");
   await layout(page);
 });
@@ -410,12 +414,12 @@ test("your preferences say what each stop does, and what each row's stop means n
   await expect(product.getByRole("radio")).toHaveCount(5);
   await expect(product.getByRole("radio", { name: "Tell me, carry on" })).toHaveAttribute("title", "Tell me but carry on");
   await expect(product.locator(".means")).toHaveText(
-    "These cards reach you, and the agent carries on with its pick meanwhile, so you never hold it up. It hears your answer at its next stopping point.23 cards so far: you overturned the agent on 2.",
+    "These cards reach you, and the agent carries on with its pick meanwhile, so you never hold it up. It hears your answer at its next stopping point.23 cards so far: 2 misses.",
   );
   await expect(row("security").locator(".limit")).toHaveText("No lower than “tell me but carry on”.");
-  await expect(row("security").locator(".means")).toHaveText("These cards reach you, and the agent stops until you answer.43 cards so far: you overturned the agent on 1.");
+  await expect(row("security").locator(".means")).toHaveText("These cards reach you, and the agent stops until you answer.43 cards so far: 1 miss.");
   await expect(row("money").locator(".limit")).toHaveText("Always “never without me”.");
-  await expect(row("dependency").locator(".evidence")).toHaveText("2 cards so far: you haven't overturned the agent here.");
+  await expect(row("dependency").locator(".evidence")).toHaveText("2 cards so far: no misses.");
   await layout(page);
   await shot(page, "preferences-stops");
 
@@ -425,7 +429,7 @@ test("your preferences say what each stop does, and what each row's stop means n
   await product.getByRole("radio", { name: "Sample after" }).check();
   await expect(product.locator(".means")).toHaveText(
     "In shadow, these cards still reach you. With holding back on, they'd go to your Held back list and the agent would carry on with its pick; the row's first 10 would come back to you, then about 1 in 2." +
-      "23 cards so far: you overturned the agent on 2. At this stop, all of them would have been held back, including 2 you overturned.",
+      "23 cards so far: 2 misses. At this stop, all of them would have been held back, including 2 misses.",
   );
   await hold.getByRole("radio", { name: "On" }).check();
   await expect(hold.locator(".now")).toHaveText("On: cards on rows at the two lowest stops skip your queue. Their agents carry on, and a random sample comes back to you.");
