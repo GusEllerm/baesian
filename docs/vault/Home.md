@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "Entry point to the Baesian vault: what the project is, where it stands, what to read first, and where notes go."
 created: 2026-10-23
-updated: 2026-11-05
+updated: 2026-11-10
 reviewed: 2026-10-23
 tags: [baesian, index]
 ---
@@ -15,11 +15,13 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 ## Current status
 
-*As of 2026-11-06.*
+*As of 2026-11-10.*
+
+- **Releasing `v0.1.10` (2026-11-10):** the first release with the licence (`v0.1.9`, live since 2026-11-06, was tagged on the commit before it); `package.json` and `service/package.json` say 0.1.10 (B-3femd). The phone flow passes the user's check on a real device. This clone's git objects were lost on 2026-11-10 and refetched from GitHub; nothing was lost.
+  - **Next:** tag `v0.1.10` once CI passes; the critics' calibration fixes, carded (from [[Profiles and Collective Steering - Critique]]), then built as answered; then M10.
 
 - **The repo is public (2026-11-06, D182):** anyone can clone it and install the CLI from source, sign up at baesian.dev and link a repo; it's source-available under the Functional Source License (FSL-1.1-ALv2, B-qx0vq): use, change and run it, but not to compete; each version becomes Apache 2.0 after two years.
-- **Ready for `v0.1.9` on `main` at `1017746`, CI passed (2026-11-06)** ([[2026-11-06 Hook Test and the README]]): `v0.1.8` is live; the plugin's hooks pass a hand test in the VS Code extension; the README is redesigned as a front page with `docs/setup.md` beside it (B-3fgyc, B-k3451) and media remade from the real client; the release commit sets `package.json`'s version and the deploy checks the tag (B-3femd).
-  - **Next:** tag `v0.1.9`; the critics' calibration fixes, if carded; real-device checks; then M10.
+- **`v0.1.9`, live (2026-11-06), on `main` at `1017746`** ([[2026-11-06 Hook Test and the README]]): `v0.1.8` is live; the plugin's hooks pass a hand test in the VS Code extension; the README is redesigned as a front page with `docs/setup.md` beside it (B-3fgyc, B-k3451) and media remade from the real client; the release commit sets `package.json`'s version and the deploy checks the tag (B-3femd).
 
 - **`v0.1.8`, live (2026-11-06, early)** ([[2026-11-05 Merges After the Sweep]]): every card from the bug sweep answered and built, and agents held to filing cards.
   - **The drawer:** a branch's start is drawn once, from a record of it being brought up to another's tip (B-c4efj); a merge into a branch's own child ends nothing (B-9v07y); every branch keeps its own column (B-cjqxz); names shortened by whole words, hex IDs to seven (B-my3az); the counts say what they count (B-zshw5); a branch with a card waiting stays at the top (B-srtcs). A card's question spans the card (B-5s5h2: text spans its box).
