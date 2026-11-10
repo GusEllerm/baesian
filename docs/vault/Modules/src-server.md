@@ -43,6 +43,7 @@ The types are in `src/api.ts`, which imports no Node modules, so the client can 
 - **`GET /api/presets`** returns `presets` (`ApiPresets`, built apart from the server too): the rows (with their floors, and the fixed ones marked), the positions (with the level each shows at), each preset with its settings and what it would have held of past cards (`replay()`), the settings in force replayed the same way, and the setup survey's example decisions and question. The client reads it when your preferences or the setup survey are open, and again on each change ([[Client Build]] items 16 and 17); it replays a draft itself.
 - **`POST /api/presence`** is the client's heartbeat (D41), through `Store.touchPresence`.
 - **`POST /api/aliases`** merges two topics (D111): `{from, to}` (`ApiAliasInput`), through `Store.mergeTopics`, with `by` from `reviewerName`. 201 with the alias, or 400.
+- **`GET /api/practice`** and **`POST /api/practice`** (B-rehdw, [[Practice Cards]]): practice answers, apart from the state. `GET` gives every `PracticeEntry` kept in the live layer's `practice/` folder, oldest first (`readPractice()`, `ApiPractice`), a file it can't read skipped. `POST` takes an `ApiPracticeInput` and nothing else (`PRACTICE_FIELDS`, shared with the relay), through `practiceEntry()` (in `src/practice-answers.ts`, which the relay uses too), by `reviewerName` with `client: "web"`, and writes it once (`writePractice()`): 201 with it, 400 for a field or value it doesn't take, 409 for a second start of the blind test or a mark before it. The folder isn't one of the kinds the record copies, nor what a machine uploads when the repo is linked, and the watcher ignores it, as it does sessions' models: writing one moves no version. No store method reads or writes it, so nothing an agent runs does.
 - **`GET /api/health`** is how `findRunningServer` checks that a server is really answering.
 - **Anything else outside `/api/`** is the client (`serveClient`), from the build `findClient` finds: `dist/client/` beside the built server, or `dist/` when the server runs from source. `ServerOptions.clientDir` overrides it, for tests.
   - **What's served:**
@@ -75,6 +76,8 @@ The live layer's own bookkeeping never counts as a change: presence, the server 
 - **`findRunningServer`** returns a server only if its process exists and `/api/health` answers with its token. Anything else is a stale file, one in a newer format included, and the next start replaces it. A `port.json` it can't read is ignored the same way, and rewritten in the newest format.
 
 ## Tests
+
+`test/practice-answers.test.ts` (B-rehdw) covers practice answers: the entry's kinds and refusals, the address on a real server, that it's never in the state or its events, the record, a linked repo's uploads or the inbox, and that no module an agent runs, nor the plugin's hooks or the relay's log, uploads and counts, names it.
 
 `test/server.test.ts` runs real servers against real repos:
 - the sign-in and every refusal;

@@ -4,6 +4,7 @@ import { AnswerBars } from "./AnswerBars";
 import { type Spent, seconds, timeSpent } from "./calibration";
 import { agentOf, dayOf } from "./model";
 import type { NotifyStatus } from "./notify";
+import { type PracticeProps, PracticeSection } from "./PracticePanel";
 import { rowInSentence } from "./prefs";
 import { Prose } from "./Prose";
 
@@ -12,8 +13,8 @@ import { Prose } from "./Prose";
 // deck's panel, opened from the breadcrumbs: its briefing, and its context notes from the vault. M8b adds the held-back
 // list and your preferences (Preferences.tsx); D180 redraws your calibration as a bar per row (AnswerBars.tsx).
 
-/** "path" is the path's sheet, on a phone (D130): it opens and closes as a panel does. */
-export type PanelKind = "calibration" | "branches" | "keys" | "deck" | "held" | "preferences" | "path";
+/** "path" is the path's sheet, on a phone (D130): it opens and closes as a panel does. "practice" is the blind test's result (B-xx49m). */
+export type PanelKind = "calibration" | "branches" | "keys" | "deck" | "held" | "preferences" | "path" | "practice";
 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
@@ -165,6 +166,12 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
         </dt>
         <dd>Undo, for 5 seconds</dd>
         <dt>
+          <kbd>1</kbd>
+          <kbd>2</kbd>
+          <kbd>3</kbd>
+        </dt>
+        <dd>In the blind test of practice cards, your guess about the card you've just answered: no, maybe, sure</dd>
+        <dt>
           <kbd>B</kbd>
         </dt>
         <dd>Your decisions, by branch: opens them beside the desk, and closes them</dd>
@@ -183,17 +190,19 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
 }
 
 /**
- * Your calibration (D180): your answers row by row against the agents' picks (`<AnswerBars />`), then, from what can be
- * stood behind (D71), how long you spend by stakes, and the decisions you settled that were later superseded. Practice
- * cards join it when they exist (D83). Choices you answered in chat are left out of each, and said (B-hswmx).
+ * Your calibration (D180): your answers row by row against the agents' picks (`<AnswerBars />`), then practice cards
+ * (B-kb5yt: the blind test, then their row, `<PracticeSection />`), then, from what can be stood behind (D71), how long you
+ * spend by stakes, and the decisions you settled that were later superseded. Choices you answered in chat are left out of
+ * each, and said (B-hswmx).
  */
-export function CalibrationPanel({ spent, superseded: s, routing, onClose }: { spent: Spent[]; superseded: { names: string[]; inChat: number }; routing: ApiRouting; onClose: () => void }) {
+export function CalibrationPanel({ spent, superseded: s, routing, practice, onClose }: { spent: Spent[]; superseded: { names: string[]; inChat: number }; routing: ApiRouting; practice?: PracticeProps; onClose: () => void }) {
   const t = timeSpent(spent);
   const superseded = s.names;
   const chat = s.inChat ? `; ${s.inChat} you answered in chat ${s.inChat === 1 ? "isn't" : "aren't"} counted` : "";
   return (
     <Panel label="Your calibration" onClose={onClose} id="calibration-panel" wide>
       <AnswerBars routing={routing} />
+      {practice && <PracticeSection {...practice} />}
       <div className="cal-time">
         <span>
           Median time on a card, in this browser: mythic and rare <b>{seconds(t.high)}</b>, uncommon <b>{seconds(t.uncommon)}</b>, common <b>{seconds(t.common)}</b>

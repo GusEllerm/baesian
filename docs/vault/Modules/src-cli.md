@@ -120,6 +120,7 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 - when to file a card, and that every card states its strongest alternative and its crux;
 - that a topic names one question, so a follow-on gets its own, narrower topic (D112);
 - that the reviewer chooses before seeing the agent's pick, case or body, so what they need in order to choose goes in `crux_fact`, kept neutral (provisional, on the finding 2 card);
+- that the case goes in `rationale`, and the alternative's best case in `alternative_rationale`, as the agent would argue it were it its pick (B-sy0kz): the case a practice card gives its planted pick ([[Practice Cards]]). The template asks for it beside `rationale`, and so does the skill;
 - that the decision record is committed with the code, so secrets, credentials and private output stay out of cards (B-vqn69). The plugin's skill says the same, and `baesian file` warns on text that looks like a secret ([[src-store]]);
 - the commit gate: card or ack trailers, and `baesian check`;
 - `wait`'s exit codes, with the one reply to an answer against the agent's pick (D104);
@@ -130,6 +131,6 @@ Both are fire-and-forget: a failed notification never fails the filing. Settings
 - that a level is a minimum only when a card is shown, and a held card means go ahead with the pick, as provisional, settled at merge (D150, B-chq61); `wait` exits 8 for one;
 - that only a person resolves a card, or sets the repo's preferences: agents never write preference files (D147).
 
-The template says the same as the block: reuse a topic only for the same question, and `crux_fact` is the only context the reviewer sees first.
+The template says the same as the block: reuse a topic only for the same question, and `crux_fact` is the only context the reviewer sees first. Its comments start in one column, and a field too long for it, `alternative_rationale`, keeps a space before its own.
 
 **In personal mode** (B-4rwyz) AGENTS.md isn't touched, so the plugin carries the instructions: `personalInstructions()` is `AGENTS_BLOCK`'s, after a paragraph on what personal mode changes for the agent (the gate takes its trailers out of the message, into the clone's ledger; card IDs and Baesian stay out of what the collaborators see), with the sentence on the record being committed replaced, since it isn't. `baesian inbox --quiet`, which the plugin's session-start hook runs, prints it at a session's first read; the MCP server adds a line to its instructions too ([[src-mcp]]).

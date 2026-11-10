@@ -52,6 +52,11 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   // B-15v62: a merge the service can't tie to any card's text is kept while the project exists, and the page says so.
   await expect(kept.getByRole("listitem").filter({ hasText: "A merge: its two branches" })).toContainText("One whose commits the service was never told cite cards (they were made where Baesian isn't signed in to the project), or that brought only a branch's deck: while the project exists");
   await expect(page.getByRole("region", { name: "What it keeps, and why" })).toContainText("A commit's subject and message, and what it changed, never reach the service.");
+  // B-rehdw: practice answers are kept on the service, apart from the cards, while the project exists; never what you wrote.
+  const practice = page.getByRole("region", { name: "What it keeps, and why" }).getByRole("listitem").filter({ hasText: "Your answers on practice cards" });
+  await expect(practice).toContainText("Never what you wrote on a practice card. They're kept apart from your cards: no machine or agent is ever sent them.");
+  await expect(kept.getByRole("listitem").filter({ hasText: "Your answers on practice cards" })).toContainText("While the project exists. They name a card only by its ID, so they keep none of its text.");
+  await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("with all its cards and answers on the service, practice answers included.");
   await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("For 14 days, signing in with your passkey can restore it");
   for (const name of ["Cloudflare, Inc.", "Globus"]) await expect(page.getByRole("region", { name: "Who else handles it" }).getByText(name, { exact: true })).toBeVisible();
   await page.getByRole("region", { name: "What it keeps, and why" }).getByRole("link", { name: "Every field is listed" }).click();

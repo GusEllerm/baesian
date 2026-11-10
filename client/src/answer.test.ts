@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiCard } from "../../src/api";
 import { describeAnswer, verdictFor } from "./answer";
-import { Outbox } from "./outbox";
+import { LOCAL } from "./endpoints";
+import { Outbox, postVerdictTo } from "./outbox";
 
 // What the reviewer answers, as the verdicts the server records (M4 step 5c).
 
@@ -89,7 +90,7 @@ describe("the outbox (D82)", () => {
   it("sends an answer when the window closes, and not before", async () => {
     vi.useFakeTimers();
     const { box, posts, sent } = outbox();
-    box.hold("B-7f3kq", verdict);
+    box.hold("B-7f3kq", { verdict });
     await vi.advanceTimersByTimeAsync(4999);
     expect(posts).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
@@ -100,7 +101,7 @@ describe("the outbox (D82)", () => {
   it("passes on the cards Baesian proposed from the answer (D161, B-y6jn6)", async () => {
     const sent: unknown[][] = [];
     const box = new Outbox(async () => ({ filed: ["B-ccccc"] }), 5000, { sent: (...a) => void sent.push(a), failed: () => {} });
-    box.hold("B-7f3kq", verdict);
+    box.hold("B-7f3kq", { verdict });
     box.flush();
     await vi.waitFor(() => expect(sent).toEqual([["B-7f3kq", { filed: ["B-ccccc"] }]]));
   });
@@ -108,7 +109,7 @@ describe("the outbox (D82)", () => {
   it("takes an answer back on undo, and sends nothing", async () => {
     vi.useFakeTimers();
     const { box, posts } = outbox();
-    box.hold("B-7f3kq", verdict);
+    box.hold("B-7f3kq", { verdict });
     expect(box.undo()).toBe("B-7f3kq");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(posts).toEqual([]);
@@ -118,8 +119,8 @@ describe("the outbox (D82)", () => {
   it("sends what's waiting at once when the next answer comes, or the page closes", async () => {
     vi.useFakeTimers();
     const { box, posts } = outbox();
-    box.hold("B-aaaaa", verdict);
-    box.hold("B-bbbbb", verdict);
+    box.hold("B-aaaaa", { verdict });
+    box.hold("B-bbbbb", { verdict });
     expect(posts).toEqual([{ keepalive: false }]);
     box.flush(true);
     expect(posts).toEqual([{ keepalive: false }, { keepalive: true }]);
@@ -128,9 +129,42 @@ describe("the outbox (D82)", () => {
   it("reports a send that fails, with the server's reason", async () => {
     const failed: string[] = [];
     const box = new Outbox(async () => { throw new Error("B-7f3kq is at revision 2; a verdict on r1 is stale"); }, 5000, { sent: () => {}, failed: (_c, e) => failed.push(e) });
-    box.hold("B-7f3kq", verdict);
+    box.hold("B-7f3kq", { verdict });
     box.flush();
     await new Promise((r) => setTimeout(r, 0));
     expect(failed).toEqual(["B-7f3kq is at revision 2; a verdict on r1 is stale"]);
+  });
+
+  it("holds a practice card's answer the same way, for the same undo window (B-kb5yt)", async () => {
+    vi.useFakeTimers();
+    const items: unknown[] = [];
+    const box = new Outbox(async (item) => void items.push(item), 5000, { sent: () => {}, failed: () => {} });
+    const practice = { kind: "answer" as const, card: "B-7f3kq", revision: 1, answered: "2026-11-01T10:00:00.000Z", blind: "other" as const, final: "planted" as const };
+    box.hold("P-7f3kq@1", { practice });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(items).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(items).toEqual([{ practice }]);
+  });
+
+  it("sends a practice answer to its own address, never as a verdict; a verdict to its own, alone (B-rehdw)", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const entry = { type: "practice", format: 1, kind: "answer", card: "B-7f3kq", revision: 1, answered: "2026-11-01T10:00:00.000Z", final: "planted", reviewer: "t", client: "web", at: "2026-11-10T10:00:00.000Z" };
+    vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      return new Response(JSON.stringify(url === LOCAL.practice ? { entry } : { verdict: {} }), { status: 201 });
+    });
+    try {
+      const post = postVerdictTo(LOCAL);
+      const practice = { kind: "answer" as const, card: "B-7f3kq", revision: 1, answered: "2026-11-01T10:00:00.000Z", final: "planted" as const };
+      expect(await post({ practice }, { keepalive: false })).toEqual({ practice: entry });
+      expect(calls).toEqual([{ url: "/api/practice", body: practice }]);
+      calls.length = 0;
+      // A mark in the blind test isn't held with it: it's kept on its own, after the answer (B-9prve).
+      await post({ verdict }, { keepalive: false });
+      expect(calls).toEqual([{ url: "/api/verdicts", body: verdict }]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

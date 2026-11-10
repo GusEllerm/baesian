@@ -14,6 +14,8 @@ export interface Endpoints {
   aliases: string;
   preferences: string;
   presets: string;
+  /** Practice answers (B-rehdw): an address of their own, apart from the state, which nothing an agent runs reads. */
+  practice: string;
   /**
    * On the website: the project, its name (B-zqkwk), where waiting answers are asked for together, and where the passkey's
    * assertion goes (D139, D163, B-a6xpc).
@@ -29,6 +31,7 @@ export const LOCAL: Endpoints = {
   aliases: "/api/aliases",
   preferences: "/api/preferences",
   presets: "/api/presets",
+  practice: "/api/practice",
 };
 
 /** One project's addresses on the relay (B-7z97x). */
@@ -42,6 +45,7 @@ export function hostedEndpoints(project: string, name: string | null): Endpoints
     aliases: `${base}/aliases`,
     preferences: `${base}/preferences`,
     presets: `${base}/presets`,
+    practice: `${base}/practice`,
     hosted: { project, name, batches: `${base}/batches`, proofs: `${base}/proofs`, live: ws },
   };
 }

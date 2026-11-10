@@ -60,9 +60,10 @@ export interface CardProps {
   problem?: string;
   /**
    * For a reopened card: your answer in a few words, and whether it has gone to the agent, or on the website waits for
-   * your passkey (B-a6xpc).
+   * your passkey (B-a6xpc). In the blind test (B-xx49m), only that it's recorded, on every card alike; and a practice card
+   * outside it says it was practice (B-kb5yt), with nothing to change.
    */
-  review?: { words: string; sent: boolean; waiting?: boolean };
+  review?: { words: string; sent: boolean; waiting?: boolean; test?: boolean; practice?: string };
   /** A settled card opened from your decisions, by branch: what was said, the option chosen, and the way back to them. */
   past?: { words: string; chosen?: OptionKind; onBranches: () => void };
   onReach: (dir: Side | "up" | "down") => void;
@@ -531,26 +532,44 @@ function Seen(p: CardProps & { mode: Extract<Mode, { kind: "seen" }> }) {
   );
 }
 
-/** A card you answered this session, reopened: what you said, and the way to change it. */
+/**
+ * A card you answered this session, reopened: what you said, and the way to change it. In the blind test it says only
+ * that it's recorded, whatever the card (B-xx49m); a practice card outside the test says it was practice, and once
+ * recorded has nothing to change (B-kb5yt).
+ */
 function Review(p: CardProps) {
   const agent = agentOf(p.card);
+  const r = p.review;
+  const settled = !!r?.practice && r.sent;
   return (
     <div className="panel-in">
       <div className="result">
         <p>
-          <b>{p.review?.words ?? "You answered this card."}</b>{" "}
-          {p.review?.sent ? `It was sent to ${agent}.` : p.review?.waiting ? `It waits for your passkey, and goes to ${agent} once you confirm it.` : `It goes to ${agent} in a few seconds.`}
+          <b>{r?.words ?? "You answered this card."}</b>{" "}
+          {r?.practice
+            ? r.practice
+            : r?.test
+              ? r.sent
+                ? "It's recorded."
+                : "It's recorded in a few seconds."
+              : r?.sent
+                ? `It was sent to ${agent}.`
+                : r?.waiting
+                  ? `It waits for your passkey, and goes to ${agent} once you confirm it.`
+                  : `It goes to ${agent} in a few seconds.`}
         </p>
       </div>
       <div className="row">
-        <button type="button" className="send" onClick={p.onChange}>
-          Change your answer
-        </button>
+        {!settled && (
+          <button type="button" className="send" onClick={p.onChange}>
+            Change your answer
+          </button>
+        )}
         <button type="button" className="cancel" onClick={p.onBack}>
           Back to the next card <kbd>Esc</kbd>
         </button>
       </div>
-      {p.review?.sent && <p className="small">A changed answer goes to {agent} with a brief of what it changes.</p>}
+      {r?.sent && !r.test && !r.practice && <p className="small">A changed answer goes to {agent} with a brief of what it changes.</p>}
     </div>
   );
 }
