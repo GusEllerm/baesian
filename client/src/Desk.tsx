@@ -333,17 +333,21 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         const a = answeredRef.current.get(k);
         // A practice card's answer, or a mark in the blind test, is kept with your practice answers (B-rehdw).
         if (posted?.practice) addPractice(posted.practice);
+        // An answer sent because you gave the next one keeps quiet: the next one's toast, with its Undo, stays. The path,
+        // and the strip of answers waiting for your passkey, say what became of it.
+        const quiet = !!outbox.current?.waiting();
         // On the website, a hard answer waits for your passkey, with any others waiting, and you go on (B-a6xpc).
         const wait = posted?.waiting;
         if (wait) {
           setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "waiting", wait }) : m));
+          if (quiet) return;
           return say(`${a?.hard === false ? "Accepting it lets more cards past you, so it" : "It"} waits for your passkey.`);
         }
         setAnswered((m) => (m.has(k) ? new Map(m).set(k, { ...m.get(k)!, phase: "sent" }) : m));
         // Outside the blind test, a practice card says it was practice once it's recorded (B-kb5yt); in it, nothing does,
         // and no card says Baesian proposed something from it, which a practice card never could (B-xx49m).
         if (a?.practice && !a.test) setPracticeNote(practiceWords(a.practice.card, a.practice.stopped));
-        say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0)}`);
+        if (!quiet) say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0)}`);
       },
       failed: (k, error) => {
         setAnswered((m) => {
