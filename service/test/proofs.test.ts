@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batchChallenge } from "../../src/passkey.js";
-import { LOOSEN_AFTER } from "../../src/proposals.js";
+import { loosenAfter } from "../../src/routing.js";
 import { type PasskeyProof, type RelayEntry, readRelayEntry } from "../../src/schema.js";
 import { MemoryStorage } from "../../src/storage.js";
 import { type Store, proofPath } from "../../src/store.js";
@@ -322,7 +322,7 @@ describe("a preference change that lets more cards past you, proved by the passk
   it("accepting a slider proposal that loosens writes two files, the verdict and the preference file, both confirmed by one tap", async () => {
     const { p, proj, machine, laptop } = await setUp();
     // Enough answers on a row without a miss, and Baesian, on the relay, proposes moving it one stop down: a hard card.
-    const ids = Array.from({ length: LOOSEN_AFTER }, () => fileCard(laptop, { touches: ["user-facing"] }));
+    const ids = Array.from({ length: loosenAfter(0) }, () => fileCard(laptop, { touches: ["user-facing"] }));
     await push(laptop, proj, machine);
     let filed: string[] = [];
     for (const id of ids) filed = (await post(p, proj, "verdicts", { card: id, revision: 1, response: "accept" })).body.filed ?? filed;

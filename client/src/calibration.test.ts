@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiState, RowReport } from "../../src/api";
-import { ENOUGH, barOf, laterSuperseded, leftOut, markAt, median, notCounted, recap, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
+import { SCALE_MIN, barOf, laterSuperseded, leftOut, median, needsWords, notCounted, recap, ruleWords, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
 
 // The calibration panel and the recap (M4 step 5e), and your answers row by row (D180).
 
@@ -51,7 +51,7 @@ describe("the recap", () => {
 });
 
 const blank: RowReport = {
-  shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, streak: 0, recentMisses: 0,
+  shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0,
   agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0,
 };
 
@@ -60,12 +60,21 @@ describe("your answers, row by row (D180)", () => {
     expect(barOf({ ...blank, agreed: 23, cameRound: 19, misses: 1 })).toEqual({ agreed: 23, cameRound: 19, missed: 1, total: 43 });
   });
 
-  it("puts every row on one scale, the longest filling the track, or the answers it takes to judge a row until one has them", () => {
+  it("puts every row on one scale, the longest filling the track, or the answers a clean row needs for a lower stop until one has them", () => {
     const bar = (total: number) => ({ agreed: total, cameRound: 0, missed: 0, total });
     expect(scaleOf([bar(17), bar(43), bar(2)])).toBe(43);
-    expect(scaleOf([bar(5), bar(2)])).toBe(ENOUGH);
-    expect(ENOUGH).toBe(29);
-    expect(markAt(43)).toBeCloseTo(29 / 43);
+    expect(scaleOf([bar(5), bar(2)])).toBe(SCALE_MIN);
+    expect(SCALE_MIN).toBe(28);
+  });
+
+  it("says what a row now needs for a lower stop, in words read at a glance (B-jtsfh)", () => {
+    expect(needsWords({ answers: 3, misses: 0, toLoosen: 25, waiting: false })).toBe("25 more without a miss for a lower stop");
+    expect(needsWords({ answers: 44, misses: 1, toLoosen: 1, waiting: false })).toBe("1 more without a miss for a lower stop");
+    expect(needsWords({ answers: 28, misses: 0, toLoosen: 0, waiting: false })).toBe("Enough for a lower stop");
+    expect(needsWords({ answers: 28, misses: 0, toLoosen: 0, waiting: true })).toBe("A move for this row waits for you");
+    expect(needsWords({ answers: 28, misses: 0, waiting: false })).toBe("As low as it can go");
+    expect(needsWords(undefined)).toBeUndefined();
+    expect(ruleWords).toEqual({ down: "after 28 answers with none, 45 with one, 60 with two", up: "a miss in its first 2 answers, 3 in 10, 5 in 20" });
   });
 
   it("sums up every card, and says what the bars leave out", () => {

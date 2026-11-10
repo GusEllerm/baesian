@@ -1,6 +1,7 @@
 import type { RoutingReport, RowReport } from "./api.js";
 import {
   type AnyRow,
+  FINAL,
   FIXED_ROWS,
   type Mode,
   type Outcome,
@@ -12,10 +13,13 @@ import {
   answeredInChat,
   isOwnCard,
   outcomeOf,
+  rank,
   rowOf,
+  stop,
+  toLoosen,
 } from "./routing.js";
 import type { GateRecord } from "./schema.js";
-import { type Card, type InForce, type Store, settingsOf } from "./store.js";
+import { type Card, type InForce, PENDING, type Store, settingsOf } from "./store.js";
 
 // The gate's record, per row (P14 section 3, the report): what was shown and held, the audits, and the misses as cards B-87tkc and
 // B-ab06a count them. Computed from the record, never stored. The slider proposals read the same numbers (B-y6jn6).
@@ -92,16 +96,33 @@ export function replayCards(counted: readonly Counted[]): ReplayCard[] {
   }));
 }
 
-/** One row's window (B-y6jn6): since it last moved, or Baesian last proposed moving it, the final answers at its position. */
+/**
+ * Where a row's count for one move began (B-jtsfh): the row's last move; a change of the agents' model (B-k0w7d); or your
+ * keeping the row where it was, the last time Baesian proposed that move. With none, it counts from the row's first answer.
+ */
+export interface CountStart {
+  at: string;
+  why: "moved" | "model" | "kept";
+  /** For a change of model: the model the agents changed to. */
+  model?: string;
+}
+
+/** The evidence for moving a row one way (B-jtsfh): every final answer at its position since its count began. */
+export interface Evidence {
+  since?: CountStart;
+  /** Final answers counted, oldest answer first, and the misses among them. */
+  answered: Counted[];
+  misses: Counted[];
+}
+
+/** One row's record for moving it (B-jtsfh): the evidence toward a lower stop and toward a higher one. */
 export interface RowWindow {
   row: Row;
   position: Position;
-  since?: string;
-  /** Final answers at the row's position since then, oldest answer first. */
-  answered: Counted[];
-  misses: Counted[];
-  /** Final answers since the last miss. */
-  streak: number;
+  down: Evidence;
+  up: Evidence;
+  /** A proposal to move the row is still waiting for your answer. */
+  waiting: boolean;
 }
 
 /** When each row last moved, from the preference history: a row never moved from "Today" has no time. */
@@ -123,25 +144,70 @@ function lastMoves(store: Store): Partial<Record<Row, string>> {
   return out;
 }
 
-/** Each row's window, under the settings in force: what the slider proposals and the report's streaks count. */
+/**
+ * The agents' latest change of model (B-jtsfh, B-k0w7d): across every counted card, in filing order, the last card whose
+ * model is known and differs from the last one known before it. A card with no model changes nothing, and counts in
+ * whichever model's run it falls. Two models filing alternately keep starting the count again.
+ */
+export function modelChange(counted: readonly Counted[]): { at: string; model: string } | undefined {
+  let known: string | undefined;
+  let change: { at: string; model: string } | undefined;
+  for (const c of counted) {
+    const model = c.card.meta.source_model;
+    if (model === undefined) continue;
+    if (known !== undefined && model !== known) change = { at: c.at, model };
+    known = model;
+  }
+  return change;
+}
+
+/**
+ * When you last kept each row where it was, for each move Baesian proposed (B-jtsfh): the time of the final answer, other
+ * than accepting it, on a slider proposal that's no longer waiting. Baesian proposes that move again only from the final
+ * answers after it, so it never asks again on the evidence you just answered.
+ */
+function keptAt(store: Store): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of store.cards()) {
+    const m = c.meta;
+    if (!m.pref_row || !m.pref_from || !m.pref_to || PENDING.has(store.status(m.id))) continue;
+    const last = store.verdicts(m.id).filter((v) => FINAL.has(v.response)).at(-1);
+    if (!last || last.response === "accept") continue;
+    const key = `${m.pref_row} ${rank(m.pref_to) > rank(m.pref_from) ? "up" : "down"}`;
+    if ((out.get(key) ?? "") < last.at) out.set(key, last.at);
+  }
+  return out;
+}
+
+/**
+ * Each row's record for moving it, under the settings in force (B-jtsfh): the final answers at its position since it last
+ * moved, on cards filed since the agents' model last changed; for each way, less those before you last kept it where it
+ * was when Baesian proposed moving it that way. A miss adds to what's needed, and never wipes out the answers before it.
+ */
 export function rowWindows(store: Store, counted: readonly Counted[], force: InForce = store.inForce()): RowWindow[] {
   return store.view(() => {
     const moved = lastMoves(store);
-    const proposed = new Map<Row, string>();
-    for (const c of store.cards()) {
-      const row = c.meta.pref_row;
-      if (row && (proposed.get(row) ?? "") < c.meta.created) proposed.set(row, c.meta.created);
-    }
+    const model = modelChange(counted);
+    const kept = keptAt(store);
+    const waiting = new Set(store.cards().flatMap((c) => (c.meta.pref_row && PENDING.has(store.status(c.meta.id)) ? [c.meta.pref_row] : [])));
     return ROWS.map((row): RowWindow => {
       const position = force.settings.rows[row];
-      const starts = [moved[row], proposed.get(row)].filter((t): t is string => t !== undefined).sort();
-      const since = starts.at(-1);
-      const answered = counted
-        .filter((c) => c.row === row && c.position === position && c.answers.final && (!since || c.answers.final.at >= since))
+      const since = moved[row];
+      const base = counted
+        .filter((c) => c.row === row && c.position === position && c.answers.final && (!since || c.answers.final.at >= since) && (!model || c.at >= model.at))
         .sort((a, b) => a.answers.final!.at.localeCompare(b.answers.final!.at));
-      const misses = answered.filter((c) => c.answers.miss);
-      const last = answered.findLastIndex((c) => c.answers.miss);
-      return { row, position, ...(since ? { since } : {}), answered, misses, streak: answered.length - (last + 1) };
+      const evidence = (dir: "up" | "down"): Evidence => {
+        const keptHere = kept.get(`${row} ${dir}`);
+        const answered = keptHere ? base.filter((c) => c.answers.final!.at > keptHere) : base;
+        const starts: CountStart[] = [
+          ...(since ? [{ at: since, why: "moved" as const }] : []),
+          ...(model ? [{ at: model.at, why: "model" as const, model: model.model }] : []),
+          ...(keptHere ? [{ at: keptHere, why: "kept" as const }] : []),
+        ];
+        const start = starts.sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+        return { ...(start ? { since: start } : {}), answered, misses: answered.filter((c) => c.answers.miss) };
+      };
+      return { row, position, down: evidence("down"), up: evidence("up"), waiting: waiting.has(row) };
     });
   });
 }
@@ -159,8 +225,6 @@ export const blankRow = (): RowReport => ({
   switched: 0,
   blind: 0,
   matched: 0,
-  streak: 0,
-  recentMisses: 0,
   agreed: 0,
   cameRound: 0,
   unblind: 0,
@@ -225,12 +289,17 @@ export function routingReport(store: Store, force: InForce = store.inForce()): R
       r.inChat++;
       pooled.inChat++;
     }
+    // What each row now needs for a lower stop (B-jtsfh), which the calibration panel says beside its bar.
     for (const w of rowWindows(store, counted, force)) {
-      const r = rows[w.row]!;
-      if (w.since) r.since = w.since;
-      r.streak = w.streak;
-      r.recentMisses = w.misses.length;
-      pooled.recentMisses += w.misses.length;
+      const { since, answered, misses } = w.down;
+      const lower = stop(w.row, w.position, "down") !== undefined;
+      rows[w.row]!.test = {
+        ...(since ? { since: since.at, why: since.why } : {}),
+        answers: answered.length,
+        misses: misses.length,
+        ...(lower ? { toLoosen: toLoosen(answered.length, misses.length) } : {}),
+        waiting: w.waiting,
+      };
     }
     for (const r of [...Object.values(rows), pooled]) if (r.answered > 0 && r.misses === 0) r.bound = 3 / r.answered;
     return { rows, pooled, beforeGate: counted.filter((c) => !c.gate).length };

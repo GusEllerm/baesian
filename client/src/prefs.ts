@@ -3,7 +3,6 @@ import {
   ALL_ROWS,
   type AnyRow,
   FIXED_ROWS,
-  LOOSEN_AFTER,
   type Mode,
   POSITIONS,
   POSITION_NAMES,
@@ -26,7 +25,7 @@ import {
 // what it would have held of past cards (`replay()`, the rules the gate runs), the change it sends, and what each stop
 // does, in words (D180). Pure, so it's tested on its own (prefs.test.ts).
 
-export { ALL_ROWS, FIXED_ROWS, LOOSEN_AFTER, POSITIONS, POSITION_NAMES, PRESETS, ROWS, ROW_FLOOR, ROW_NAMES };
+export { ALL_ROWS, FIXED_ROWS, POSITIONS, POSITION_NAMES, PRESETS, ROWS, ROW_FLOOR, ROW_NAMES };
 export type { AnyRow, Mode, Position, Row };
 
 /** The setup survey's answers (B-5na1k): the rows whose example you'd want to see, and those you'd be fine not seeing. */

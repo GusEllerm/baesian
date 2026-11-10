@@ -155,11 +155,64 @@ export const PRESETS: readonly Preset[] = [
   },
 ];
 
+// ---------------------------------------------------------------- when Baesian proposes moving a row (B-jtsfh)
+
+/** The miss rate a row is tested against (B-jtsfh): 1 in 10. */
+export const MISS_RATE = 0.1;
+/** How sure the test must be before Baesian proposes a move (B-jtsfh): 95%. */
+export const SURE = 0.95;
+
 /**
- * Final answers in a row without a miss before Baesian proposes loosening a row (B-y6jn6): the count that bounds a miss
- * rate under 10% (P14). The calibration panel marks it on each row's bar, as what it takes to judge a row (D180).
+ * How likely a row's miss rate is under `MISS_RATE`, from `answers` final answers with `misses` among them (B-jtsfh):
+ * the posterior from a uniform prior, Beta(misses + 1, answers - misses + 1). For whole numbers a and b, P(p < x) under
+ * Beta(a, b) is P(Binomial(a + b - 1, x) ≥ a), so it's one minus a binomial's first `misses + 1` terms.
  */
-export const LOOSEN_AFTER = 29;
+export function chanceUnder(answers: number, misses: number, x = MISS_RATE): number {
+  const n = answers + 1;
+  let log = n * Math.log(1 - x);
+  let below = 0;
+  for (let i = 0; i <= misses && i < n; i++) {
+    below += Math.exp(log);
+    log += Math.log((n - i) / (i + 1)) + Math.log(x / (1 - x));
+  }
+  return Math.max(0, Math.min(1, 1 - below));
+}
+
+/**
+ * The one test, both ways (B-jtsfh): "down" once Baesian is `SURE` a row's miss rate is under `MISS_RATE`, "up" once it's
+ * as sure it's over, or undefined. Loosening after 28 final answers with no miss, 45 with one, 60 with two, 75 with three;
+ * tightening at a miss in the first two answers, 2 in 3, 3 in 10, 5 in 20, 8 in 42.
+ */
+export function rowTest(answers: number, misses: number): "down" | "up" | undefined {
+  const under = chanceUnder(answers, misses);
+  if (under >= SURE) return "down";
+  if (1 - under >= SURE) return "up";
+  return undefined;
+}
+
+/** More final answers, all without a miss, before the test proposes a lower stop: 0 once it would. */
+export function toLoosen(answers: number, misses: number): number {
+  let more = 0;
+  while (chanceUnder(answers + more, misses) < SURE) more++;
+  return more;
+}
+
+/** Final answers it takes, from none, before the test proposes a lower stop, with `misses` among them: 28 with none. */
+export const loosenAfter = (misses = 0): number => toLoosen(misses, misses) + misses;
+
+/** The most final answers in which a single miss proposes a higher stop: a miss in the first 2. */
+export function oneMissWithin(): number {
+  let answers = 1;
+  while (rowTest(answers + 1, 1) === "up") answers++;
+  return answers;
+}
+
+/** The fewest misses in `answers` final answers at which the test proposes a higher stop: 1 in 2, 3 in 10, 5 in 20. */
+export function tightenAt(answers: number): number {
+  let misses = 0;
+  while (misses <= answers && rowTest(answers, misses) !== "up") misses++;
+  return misses;
+}
 
 /** The audit rates and burn-in every preset starts with (B-fgc4y): 1 in 10, 1 in 3, and each row's first 10 held cards. */
 export const AUDIT_DEFAULTS = { rate_agent_decides: 0.1, rate_sample: 1 / 3, burn_in: 10 } as const;

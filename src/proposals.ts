@@ -1,11 +1,11 @@
-import { type Counted, countedCards, replayCards, rowWindows } from "./report.js";
-import { LEVEL_AT, LOOSEN_AFTER, type MissBy, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, isOwnCard, replay, stop } from "./routing.js";
+import { type CountStart, type Counted, type Evidence, countedCards, replayCards, rowWindows } from "./report.js";
+import { LEVEL_AT, type MissBy, POSITION_NAMES, type Position, ROW_NAMES, type Row, type Settings, chanceUnder, isOwnCard, loosenAfter, oneMissWithin, replay, rowTest, stop, tightenAt } from "./routing.js";
 import type { Verdict } from "./schema.js";
 import { SIMILAR_TITLE, jaccard, tokens } from "./similarity.js";
 import { type Card, PENDING, type Store } from "./store.js";
 
 // The cards Baesian files itself from the record, with no model, as it files conflict cards (D65): convention cards,
-// "Make these one rule?" (D161, P16 section 6), and slider proposals, "move this slider?" (B-y6jn6). The local server
+// "Make these one rule?" (D161, P16 section 6), and slider proposals, "move this slider?" (B-y6jn6, B-jtsfh). The local server
 // runs `afterVerdict` when the client records an answer; a relay sync will run it when the CLI pulls one (M9).
 
 /** Where each kind goes: a deck of its own, created when it's first used. */
@@ -17,14 +17,11 @@ export const CONVENTIONS_DECK = {
 export const PREFERENCES_DECK = {
   id: "preferences",
   title: "Your preferences",
-  brief: "Baesian files these itself from each row's record: one stop up after a miss, one stop down after 29 answers in a row without one. Accepting one writes a new preference file; Baesian never moves a row on its own.\n",
+  brief: "Baesian files these itself from each row's record: one stop down once it's 95% sure the row's misses are under 1 in 10, one stop up once it's as sure they're over. Accepting one writes a new preference file; Baesian never moves a row on its own.\n",
 };
 
 /** A comment that states a rule (P16 section 6). The word list is a guess, to tune while dogfooding. */
 export const RULE_WORDS = /\b(always|never|from now on|in general)\b/i;
-
-/** Final answers in a row without a miss before Baesian proposes loosening a row, kept in src/routing.ts so the client can mark it. */
-export { LOOSEN_AFTER };
 
 /** After the client records a verdict: the convention cards and slider proposals the record now calls for, filed. */
 export function afterVerdict(store: Store, verdict: Verdict): Card[] {
@@ -96,7 +93,7 @@ export function proposeConvention(store: Store, id: string): Card[] {
   return [store.fileOwn(draft, body, CONVENTIONS_DECK)];
 }
 
-// ---------------------------------------------------------------- slider proposals (B-y6jn6)
+// ---------------------------------------------------------------- slider proposals (B-y6jn6, B-jtsfh)
 
 /** What a position does to a row's cards, in a line. */
 function effect(to: Position, settings: Settings): string {
@@ -118,65 +115,31 @@ function effect(to: Position, settings: Settings): string {
 const named = (p: Position) => `“${POSITION_NAMES[p]}”`;
 
 /**
- * Propose moving each row one stop (B-y6jn6): up after a miss on it, down after `LOOSEN_AFTER` final answers in a row on
- * it without one, at its position since it last moved or Baesian last proposed moving it. Misses are as card B-87tkc
- * counts them, final answers on shown rows and audits on held ones. Not past a row's floor, and not while a proposal on
- * the row is still waiting. Loosening is hard, since it lets more decisions past you; tightening is provisional.
+ * Propose moving each row one stop (B-y6jn6), by one test both ways (B-jtsfh): down once Baesian is 95% sure the row's
+ * miss rate is under 1 in 10, up once it's as sure it's over (`rowTest()`, a uniform prior over the rate), from every
+ * final answer at the row's position since it last moved, on cards filed since the agents' model last changed
+ * (`rowWindows()`). A miss adds to what loosening needs and never wipes out the answers before it. Misses are as cards
+ * B-87tkc and B-ab06a count them, final answers on shown rows and audits on held ones. After you keep a row where it was,
+ * that move is proposed again only from the answers since, passing the test on their own. Not past a row's floor, and not
+ * while a proposal on the row is still waiting; where both ways pass, it proposes tightening. Loosening is hard, since it
+ * lets more decisions past you; tightening is provisional.
  */
 export function proposeSliderMoves(store: Store): Card[] {
   const plans = store.view(() => {
     const force = store.inForce();
     const counted = countedCards(store);
-    const waiting = new Set(store.cards().flatMap((c) => (c.meta.pref_row && PENDING.has(store.status(c.meta.id)) ? [c.meta.pref_row] : [])));
-    return rowWindows(store, counted, force).flatMap((w): { w: typeof w; to: Position; dir: "up" | "down"; counted: Counted[]; settings: Settings }[] => {
-      if (waiting.has(w.row)) return [];
-      if (w.misses.length) {
-        const to = stop(w.row, w.position, "up");
-        return to ? [{ w, to, dir: "up", counted, settings: force.settings }] : [];
-      }
-      if (w.streak >= LOOSEN_AFTER) {
-        const to = stop(w.row, w.position, "down");
-        return to ? [{ w, to, dir: "down", counted, settings: force.settings }] : [];
+    return rowWindows(store, counted, force).flatMap((w): { row: Row; from: Position; to: Position; dir: "up" | "down"; evidence: Evidence; counted: Counted[]; settings: Settings }[] => {
+      if (w.waiting) return [];
+      for (const dir of ["up", "down"] as const) {
+        const evidence = w[dir];
+        if (rowTest(evidence.answered.length, evidence.misses.length) !== dir) continue;
+        const to = stop(w.row, w.position, dir);
+        if (to) return [{ row: w.row, from: w.position, to, dir, evidence, counted, settings: force.settings }];
       }
       return [];
     });
   });
-  return plans.map((p) => store.fileOwn(sliderDraft(p.w.row, p.w.position, p.to, p.dir, p.w.answered, p.w.misses, p.counted, p.settings), sliderBody(p.dir), PREFERENCES_DECK));
-}
-
-function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down", answered: Counted[], misses: Counted[], counted: Counted[], settings: Settings) {
-  const name = ROW_NAMES[row];
-  const lower = name.charAt(0).toLowerCase() + name.slice(1);
-  const evidence = dir === "up" ? misses.at(-1)! : answered.at(-1)!;
-  const moved = { ...settings, rows: { ...settings.rows, [row]: to } };
-  const after = replay(replayCards(counted), moved).rows[row];
-  const cards = (k: number) => `${k} ${k === 1 ? "card" : "cards"}`;
-  // What the move would have held of past cards, when it moves to a stop that holds any back.
-  const history = after && !LEVEL_AT[to] ? ` Of the ${cards(after.cards)} on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
-  const fact =
-    dir === "up"
-      ? `“${name}” is at ${named(from)}. On ${evidence.card.meta.id}, “${evidence.card.meta.title}”, ${MISSED_BY[evidence.answers.missBy ?? "overturn"]}. Misses on this row at ${named(from)}: ${misses.length} in ${answered.length} final ${answered.length === 1 ? "answer" : "answers"}.${history}`
-      : `“${name}” is at ${named(from)}. Your last ${answered.length} final answers on it kept the agent's pick, and none was marked “you should have asked me”: with no misses in ${answered.length}, the miss rate is under about 1 in ${Math.floor(answered.length / 3)}.${history}`;
-  return {
-    title: `The setting for ${lower}`,
-    question: `Where should the setting for ${lower} be now?`,
-    doing: "reading the record of your answers, row by row",
-    topic: `preferences/${row.replace(/_/g, "-")}/${evidence.card.meta.id.toLowerCase()}`,
-    level: dir === "up" ? "provisional" : "hard",
-    touches: [],
-    reverse: "cheap",
-    proposal: `Move it to ${named(to)}`,
-    proposal_then: `a new preference file moves it: ${effect(to, settings)}${settings.mode === "shadow" && !["tell-me", "stop-and-ask", "never-without-me"].includes(to) ? " (in shadow, nothing is held back yet)" : ""}`,
-    alternative: `Keep it at ${named(from)}`,
-    alternative_then: "nothing changes, and Baesian proposes a move on this row again only from new answers",
-    crux: dir === "up" ? "Was that answer a sign of this kind of decision, or a one-off?" : "Can agents take this kind of decision with less of your attention?",
-    crux_proposal: dir === "up" ? "A sign of the kind" : "If they can",
-    crux_alternative: dir === "up" ? "A one-off" : "Not yet",
-    crux_fact: fact,
-    pref_row: row,
-    pref_from: from,
-    pref_to: to,
-  };
+  return plans.map((p) => store.fileOwn(sliderDraft(p.row, p.from, p.to, p.dir, p.evidence, p.counted, p.settings), sliderBody(p.dir), PREFERENCES_DECK));
 }
 
 /** What made a card a miss, in the words of a slider card's evidence (B-87tkc, B-ab06a). */
@@ -190,5 +153,56 @@ const MISSED_BY: Record<MissBy, string> = {
 export const MISS_WORDS =
   "A miss is a final answer that overturns the agent's pick, or one marked “you should have asked me” (B-87tkc); and on a question of what you value, a blind choice against the agent's pick, whatever you answer after its case (B-ab06a).";
 
-const sliderBody = (dir: "up" | "down") =>
-  `Baesian files this itself from the record, with no model (B-y6jn6): ${dir === "up" ? "one stop up after a miss on a row" : `one stop down after ${LOOSEN_AFTER} final answers in a row on it without a miss`}. ${MISS_WORDS} Accepting writes a new preference file; Baesian never moves a row on its own.\n`;
+/** Since when a row's answers are counted, as a slider card says it: "since it last moved". */
+function sinceWords(since: CountStart | undefined): string {
+  if (!since) return "so far";
+  if (since.why === "moved") return "since it last moved";
+  if (since.why === "kept") return "since you last kept it here";
+  return `since the agents' model changed to ${since.model}`;
+}
+
+const percent = (x: number) => `${(Math.floor(x * 1000) / 10).toFixed(1)}%`;
+
+function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down", evidence: Evidence, counted: Counted[], settings: Settings) {
+  const name = ROW_NAMES[row];
+  const lower = name.charAt(0).toLowerCase() + name.slice(1);
+  const n = evidence.answered.length;
+  const k = evidence.misses.length;
+  const last = dir === "up" ? evidence.misses.at(-1)! : evidence.answered.at(-1)!;
+  const moved = { ...settings, rows: { ...settings.rows, [row]: to } };
+  const after = replay(replayCards(counted), moved).rows[row];
+  const cards = (c: number) => `${c} ${c === 1 ? "card" : "cards"}`;
+  // What the move would have held of past cards, when it moves to a stop that holds any back.
+  const history = after && !LEVEL_AT[to] ? ` Of the ${cards(after.cards)} on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
+  const record = `Of your ${n} final ${n === 1 ? "answer" : "answers"} on it ${sinceWords(evidence.since)}, ${k === 0 ? "none was a miss" : k === 1 ? "1 was a miss" : `${k} were misses`}`;
+  const under = chanceUnder(n, k);
+  const fact =
+    dir === "up"
+      ? `“${name}” is at ${named(from)}. On ${last.card.meta.id}, “${last.card.meta.title}”, ${MISSED_BY[last.answers.missBy ?? "overturn"]}. ${record}: Baesian is ${percent(1 - under)} sure the row's misses are over 1 in 10.${history}`
+      : `“${name}” is at ${named(from)}. ${record}: Baesian is ${percent(under)} sure the row's misses are under 1 in 10.${history}`;
+  return {
+    title: `The setting for ${lower}`,
+    question: `Where should the setting for ${lower} be now?`,
+    doing: "reading the record of your answers, row by row",
+    topic: `preferences/${row.replace(/_/g, "-")}/${last.card.meta.id.toLowerCase()}`,
+    level: dir === "up" ? "provisional" : "hard",
+    touches: [],
+    reverse: "cheap",
+    proposal: `Move it to ${named(to)}`,
+    proposal_then: `a new preference file moves it: ${effect(to, settings)}${settings.mode === "shadow" && !["tell-me", "stop-and-ask", "never-without-me"].includes(to) ? " (in shadow, nothing is held back yet)" : ""}`,
+    alternative: `Keep it at ${named(from)}`,
+    // B-jtsfh: a move you decline is proposed again only once the answers after it pass the test on their own.
+    alternative_then: "nothing changes, and Baesian proposes this move again only once your answers from now on pass the same test on their own",
+    crux: dir === "up" ? "Are these misses a sign of this kind of decision, or chance?" : "Can agents take this kind of decision with less of your attention?",
+    crux_proposal: dir === "up" ? "A sign of the kind" : "If they can",
+    crux_alternative: dir === "up" ? "Chance" : "Not yet",
+    crux_fact: fact,
+    pref_row: row,
+    pref_from: from,
+    pref_to: to,
+  };
+}
+
+/** The rule a slider card comes from, in its body (B-y6jn6, B-jtsfh), with the numbers the test gives. */
+export const sliderBody = (dir: "up" | "down") =>
+  `Baesian files this itself from the record, by a fixed rule (B-y6jn6, B-jtsfh): ${dir === "up" ? "one stop up" : "one stop down"} once it's 95% sure the row's misses are ${dir === "up" ? "over" : "under"} 1 in 10, from every final answer on the row since it last moved, with no prior lean either way. ${dir === "up" ? `That's a miss in the first ${oneMissWithin()} answers, ${tightenAt(10)} in 10, or ${tightenAt(20)} in 20.` : `That's ${loosenAfter(0)} answers with no miss, ${loosenAfter(1)} with one, or ${loosenAfter(2)} with two.`} A change of the agents' model starts the count again, and after you keep a row where it is, Baesian proposes that move again only from the answers since. ${MISS_WORDS} Accepting writes a new preference file; Baesian never moves a row on its own.\n`;

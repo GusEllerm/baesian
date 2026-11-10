@@ -73,7 +73,7 @@ sig = "3d5022fbeb780a06"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/AnswerBars.tsx"
-sig = "56b2376ce12b6c9b"
+sig = "7a18b76f3dc4314c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -153,12 +153,12 @@ sig = "3ce34671796cc257"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/calibration.ts"
-sig = "66a8f88177e0df42"
+sig = "908fcd32e514c78a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
-target = "client/src/calibration.ts#ENOUGH"
-sig = "ac53fc69abea8e77"
+target = "client/src/calibration.ts#SCALE_MIN"
+sig = "b0041518f28a5b77"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -182,6 +182,11 @@ sig = "07f130f08280de22"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/calibration.ts#needsWords"
+sig = "2a0bd71c3201822f"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/calibration.ts#notCounted"
 sig = "e507eacf19fef1b5"
 
@@ -192,8 +197,13 @@ sig = "f580a96d8af08667"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/calibration.ts#ruleWords"
+sig = "6d6f7e4a8a4b2861"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/calibration.ts#scaleOf"
-sig = "2cc50b7df28e2ab3"
+sig = "dc6fff03a98bb707"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -973,7 +983,7 @@ sig = "6008c69f9ca91de0"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts"
-sig = "c4b1679ce1a4b96f"
+sig = "31fc25741b701927"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -999,6 +1009,11 @@ sig = "e7531a4cba508948"
 doc = "docs/vault/Design/Client Build.md"
 target = "src/api.ts#Brief"
 sig = "a89589bb14fd5a16"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "src/api.ts#RowTest"
+sig = "38d97ffa04ac3cd5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1038,12 +1053,7 @@ sig = "e3d965200a240e74"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "src/report.ts#routingReport"
-sig = "7bec698b3e55a369"
-
-[[bindings]]
-doc = "docs/vault/Design/Client Build.md"
-target = "src/routing.ts#LOOSEN_AFTER"
-sig = "d30622daef88b1b7"
+sig = "b82b1e1708e99019"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1083,7 +1093,7 @@ sig = "5f260d4646f447ed"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/AnswerBars.tsx"
-sig = "56b2376ce12b6c9b"
+sig = "7a18b76f3dc4314c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1163,7 +1173,12 @@ sig = "1155fe7fab06490c"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/api.ts#RowReport"
-sig = "846c2e4743ac2746"
+sig = "f9c6d684be823377"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/api.ts#RowTest"
+sig = "38d97ffa04ac3cd5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1183,7 +1198,7 @@ sig = "a3b244c364df0d2b"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/report.ts#RowWindow"
-sig = "b521431c17e3fa45"
+sig = "ba198620462754ef"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1204,6 +1219,11 @@ sig = "d3cc8a5e2864da7b"
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "src/routing.ts#replay"
 sig = "6b7d54b629bba9af"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Data Contract.md"
+target = "src/routing.ts#toLoosen"
+sig = "202d1ea17687fe59"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1758,7 +1778,7 @@ sig = "e7531a4cba508948"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/api.ts#RowReport"
-sig = "846c2e4743ac2746"
+sig = "f9c6d684be823377"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1948,12 +1968,12 @@ sig = "a3b244c364df0d2b"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/report.ts#RowWindow"
-sig = "b521431c17e3fa45"
+sig = "ba198620462754ef"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/routing.ts"
-sig = "179feb79b9461b6e"
+sig = "d0c182126a2ce8f6"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -5238,7 +5258,7 @@ sig = "083d8693f367e77d"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "client/src/AnswerBars.tsx"
-sig = "56b2376ce12b6c9b"
+sig = "7a18b76f3dc4314c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -7028,7 +7048,12 @@ sig = "1155fe7fab06490c"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/api.ts#RowReport"
-sig = "846c2e4743ac2746"
+sig = "f9c6d684be823377"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/api.ts#RowTest"
+sig = "38d97ffa04ac3cd5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7057,8 +7082,13 @@ sig = "6be07bb039633ace"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#MISS_WORDS"
+sig = "eefdb2a7f4cd2433"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/proposals.ts#PREFERENCES_DECK"
-sig = "1f852b2e4dddb971"
+sig = "7cd310464826a898"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7078,12 +7108,27 @@ sig = "92a3717be7d2104e"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/proposals.ts#proposeSliderMoves"
-sig = "65e116fc9202aaa8"
+sig = "f4002fe8544302bf"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/proposals.ts#sliderBody"
+sig = "d4bfc757b2ed3efb"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#CountStart"
+sig = "1a2a0da3a92dadaf"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#Evidence"
+sig = "13491e95729defff"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/report.ts#blankRow"
-sig = "0b6e127f7f97cdd5"
+sig = "da7eb3bbdf938eb5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7102,18 +7147,23 @@ sig = "e3d965200a240e74"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/report.ts#modelChange"
+sig = "a840b778d3547583"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/report.ts#replayCards"
 sig = "6f4a884f6186c5cb"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/report.ts#routingReport"
-sig = "7bec698b3e55a369"
+sig = "b82b1e1708e99019"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/report.ts#rowWindows"
-sig = "a1e2a5f35e39855b"
+sig = "513b5d8cd252d96a"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7157,8 +7207,8 @@ sig = "28a2844d5b82ff80"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
-target = "src/routing.ts#LOOSEN_AFTER"
-sig = "d30622daef88b1b7"
+target = "src/routing.ts#MISS_RATE"
+sig = "ce59d094d1308cf6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7217,6 +7267,11 @@ sig = "194793b1c4785209"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#SURE"
+sig = "84c5a0a4719c2799"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/routing.ts#SURVEY"
 sig = "0f50680aa1b1ebd3"
 
@@ -7242,6 +7297,11 @@ sig = "bb9182575255a6bd"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#chanceUnder"
+sig = "77fba522f447a95e"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/routing.ts#isOwnCard"
 sig = "1a44eb17886c5bda"
 
@@ -7252,8 +7312,18 @@ sig = "dee444fc54262f00"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#loosenAfter"
+sig = "0baca157c66a0141"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/routing.ts#loosening"
 sig = "333ff586ea15bc7b"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#oneMissWithin"
+sig = "97da0ea64fd9d262"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7282,6 +7352,11 @@ sig = "f89fa21ed94ca9f5"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#rowTest"
+sig = "b28762b09a99318f"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
 target = "src/routing.ts#stop"
 sig = "f83aed3fee9bc9b3"
 
@@ -7294,6 +7369,16 @@ sig = "62a201f114581fe6"
 doc = "docs/vault/Modules/src-routing.md"
 target = "src/routing.ts#tellMe"
 sig = "59583b67ce182636"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#tightenAt"
+sig = "6a52c5ebfe85c7c7"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-routing.md"
+target = "src/routing.ts#toLoosen"
+sig = "202d1ea17687fe59"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7318,7 +7403,7 @@ sig = "873eb35f6b2f12d0"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/AnswerBars.tsx"
-sig = "56b2376ce12b6c9b"
+sig = "7a18b76f3dc4314c"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -7438,7 +7523,7 @@ sig = "00b19142874c61e7"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/api.ts"
-sig = "c4b1679ce1a4b96f"
+sig = "31fc25741b701927"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -7548,7 +7633,7 @@ sig = "dcd523c16d9b019d"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "src/report.ts#routingReport"
-sig = "7bec698b3e55a369"
+sig = "b82b1e1708e99019"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -9293,12 +9378,7 @@ sig = "3a5a335a45f4bf57"
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
 target = "src/proposals.ts#proposeSliderMoves"
-sig = "65e116fc9202aaa8"
-
-[[bindings]]
-doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
-target = "src/routing.ts#LOOSEN_AFTER"
-sig = "d30622daef88b1b7"
+sig = "f4002fe8544302bf"
 
 [[bindings]]
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"

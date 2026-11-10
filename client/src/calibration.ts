@@ -1,5 +1,5 @@
-import type { ApiCard, ApiState, RowReport } from "../../src/api";
-import { LOOSEN_AFTER, answeredInChat } from "../../src/routing";
+import type { ApiCard, ApiState, RowReport, RowTest } from "../../src/api";
+import { answeredInChat, loosenAfter, oneMissWithin, tightenAt } from "../../src/routing";
 import type { Answer } from "./answer";
 import type { Rarity } from "./model";
 import { listWords } from "./prefs";
@@ -55,8 +55,11 @@ const CLIENTS: ReadonlySet<string> = new Set(["web", "hosted-desktop", "hosted-p
 
 /** A row with fewer answers than this is faded: too few to say anything about it yet. */
 export const THIN = 10;
-/** The answers it takes to judge a row: Baesian proposes a lower stop after this many in a row without a miss (B-y6jn6). */
-export const ENOUGH = LOOSEN_AFTER;
+/**
+ * The shortest scale the rows are drawn on: the answers a row takes, with no miss, before Baesian proposes a lower stop
+ * (B-jtsfh, 28), so a row with a few answers never fills the track.
+ */
+export const SCALE_MIN = loosenAfter(0);
 
 /**
  * A row's bar, from the report: each card once, by how its answers compare with the agent's pick. `missed` is the
@@ -72,11 +75,27 @@ export interface Bar {
 
 export const barOf = (r: RowReport): Bar => ({ agreed: r.agreed, cameRound: r.cameRound, missed: r.misses, total: r.agreed + r.cameRound + r.misses });
 
+/** The rows' one scale: the longest row's answers, so it fills the track, or `SCALE_MIN` while no row has that many. */
+export const scaleOf = (bars: readonly Bar[]): number => Math.max(SCALE_MIN, ...bars.map((b) => b.total));
+
 /**
- * The rows' one scale: the longest row's answers, so it fills the track, or the answers it takes to judge a row while
- * no row has that many, so the mark at `ENOUGH` is always on the track.
+ * What a row now needs before Baesian proposes a lower stop, in words read at a glance (B-jtsfh): the answers still to go
+ * without a miss, counted since the row last moved, the agents' model changed, or you kept it where it was. Nothing for
+ * a fixed row, or "All rows".
  */
-export const scaleOf = (bars: readonly Bar[]): number => Math.max(ENOUGH, ...bars.map((b) => b.total));
+export function needsWords(t: RowTest | undefined): string | undefined {
+  if (!t) return undefined;
+  if (t.waiting) return "A move for this row waits for you";
+  if (t.toLoosen === undefined) return "As low as it can go";
+  if (t.toLoosen === 0) return "Enough for a lower stop";
+  return `${t.toLoosen} more without a miss for a lower stop`;
+}
+
+/** The rule, in the reading notes' words: the answers loosening takes, and the misses tightening takes. */
+export const ruleWords = {
+  down: `after ${loosenAfter(0)} answers with none, ${loosenAfter(1)} with one, ${loosenAfter(2)} with two`,
+  up: `a miss in its first ${oneMissWithin()} answers, ${tightenAt(10)} in 10, ${tightenAt(20)} in 20`,
+};
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const times = (n: number) => (n === 1 ? "once" : `${n} times`);
@@ -116,9 +135,6 @@ export function segmentWords(row: string, kind: keyof Omit<Bar, "total">, n: num
   const what = { agreed: "you chose as the agent did, blind", cameRound: "you came round to its pick", missed: n === 1 ? "a miss" : "misses" }[kind];
   return `${row}: ${what}, on ${n} of ${plural(total, "card")}`;
 }
-
-/** Where the mark sits on a row's track, as a fraction of it. */
-export const markAt = (scale: number): number => ENOUGH / scale;
 
 /** This session's answers, in a sentence (round 5's recap). */
 export function recap(answers: Answer[]): string {
