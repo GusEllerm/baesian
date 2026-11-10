@@ -13,7 +13,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -968,7 +968,7 @@ sig = "a529f82bf25c2a5e"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1528,12 +1528,12 @@ sig = "cfd32713f48b1632"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "plugins/baesian/hooks/new-verdicts.mjs"
-sig = "4233a4a17d8dbc8b"
+sig = "0afc1f69f2afd75d"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3213,7 +3213,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4223,7 +4223,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -4558,7 +4558,7 @@ sig = "cfd32713f48b1632"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -4763,7 +4763,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4863,7 +4863,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5748,7 +5748,7 @@ sig = "d9e44de54aed0221"
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-cli.md"
@@ -6483,7 +6483,7 @@ sig = "80bc0941d8109b9b"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -7443,7 +7443,7 @@ sig = "b7090cba05fab487"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -8243,7 +8243,7 @@ sig = "51ce45927f9f053e"
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "d3851095da17038b"
+sig = "fc5af5be6c7add33"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-store.md"

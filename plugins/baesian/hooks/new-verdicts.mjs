@@ -6,15 +6,19 @@
 //
 // Both also note the session's model, when the harness names it (B-k0w7d): Claude Code at `SessionStart`, Codex at
 // every hook. model-switched.mjs notes it when Claude Code switches.
+//
+// At a session's start, in a repo that uses Baesian, it checks the `baesian` on PATH is the plugin's release (B-pw9ak),
+// and when it isn't, or there's none, tells the agent once, to ask the person to install or update.
 import { pathToFileURL } from "node:url";
-import { baesian, noteModel, runHook, sessionArgs } from "./baesian.mjs";
+import { baesian, noteModel, runHook, sessionArgs, sessionMemory, versionNote } from "./baesian.mjs";
 
-/** The hook's plain output: what `inbox --quiet` printed for this session, or nothing. */
-export async function newVerdicts(input, run = baesian) {
+/** The hook's plain output: a word on the CLI's release, at a session's start, then what `inbox --quiet` printed. */
+export async function newVerdicts(input, run = baesian, memory = sessionMemory("version")) {
   noteModel(input);
+  const note = await versionNote(input, run, memory);
   const r = await run(["inbox", "--quiet", ...sessionArgs(input)], "", input?.cwd);
-  if (r.missing || r.status !== 0) return "";
-  return r.stdout;
+  if (r.missing || r.status !== 0) return note;
+  return note + r.stdout;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runHook(newVerdicts);
