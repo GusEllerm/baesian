@@ -1,4 +1,5 @@
-import type { ApiVerdictInput } from "../../src/api";
+import type { ApiPracticeInput, ApiVerdictInput } from "../../src/api";
+import type { PracticeEntry } from "../../src/schema";
 import { type Endpoints, postAnswer } from "./endpoints";
 import type { Wait } from "./waiting";
 
@@ -13,12 +14,22 @@ import type { Wait } from "./waiting";
 export interface Posted {
   filed?: string[];
   waiting?: Wait;
+  /** The practice entry kept with it (B-rehdw): a practice card's answer, or a real card's mark in the blind test. */
+  practice?: PracticeEntry;
 }
-export type Post = (verdict: ApiVerdictInput, opts: { keepalive: boolean }) => Promise<Posted | void>;
+
+/**
+ * What waits in the undo window: a verdict, with, in the blind test, your mark on its card (B-xx49m); or a practice card's
+ * answer (B-kb5yt), which goes to its own address and never to an agent. Both wait the same, so a practice card answers
+ * as a real one does.
+ */
+export type Outgoing = { verdict: ApiVerdictInput; mark?: ApiPracticeInput } | { practice: ApiPracticeInput };
+
+export type Post = (item: Outgoing, opts: { keepalive: boolean }) => Promise<Posted | void>;
 
 export interface Held {
   card: string;
-  verdict: ApiVerdictInput;
+  item: Outgoing;
   /** When it goes, by this browser's clock. */
   until: number;
 }
@@ -34,16 +45,16 @@ export class Outbox {
   ) {}
 
   /** Hold an answer for the undo window. Anything already waiting is sent first. */
-  hold(card: string, verdict: ApiVerdictInput): Held {
+  hold(card: string, item: Outgoing): Held {
     this.flush();
     const until = this.now() + this.ms;
-    this.held = { card, verdict, until, timer: setTimeout(() => this.flush(), this.ms) };
-    return { card, verdict, until };
+    this.held = { card, item, until, timer: setTimeout(() => this.flush(), this.ms) };
+    return { card, item, until };
   }
 
   /** The answer waiting, if any. */
   waiting(): Held | undefined {
-    return this.held && { card: this.held.card, verdict: this.held.verdict, until: this.held.until };
+    return this.held && { card: this.held.card, item: this.held.item, until: this.held.until };
   }
 
   /** Take back the answer waiting. Returns its card, or undefined if nothing was waiting. */
@@ -59,9 +70,9 @@ export class Outbox {
   flush(keepalive = false): void {
     if (!this.held) return;
     clearTimeout(this.held.timer);
-    const { card, verdict } = this.held;
+    const { card, item } = this.held;
     this.held = undefined;
-    this.post(verdict, { keepalive }).then(
+    this.post(item, { keepalive }).then(
       (posted) => (posted ? this.events.sent(card, posted) : this.events.sent(card)),
       (e: unknown) => this.events.failed(card, e instanceof Error ? e.message : String(e)),
     );
@@ -74,10 +85,26 @@ export class Outbox {
  */
 export const postVerdictTo =
   (e: Endpoints): Post =>
-  async (verdict, { keepalive }) => {
-    const r = await postAnswer(e, e.verdicts, verdict, { keepalive, client: true, wait: true });
-    return posted(r);
+  async (item, { keepalive }) => {
+    // A practice card's answer goes to the practice address alone (B-rehdw): never to an agent, and never a verdict.
+    if ("practice" in item) return { practice: await postPractice(e, item.practice, keepalive) };
+    const out = await posted(await postAnswer(e, e.verdicts, item.verdict, { keepalive, client: true, wait: true }));
+    // In the blind test, your mark on the card goes after its answer (B-xx49m). A mark that fails costs only itself.
+    if (!item.mark) return out;
+    try {
+      return { ...out, practice: await postPractice(e, item.mark, keepalive) };
+    } catch {
+      return out;
+    }
   };
+
+/** Keep a practice entry (B-rehdw): the start of the blind test, a practice card's answer, or a mark. Rejects with the server's reason. */
+export async function postPractice(e: Endpoints, input: ApiPracticeInput, keepalive = false): Promise<PracticeEntry> {
+  const r = await postAnswer(e, e.practice, input, { keepalive, client: true });
+  const body = (await r.json().catch(() => ({}))) as { entry?: PracticeEntry; error?: string };
+  if (!r.ok || !body.entry) throw new Error(body.error ?? `the server answered ${r.status}`);
+  return body.entry;
+}
 
 /** What a recorded answer's reply says, that it waits for the passkey, or the server's reason it wasn't recorded. */
 async function posted(r: Response): Promise<Posted> {

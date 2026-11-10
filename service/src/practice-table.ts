@@ -1,4 +1,4 @@
-import { PracticeRefused, practiceEntry } from "../../src/practice.js";
+import { PracticeRefused, practiceEntry } from "../../src/practice-answers.js";
 import { PracticeEntry, upgradeFile } from "../../src/schema.js";
 import type { Reply } from "./relay.js";
 

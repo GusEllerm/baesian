@@ -7,7 +7,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { fileURLToPath } from "node:url";
 import { type ApiPreferencesInput, type ApiState, type ApiVerdictInput, PREFERENCE_FIELDS, VERDICT_FIELDS } from "./api.js";
 import { unmarkJson } from "./cite.js";
-import { PRACTICE_DIR, PracticeRefused, inOrder, practiceEntry } from "./practice.js";
+import { PRACTICE_DIR, PracticeRefused, inOrder, practiceEntry } from "./practice-answers.js";
 import { afterVerdict } from "./proposals.js";
 import { LastPort, PracticeEntry, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
 import { presets, snapshot } from "./state.js";

@@ -88,12 +88,12 @@ sig = "50b6565f95d7d3f1"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Card.tsx"
-sig = "93dc16d621cac6a4"
+sig = "375520e6b18f528d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -113,12 +113,17 @@ sig = "0d13d5c46a29a068"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Panels.tsx"
-sig = "7b739c48aa41f26f"
+sig = "de6808853e3381ac"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
 sig = "ec22ff818f2accfd"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/PracticePanel.tsx"
+sig = "c825965f3fe24f74"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -218,7 +223,12 @@ sig = "db29f3c14362e308"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/endpoints.ts"
-sig = "549c815f4036768a"
+sig = "8b56330e44d87cbb"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/endpoints.ts#Endpoints"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -228,7 +238,7 @@ sig = "9275a5ba8698ca73"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/endpoints.ts#LOCAL"
-sig = "c064fb67a4c6a0c8"
+sig = "12ad307dad4662ec"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -243,7 +253,7 @@ sig = "fe6307f13feab2cc"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/endpoints.ts#hostedEndpoints"
-sig = "425667134db0b14c"
+sig = "208fd6d652f100fc"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -378,7 +388,7 @@ sig = "81be54c39b881d09"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/live.ts"
-sig = "ca34b010cf62219a"
+sig = "d5a101e487c866cc"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -389,6 +399,11 @@ sig = "8b57b811fd80c954"
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/live.ts#useLiveState"
 sig = "f47e0a3865045291"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/live.ts#usePractice"
+sig = "6dcdb39452db30dd"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -578,27 +593,37 @@ sig = "cc49354e8d220f33"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts"
-sig = "60cc02bfc9cebabc"
+sig = "f618be5ca0f63a2a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts#Outbox"
-sig = "08edb50adba5b658"
+sig = "598ab630f1570d3b"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/outbox.ts#Outgoing"
+sig = "9f1a77a377fab58e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts#Posted"
-sig = "2eea0777cc3eb4d0"
+sig = "421e9b413116585e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/outbox.ts#postPractice"
+sig = "ddac6825de97e56d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/outbox.ts#postVerdictTo"
-sig = "5e4b251db73115d0"
+sig = "e6de8f737b6d7780"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/practice.ts"
-sig = "5e69794ade0f68fc"
+sig = "5e1b66bcbd82026e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -622,6 +647,16 @@ sig = "a65426a65679a888"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#SPOTTED_P"
+sig = "1be71753257dcf6e"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#cameRound"
+sig = "c197c58bed2fd899"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/practice.ts#draws"
 sig = "8283d124226c000d"
 
@@ -632,8 +667,38 @@ sig = "81ccec9fe960c63e"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#fisherP"
+sig = "24fa2018a562daad"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#phaseOf"
+sig = "bdf6748356be86f3"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#practiceAnswer"
+sig = "0d3e09223f2194be"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#practiceBar"
+sig = "20343eaf02191d73"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/practice.ts#practiceId"
 sig = "8853e5d26816b51d"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#practicePath"
+sig = "54b46c5b4440273d"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#practiceWords"
+sig = "96ebee889dbeeccf"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -642,8 +707,28 @@ sig = "86407f77c358954d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#resultNote"
+sig = "91590dadda94a2c6"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#resultOf"
+sig = "8a4e3ff91f63b763"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#resultWords"
+sig = "94d6ede79746e9c0"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
 target = "client/src/practice.ts#sources"
 sig = "50ae09bbd0851d02"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/practice.ts#statusOf"
+sig = "13f946f2b8bef2b0"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1173,12 +1258,12 @@ sig = "7a18b76f3dc4314c"
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
 target = "client/src/Card.tsx"
-sig = "93dc16d621cac6a4"
+sig = "375520e6b18f528d"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
-target = "client/src/calibration.ts#Bar"
-sig = "f18454142ca2a28c"
+target = "client/src/practice.ts#cameRound"
+sig = "c197c58bed2fd899"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Data Contract.md"
@@ -1388,17 +1473,17 @@ sig = "34e03dcb6c10d5a0"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Card.tsx"
-sig = "93dc16d621cac6a4"
+sig = "375520e6b18f528d"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1424,6 +1509,21 @@ sig = "6476c607e7d134b1"
 doc = "docs/vault/Design/File Formats.md"
 target = "client/src/model.ts#hash"
 sig = "84750b500b379bba"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "client/src/outbox.ts#Posted"
+sig = "421e9b413116585e"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "client/src/practice.ts#Marked"
+sig = "1fc25254ed8888ef"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "client/src/practice.ts#TestResult"
+sig = "b082491e168271a2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1722,7 +1822,7 @@ sig = "8d34b5d7f9904b60"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
-target = "service/src/practice.ts#PracticeTable"
+target = "service/src/practice-table.ts#PracticeTable"
 sig = "a0437f7e909783f9"
 
 [[bindings]]
@@ -2072,12 +2172,12 @@ sig = "02266e39041717bc"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
-target = "src/practice.ts#PRACTICE_DIR"
+target = "src/practice-answers.ts#PRACTICE_DIR"
 sig = "ad60a72a559e2269"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
-target = "src/practice.ts#practiceEntry"
+target = "src/practice-answers.ts#practiceEntry"
 sig = "d248ae1086795bbc"
 
 [[bindings]]
@@ -3953,7 +4053,12 @@ sig = "1ebada7599d6a7b9"
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/Card.tsx"
-sig = "93dc16d621cac6a4"
+sig = "375520e6b18f528d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/Desk.tsx"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -3964,6 +4069,11 @@ sig = "2846db50fbfc41dc"
 doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/answer.ts#UNDO_MS"
 sig = "558dcce9d1fc9809"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/endpoints.ts#Endpoints"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4008,7 +4118,22 @@ sig = "504fbf26cc39e09f"
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/outbox.ts#Outbox"
-sig = "08edb50adba5b658"
+sig = "598ab630f1570d3b"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/outbox.ts#Posted"
+sig = "421e9b413116585e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#Marked"
+sig = "1fc25254ed8888ef"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#TestResult"
+sig = "b082491e168271a2"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4072,6 +4197,11 @@ sig = "a529f82bf25c2a5e"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/index.ts#ProjectRelay"
+sig = "8e055c71244b6e6f"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "service/src/relay.ts#Relay"
 sig = "07b0dff5a8de19a4"
 
@@ -4123,7 +4253,7 @@ sig = "b08b524adad14f0d"
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
@@ -4187,7 +4317,7 @@ sig = "d283881da80d3127"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
-target = "service/src/practice.ts#PracticeTable"
+target = "service/src/practice-table.ts#PracticeTable"
 sig = "a0437f7e909783f9"
 
 [[bindings]]
@@ -4257,7 +4387,7 @@ sig = "84d9a048d229408d"
 
 [[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
-target = "src/practice.ts#practiceEntry"
+target = "src/practice-answers.ts#practiceEntry"
 sig = "d248ae1086795bbc"
 
 [[bindings]]
@@ -4418,7 +4548,7 @@ sig = "ad9a1a96c5bf3624"
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
@@ -4443,12 +4573,12 @@ sig = "083d8693f367e77d"
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Design/Vault Adapter.md"
@@ -4618,7 +4748,7 @@ sig = "4f7d45732c6da701"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4628,7 +4758,7 @@ sig = "ec22ff818f2accfd"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -4733,7 +4863,7 @@ sig = "3d5022fbeb780a06"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "client/src/endpoints.ts#Endpoints"
-sig = "13bac2fb32723ff0"
+sig = "454c8207549fb12b"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5072,12 +5202,12 @@ sig = "d283881da80d3127"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "service/src/practice.ts"
-sig = "4b30c7b59f6c8df8"
+target = "service/src/practice-table.ts"
+sig = "045cc4956b9bbda8"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "service/src/practice.ts#PracticeTable"
+target = "service/src/practice-table.ts#PracticeTable"
 sig = "a0437f7e909783f9"
 
 [[bindings]]
@@ -5487,7 +5617,7 @@ sig = "d36eca036a0117cb"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
-target = "src/practice.ts#practiceEntry"
+target = "src/practice-answers.ts#practiceEntry"
 sig = "d248ae1086795bbc"
 
 [[bindings]]
@@ -7363,12 +7493,12 @@ sig = "1ebada7599d6a7b9"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
-target = "client/src/calibration.ts#Bar"
-sig = "f18454142ca2a28c"
+target = "client/src/practice.ts#cameRound"
+sig = "c197c58bed2fd899"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -7768,7 +7898,7 @@ sig = "7a18b76f3dc4314c"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Desk.tsx"
-sig = "0699322e1ebaa9f7"
+sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -7779,6 +7909,11 @@ sig = "fe6629d2f01883d9"
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/Path.tsx"
 sig = "ec22ff818f2accfd"
+
+[[bindings]]
+doc = "docs/vault/Modules/src-server.md"
+target = "client/src/PracticePanel.tsx"
+sig = "c825965f3fe24f74"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -7793,12 +7928,7 @@ sig = "9f8bbe9695c33412"
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
 target = "client/src/outbox.ts#Outbox"
-sig = "08edb50adba5b658"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-server.md"
-target = "client/src/practice.ts"
-sig = "5e69794ade0f68fc"
+sig = "598ab630f1570d3b"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -7874,11 +8004,6 @@ sig = "eccfe5de591bc61e"
 doc = "docs/vault/Modules/src-server.md"
 target = "service/src/index.ts#Route"
 sig = "1828a187ca7e448d"
-
-[[bindings]]
-doc = "docs/vault/Modules/src-server.md"
-target = "service/src/practice.ts"
-sig = "4b30c7b59f6c8df8"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
@@ -8012,12 +8137,12 @@ sig = "3c582457c00c5754"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
-target = "src/practice.ts"
+target = "src/practice-answers.ts"
 sig = "b451157079f7c5a6"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-server.md"
-target = "src/practice.ts#practiceEntry"
+target = "src/practice-answers.ts#practiceEntry"
 sig = "d248ae1086795bbc"
 
 [[bindings]]

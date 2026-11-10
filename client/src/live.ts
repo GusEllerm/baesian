@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import type { ApiState } from "../../src/api";
+import { useCallback, useEffect, useState } from "react";
+import type { ApiPractice, ApiState } from "../../src/api";
+import type { PracticeEntry } from "../../src/schema";
 import { type Endpoints, hostedClient, useEndpoints } from "./endpoints";
 
 export type Live =
@@ -123,6 +124,50 @@ export function useHostedState(e: Endpoints): Live {
     };
   }, [stateUrl, liveUrl]);
   return live;
+}
+
+/**
+ * Your practice answers (B-rehdw), from their own address, apart from the state: read when the desk opens, again when the
+ * page comes back into view (another device may have added some), and as each one is written here. `ready` once the
+ * first read has come back: until then the desk draws no practice card, so one is never drawn twice. A read that fails
+ * keeps what was there.
+ */
+export function usePractice(e: Endpoints): { entries: PracticeEntry[]; ready: boolean; add: (entry: PracticeEntry) => void } {
+  const [entries, setEntries] = useState<PracticeEntry[]>([]);
+  const [ready, setReady] = useState(false);
+  const url = e.practice;
+  useEffect(() => {
+    let stopped = false;
+    const load = async () => {
+      try {
+        const r = await fetch(url, { credentials: "same-origin" });
+        if (!r.ok) return;
+        const body = (await r.json()) as ApiPractice;
+        if (!stopped) {
+          setEntries((had) => merged(body.entries, had));
+          setReady(true);
+        }
+      } catch {
+        // offline, or the server went away: what's here stays
+      }
+    };
+    void load();
+    const back = () => document.visibilityState === "visible" && void load();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [url]);
+  const add = useCallback((entry: PracticeEntry) => setEntries((had) => merged([entry], had)), []);
+  return { entries, ready, add };
+}
+
+/** Practice entries from two reads, each once, in the order written. */
+function merged(a: readonly PracticeEntry[], b: readonly PracticeEntry[]): PracticeEntry[] {
+  const key = (x: PracticeEntry) => JSON.stringify(x);
+  const seen = new Set<string>();
+  return [...a, ...b].filter((x) => !seen.has(key(x)) && !!seen.add(key(x))).sort((x, y) => x.at.localeCompare(y.at));
 }
 
 /** How often the open client says the reviewer is there (D41). Three missed beats and they count as away. */

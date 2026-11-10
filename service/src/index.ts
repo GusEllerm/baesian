@@ -8,7 +8,7 @@ import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, cros
 import { Accounts } from "./accounts.js";
 import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
-import { PracticeTable } from "./practice.js";
+import { PracticeTable } from "./practice-table.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";

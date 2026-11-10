@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
-import type { Verdict } from "../../src/schema";
+import type { PracticeEntry, PracticeMark, Verdict } from "../../src/schema";
+import { comparedWords } from "./PracticePanel";
 import { keyOf, rarityOf, relationsOf, sidesFor } from "./model";
-import { GAP, MAX_AGE_MS, MIN_AGE_MS, RATE, draws, finalChoice, practiceId, rebuild, sources, whyNot } from "./practice";
+import {
+  GAP, MAX_AGE_MS, MIN_AGE_MS, RATE, SPOTTED_P, TEST_SIZE, cameRound, draws, finalChoice, fisherP, phaseOf, practiceAnswer, practiceBar, practiceId, practicePath, practiceWords, practised, rebuild,
+  resultNote, resultOf, resultWords, sources, statusOf, testMarks, whyNot,
+} from "./practice";
 
 // Practice cards with planted picks (B-kb5yt, D83): which past cards come back (Practice Cards, section 1; B-j583c's
 // window), how one is rebuilt (section 2; B-sy0kz's case), and when one is drawn (section 4; B-xx49m's rate in the test).
@@ -194,5 +198,137 @@ describe("when one comes (Practice Cards section 4, B-xx49m)", () => {
   it("reads a card's final choice: the latest final answer, when it chose an option", () => {
     expect(finalChoice(past({}, { verdicts: [verdict({ response: "accept", first_choice: "alternative", at: ago(3) })] }))).toEqual({ option: "proposal", at: ago(3), first: "alternative" });
     expect(finalChoice(past({}, { verdicts: [verdict({ response: "reject", comment: "no" })] }))).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------- answering one, and the blind test
+
+let t = 0;
+const tick = () => new Date(NOW + ++t * 1000).toISOString();
+const who = { type: "practice" as const, format: 1 as const, reviewer: "gus", client: "web" };
+const start = (): PracticeEntry => ({ ...who, kind: "test-start", at: tick() });
+const rebuilt = (card: string, mark?: PracticeMark, over: Partial<Extract<PracticeEntry, { kind: "answer" }>> = {}): PracticeEntry => ({
+  ...who, kind: "answer", card, revision: 1, answered: ago(10), blind: "other", final: "planted", ...(mark ? { test: true as const, mark } : {}), at: tick(), ...over,
+});
+const real = (card: string, mark: PracticeMark): PracticeEntry => ({ ...who, kind: "mark", card, revision: 1, mark, at: tick() });
+/** A whole test: forty cards, ten rebuilt, marked as given. */
+function test(marks: { practice: PracticeMark[]; real: PracticeMark[] }): PracticeEntry[] {
+  const out = [start()];
+  marks.real.forEach((m, i) => out.push(real(`B-r${String(i).padStart(4, "0")}`, m)));
+  marks.practice.forEach((m, i) => out.push(rebuilt(`B-p${String(i).padStart(4, "0")}`, m)));
+  return out;
+}
+const times = <T,>(n: number, x: T): T[] => Array.from({ length: n }, () => x);
+
+describe("answering a practice card (Practice Cards section 4, B-rehdw)", () => {
+  const p = rebuild(past({}, { verdicts: [verdict({ at: ago(9) })] }));
+  it("keeps the kind of answer against the planted pick, never what you wrote; and in the test, your mark", () => {
+    expect(practiceAnswer(p.practice, { kind: "choose", option: "proposal", first: "alternative", why: "it read well" })).toEqual({ kind: "answer", card: p.practice.of, revision: 1, answered: ago(9), blind: "other", final: "planted" });
+    expect(practiceAnswer(p.practice, { kind: "choose", option: "alternative", first: "proposal" })).toMatchObject({ blind: "planted", final: "other" });
+    expect(practiceAnswer(p.practice, { kind: "write", reason: "correction", text: "Use MySQL" })).toEqual({ kind: "answer", card: p.practice.of, revision: 1, answered: ago(9), final: "write" });
+    expect(practiceAnswer(p.practice, { kind: "pass", reason: "need_context", text: "" }, "sure")).toMatchObject({ final: "pass", test: true, mark: "sure" });
+  });
+
+  it("says it was practice once answered: from what and when, the planted pick, that no agent waited, that nothing went or was kept", () => {
+    expect(practicePath(p, { kind: "choose", option: "proposal", first: "proposal" })).toBe("practice: you chose “Postgres”");
+    expect(practicePath(p, { kind: "pass", reason: "see_it_run", text: "" })).toBe("practice: you couldn't judge it");
+    const words = practiceWords(p, true);
+    expect(words).toMatch(/^That was a practice card, rebuilt from one you answered on .+\. The pick it showed was the option claude-code didn't pick, and no agent was waiting on it\. Nothing went to an agent, and anything you wrote wasn't kept\.$/);
+    expect(practiceWords(p, false)).not.toContain("waiting");
+  });
+
+  it("counts each card that has come back, in any phase, so it never comes back again", () => {
+    expect([...practised([start(), rebuilt("B-aaaaa"), rebuilt("B-bbbbb", "no"), real("B-ccccc", "no")])]).toEqual(["B-aaaaa", "B-bbbbb"]);
+  });
+});
+
+describe("the blind test (B-xx49m, B-bb7ga)", () => {
+  it("beats guessing as card B-bb7ga counts it: with forty cards, marking five, four right; ten, five right; fifteen, seven right", () => {
+    expect(fisherP(40, 10, 5, 4)).toBeLessThan(SPOTTED_P);
+    expect(fisherP(40, 10, 5, 3)).toBeGreaterThan(SPOTTED_P);
+    expect(fisherP(40, 10, 10, 5)).toBeLessThan(SPOTTED_P);
+    expect(fisherP(40, 10, 10, 4)).toBeGreaterThan(SPOTTED_P);
+    expect(fisherP(40, 10, 15, 7)).toBeLessThan(SPOTTED_P);
+    expect(fisherP(40, 10, 15, 6)).toBeGreaterThan(SPOTTED_P);
+    // Marking none, or everything, tells nothing.
+    expect(fisherP(40, 10, 0, 0)).toBe(1);
+    expect(fisherP(40, 10, 40, 10)).toBeCloseTo(1);
+    expect(fisherP(40, 10, 10, 5)).toBeCloseTo(0.0498, 4);
+  });
+
+  it("is on from its start until ten rebuilt cards are marked; then spotted or not, over every card in it, maybe and sure as marked", () => {
+    expect(statusOf([])).toEqual({ kind: "before" });
+    expect(phaseOf(statusOf([]))).toBeUndefined();
+    const half = test({ practice: times(5, "no"), real: times(10, "no") });
+    expect(statusOf(half)).toMatchObject({ kind: "test", practice: 5 });
+    expect(phaseOf(statusOf(half))).toBe("test");
+    // Ten of forty marked maybe or sure, five of them rebuilt: spotted, so practice cards are dropped.
+    const spotted = statusOf(test({ practice: [...times(4, "maybe" as const), "sure", ...times(5, "no" as const)], real: [...times(5, "maybe" as const), ...times(25, "no" as const)] }));
+    expect(spotted).toMatchObject({ kind: "spotted", result: { total: 40, practice: 10, marked: 10, right: 5, spotted: true } });
+    expect(phaseOf(spotted)).toBeUndefined();
+    // Four right of ten marked doesn't beat guessing: practice cards start.
+    const passed = statusOf(test({ practice: [...times(4, "sure" as const), ...times(6, "no" as const)], real: [...times(6, "maybe" as const), ...times(24, "no" as const)] }));
+    expect(passed).toMatchObject({ kind: "on", result: { marked: 10, right: 4, spotted: false } });
+    expect(phaseOf(passed)).toBe("on");
+    // One card you're sure of is one mark among the rest (B-bb7ga), not enough by itself.
+    expect(resultOf(testMarks(test({ practice: ["sure", ...times(9, "no" as const)], real: times(30, "no") }))).spotted).toBe(false);
+  });
+
+  it("takes each card's latest mark, and only the first ten rebuilt cards' worth of the test", () => {
+    const entries = [start(), rebuilt("B-aaaaa", "no"), rebuilt("B-aaaaa", "sure"), real("B-ccccc", "no"), real("B-ccccc", "maybe")];
+    expect(testMarks(entries).map((m) => [m.card, m.mark])).toEqual([["B-aaaaa", "sure"], ["B-ccccc", "maybe"]]);
+    const more = test({ practice: times(TEST_SIZE + 2, "no"), real: [] });
+    expect(testMarks(more).filter((m) => m.practice)).toHaveLength(TEST_SIZE);
+    // A real card's mark goes after its verdict, so it may arrive after the tenth practice card's answer: it still counts.
+    const late = [...test({ practice: times(TEST_SIZE, "no"), real: times(3, "no") }), real("B-late1", "maybe")];
+    expect(testMarks(late).map((m) => m.card)).toContain("B-late1");
+    expect(resultOf(testMarks(late)).total).toBe(TEST_SIZE + 4);
+    // Practice answers outside the test aren't in it.
+    expect(testMarks([start(), rebuilt("B-ddddd")])).toEqual([]);
+  });
+
+  it("says its result in words, and writes it as a dated note for the vault's Reviews, with each rebuilt card's mark against when its original was answered", () => {
+    const s = statusOf(test({ practice: [...times(4, "sure" as const), ...times(6, "no" as const)], real: [...times(6, "maybe" as const), ...times(24, "no" as const)] }));
+    if (s.kind !== "on") throw new Error("expected the test passed");
+    expect(resultWords(s.result)).toMatch(/^You marked 10 of the 40 cards in the test as maybe or sure, and 4 of those were rebuilt, of 10 rebuilt in all\. Guessing would do that well \d+% of the time\. That doesn't beat guessing, so practice cards aren't spotted: they now come about 1 in 20 cards\.$/);
+    const note = resultNote(s, (id) => (id === "B-p0000" ? "Where runs are kept" : undefined));
+    expect(note.name).toMatch(/^\d{4}-\d{2}-\d{2} Practice Cards Blind Test\.md$/);
+    expect(note.text).toMatch(/^---\ntype: review\n/);
+    expect(note.text).toContain("| B-p0000, “Where runs are kept” | sure | ");
+    expect(note.text).toContain("| B-p0001 | sure | ");
+    expect(note.text).toContain("30 real cards answered in the test: marked no 24, maybe 6, sure 0.");
+    expect(note.text).toContain("[[Practice Cards]]");
+  });
+});
+
+describe("the calibration panel's row (Practice Cards section 6)", () => {
+  it("puts each practice card once, by its latest answer outside the test: planted blind, came round, or kept against", () => {
+    const entries = [
+      rebuilt("B-aaaaa", undefined, { blind: "planted", final: "planted" }),
+      rebuilt("B-bbbbb", undefined, { blind: "other", final: "planted" }),
+      rebuilt("B-ccccc", undefined, { blind: "other", final: "other" }),
+      rebuilt("B-ccccc", undefined, { blind: "other", final: "planted" }),
+      rebuilt("B-ddddd", undefined, { blind: undefined, final: "write" }),
+      start(),
+      rebuilt("B-eeeee", "maybe", { blind: "other", final: "planted" }),
+    ];
+    expect(practiceBar(entries)).toEqual({ planted: 1, cameRound: 2, kept: 0, total: 3 });
+  });
+
+  it("compares coming round to planted picks with coming round to real ones, on cards practice could have come from", () => {
+    const entries = [rebuilt("B-aaaaa", undefined, { final: "planted" }), rebuilt("B-bbbbb", undefined, { final: "other" })];
+    const cards = [
+      past({}, { verdicts: [verdict({ response: "accept", first_choice: "alternative" })] }),
+      past({}, { verdicts: [verdict({ response: "alternative", choice: "Postgres", first_choice: "alternative" })] }),
+      past({}, { verdicts: [verdict({ response: "accept", first_choice: "proposal" })] }),
+      // Not like with like: a hard card, Baesian's own, one answered in chat.
+      past({ level: "hard" }, { verdicts: [verdict({ response: "accept", first_choice: "alternative" })] }),
+      past({ source_agent: "baesian" }, { verdicts: [verdict({ response: "accept", first_choice: "alternative" })] }),
+      past({ answered_in_chat: "SQLite" }, { verdicts: [verdict({ response: "accept" })] }),
+    ];
+    const r = cameRound(entries, snapshot(cards));
+    expect(r).toEqual({ planted: { came: 1, of: 2 }, real: { came: 1, of: 2 } });
+    expect(comparedWords(r)).toBe("You came round to a planted pick on 1 of 2 practice cards where you chose otherwise blind, and to an agent's real pick on 1 of 2.");
+    expect(comparedWords({ planted: { came: 0, of: 0 }, real: { came: 3, of: 7 } })).toBe("No practice card yet where you chose otherwise blind, and you came round to an agent's real pick on 3 of 7.");
   });
 });

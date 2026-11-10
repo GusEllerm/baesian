@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ApiPractice, ApiState } from "../src/api.js";
-import { PRACTICE_DIR, PracticeRefused, practiceEntry } from "../src/practice.js";
+import { PRACTICE_DIR, PracticeRefused, practiceEntry } from "../src/practice-answers.js";
 import { type RunningServer, readPractice, startServer } from "../src/server.js";
 import { PracticeEntry } from "../src/schema.js";
 import { unsent } from "../src/sync.js";
@@ -139,7 +139,7 @@ describe("nothing an agent runs reads practice answers (Practice Cards section 5
   const AGENTS_RUN = ["cli.ts", "ops.ts", "wait.ts", "mcp.ts", "sync.ts", "vault.ts", "gate.ts", "hooks.ts", "verify.ts", "proposals.ts", "report.ts", "routing.ts", "store.ts", "state.ts", "notify.ts", "trailers.ts", "merges.ts"];
   it.each(AGENTS_RUN)("src/%s", (file) => {
     const text = readFileSync(join(ROOT, "src", file), "utf8");
-    expect(text).not.toMatch(/from "\.\/practice\.js"|readPractice|PRACTICE_DIR|PracticeEntry|\/api\/practice/);
+    expect(text).not.toMatch(/from "\.\/practice-answers\.js"|readPractice|PRACTICE_DIR|PracticeEntry|\/api\/practice/);
   });
   it("the plugin's hooks", () => {
     const dir = join(ROOT, "plugins", "baesian", "hooks");

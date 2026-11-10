@@ -419,6 +419,28 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .cal-reading b { display: block; margin-bottom: 2px; font: 700 13px/1.3 var(--ui); font-stretch: 90%; }
 .cal-time { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 18px; font: 500 13.5px/1.35 var(--ui); font-stretch: 92%; color: var(--ink-soft); }
 .cal-time b { color: var(--ink); }
+/* Practice cards (B-kb5yt): the blind test, then their row, under the rows; "kept to the other option" is neither agreement nor a miss */
+:is(.sw, .seg).k { background: #988da9; }
+.cal-practice { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; padding-top: 4px; border-top: 1px solid var(--rule); }
+.cal-practice h5 { margin: 10px 0 0; }
+.cal-practice .sub { margin: 0; }
+.cal-practice .cal-row { border-top: 0; }
+.cal-practice .practice-legend { flex-direction: row; flex-wrap: wrap; gap: 8px 18px; padding: 10px 14px; }
+.cal-start { --c: var(--ink); align-self: flex-start; padding: 0 18px; }
+.cal-start:disabled { opacity: .5; cursor: default; }
+.cal-link { align-self: flex-start; border: 0; background: none; padding: 4px 0; cursor: pointer; font: var(--t-meta); font-stretch: 88%; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
+.practice-list { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
+.practice-list .parked-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 8px; background: var(--face-light); }
+.practice-list .nm { font: 700 14px/1.3 var(--ui); font-stretch: 90%; }
+.practice-list .st { font: var(--t-small); font-stretch: 92%; color: var(--ink-soft); }
+/* The blind test's mark (B-xx49m), in the reveal and the written answers, as the "Why?" line is */
+.test-mark { display: flex; flex-direction: column; gap: 6px; }
+.test-mark .lbl { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
+.test-mark .soft { font-weight: 400; color: var(--ink-soft); }
+.test-mark .chips button { display: inline-flex; gap: 8px; align-items: center; }
+/* What a practice card says once answered (B-kb5yt), where a real card's toast says it was sent */
+.passkey-wait.practice-note { background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); }
+.passkey-wait.practice-note .cancel { padding: 0 10px; height: 38px; color: var(--ink); font-weight: 650; }
 
 /* Your decisions, by branch (D181, B-v8jzy): a drawer from the right on a computer, the whole screen on a phone. The
    history as a list, newest first, each branch a line in a gutter of fixed columns beside the rows (B-tgq5p). The desk
@@ -675,7 +697,7 @@ body.drawer-open .drawer { transform: none; visibility: visible; transition: tra
   .hold, .confirm { height: auto; min-height: 48px; padding: 8px 14px; text-align: center; }
   .switch { height: auto; min-height: 46px; padding: 8px 14px; }
   .reveal-row .cancel { justify-content: center; }
-  .chips button, .send, .cancel, .why-line input { min-height: 44px; }
+  .chips button, .send, .cancel, .why-line input, .cal-link, .cal-start { min-height: 44px; }
   .cancel { padding: 0 8px; }
   .row { gap: 8px 12px; }
   .rule-toggle { min-height: 44px; padding: 10px 0; }
@@ -958,7 +980,7 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
   .site-foot a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
   .desk-notice { margin: 0 0 6px; }
   .passkey-wait { margin: 0 0 4px; padding: 6px 6px 6px 12px; }
-  .passkey-wait .confirm, .passkey-wait.lapsed .cancel { height: auto; min-height: 44px; }
+  .passkey-wait .confirm, .passkey-wait.lapsed .cancel, .passkey-wait.practice-note .cancel { height: auto; min-height: 44px; }
   .once-row { flex-direction: column; align-items: stretch; }
   .once-row .switch { min-height: 44px; }
   .proof-row { flex-direction: column; align-items: stretch; }
