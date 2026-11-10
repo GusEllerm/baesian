@@ -151,6 +151,21 @@ One file per response (`Verdict`). There can be several per revision: "not my ar
 | `account` | optional: in a hosted repo, the stable ID of the account that answered (`AccountId`), beside its handle in `reviewer`; the hosted client's `client` is `hosted-desktop` or `hosted-phone` (M9a) |
 | `project`, `card_digest` | optional: in a hosted repo, set by the relay: the project it was given in (`ProjectId`, B-tf9fc), and the SHA-256 of the card revision's file as the relay received it, in lowercase hex (B-f571v). [[#The hosted service's proof (M9a)]] says how they're checked |
 
+## Practice entry (B-rehdw)
+
+Your answers on practice cards, and the blind test that comes before them ([[Practice Cards]], B-kb5yt): `PracticeEntry`, kind `practice` in `FILE_KINDS`, format 1. Never a verdict, never in the record or the relay's log, and never read by anything an agent runs. In a clone that isn't linked, one JSON file each in the live layer's `practice/` (`PRACTICE_DIR`), named `<at, compact>-<8 hex>.json`, written once by `baesian serve` (`writePractice()`); on the hosted service, one row each of the project's practice table (`PracticeTable`). Either way written only through `practiceEntry()`, from what the client sends (`ApiPracticeInput`, `PRACTICE_FIELDS`). Never what you typed: only the kind of answer.
+
+| Field | Notes |
+|---|---|
+| `type`, `format` | `practice`; 1 |
+| `kind` | `test-start`: you started the blind test (B-xx49m), once. `answer`: your answer on a practice card. `mark`: in the blind test, your mark on a real card you answered |
+| `card`, `revision` | `answer`: the card the practice card was rebuilt from, and its revision; `mark`: the card marked |
+| `answered` | `answer`: when that card's final answer was given, for B-j583c's check |
+| `blind` | `answer`, optional: your blind choice against the planted pick, `planted` or `other`; none for a written answer or "can't judge" |
+| `final` | `answer`: `planted`, `other`, `write` or `pass` (a written answer, or "can't judge") |
+| `test`, `mark` | `answer`: in the blind test, `true`, and your mark; both or neither. `mark`: always. A mark is `no`, `maybe` or `sure` (`PracticeMark`, B-bb7ga) |
+| `reviewer`, `account`, `client`, `at` | set by the server: who (and on the hosted service their account), the client (`web`, `hosted-desktop` or `hosted-phone`), and when |
+
 ## The others
 
 Each also has `type` and `format` (D156), not repeated below.

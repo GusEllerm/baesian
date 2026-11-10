@@ -1,14 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { type FSWatcher, existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { type FSWatcher, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { userInfo } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ApiPreferencesInput, type ApiState, type ApiVerdictInput, PREFERENCE_FIELDS, VERDICT_FIELDS } from "./api.js";
 import { unmarkJson } from "./cite.js";
+import { PRACTICE_DIR, PracticeRefused, inOrder, practiceEntry } from "./practice.js";
 import { afterVerdict } from "./proposals.js";
-import { LastPort, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
+import { LastPort, PracticeEntry, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
 import { presets, snapshot } from "./state.js";
 import { type Store, StalePreferences, ValidationError } from "./store.js";
 import { contextNotes } from "./vault.js";
@@ -66,9 +67,41 @@ export interface RunningServer {
  */
 const cookieName = (port: number) => `baesian-${port}`;
 const MAX_BODY = 64 * 1024;
-/** The live layer's own bookkeeping, which never changes what the client shows: sessions' models among it (B-k0w7d). */
+/**
+ * The live layer's own bookkeeping, which never changes what the client shows: sessions' models among it (B-k0w7d), and
+ * practice answers (B-rehdw), which aren't in the state: the client reads them at their own address.
+ */
 const IGNORED = (rel: string) =>
-  rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel === "port.json" || ["cursors", "models"].some((d) => rel.startsWith(`${d}${sep}`) || rel.startsWith(`${d}/`));
+  rel.endsWith(".tmp") || rel === "presence.json" || rel === "server.json" || rel === "port.json" || ["cursors", "models", PRACTICE_DIR].some((d) => rel === d || rel.startsWith(`${d}${sep}`) || rel.startsWith(`${d}/`));
+
+/**
+ * The practice entries kept in a clone's live layer (B-rehdw), oldest first: one file each in `practice/`. A file that
+ * can't be read, half-written or in a newer format (D157), is skipped.
+ */
+export function readPractice(live: string): PracticeEntry[] {
+  const dir = join(live, PRACTICE_DIR);
+  if (!existsSync(dir)) return [];
+  const out: PracticeEntry[] = [];
+  for (const name of readdirSync(dir).filter((n) => n.endsWith(".json")).sort()) {
+    try {
+      out.push(PracticeEntry.parse(upgradeFile("practice", JSON.parse(readFileSync(join(dir, name), "utf8")), `${PRACTICE_DIR}/${name}`)));
+    } catch {
+      // half-written, or not one this Baesian reads: skipped
+    }
+  }
+  return inOrder(out);
+}
+
+/** Keep one practice entry in a clone's live layer (B-rehdw): `practice/<at>-<suffix>.json`, written once. */
+export function writePractice(live: string, e: PracticeEntry): string {
+  const dir = join(live, PRACTICE_DIR);
+  mkdirSync(dir, { recursive: true });
+  const name = `${e.at.replace(/[-:]/g, "")}-${randomBytes(4).toString("hex")}.json`;
+  const tmp = join(dir, `${name}.tmp`);
+  writeFileSync(tmp, `${JSON.stringify(e, null, 2)}\n`, { flag: "wx" });
+  renameSync(tmp, join(dir, name));
+  return `${PRACTICE_DIR}/${name}`;
+}
 
 /** Who answers in the client: git's `user.name`, or the account name. */
 export function reviewerName(toplevel: string): string {
@@ -393,6 +426,18 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
           res.writeHead(204, HEADERS);
           return res.end();
         }
+        // A practice answer, a mark in the blind test, or its start (B-rehdw): kept in the live layer, apart from the state.
+        if (url.pathname === "/api/practice") {
+          const input = await readJson(req);
+          try {
+            const entry = practiceEntry(input, { reviewer, client: "web" }, readPractice(store.live));
+            writePractice(store.live, entry);
+            return send(res, 201, { entry });
+          } catch (e) {
+            if (e instanceof PracticeRefused) return send(res, e.status, { error: e.message });
+            throw e;
+          }
+        }
         return send(res, 404, { error: "not found" });
       }
 
@@ -400,6 +445,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
       if (url.pathname === "/api/health") return send(res, 200, { ok: true, pid: process.pid });
       if (url.pathname === "/api/state") return send(res, 200, serverState(store, { version, started, watch: watcher.mode() }));
       if (url.pathname === "/api/presets") return send(res, 200, presets(store));
+      if (url.pathname === "/api/practice") return send(res, 200, { entries: readPractice(store.live) });
       if (url.pathname === "/api/events") {
         res.writeHead(200, { ...HEADERS, "content-type": "text/event-stream; charset=utf-8", connection: "keep-alive" });
         res.write(`retry: 2000\nevent: changed\ndata: ${JSON.stringify({ version })}\n\n`);

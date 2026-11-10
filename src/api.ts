@@ -1,5 +1,5 @@
 import type { Replay, Settings, SurveyItem } from "./routing.js";
-import type { CardMeta, DeckMeta, Fallback, GateRecord, Level, Preferences, Presence, RuleMeta, RuleRetirement, Verdict } from "./schema.js";
+import type { CardMeta, DeckMeta, Fallback, GateRecord, Level, PracticeEntry, Preferences, Presence, RuleMeta, RuleRetirement, Verdict } from "./schema.js";
 
 // The server's API (D96): what `GET /api/state` returns, and what the client may write. Types only, and nothing
 // from Node, so the client can share them. docs/vault/Design/Local Server.md describes the API for people.
@@ -310,6 +310,24 @@ export const PREFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "gate_schema", "gate_infra", "gate_api", "gate_ignore",
   ...["public_api", "schema", "dependency", "infra", "user_facing", "security", "privacy", "other"].map((r) => `row_${r}`),
 ]);
+
+/** A practice entry's own fields (B-rehdw), as the client sends them: never who wrote it, with which client, or when. */
+type PracticeOwn<E> = E extends unknown ? Omit<E, "type" | "format" | "reviewer" | "account" | "client" | "at"> : never;
+
+/**
+ * What the client sends to `POST /api/practice` (B-kb5yt, B-rehdw): the blind test's start, an answer on a practice card,
+ * or a mark in the test. The server adds who wrote it, which client and when. Practice answers have an address of their
+ * own, apart from the state: `GET /api/practice` gives them to the client, and nothing an agent runs reads them.
+ */
+export type ApiPracticeInput = PracticeOwn<PracticeEntry>;
+
+/** The fields a practice entry may be sent with (`ApiPracticeInput`); anything else is refused. The local server and the relay share them. */
+export const PRACTICE_FIELDS: ReadonlySet<string> = new Set(["kind", "card", "revision", "answered", "blind", "final", "test", "mark"]);
+
+/** What `GET /api/practice` returns: every practice entry, oldest first. */
+export interface ApiPractice {
+  entries: PracticeEntry[];
+}
 
 /** What the client sends to `POST /api/aliases` to merge two topics (D44, D111). The server adds who merged them. */
 export interface ApiAliasInput {
