@@ -3761,6 +3761,176 @@ target = "src/wait.ts#waitForVerdict"
 sig = "1ebada7599d6a7b9"
 
 [[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/Card.tsx"
+sig = "4872420fdf40e43e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/answer.ts#READ_FIRST_MS"
+sig = "2846db50fbfc41dc"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/answer.ts#UNDO_MS"
+sig = "558dcce9d1fc9809"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/local.ts#addSpent"
+sig = "b57ce241bb0fb3a7"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/local.ts#useBriefed"
+sig = "9a73c19fe22aed99"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/local.ts#useSeen"
+sig = "1f8c7c02469d986e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#isHard"
+sig = "335c52c34d6b2212"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#queue"
+sig = "994654274ba05f5e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#rarityOf"
+sig = "68856157877c358e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#relationsOf"
+sig = "f123a5779daa495c"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#sidesFor"
+sig = "504fbf26cc39e09f"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/outbox.ts#Outbox"
+sig = "08edb50adba5b658"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round3/app.js#queue"
+sig = "a1a0807df3e82fb9"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round3/data.js#rarityOf"
+sig = "0a6514f8831a74f5"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round4/app.js#UNDO_MS"
+sig = "7a674fa298423607"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round4/app.js#queue"
+sig = "3de33eb997421454"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round4/app.js#sidesFor"
+sig = "71a8a4771a3249ee"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round4/data.js#rarityOf"
+sig = "a529f82bf25c2a5e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round4/map.js#relationsOf"
+sig = "17b18c4616ffbc07"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round5/app.js#UNDO_MS"
+sig = "7a674fa298423607"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round5/app.js#queue"
+sig = "3de33eb997421454"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round5/app.js#relationsOf"
+sig = "8b5679d5f8af085f"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round5/app.js#sidesFor"
+sig = "6ee66bd70d55f080"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "design/explorations/round5/data.js#rarityOf"
+sig = "a529f82bf25c2a5e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/relay.ts#Relay"
+sig = "07b0dff5a8de19a4"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/retention.ts#RETENTION"
+sig = "f48df2a05a9b6e50"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/retention.ts#due"
+sig = "22b44b1b71115818"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/sql-storage.ts#SqlFileStorage"
+sig = "72adb752ed0cc110"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/api.ts#ApiState"
+sig = "e7531a4cba508948"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/api.ts#VERDICT_FIELDS"
+sig = "9daa2130fb6f1b1c"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/store.ts#Card"
+sig = "134bba8cd800cb12"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/store.ts#LIVE_DIR"
+sig = "e453a24fcffaddc0"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/store.ts#Store"
+sig = "48022ac7b71eac77"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/sync.ts#agentWritten"
+sig = "b08b524adad14f0d"
+
+[[bindings]]
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "client/src/endpoints.ts#Endpoints"
 sig = "13bac2fb32723ff0"

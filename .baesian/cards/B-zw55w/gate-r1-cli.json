@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-zw55w",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261105T124554.388Z-nb4qj.json",
+  "touches": [
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "asked": "blocking",
+  "source": "agent",
+  "row": "user_facing",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "blocking",
+  "reason": "agent",
+  "at": "2026-11-10T20:15:48.555Z"
+}

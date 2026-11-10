@@ -5,7 +5,7 @@ authority: log
 livedocs: snapshot
 summary: "Every Baesian decision, with who made it: the user's decisions, agent proposals awaiting the user, and agent two-way-door choices the user can overturn."
 created: 2026-10-23
-updated: 2026-11-06
+updated: 2026-11-10
 reviewed: 2026-10-23
 tags: [baesian, decisions]
 ---
@@ -267,6 +267,7 @@ views:
 
 | ID | Date | Proposal | Where argued |
 |---|---|---|---|
+| P19 | 2026-11-10 | **Practice cards with planted picks, after B-kb5yt and D83.** Built in the client from resolved, non-hard agents' cards, each once, with the option the agent didn't pick shown as its pick; nothing on them may name the pick, and the original never shows on the path; about 1 in 20, never first or last; it says it was practice once answered; its answers never reach an agent, the record or the counts; a practice row in the calibration panel compares coming round to planted and real picks; the blind test comes first, started by the user, with a mark after each card. Six open choices filed as cards in deck calibration: B-sy0kz, B-rehdw, B-j583c, B-xx49m, B-bb7ga, B-zw55w. | [[Practice Cards]] |
 | ~~P18~~ | 2026-11-03 | **Its six cards were accepted as D164–D169** (2026-11-03); the rest are the agent's choices, standing unless the user overturns them. **The MCP server (M7):** a local stdio server, `baesian mcp`, registered by the plugin, whose tools call the CLI's store code, wait in 100-second slices and never answer. Six open choices filed as cards in deck mcp-server. | [[MCP Server]] |
 | ~~P17~~ | 2026-11-03 | **Its six cards were accepted as D170–D175** (2026-11-03); the rest are the agent's choices, standing unless the user overturns them. **The vault adapter (M6):** one note per decision and per rule, written at commit from the record, changed only by frontmatter and dated sections, listed by a Bases query in this log, and kept out of livedocs' checks; rules never come from notes. Six open choices filed as cards in deck vault-adapter. | [[Vault Adapter]] |
 | ~~P16~~ | 2026-11-03 | **Its eight cards were accepted as D156–D163** (2026-11-03); the rest are the agent's choices, standing unless the user overturns them. **Every format change v1 needs, before versioning starts (D108):** format numbers, preference files, gate records and the held status, audit and convention cards, who answered, and the relay's files. Eight open choices filed as cards in deck formats-v1. | [[Formats for v1]] |
