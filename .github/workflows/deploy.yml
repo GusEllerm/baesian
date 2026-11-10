@@ -7,6 +7,8 @@ name: deploy
 #
 # Then the same tag puts the command line on npm (B-xr2fa), once the service is live, so the CLI never reaches people
 # before the service it talks to: by npm's trusted publishing, from this file, with no token stored, and with provenance.
+# Last, it makes the release's page on GitHub Releases (B-yj9wc), from the notes the release commit wrote in
+# docs/release-notes/<version>.md.
 
 on:
   push:
@@ -64,6 +66,16 @@ jobs:
               exit 1
             fi
           done
+
+      # B-yj9wc: the release commit writes the release's notes, which become its page on GitHub Releases in the last job.
+      # Without them nothing is deployed, rather than a release going live with no page to say what changed.
+      - name: The release commit wrote the release's notes
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
+          if [ ! -s "$notes" ]; then
+            echo "::error::$GITHUB_REF_NAME has no release notes: write them in $notes in the release commit, then tag (B-yj9wc)"
+            exit 1
+          fi
 
       # B-h0vyy: only a release from FIRST_NPM_RELEASE on goes to npm. A pre-release isn't published either.
       - name: Whether npm gets this release
@@ -153,3 +165,32 @@ jobs:
       # `prepack` clears dist/ and builds it again, so the package holds only what this commit builds.
       - if: steps.published.outputs.already == 'false'
         run: npm publish
+
+  # The release's page on GitHub Releases (B-yj9wc), from the notes its release commit wrote: what changed, and what to
+  # run again after updating. It comes last, once the service is live and the command line is on npm, or once the deploy
+  # job said this release doesn't go there, so the page never offers a release people can't install. Only this job may
+  # write to the repo (`contents: write`), which making a release needs; it runs none of the repo's code, and reads only
+  # the notes. A release already on GitHub, from an earlier run, is left as it is.
+  release:
+    needs: [deploy, publish]
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: GitHub Releases gets the release's notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::$GITHUB_REF_NAME is on GitHub Releases already: left as it is"
+            exit 0
+          fi
+          set -- --repo "$GITHUB_REPOSITORY" --verify-tag --title "Baesian $version" --notes-file "docs/release-notes/$version.md"
+          case "$version" in *-*) set -- "$@" --prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" "$@"

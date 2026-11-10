@@ -17,6 +17,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-10.*
 
+- **M10 step 10, the docs, built (2026-11-10), unmerged, on `worktree-agent-accc8a860d1e0945d`** ([[2026-11-10 M10 Docs]]): the README and setup guide install 1.0 from npm and the plugin from `GusEllerm/baesian`, with Updating, Compatibility and what a public repo shows (B-n15wk, B-h0vyy, B-4kj4d); SECURITY.md with security@baesian.dev (B-480t1); each tag's GitHub Release made by the deploy from `docs/release-notes/<version>.md`, 1.0.0's written (B-yj9wc).
+  - **Next:** the lead merges it into v1/next. Before tagging v1.0.0, the user forwards security@baesian.dev and makes the spare key (1.0.0's notes tell people `baesian ci` pins it); the release commit sets the three versions.
+
 - **M10's service steps 3, 4 and 6, built (2026-11-10), unmerged, on `worktree-agent-acca78dbafad9f1af`** ([[2026-11-10 M10 Service Steps]]): numbered migrations as each project's object wakes, migration 1 being every table 0.1.x made (B-866d2); formats and hook blocks rolled out a release late, the CLI's release on every request, and the relay refusing one too old with the release to install (B-4p43b, B-4kj4d, B-amxkp); a spare service key published at `/v1/keys` and pinned by `baesian ci` (B-x47ek).
   - **Next:** the lead merges it into v1/next; the spare key `relay-2` is made (2026-11-10) and its three variables are in `service/wrangler.jsonc`; once deployed, run `baesian ci` in each linked repo to pin it. On 1.0.0's deploy every 0.1.x CLI is told to install 1.0.0.
 

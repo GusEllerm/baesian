@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ciPin, workflowSteps } from "../src/ci.js";
+import { ciPin, workflowBody, workflowSteps } from "../src/ci.js";
 import { VERSION, main } from "../src/cli.js";
 import { openRepo } from "../src/git.js";
 import { verify } from "../src/verify.js";
@@ -153,6 +153,14 @@ describe("the pin `baesian ci` prints (B-pt52b)", () => {
     expect(steps.match(/npx --yes baesian@[^ ]+ verify/g)).toEqual([`npx --yes baesian@${VERSION} verify`, `npx --yes baesian@${VERSION} verify`]);
     expect(steps).not.toMatch(/npx (--yes )?baesian(@latest)? /);
     expect(steps).toContain(`# Baesian ${VERSION} from npm, pinned: the release that printed these steps. To move CI to another, run \`baesian ci\` with it, and commit the steps it prints.`);
+  });
+
+  it("are the steps the setup guide shows, in its whole workflow, for the release it names", () => {
+    const guide = readFileSync(join(import.meta.dirname, "..", "docs", "setup.md"), "utf8");
+    const block = /```yaml\n([\s\S]*?)```/.exec(guide.slice(guide.indexOf("## 5. Check decisions in CI")))![1]!;
+    const release = /npx --yes baesian@(\S+) verify/.exec(block)![1]!;
+    const steps = block.split("\n").filter((l) => l.startsWith("      ")).map((l) => l.slice(6));
+    expect(steps).toEqual(workflowBody(release));
   });
 });
 

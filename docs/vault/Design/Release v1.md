@@ -10,7 +10,7 @@ tags: [baesian, design, release, plan]
 
 # Release v1
 
-> **Status: plan (2026-11-10), by an agent, for the lead to hand to builders; being built.** Built so far: steps 2 to 9 ([[#The steps, in order]]); step 6 waits on the user making the spare key, step 7 on the user's part on npmjs.com. M10 in [[Implementation Plan]]: "the review before publishing (D108) and the cards in deck `release`, the stability cards in deck `stability`, a licence, publishing (npm, the plugin's marketplace), and the docs". Every decision here that the [[Working Agreement]] gives the user is a card in deck `release-v1`, listed in [[#Decisions in deck release-v1]]. Only what cites a D-number or an answered card is decided; the rest is the agent's recommendation, for builders to follow once the cards it rests on are answered.
+> **Status: plan (2026-11-10), by an agent, for the lead to hand to builders; being built.** Built so far: steps 2 to 10 ([[#The steps, in order]]); step 6 waits on the user making the spare key, step 7 on the user's part on npmjs.com, step 10 on security@baesian.dev's forwarding. M10 in [[Implementation Plan]]: "the review before publishing (D108) and the cards in deck `release`, the stability cards in deck `stability`, a licence, publishing (npm, the plugin's marketplace), and the docs". Every decision here that the [[Working Agreement]] gives the user is a card in deck `release-v1`, listed in [[#Decisions in deck release-v1]]. Only what cites a D-number or an answered card is decided; the rest is the agent's recommendation, for builders to follow once the cards it rests on are answered.
 
 ## In brief
 
@@ -19,7 +19,7 @@ tags: [baesian, design, release, plan]
 - **npm:** the name `baesian` is free. The package is nearly ready: it needs `private` gone and a repository field, which trusted publishing requires. CI publishes it from the same release tag that deploys the service, after the service.
 - **The plugin:** this repo stays its marketplace, added as `GusEllerm/baesian` in both harnesses. Its version must move with each release, or nobody who installed it gets an update.
 - **v1:** the number, what it promises, and how a format change rolls out are the user's, on three cards. Once v1 is published, D108 ends.
-- **The docs** change once install is `npm install -g baesian`: the README, the setup guide, and three new pieces (updating, compatibility, and what a linked public repo publishes), with a SECURITY.md and release notes.
+- **The docs** change once install is `npm install -g baesian`: the README, the setup guide, and three new pieces (updating, compatibility, and what a linked public repo publishes), with a SECURITY.md and release notes. **Built** (step 10), with the deploy making each tag's GitHub Release from notes in `docs/release-notes/`.
 
 ## What's done
 
@@ -101,9 +101,10 @@ Each of these changed in place, at format 1, as D108 allowed. File Formats is up
 4. **The release, as B-bk20v and B-3femd have it:**
    - merge v1/next into main;
    - set the version in package.json (`npm version <x.y.z> --no-git-tag-version`, which sets src/version.ts too), `service/package.json` and the plugin's manifest;
+   - write the release's notes in `docs/release-notes/<x.y.z>.md` (B-yj9wc, step 10);
    - tag `vX.Y.Z` on main.
 
-   The deploy then migrates the accounts database, deploys the service, and publishes the CLI.
+   The deploy then migrates the accounts database, deploys the service, publishes the CLI, and makes the release's page on GitHub Releases from its notes.
 
 **Which Baesian a repo's CI runs** once it's on npm is **card B-c0e0d**. This repo's own CI keeps running its own build (`node dist/bin.js`).
 
@@ -153,6 +154,13 @@ Once the cards are answered, following B-3fgyc (the README is a front page) and 
 - **npm's page shows the README.** *Unverified:* how npm renders its relative image paths and `<picture>` elements; check the package page after the first publish, and use absolute URLs if they break.
 - **In the vault:** File Formats' status line, the M10 row in [[Implementation Plan]], and Home.
 
+**Built** (step 10, 2026-11-10), on B-n15wk, B-h0vyy, B-4kj4d, B-4p43b, B-amxkp, B-pw9ak, B-c0e0d, B-x47ek, B-480t1 and B-yj9wc:
+- **The README:** install is `npm install -g baesian`; the plugin's marketplace is `GusEllerm/baesian` in Claude Code, the VS Code extension (from a terminal) and Codex; the pre-release note is gone; a folded **Updating**; a **Releases** section with what 1.x keeps working, linking GitHub Releases, the setup guide's Compatibility and SECURITY.md; building from a clone, and the plugin from a clone's path, in Development. The demo stays a clone. Its images and links are absolute URLs on main (`https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/…`, `https://github.com/GusEllerm/baesian/blob/main/…`), since the package holds no `docs/` and npm's handling of a relative `srcset` is unchecked; GitHub renders them (checked with its markdown API, each image 200).
+- **`docs/setup.md`:** step 1 from npm, with a global install's reasons and nvm, and what someone on a 0.1.x clone does; step 4 from GitHub; step 5 a whole workflow with the steps `baesian ci` prints for 1.0.0, held to `workflowBody()` by a test in test/ci.test.ts; new sections **Updating**, **Compatibility** and **What a public repo shows** (finding 9).
+- **SECURITY.md:** security@baesian.dev, what to report, what to include, the latest 1.x supported, and a reply to every report.
+- **Release notes** are `docs/release-notes/<version>.md`, written by the release commit, not in the package, each paragraph on one line (a release's body keeps line breaks). The deploy job checks the tag's notes exist before it migrates or deploys anything ("The release commit wrote the release's notes"); a last job, `release`, after the publish (or when npm isn't due), with `contents: write` on it alone, runs `gh release create <tag> --verify-tag --title "Baesian <version>" --notes-file …` with the repo's `GITHUB_TOKEN`, a pre-release marked as one, and leaves a release GitHub already has. test/deploy-workflow.test.ts runs both steps' shell with a stand-in `gh`, and fails once package.json's version reaches 1.0.0 without its notes. `1.0.0.md` says what 1.0 is, how to install, what 1.x keeps working, the five things a 0.1.x user does (install 1.0.0, the plugin from GitHub, Codex's hooks trusted again, `baesian ci` again for the spare and the pinned steps, `baesian init` again for `AGENTS.md`'s `alternative_rationale`), what's new, and where to report a security problem.
+- **`.github/workflows/ci.yml`** no longer says Baesian isn't on npm: this repo runs its own build so each commit is checked by the Baesian it builds.
+
 ## The steps, in order
 
 | # | Step | Waits on | Who |
@@ -166,8 +174,8 @@ Once the cards are answered, following B-3fgyc (the README is a front page) and 
 | 7 | package.json, the plugin's version, and the publishing job in the deploy workflow | B-emtd9, B-xr2fa | a builder: **built**; then the user on npmjs.com |
 | 8 | The plugin's check of the CLI's version, or its npx command | B-pw9ak (after B-n15wk) | a builder (plugin): **built** |
 | 9 | What `baesian ci` prints | B-c0e0d (after B-4p43b) | a builder (CLI): **built** |
-| 10 | The README, the setup guide, SECURITY.md, release notes | B-n15wk, B-h0vyy, B-4kj4d, B-480t1, B-yj9wc | a builder; the user turns on GitHub's private reporting or the address |
-| 11 | The release: merge v1/next into main, set the three versions, tag on main | every card above | the user |
+| 10 | The README, the setup guide, SECURITY.md, release notes | B-n15wk, B-h0vyy, B-4kj4d, B-480t1, B-yj9wc | a builder: **built**; then the user forwards security@baesian.dev |
+| 11 | The release: merge v1/next into main, set the three versions, write the notes, tag on main | every card above | the user |
 | 12 | After it: provenance on npm's page; a clean install on a fresh machine; the plugin from GitHub in Claude Code and in Codex; `baesian verify` in a fresh repo's CI; the vault and the user's note on D108 | the release | the lead |
 
 Steps 2 to 9 are independent of each other and can run in parallel once their cards are answered. Step 10 waits for the steps whose behaviour it describes.
@@ -217,7 +225,8 @@ None of these needs a card of its own, beyond the one it builds on. A builder wh
 
 - Whether the npm organisation name `baesian` is free: that needs a login.
 - ~~Whether npm lets a trusted publisher be set up before the package's first version exists.~~ It doesn't (step 7, from npm's docs): the first version is published by hand.
-- How npmjs.com renders the README's relative images and `<picture>` elements.
+- How npmjs.com renders the README's relative images and `<picture>` elements. npm's docs say the README is "rendered as GitHub Flavored Markdown via GitHub's API" (https://docs.npmjs.com/about-package-readme-files/); the page itself refuses automated fetches. Step 10 made every image and link absolute, so this matters less. Still to check after the first publish: a user report (https://github.com/orgs/community/discussions/61789, 2023, unanswered) says npmjs.com sets no `color-scheme`, so a `<picture>`'s dark source shows on its white page when the computer is in dark mode, which would show the cream wordmark on white.
 - Whether `npx --yes baesian@<version>` runs offline from its cache once fetched. This matters only if B-n15wk or B-pw9ak goes to npx.
-- The Codex command that refreshes a marketplace added from GitHub; `codex plugin add` again after a version change is in Codex's own help.
+- ~~The Codex command that refreshes a marketplace added from GitHub.~~ `codex plugin marketplace upgrade [name]` (Codex's source, through Context7, 2026-11-10); then `codex plugin add` again installs the new version.
+- That the VS Code extension's **Manage plugins** dialog (`/plugins`) adds a GitHub marketplace as Claude Code's docs say (https://code.claude.com/docs/en/vs-code): the setup guide mentions it beside the terminal commands.
 - The tarball's figures come from a `dist/` built on 2026-11-05; a fresh build will differ a little.

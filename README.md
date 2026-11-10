@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/media/wordmark-dark.png">
-    <img src="docs/media/wordmark.png" alt="Baesian" width="280">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/wordmark-dark.png">
+    <img src="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/wordmark.png" alt="Baesian" width="280">
   </picture>
 </p>
 
@@ -13,20 +13,16 @@ They put each one to you as a card, and you choose before you see their pick.</p
   <a href="#try-the-demo">Try the demo</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#set-it-up">Set it up</a> ·
-  <a href="docs/setup.md">Setup guide</a>
+  <a href="https://github.com/GusEllerm/baesian/blob/main/docs/setup.md">Setup guide</a>
 </p>
 
 <p align="center">
-  <img src="docs/media/demo.gif" width="74%" alt="Answering two agents' decision cards in Baesian: choose first, then see the agent's pick, while each agent's terminal gets the answer">
-  <img src="docs/media/phone.png" width="22%" alt="A Baesian card held on a phone until it lifts, with its four answers named at the screen's edges">
+  <img src="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/demo.gif" width="74%" alt="Answering two agents' decision cards in Baesian: choose first, then see the agent's pick, while each agent's terminal gets the answer">
+  <img src="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/phone.png" width="22%" alt="A Baesian card held on a phone until it lifts, with its four answers named at the screen's edges">
 </p>
 <p align="center"><sub>At your desk, two agents building a made-up bakery's shop stop for you: you choose, see their pick,
 overrule one, and each agent's terminal gets your answer. On your phone, you hold a card until it lifts and drag it to
 an answer.</sub></p>
-
-> [!NOTE]
-> Baesian is in development, and not released yet. The hosted client at [baesian.dev](https://baesian.dev) is live;
-> the CLI and the plugin install from this repo; file formats may change before v1.
 
 Your Claude Code and Codex agents make design decisions all day, and a few of them are hard to undo: where a
 signed-in user's session lives, how prices are stored, what deleting an account removes. Baesian has the agent put
@@ -74,30 +70,26 @@ Each branch carries its own cards, committed with its code, so decisions merge w
 **Your decisions, by branch** (press B) draws that history: where each branch began, what was decided on it, and every
 merge with what it brought.
 
-<p align="center"><img src="docs/media/branches.png" width="100%" alt="Baesian's Branches drawer on its own history: merges and cards by branch, with one card opened to the three commits that cite it"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/branches.png" width="100%" alt="Baesian's Branches drawer on its own history: merges and cards by branch, with one card opened to the three commits that cite it"></p>
 <p align="center"><sub>Baesian's own decisions on one evening: worktrees branching off v1/next, the cards filed on them
 and the commits citing those cards, merging back.</sub></p>
 
 Every commit names the cards it builds on, so if you change an answer later, the agent is told which commits built on
 the old one. In CI, `baesian verify` checks each commit's decisions, and holds a merge until its cards are answered.
 
-<p align="center"><img src="docs/media/checkpoints.png" width="100%" alt="Four commits on feat/checkout, each carrying the decisions as they stood; when an answer later changes, the agent is told which commits built on the old one"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/GusEllerm/baesian/main/docs/media/checkpoints.png" width="100%" alt="Four commits on feat/checkout, each carrying the decisions as they stood; when an answer later changes, the agent is told which commits built on the old one"></p>
 <p align="center"><sub>Each commit carries the decisions as they stood. When an answer changes, the commits that built on
 the old one are named.</sub></p>
 
 ## Set it up
 
-You need Node 22 or later, git, and Claude Code or Codex. The [setup guide](docs/setup.md) has each step in full.
+You need Node 22 or later, git, and Claude Code or Codex. The
+[setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md) has each step in full.
 
 ### 1. Install the CLI
 
-Baesian isn't on npm yet, so build it from this repo:
-
 ```sh
-git clone https://github.com/GusEllerm/baesian.git
-cd baesian
-npm install
-npm run build && npm link
+npm install -g baesian
 ```
 
 ### 2. Make an account
@@ -121,7 +113,7 @@ this machine on the page it prints, then run the commit it prints.
 In Claude Code:
 
 ```text
-/plugin marketplace add /path/to/baesian
+/plugin marketplace add GusEllerm/baesian
 /plugin install baesian@baesian
 ```
 
@@ -131,19 +123,29 @@ In Claude Code:
 In the VS Code extension, run the same from a terminal, then start a new conversation:
 
 ```sh
-claude plugin marketplace add /path/to/baesian
+claude plugin marketplace add GusEllerm/baesian
 claude plugin install baesian@baesian
 ```
 
 In Codex:
 
 ```sh
-codex plugin marketplace add /path/to/baesian
+codex plugin marketplace add GusEllerm/baesian
 codex plugin add baesian@baesian
 ```
 
 Codex runs the plugin's hooks only after you accept its "Hooks need review" prompt in interactive mode, and again after
 any update.
+</details>
+
+<details>
+<summary><b>Updating</b></summary>
+
+Update the CLI and the plugin together, to the same release: `npm install -g baesian`, then
+`claude plugin update baesian@baesian` (in Codex, `codex plugin marketplace upgrade baesian`, then
+`codex plugin add baesian@baesian`). When they differ, the plugin tells your agent to ask you to update. Each release's
+notes say what else to run again; [the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#updating)
+has the details.
 </details>
 
 <details>
@@ -153,8 +155,9 @@ any update.
 baesian ci --github
 ```
 
-sets the repository variable CI reads its keys from; then add the workflow steps it prints. See
-[the setup guide](docs/setup.md#5-check-decisions-in-ci).
+sets the repository variable CI reads its keys from: the service's, a spare it keeps offline, and your passkeys'. Then
+add the workflow steps it prints, which run the release that printed them until you run `baesian ci` again. See
+[the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#5-check-decisions-in-ci).
 </details>
 
 <details>
@@ -162,10 +165,33 @@ sets the repository variable CI reads its keys from; then add the workflow steps
 
 `baesian init` then `baesian serve` gives you the client on your own machine, with nothing sent anywhere; `baesian
 login` links the repo later. In a repo whose other contributors don't use Baesian, `baesian init --personal` keeps
-everything in your clone and commits nothing. Both are in [the setup guide](docs/setup.md#without-an-account).
+everything in your clone and commits nothing. Both are in
+[the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#without-an-account).
 </details>
 
+## Releases
+
+Each release's notes, with anything to run again after updating, are on
+[GitHub Releases](https://github.com/GusEllerm/baesian/releases). From 1.0, every 1.x release reads the files earlier
+ones wrote, and keeps the hosted service's protocol and the commands, flags, exit codes and MCP tools your agents are
+told to use: the setup guide's [Compatibility](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#compatibility)
+section says how. To report a security problem, write to security@baesian.dev
+([SECURITY.md](https://github.com/GusEllerm/baesian/blob/main/SECURITY.md)).
+
 ## Development
+
+To work on Baesian, build it from a clone and link it onto your PATH, in place of the `baesian` from npm:
+
+```sh
+git clone https://github.com/GusEllerm/baesian.git
+cd baesian
+npm install
+npm run build && npm link
+```
+
+To try the plugin from your clone, add its marketplace by path, `/plugin marketplace add /path/to/baesian`, then install
+it as above. Both marketplaces are named `baesian`, so remove the one from GitHub first:
+`/plugin marketplace remove baesian`.
 
 ```sh
 npm test               # unit tests
@@ -174,12 +200,14 @@ npm run typecheck
 npm run readme-media   # remakes this README's images (needs ffmpeg)
 ```
 
-The project's memory is the Obsidian vault in [`docs/vault/`](docs/vault/Home.md): the design, the decision log, and
-a log of each working session. Start at `Home.md`.
+The project's memory is the Obsidian vault in
+[`docs/vault/`](https://github.com/GusEllerm/baesian/blob/main/docs/vault/Home.md): the design, the decision log, and a
+log of each working session. Start at `Home.md`.
 
 ## Licence
 
-Baesian is source-available under the [Functional Source License 1.1](LICENSE.md) (FSL-1.1-ALv2): you may use, change
+Baesian is source-available under the
+[Functional Source License 1.1](https://github.com/GusEllerm/baesian/blob/main/LICENSE.md) (FSL-1.1-ALv2): you may use, change
 and run it for any purpose except a product or service that competes with it, and each version becomes available under
 the Apache License 2.0 two years after its release.
 
