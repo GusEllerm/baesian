@@ -1,0 +1,15 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-480t1",
+  "revision": 1,
+  "response": "alternative",
+  "choice": "security@baesian.dev",
+  "first_choice": "alternative",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "f49141c7cade83f47011e7a906bb4419ecb8f9ee432be08f06d5e63a1662542d",
+  "client": "hosted-desktop",
+  "at": "2026-11-10T21:10:39.292Z"
+}

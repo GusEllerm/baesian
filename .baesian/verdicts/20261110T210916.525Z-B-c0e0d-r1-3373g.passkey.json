@@ -1,0 +1,19 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261110T210916.525Z-B-c0e0d-r1-3373g.json",
+  "batch": [
+    "e19c2712597718e3d59111da5663237455feeca56185bf5fe7f325fe6368c319",
+    "4b0b17f2c5f39dd8913ded3bda084e335ae13ee8549108b53f0a280f1b6e9adf",
+    "ba6aea3c424116c89c84b657b111799c5d08c9d7de9e4acf1861a0087be3b61c",
+    "b0a563ab28428593a6eacebbdf4ad53f75cfa19824617ab2d7657b9f3d3b7412",
+    "3bd1f5333da8c878a32c3fb97e6c2c13d255752b2ea210f22fbd99bb558eecc4",
+    "aa234a7c5cdf977015f07ab4cf76d34a1e567e2422a21a32b8d503b1b8686905",
+    "0addcc1afe5a29743f397f06545b3744954836717c8647e9b9197c3c6595ad3a",
+    "81d456d0d5817144ef8839323f5923a772118a87e42bcc553494d1c51bdb4a3c"
+  ],
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRXBUdHl3ZmtySkdGTGU1TzVyT1huOUs1MUd0Slp5YUJrTkN3aXF1ekMyTSIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEQCICZrkVxJnkTtTP8-xXuuKMKbo5C76AlEevCLiEQ1IINPAiAF0_p04BoqNWbzrTr4EYPJbOiXZQ59hcdodUaq9MDPAQ"
+}
