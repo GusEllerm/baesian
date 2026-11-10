@@ -5401,6 +5401,11 @@ target = "src/verify.ts#VerifyResult"
 sig = "083d8693f367e77d"
 
 [[bindings]]
+doc = "docs/vault/Home.md"
+target = "src/version.ts"
+sig = "c7f3da52af853593"
+
+[[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "client/site-public/_headers"
 sig = "d253c026a3120092"
