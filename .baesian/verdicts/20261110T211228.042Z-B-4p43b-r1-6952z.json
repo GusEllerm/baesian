@@ -1,0 +1,16 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-4p43b",
+  "revision": 1,
+  "response": "alternative",
+  "choice": "New one at once",
+  "comment": "Right now we are in what I would call rapid prototype. We can break things and not worry about supporting prior versions. If / once there are more users policy on this may change.",
+  "first_choice": "alternative",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "3e1888952aba0de084bd05875d019fce19f643b41e2a4ae98c9cdeacc1489f5a",
+  "client": "hosted-desktop",
+  "at": "2026-11-10T21:12:28.042Z"
+}
