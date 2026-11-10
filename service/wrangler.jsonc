@@ -54,6 +54,11 @@
     "SERVICE_ORIGIN": "https://baesian.dev",
     "SERVICE_RP_ID": "baesian.dev",
     "SERVICE_KEY_VALID_AFTER": "2026-11-01T00:00:00.000Z",
+    // The spare service key (B-x47ek): its public half only, published at /v1/keys and never signed with, so CI can pin
+    // it before the day the service's key is replaced. Its private half is kept offline by the user.
+    "SERVICE_SPARE_KEY_ID": "relay-2",
+    "SERVICE_SPARE_PUBLIC_KEY": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPXod7Wsq//j6jWTK+6UTuxlTBjTzdnVkh6bdn8sTeM",
+    "SERVICE_SPARE_KEY_VALID_AFTER": "2026-11-10T23:36:01.883Z",
     // The address codes and notices come from, on baesian.dev, onboarded to Email Sending (M9f).
     "EMAIL_FROM": "sign-in@baesian.dev",
     // Turnstile's site key, for the website's widget (B-1a03b) on baesian.dev; its secret is TURNSTILE_SECRET. Local
