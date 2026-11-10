@@ -228,6 +228,12 @@ export const CardMeta = z.strictObject({
   crux_fact: Text.optional(),
   // The agent's case (D77): the rationale is optional; "wrong if" and its check are required when a facet asks.
   rationale: Text.optional(),
+  /**
+   * The agent's best case for its alternative, as it would write its rationale if the alternative were its pick (B-sy0kz).
+   * Never shown on the card itself: it's the case a practice card gives its planted pick, when the card comes back with
+   * its options swapped (B-kb5yt), and only a card that carries one can.
+   */
+  alternative_rationale: Text.optional(),
   wrong_if: Text.optional(),
   check: Text.optional(),
   // The trial facets (D75).

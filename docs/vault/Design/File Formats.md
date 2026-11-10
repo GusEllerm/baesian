@@ -93,6 +93,7 @@ Frontmatter (`CardMeta`):
 | `crux_preference` | boolean | | the crux is about what the reviewer values, not a fact |
 | `crux_fact` | string | | a fact that bears on the crux |
 | `rationale` | string | | why the agent picks the proposal (D77) |
+| `alternative_rationale` | string | | the agent's best case for the alternative, in its rationale's voice, as if the alternative were its pick (B-sy0kz). Never shown on the card itself, nor by `baesian show` or the decision's vault note: it's the case a practice card gives its planted pick when the card comes back with its options swapped ([[Practice Cards]], B-kb5yt), and only a card that carries one can come back. The template asks for it beside `rationale` (`CARD_FIELDS`). New in format 1, with no migration before v1 (D108) |
 | `wrong_if`, `check` | strings | when a facet asks | what would show the pick is wrong, and where to look. Required when `reverse` is `one-way`, when `touches` includes `security` or `privacy`, or when `premise` is set (D77) |
 | `premise`, `premise_option`, `premise_check` | string; `proposal` or `alternative`; string | all or none | a claim an option rests on that nobody has checked, which option, and the check (D75) |
 | `acted`, `acted_option` | string; `proposal` or `alternative` | both or neither | what the agent has already built, and for which option (D75) |

@@ -22,8 +22,9 @@ reverse. Otherwise decide yourself. Every card states its strongest alternative,
 the choice turns on (the crux). A topic names one question: reuse one from \`baesian topics\` only for the
 same question, and give a follow-on question its own, narrower topic. The reviewer chooses before seeing
 your pick, your case or the card's body; put what they need in order to choose, kept neutral, in
-\`crux_fact\`, and background in the body. The decision record is committed with the code, so don't paste
-secrets, credentials or private output into a card.
+\`crux_fact\`, and background in the body. Make your case in \`rationale\`, and the alternative's best case
+in \`alternative_rationale\`, as you'd argue it if it were your pick. The decision record is committed
+with the code, so don't paste secrets, credentials or private output into a card.
 
 A choice you'd put to the reviewer in chat goes as a card, even when they're in the conversation: say
 "it's in your deck" and don't list the options there, so they still choose before seeing your pick. A
@@ -155,7 +156,7 @@ export function writeAgentsBlock(toplevel: string, vault?: { rules: string; note
 }
 
 /** In personal mode, what the block says about the record, which isn't committed there. */
-const RECORD_SENTENCE = "The decision record is committed with the code, so don't paste\nsecrets, credentials or private output into a card.";
+const RECORD_SENTENCE = "The decision record is committed\nwith the code, so don't paste secrets, credentials or private output into a card.";
 
 /**
  * What an agent is told in a clone that uses Baesian in personal mode (B-4rwyz), where AGENTS.md says nothing of it: the
@@ -172,7 +173,7 @@ export function personalInstructions(): string {
     "of the message once it has, into this clone's ledger. Keep card IDs and Baesian itself out of anything others see: code,",
     "comments, commit messages, pull requests. `baesian inbox` says when this clone's setup needs fixing.",
     "",
-    body.replace(RECORD_SENTENCE, "The decision record stays in this clone, but a card reaches the reviewer's\nwebsite in a linked repo, so don't paste secrets, credentials or private output into a card."),
+    body.replace(RECORD_SENTENCE, "The decision record stays in this\nclone, but a card reaches the reviewer's website in a linked repo, so don't paste secrets, credentials\nor private output into a card."),
   ].join("\n");
 }
 
@@ -218,6 +219,7 @@ export const CARD_FIELDS: readonly CardField[] = [
   { field: "crux_preference", value: "true", optional: true, note: "the crux is about what the reviewer values, not a fact" },
   { field: "crux_fact", value: '""', optional: true, note: "what the reviewer needs to choose, kept neutral: the only context they see first" },
   { field: "rationale", value: '""', optional: true, note: "why you pick the proposal" },
+  { field: "alternative_rationale", value: '""', optional: true, note: "the best case for the alternative: why you'd pick it, if it were your pick" },
   {
     field: "answered_in_chat", value: '""', optional: true,
     note: "only if the reviewer already answered it in chat: what they said, quoted and short; your pick is their answer, which they confirm with one tap",
@@ -259,7 +261,8 @@ export const CARD_FIELDS: readonly CardField[] = [
 function templateLine(f: CardField): string {
   const head = f.optional ? `# ${f.field}: ${f.value}` : `${f.field}: ${f.value}`;
   const comment = f.line ?? (f.optional ? `(${f.note})` : `# ${f.note}`);
-  return comment ? `${head.padEnd(f.optional ? 27 : 23)}${comment}` : head;
+  // The comments start in one column, and a field too long for it keeps a space before its own.
+  return comment ? `${head.padEnd((f.optional ? 27 : 23) - 1)} ${comment}` : head;
 }
 
 export const CARD_TEMPLATE = `---
