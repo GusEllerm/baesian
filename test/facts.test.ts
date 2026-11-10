@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { commitSnapshot, detectFacts, requirementName, stagedSnapshot } from "../src/facts.js";
 import { globToRegExp } from "../src/globs.js";
-import { hookBlock } from "../src/hookblock.js";
+import { RELEASED_BLOCKS, blockDigest, hookBlock } from "../src/hookblock.js";
 import { cleanup, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
@@ -156,6 +156,49 @@ describe("schema and infra", () => {
     sh(dir, "reset", "-q", "--hard");
     sh(dir, "rm", "-q", ".githooks/pre-commit");
     expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
+  });
+
+  describe("a block another release wrote (B-np6af)", () => {
+    /** A block an older release might have written, made one by listing its digest, as a release would. */
+    const OLDER = "# >>> baesian >>>\nif command -v baesian >/dev/null 2>&1; then\n  baesian hook pre-commit || exit $?\nfi\n# <<< baesian <<<";
+    const released = RELEASED_BLOCKS["pre-commit"] as string[];
+    const unlist = () => {
+      const at = released.indexOf(blockDigest(OLDER));
+      if (at >= 0) released.splice(at, 1);
+    };
+    beforeEach(() => void released.push(blockDigest(OLDER)));
+    afterEach(unlist);
+
+    it("doesn't count an older release's block, added, or swapped in for this one's and back", () => {
+      const { dir } = repo();
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${OLDER}\n` });
+      expect(ids(dir)).toEqual([]); // a teammate on the older release sets the repo up
+      sh(dir, "commit", "-q", "-m", "Set up Baesian, an older release");
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\n` });
+      expect(ids(dir)).toEqual([]); // this release's init, a release newer
+      sh(dir, "commit", "-q", "-m", "init, this release");
+      commitFiles(dir, { ".githooks/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\nnpm test\n` });
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${OLDER}\nnpm test\n` });
+      expect(ids(dir)).toEqual([]); // the older release's init again, beside the repo's own lines
+    });
+
+    it("counts a block no release lists: one changed by hand, another hook's, or a newer release's", () => {
+      const { dir } = repo();
+      commitFiles(dir, { ".githooks/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\n` });
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${OLDER.replace("exit $?", ":")}\n` });
+      expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
+      stage(dir, { ".githooks/commit-msg": `#!/bin/sh\n${OLDER}\n`, ".githooks/pre-commit": `#!/bin/sh\n${hookBlock("pre-commit")}\n` });
+      expect(ids(dir)).toEqual(["infra:.githooks/commit-msg"]);
+      sh(dir, "reset", "-q", "--hard");
+      // A release can't know the blocks of the releases after it: it counts theirs as any change to a hook.
+      const newer = hookBlock("pre-commit").replace("baesian hook pre-commit", "baesian hook pre-commit --from-a-newer-release");
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${newer}\n` });
+      expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
+      // Taking an older block out of the list (one found flawed) makes it count again.
+      unlist();
+      stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${OLDER}\n` });
+      expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
+    });
   });
 
   it("ignores node_modules and Baesian's own record", () => {

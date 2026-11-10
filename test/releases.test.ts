@@ -1,10 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { z } from "zod";
 import { afterAll, describe, expect, it } from "vitest";
 import { parseDoc } from "../src/frontmatter.js";
 import { openRepo } from "../src/git.js";
+import { type HookName, RELEASED_BLOCKS, blockDigest } from "../src/hookblock.js";
 import {
   Attachment,
   CardMeta,
@@ -28,11 +31,16 @@ import type { Store } from "../src/store.js";
 import { readTrustFile } from "../src/trust.js";
 import { RecordAt } from "../src/verify.js";
 
+// What this Baesian keeps reading from every release before it, checked against the release tags of this repo, which
+// has used Baesian on itself since before v0.1.0. Each tag joins the tests as it's made.
+//
 // Finding 1 of the formats review before v1 (docs/vault/Design/Release v1.md): format 1 is everything 0.1.x wrote, and
-// that's how it freezes. So this Baesian reads the record committed at every release tag of this repo, which has used
-// Baesian on itself since before v0.1.0, with its own schemas: every file, each as its kind, and then the record whole,
-// as CI reads a commit's record (`RecordAt`). Each release tag joins the test as it's made, so a later release that
+// that's how it freezes. So this Baesian reads the record committed at every release tag with its own schemas: every
+// file, each as its kind, and then the record whole, as CI reads a commit's record (`RecordAt`). A later release that
 // changes a format in place, rather than adding one with an upgrade (D156), fails here.
+//
+// B-np6af: the hook blocks each release's `baesian init` wrote are Baesian's own to the gate, by their digests in
+// `RELEASED_BLOCKS`; each tag's are worked out by running that release's own `hookBlock()`.
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -162,5 +170,27 @@ describe("every release's record, read by this Baesian (Release v1, finding 1)",
       store.view(() => readWhole(store), (path, error) => reported.push({ path, error }));
       expect(reported).toEqual([]);
     });
+  });
+});
+
+const sources: string[] = [];
+afterAll(() => {
+  for (const dir of sources.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+/** A release's own `src/`, as it was tagged, in a folder of its own, to run its code. */
+function sourceAt(tag: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "baesian-release-"));
+  sources.push(dir);
+  const tar = execFileSync("git", ["archive", "--format=tar", tag, "src"], { cwd: ROOT, maxBuffer: 64 << 20 });
+  execFileSync("tar", ["-x", "-C", dir], { input: tar });
+  return join(dir, "src");
+}
+
+describe("every release's hook blocks, which the gate counts as Baesian's own (B-np6af)", () => {
+  it.each(TAGS)("%s's, each listed for its hook", async (tag) => {
+    const released = (await import(pathToFileURL(join(sourceAt(tag), "hookblock.ts")).href)) as { HOOKS: readonly string[]; hookBlock: (name: string) => string };
+    const unlisted = released.HOOKS.filter((name) => !RELEASED_BLOCKS[name as HookName]?.includes(blockDigest(released.hookBlock(name))));
+    expect(unlisted, `add each one's digest to RELEASED_BLOCKS: ${unlisted.map((n) => `${n} ${blockDigest(released.hookBlock(n))}`).join(", ")}`).toEqual([]);
   });
 });

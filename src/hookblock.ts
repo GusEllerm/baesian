@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { basename } from "node:path";
 
 // D54: Baesian's hooks are a marked block inside whatever hook files the repo already uses, placed right after the
@@ -94,18 +95,48 @@ function withoutBlock(text: string): string {
 }
 
 /**
- * Whether a change to a hook file only adds or updates Baesian's own block (B-g6ywj): the file is a hook Baesian
- * installs, its new block is exactly what this Baesian's `baesian init` writes, and nothing outside the block changed.
- * Such a change isn't an infra fact: its text is Baesian's, so an ack on it would record nothing anyone decided. Any
- * other change to a hook is one (D135), as is deleting a hook or taking the block out.
+ * Every block a released Baesian's `baesian init` wrote in a repo's committed hooks (B-np6af), by hook: the SHA-256 of
+ * the block's text, from its first marker to its last, as `hookBlock()` returned it in that release. Personal mode's
+ * blocks (B-4rwyz) are never committed, so they're not here. Teammates and CI are often a release apart, so a block any
+ * release wrote is Baesian's own, as this one's is (B-g6ywj).
+ *
+ * A release that changes a block adds the one it replaces here, if a release wrote it; test/releases.test.ts checks every
+ * release tag's blocks are listed. A block found flawed is taken out, and from then on counts as any change to a hook.
+ * A release can't know the blocks of the releases after it: a newer release's block, which this list lacks, counts as a
+ * change to the hook here, as before B-np6af.
+ */
+export const RELEASED_BLOCKS: Readonly<Record<HookName, readonly string[]>> = {
+  "pre-commit": ["24cb63901109e4b7868618c4c51a88e5ddcaf72426ee5d40c4680bfc8b3921e9"], // v0.1.0 to v0.1.10
+  "commit-msg": ["2f4a00b996aefc51e88e05c18709f7a3ef59e5444ff30229488d1d4bebce24a3"], // v0.1.0 to v0.1.10
+  "post-commit": ["cae9c1b0840004bdee362cbb9d43f6184f99c972351105c3895a1b574757d214"], // v0.1.0 to v0.1.10
+  "post-merge": ["8912aee3dee4dfde79bf04687553b3a4d9400bc9351cf3cfbe8f15b9a0803c39"], // v0.1.5 to v0.1.10
+  "post-rewrite": ["944bb30617d56c767f8229cdb76cdb76b42f4684b799bba436c563e0fc69e73c"], // v0.1.5 to v0.1.10
+  "pre-push": ["ad03a493a081320304d0b2a1040a6c676725244bb818561372ee508ad12b08dd"], // v0.1.8 to v0.1.10
+};
+
+/** A block's digest, as `RELEASED_BLOCKS` lists it. */
+export const blockDigest = (block: string) => createHash("sha256").update(block).digest("hex");
+
+/** Whether a block is one Baesian wrote for this hook: this release's, or any released one's (B-np6af). */
+export function isBaesianBlock(name: HookName, block: string): boolean {
+  return block === hookBlock(name) || RELEASED_BLOCKS[name].includes(blockDigest(block));
+}
+
+/**
+ * Whether a change to a hook file only adds, updates or swaps Baesian's own block (B-g6ywj, B-np6af): the file is a hook
+ * Baesian installs, its new block is one a Baesian's `baesian init` wrote for that hook, this release's or any released
+ * one's (`isBaesianBlock()`), and nothing outside the block changed. Such a change isn't an infra fact: its text is
+ * Baesian's, so an ack on it would record nothing anyone decided. Any other change to a hook is one (D135), as is
+ * deleting a hook or taking the block out. The commit gate and `baesian verify` both judge hooks by it.
  */
 export function onlyBaesianBlock(path: string, before: string | undefined, after: string | undefined): boolean {
   const name = basename(path);
   if (after === undefined || !(HOOKS as readonly string[]).includes(name)) return false;
-  const block = hookBlock(name as HookName);
   const start = after.indexOf(BEGIN);
   const end = after.indexOf(END);
-  if (start < 0 || end < start || after.slice(start, end + END.length) !== block) return false;
+  if (start < 0 || end < start) return false;
+  const block = after.slice(start, end + END.length);
+  if (!isBaesianBlock(name as HookName, block)) return false;
   if (after.indexOf(BEGIN, start + 1) >= 0) return false;
   return before === undefined ? after === NEW_HOOK(block) : withoutBlock(before) === withoutBlock(after);
 }
