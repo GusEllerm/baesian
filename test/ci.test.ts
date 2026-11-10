@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ciPin, workflowSteps } from "../src/ci.js";
-import { main } from "../src/cli.js";
+import { VERSION, main } from "../src/cli.js";
 import { openRepo } from "../src/git.js";
 import { verify } from "../src/verify.js";
 import { pinnedTrust } from "../src/trust.js";
@@ -93,12 +93,18 @@ describe("the pin `baesian ci` prints (B-pt52b)", () => {
   });
 
   it("comes with the workflow's steps: the full history, and verify with the pinned variable, from npm", () => {
-    const steps = workflowSteps().join("\n");
+    const steps = workflowSteps("1.4.2").join("\n");
     expect(steps).toContain("fetch-depth: 0");
-    expect(steps).toContain('run: npx baesian verify --base "${{ github.event.before }}"');
-    expect(steps).toContain("run: npx baesian verify --merge");
+    expect(steps).toContain('run: npx --yes baesian@1.4.2 verify --base "${{ github.event.before }}"');
+    expect(steps).toContain("run: npx --yes baesian@1.4.2 verify --merge");
     expect(steps.match(/BAESIAN_TRUST: \$\{\{ vars\.BAESIAN_TRUST \}\}/g)).toHaveLength(2);
-    expect(steps).toContain("isn't yet");
+  });
+
+  it("runs the release that printed them, pinned, so a new release reaches CI only in a commit (B-c0e0d)", () => {
+    const steps = workflowSteps(VERSION).join("\n");
+    expect(steps.match(/npx --yes baesian@[^ ]+ verify/g)).toEqual([`npx --yes baesian@${VERSION} verify`, `npx --yes baesian@${VERSION} verify`]);
+    expect(steps).not.toMatch(/npx (--yes )?baesian(@latest)? /);
+    expect(steps).toContain(`# Baesian ${VERSION} from npm, pinned: the release that printed these steps. To move CI to another, run \`baesian ci\` with it, and commit the steps it prints.`);
   });
 });
 

@@ -62,15 +62,18 @@ export function ciPin(store: Store, service: string, project: string): CiPin | {
 /**
  * The GitHub Actions steps that run `baesian verify` with the pin (B-pt52b), as this repo's own workflow runs it: the full
  * history, which verify needs for the base, every commit in the range and the commit that linked the repo (B-45xz8); the
- * pushed commits on a push, and the merge gate on a pull request (D31). The CLI comes from npm, where it's to be published.
+ * pushed commits on a push, and the merge gate on a pull request (D31). The CLI comes from npm, pinned to `version`, the
+ * release that prints the steps (B-c0e0d): a new release changes a repo's CI only in a commit, made by running
+ * `baesian ci` again with it.
  */
-export function workflowSteps(): string[] {
-  return ["# In a workflow that runs on pushes to your main branch and on pull requests, as one job's steps.", ...workflowBody()];
+export function workflowSteps(version: string): string[] {
+  return ["# In a workflow that runs on pushes to your main branch and on pull requests, as one job's steps.", ...workflowBody(version)];
 }
 
 /** The steps alone, for `baesian ci`, which says where they go in a sentence of its own. */
-export function workflowBody(): string[] {
+export function workflowBody(version: string): string[] {
   const env = ["  env:", `    ${TRUST_ENV}: \${{ vars.${TRUST_ENV} }}`];
+  const baesian = `npx --yes baesian@${version}`;
   return [
     "# Keep agents' commits from editing it, with a ruleset or code owners on .github/: it passes the pin to verify.",
     "- uses: actions/checkout@v7",
@@ -79,14 +82,14 @@ export function workflowBody(): string[] {
     "- uses: actions/setup-node@v7",
     "  with:",
     "    node-version: 22",
-    "# `npx baesian` runs Baesian's CLI from npm: it's to be published there, and isn't yet.",
+    `# Baesian ${version} from npm, pinned: the release that printed these steps. To move CI to another, run \`baesian ci\` with it, and commit the steps it prints.`,
     "- name: baesian verify (pushed commits)",
     "  if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'",
-    '  run: npx baesian verify --base "${{ github.event.before }}"',
+    `  run: ${baesian} verify --base "\${{ github.event.before }}"`,
     ...env,
     "- name: baesian verify --merge (pull request)",
     "  if: github.event_name == 'pull_request'",
-    "  run: npx baesian verify --merge",
+    `  run: ${baesian} verify --merge`,
     ...env,
   ];
 }
