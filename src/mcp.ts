@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from "node:path";
 import { CLIENT_INFO_META_KEY, type CallToolResult, McpServer, type ServerContext } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
-import { CARD_FIELDS, agentName, harnessSession } from "./agents.js";
+import { CARD_FIELDS, agentName, harnessSession, modelSessions } from "./agents.js";
 import { NotARepo } from "./git.js";
 import type { Http } from "./login.js";
 import { notifyFiled } from "./notify.js";
@@ -179,7 +179,8 @@ export function buildMcpServer(opts: McpOptions): McpServer {
       process.stderr.write(`baesian mcp: notification failed (the card is filed): ${e instanceof Error ? e.message : String(e)}\n`);
     }
   };
-  const actor = (ctx: ServerContext): Actor => ({ agent: agentOf(ctx), notify });
+  // The harness sessions in the server's environment, so a card it files records its model (B-k0w7d).
+  const actor = (ctx: ServerContext): Actor => ({ agent: agentOf(ctx), notify, sessions: modelSessions(env) });
   /** Run an operation, turning the store's errors into results with a code. */
   const run = async (fn: () => Op<unknown> | Promise<Op<unknown>>, wrap?: string): Promise<CallToolResult> => {
     try {

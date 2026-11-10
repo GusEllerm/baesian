@@ -99,7 +99,7 @@ Provenance: drafted by the agent on 2026-10-31 for M4 step 5. Everything not mar
 3. **5c, the card and answering (done, 2026-10-31),** against the live server.
    - **The card** (`client/src/Card.tsx`, with `Mark.tsx`) is drawn as round 5 draws it:
      - the stakes line and rarity mark, and the agent's state: stopped, stopped waiting, or carried on (D90);
-     - the trigger, the question and the crux;
+     - the trigger, the question and the crux; the trigger names the agent alone, and the model it ran on (`source_model`, B-k0w7d) is named only in the reveal, with its pick, in brackets: "You chose Postgres. claude-code (claude-opus-5-5) picked SQLite (WAL mode)." (B-fvx91);
      - two options;
      - the facets, and the footer with its reading-time rule.
    - **Every card goes through the reveal** (D86). On a disagreement it offers an optional reason and the switch (D87, D88). A mythic card is held to confirm (D67).

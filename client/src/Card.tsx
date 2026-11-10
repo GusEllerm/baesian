@@ -97,6 +97,7 @@ export function Card(p: CardProps) {
         {/* A held card's agent went ahead: whether it ever waited says nothing you need before choosing (D151). */}
         {!isHeld(card) && <WaitBadge agent={agentOf(card)} wait={p.wait} />}
       </p>
+      {/* The agent alone: the model it ran on is named with its pick, once you've chosen (B-fvx91). */}
       <p className="doing">
         <b>{agentOf(card)}</b> is {m.doing}
       </p>
@@ -343,6 +344,9 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const { card, mode } = p;
   const m = card.meta;
   const agent = agentOf(card);
+  // Who picked it, with the model it ran on when the card records one (B-k0w7d): named here, with its pick, once you've
+  // chosen, never on the card before (B-fvx91).
+  const picker = m.source_model ? `${agent} (${m.source_model})` : agent;
   const held = isHeld(card);
   const own = isOwnCard(m);
   // Answered in chat (B-hswmx): its pick is your answer, so choosing the other option is going against what you said.
@@ -369,20 +373,20 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         ) : held ? (
           switched ? (
             <>
-              You're keeping <b>{m.proposal}</b>, what {agent} went ahead with.
+              You're keeping <b>{m.proposal}</b>, what {picker} went ahead with.
             </>
           ) : (
             <>
-              You chose <b>{m[mode.option]}</b>. {agent} went ahead with {same ? "the same" : <b>{m.proposal}</b>}.
+              You chose <b>{m[mode.option]}</b>. {picker} went ahead with {same ? "the same" : <b>{m.proposal}</b>}.
             </>
           )
         ) : switched ? (
           <>
-            You switched to <b>{m.proposal}</b>, {agent}'s pick.
+            You switched to <b>{m.proposal}</b>, {agent}'s pick{m.source_model ? ` (${m.source_model})` : ""}.
           </>
         ) : (
           <>
-            You chose <b>{m[mode.option]}</b>. {agent}{" "}
+            You chose <b>{m[mode.option]}</b>. {picker}{" "}
             {same ? (
               "picked the same."
             ) : (

@@ -1,6 +1,6 @@
 import { CARD_TEMPLATE } from "./agents.js";
 import { cite, citeIn } from "./cite.js";
-import { agentLabel, byLine, cardAuthor, q, reviewerOf, said } from "./quote.js";
+import { agentLabel, byLine, cardAuthor, plain, q, reviewerOf, said } from "./quote.js";
 import { POSITION_NAMES, ROW_NAMES, type AnyRow, type Position } from "./routing.js";
 import type { GateRecord, Verdict, Withdrawal } from "./schema.js";
 import {
@@ -59,7 +59,15 @@ export interface Op<T> {
 export interface Actor {
   agent: string;
   notify: (card: Card) => void;
+  /** The harness sessions the command runs in (`modelSessions()`), whose model a card it files records (B-k0w7d). */
+  sessions?: readonly string[];
 }
+
+/** Who files a card: the agent, and the model its session runs on, if the plugin's hooks heard one (B-k0w7d). */
+const filer = (s: Store, actor: Actor) => {
+  const model = actor.sessions?.length ? s.sessionModel(actor.sessions) : undefined;
+  return { agent: actor.agent, ...(model ? { model } : {}) };
+};
 
 // ---------------------------------------------------------------- lines
 
@@ -197,21 +205,21 @@ function filed(result: FileResult, title: Piece): Line[] {
 
 /** `baesian file`: file a card, notify for blocking and hard cards, and say what to do next. */
 export function fileOp(s: Store, draft: unknown, body: string, actor: Actor & { force?: boolean }): Op<FileResult> {
-  const result = s.fileCard(draft, body, { agent: actor.agent, force: actor.force ?? false });
+  const result = s.fileCard(draft, body, { ...filer(s, actor), force: actor.force ?? false });
   actor.notify(result.card);
   return { lines: filed(result, q(result.card.meta.title)), data: result };
 }
 
 /** `baesian revise`: the next revision of a returned card. */
 export function reviseOp(s: Store, cardId: string, draft: unknown, body: string, actor: Actor): Op<FileResult> {
-  const result = s.reviseCard(cardId, draft, body, { agent: actor.agent });
+  const result = s.reviseCard(cardId, draft, body, filer(s, actor));
   actor.notify(result.card);
   return { lines: filed(result, q(result.card.meta.title)), data: result };
 }
 
 /** `baesian reply`: the agent's one reply to an answer against its pick (D89, D104). */
 export function replyOp(s: Store, cardId: string, reply: string, actor: Actor): Op<{ card: string; revision: number; level: string }> {
-  const card = s.replyToCard(cardId, reply, { agent: actor.agent });
+  const card = s.replyToCard(cardId, reply, filer(s, actor));
   actor.notify(card);
   return {
     lines: [
@@ -226,7 +234,7 @@ export function replyOp(s: Store, cardId: string, reply: string, actor: Actor): 
 
 /** `baesian rule`: draft the rule the reviewer asked for, as a card (D110). */
 export function ruleOp(s: Store, from: string, rule: string, covers: string[], actor: Actor): Op<{ card: string; from: string }> {
-  const card = s.draftRule(from, rule, covers, { agent: actor.agent });
+  const card = s.draftRule(from, rule, covers, filer(s, actor));
   actor.notify(card);
   return { lines: [head("done", "filed ", id(card.meta.id), ": the rule goes to the reviewer as a card, and is saved once they accept it")], data: { card: card.meta.id, from } };
 }
@@ -369,6 +377,8 @@ export function showOp(s: Store, cardId: string): Op<ShowData> {
       ...fields([
         m.topic !== undefined && { label: "topic", value: m.topic },
         { label: "deck", value: m.deck },
+        // The model its agent ran on, as the harness named it to the plugin (B-k0w7d).
+        m.source_model !== undefined && { label: "model", value: plain(m.source_model) },
         gate ? levelField(gate, false) : { label: "level", value: level(m.level) },
         decision !== undefined && { label: "decided", value: by ? `by ${byLine(reviewerOf(by))}: ${q(decision)}` : q(decision) },
         ...waiting.map((w) => ({ label: "waiting", value: `${agentLabel(w.agent)}, ${w.stale ? `stopped (last seen ${when(w.at)})` : `since ${when(w.since)}`}` })),

@@ -49,6 +49,7 @@ The definitions are the Zod schemas in `src/schema.ts`. This note describes them
 | `attachments/<id>-<suffix>.json` | `Attachment` | yes | no | `baesian attach` |
 | `cursors/<branch>.json` | `Cursor` (`at`, and `delivered`: what `wait` has delivered since) | yes (mutable) | no | `baesian inbox`, and `baesian wait` |
 | `cursors/<branch>/<session>.json` | `Cursor` (`at`): one session's own place in the branch's inbox (B-ghhym, provisional) | yes (mutable) | no | `baesian inbox --session`, run by the plugin's hooks |
+| `models/<session>.json` | `SessionModel` (`model`, `at`): the model a harness session runs on, as the harness last named it to the plugin's hooks (B-k0w7d); `<session>` is the session's ID as `slug()` makes it (`modelPath()`) | yes (mutable, replaced whole) | no | the plugin's hooks, directly (`noteModel()` in `plugins/baesian/hooks/baesian.mjs`): at `SessionStart` when Claude Code names the model, at `PostModelSwitch`, and in Codex at every hook that runs `new-verdicts.mjs`; read by `baesian file` and the MCP server's filing tools |
 | `presence.json` | `Presence` | yes (mutable) | no | the client's heartbeat (D41) |
 | `waiting/<id>-<suffix>.json` | `Waiting` | yes (mutable) | no | `baesian wait`, while it waits (D90) |
 | `server.json` | `ServerInfo` | yes (mutable, readable only by the user) | no | `baesian serve`, while it runs (D97) |
@@ -111,6 +112,7 @@ Frontmatter (`CardMeta`):
 | `confidence` | optional 0–1 | | recorded, not used for routing (D3) |
 | `domain`, `evidence` | lists | | routing tags; links |
 | `source_agent`, `source_branch`, `created` | | | filled in by Baesian. `source_agent` is free text, so it can name a persistent agent rather than the harness. The folder a card was filed from isn't recorded (D105) |
+| `source_model` | optional string, at most 200 characters | | filled in by Baesian, never a draft (B-k0w7d): the model the revision's filer ran on, from its harness session's `models/<session>.json` (`Store.sessionModel`), by the session the harness gives the commands an agent runs (`modelSessions()`: `CLAUDE_CODE_SESSION_ID`; in Codex `CODEX_SESSION_ID`, then `CODEX_THREAD_ID`). Absent when the card was filed without the plugin, outside a harness session, or before the harness named a model. Each revision records its own filer's: a revision or a reply from a session with no model known has none, whatever the first had. A card filed again under a new ID at a sync keeps it. New in format 1, with no migration before v1 (D108) |
 
 **Body:** optional Markdown context, shown with the agent's reasoning (D92). Nothing in it is checked.
 
@@ -421,6 +423,7 @@ With `vault` set, the vault adapter writes two more files, in the vault rather t
 | `answered`, `answered_by` | the latest resolving verdict's time (ISO, as text) and reviewer |
 | `topic`, `deck`, `level`, `reverse`, `touches` | as on that revision; the topic canonical |
 | `filed`, `filed_by`, `branch` | the first revision's time, agent and branch |
+| `filed_model` | the first revision's `source_model`, when it has one (B-k0w7d); the body's "Filed by" line names it in brackets after the agent |
 | `depends_on`, `supersedes`, `superseded_by`, `conflict_of` | links to those decisions' notes |
 
 **Decision note body:** the title, the question, then one paragraph each, only when set: **Decided** (with what follows from it), **Not chosen** (one or two), **It turned on** (the crux, and the answer that leads to each option), **The fact given**, **Comment**, **Answered in chat first** (what the reviewer said, which the agent filed as its pick, B-hswmx), **First chose** (when the reviewer switched after the agent's pick was shown, D88), **The agent's case**, **The agent's reply**. Then who answered, when, and on which card and revision; who filed it, on which branch and in which deck, and the deck's context notes as links; where the record is, and that editing the note changes nothing. Last, `## Background`, the card's body.

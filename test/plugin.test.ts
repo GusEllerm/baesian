@@ -6,10 +6,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AGENTS_BLOCK, agentsBlock } from "../src/agents.js";
 import { main } from "../src/cli.js";
 import { globToRegExp as gateGlob } from "../src/globs.js";
+import { slug } from "../src/git.js";
 import { MCP_INSTRUCTIONS } from "../src/mcp.js";
 import { Config } from "../src/schema.js";
+import { Store, modelPath } from "../src/store.js";
 // @ts-expect-error: plain JavaScript, as below
-import { repoOf } from "../plugins/baesian/hooks/baesian.mjs";
+import { modelOf, noteModel, repoOf, slug as hookSlug } from "../plugins/baesian/hooks/baesian.mjs";
+// @ts-expect-error: plain JavaScript, as below
+import { onModelSwitched } from "../plugins/baesian/hooks/model-switched.mjs";
 // @ts-expect-error: plain JavaScript, as below
 import { CHOICE_REASON, CHOICE_TAIL, QUESTION_REASON, asksChoice, choiceSignals } from "../plugins/baesian/hooks/choices.mjs";
 // @ts-expect-error: plain JavaScript, as below
@@ -70,7 +74,9 @@ describe("the plugin's files", () => {
     expect(hooks.PostToolUse).toEqual([expect.objectContaining({ matcher: "ExitPlanMode" })]);
     // Nothing mid-task (D116), and only a person approves a plan: a PreToolUse hook on ExitPlanMode could answer
     // for them.
-    expect(Object.keys(hooks).sort()).toEqual(["PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"]);
+    expect(Object.keys(hooks).sort()).toEqual(["PostModelSwitch", "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"]);
+    // A model switch only notes the session's model (B-k0w7d): it prints nothing, and never blocks.
+    expect(hooks.PostModelSwitch).toEqual([{ hooks: [expect.objectContaining({ type: "command", command: expect.stringContaining("hooks/model-switched.mjs") })] }]);
     for (const { matcher } of hooks.PreToolUse) expect(matcher.split("|")).not.toContain("ExitPlanMode");
   });
 
@@ -160,6 +166,58 @@ describe("the hooks when a session starts and with your next message", () => {
   it("say nothing without the CLI", async () => {
     const missing = async () => ({ missing: true, status: 1, stdout: "", stderr: "spawnSync baesian ENOENT" });
     expect(await newVerdicts(started("/", "s-1"), missing)).toBe("");
+  });
+});
+
+describe("the session's model, kept for the cards it files (B-k0w7d)", () => {
+  const modelIn = (dir: string, session: string) => Store.open(dir).sessionModel([session]);
+
+  it("is noted when Claude Code starts a session and names it, and when it switches; a start that leaves it out writes nothing", async () => {
+    const { dir } = repo();
+    const at = () => "2026-11-10T20:00:00.000Z";
+    expect(await newVerdicts({ hook_event_name: "SessionStart", session_id: "s-1", source: "clear", cwd: dir }, cli)).toBe("");
+    expect(modelIn(dir, "s-1")).toBeUndefined();
+    await newVerdicts({ hook_event_name: "SessionStart", session_id: "s-1", source: "startup", model: "claude-opus-5-5", cwd: dir }, cli);
+    expect(modelIn(dir, "s-1")).toBe("claude-opus-5-5");
+    expect(await onModelSwitched({ hook_event_name: "PostModelSwitch", session_id: "s-1", from_model: "claude-opus-5-5", to_model: "claude-sonnet-5", requested_model: "sonnet", cwd: dir })).toBe("");
+    expect(modelIn(dir, "s-1")).toBe("claude-sonnet-5");
+    // The file is Baesian's own format, which the store reads; unchanged, it isn't written again.
+    const file = join(Store.open(dir).live, modelPath("s-1"));
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ type: "session-model", format: 1, model: "claude-sonnet-5", at: expect.any(String) });
+    expect(noteModel({ session_id: "s-1", model: "claude-sonnet-5", cwd: dir }, at)).toBe(false);
+    expect(noteModel({ session_id: "s-1", model: "claude-opus-5-5", cwd: dir }, at)).toBe(true);
+    expect(JSON.parse(readFileSync(file, "utf8")).at).toBe("2026-11-10T20:00:00.000Z");
+  });
+
+  it("is noted from every Codex hook that runs new-verdicts.mjs, each of which names the model", async () => {
+    const { dir } = repo();
+    await newVerdicts({ hook_event_name: "UserPromptSubmit", session_id: "019a-thread", turn_id: "t", model: "gpt-5.5-codex", prompt: "go on", cwd: dir }, cli);
+    expect(modelIn(dir, "019a-thread")).toBe("gpt-5.5-codex");
+  });
+
+  it("is kept by the session's ID as Baesian names its files", () => {
+    for (const id of ["2f6c0b1e-5d3a-4c1f-9e2b-7a8d6c5b4a39", "019A_Thread/7", "---", "Ünïcode session"]) expect(hookSlug(id)).toBe(slug(id));
+  });
+
+  it("is read from `to_model`, then `model`, and nothing that isn't a name", () => {
+    expect(modelOf({ model: "a", to_model: "b" })).toBe("b");
+    expect(modelOf({ model: " claude-opus-5-5 " })).toBe("claude-opus-5-5");
+    for (const input of [{}, { model: "" }, { model: 5 }, { model: "x".repeat(201) }, undefined]) expect(modelOf(input)).toBeUndefined();
+  });
+
+  it("writes nothing, and never fails, outside a repo that uses Baesian, or with no session", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "baesian-plugin-"));
+    try {
+      expect(noteModel({ session_id: "s-1", model: "m", cwd: outside })).toBe(false);
+      execFileSync("git", ["init", "-q"], { cwd: outside });
+      expect(noteModel({ session_id: "s-1", model: "m", cwd: outside })).toBe(false);
+      expect(existsSync(join(outside, ".git", "baesian"))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+    const { dir } = repo();
+    expect(noteModel({ model: "m", cwd: dir })).toBe(false);
+    expect(await onModelSwitched({ hook_event_name: "PostModelSwitch", cwd: dir })).toBe("");
   });
 });
 

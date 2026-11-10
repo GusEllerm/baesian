@@ -246,6 +246,8 @@ interface Refile {
   draft: Record<string, unknown>;
   body: string;
   agent: string;
+  /** The model it was filed on (B-k0w7d), kept when it's filed again. */
+  model?: string | undefined;
   withdrawn: boolean;
 }
 
@@ -275,7 +277,7 @@ function takeOut(store: Store, id: string): Refile | undefined {
   const asked = store.gateRecordBy(id, latest.meta.revision, "cli")?.asked;
   const fields = new Set(Object.keys(CardDraft.shape));
   const draft = Object.fromEntries(Object.entries(latest.meta).filter(([k]) => fields.has(k) && k !== "level" && k !== "type" && k !== "format"));
-  const out: Refile = { id, draft: { ...draft, ...(asked ? { level: asked } : {}) }, body: latest.body, agent: latest.meta.source_agent, withdrawn: store.withdrawal(id) !== undefined };
+  const out: Refile = { id, draft: { ...draft, ...(asked ? { level: asked } : {}) }, body: latest.body, agent: latest.meta.source_agent, model: latest.meta.source_model, withdrawn: store.withdrawal(id) !== undefined };
   for (const f of store.storage.list(`cards/${id}`)) {
     const rel = `cards/${id}/${f}`;
     const bytes = store.storage.read(rel);
@@ -403,7 +405,7 @@ async function pull(store: Store, client: RelayClient, run: Run): Promise<void> 
       run.out.notes.push(`relay: ${r.id} was already taken on the relay by another machine's card; yours was withdrawn, so it isn't filed again`);
       continue;
     }
-    const to = store.fileCard(r.draft, r.body, { agent: r.agent, force: true }).card.meta.id;
+    const to = store.fileCard(r.draft, r.body, { agent: r.agent, model: r.model, force: true }).card.meta.id;
     run.out.renamed.push({ from: r.id, to });
     run.out.notes.push(`relay: ${r.id} was already taken on the relay by another machine's card, so yours is filed again as ${to}: use ${to} from now on (\`baesian show ${to}\`)`);
   }

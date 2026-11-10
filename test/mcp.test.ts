@@ -488,6 +488,15 @@ describe("naming the agent (P18 section 6)", () => {
     expect(await filedBy({ agent: "named", env: { BAESIAN_AGENT: "night-shift" } }, "claude-code")).toBe("named");
   });
 
+  it("records the model of the session in the server's environment, as the plugin's hooks kept it (B-k0w7d)", async () => {
+    const { dir, store } = repo();
+    store.noteSessionModel("s-1", "claude-opus-5-5");
+    const meta = async (env: NodeJS.ProcessEnv, over: Record<string, unknown> = {}) =>
+      ((await call(await connect(dir, { env }), "file_card", { ...draft(over), new: true })).data.card as { meta: Record<string, unknown> }).meta;
+    expect(await meta({ CLAUDE_CODE_SESSION_ID: "s-1" })).toMatchObject({ source_agent: "claude-code", source_model: "claude-opus-5-5" });
+    expect(await meta({}, { title: "Another", topic: "storage/another" })).not.toHaveProperty("source_model");
+  });
+
   it("in the 2026-07-28 era too, from each request's metadata", async () => {
     const { dir } = repo();
     const r = await call(await connect(dir, {}, { pin: "2026-07-28" }, "codex-mcp-client"), "file_card", draft());

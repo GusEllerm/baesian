@@ -108,6 +108,7 @@ Flat, like the rest of the vault: strings, and lists of strings. The vault's own
 | `answered`, answered_by | the verdict's time and reviewer. The time is an ISO timestamp kept as text, so the table sorts by it either way |
 | `topic`, `deck`, `level`, `reverse`, `touches` | as on the card |
 | `filed`, filed_by, `branch` | the card's creation time, agent and branch |
+| filed_model | the model the first revision's agent ran on, when its harness named one (B-k0w7d); the "Filed by" line names it in brackets |
 | depends_on, `supersedes`, superseded_by | wikilinks to those decisions' notes |
 
 Left out on purpose: anything that differs by branch or by clone. That means no commits, ledger entries, attachments or waiting agents. The client shows those. In a note they'd make two branches' copies differ, and the merge conflicts D43 avoids would come back.

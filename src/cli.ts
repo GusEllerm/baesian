@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
-import { agentName, harnessSession, personalInstructions } from "./agents.js";
+import { agentName, harnessSession, modelSessions, personalInstructions } from "./agents.js";
 import { ciPin, runProgram, workflowBody, workflowSteps } from "./ci.js";
 import { Told, cite, citeIn, unmark, unmarkJson } from "./cite.js";
 import { CONFIG_PATH, stagedSnapshot } from "./facts.js";
@@ -257,7 +257,8 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
       tell(warning(`notification failed (the card is filed): ${e instanceof Error ? e.message : String(e)}`));
     }
   };
-  const actor = (): Actor => ({ agent: agentName(program.opts().agent), notify });
+  // The sessions the command runs in, so a card it files records its model (B-k0w7d).
+  const actor = (): Actor => ({ agent: agentName(program.opts().agent), notify, sessions: modelSessions(io.env ?? process.env) });
   /** Print an operation's lines, or with `--json` its data (P18: what the MCP tool returns as structured content). */
   const print = <T>(op: Op<T>, asJson: boolean | undefined) => (asJson ? json(op.data) : say(op.lines));
   const http = (): Http => io.http ?? {};

@@ -97,6 +97,18 @@ export function harnessSession(env: NodeJS.ProcessEnv = process.env): string | u
   return env.CLAUDE_CODE_SESSION_ID?.trim() || env.CODEX_THREAD_ID?.trim() || undefined;
 }
 
+/**
+ * The sessions a command's model is looked up by (B-k0w7d), in order: Claude Code's `CLAUDE_CODE_SESSION_ID`; and in
+ * Codex `CODEX_SESSION_ID`, which Codex's source names but which wasn't seen set, then `CODEX_THREAD_ID`, which rehearse
+ * found equal to the hooks' `session_id` in Codex 0.166.0. Codex's source fills the hooks' `session_id` from the session
+ * and the variable from the thread, so in a thread of its own (a subagent's, say) they may differ: then no file
+ * matches, and the card has no model rather than a wrong one.
+ */
+export function modelSessions(env: NodeJS.ProcessEnv = process.env): string[] {
+  const ids = [env.CLAUDE_CODE_SESSION_ID, env.CODEX_SESSION_ID, env.CODEX_THREAD_ID].map((v) => v?.trim()).filter((v): v is string => Boolean(v));
+  return [...new Set(ids)];
+}
+
 export function harnessName(env: NodeJS.ProcessEnv): string | undefined {
   // Claude Code sets AI_AGENT to "<name>_<version>_<role>", for example "claude-code_2-1-314_agent".
   const ai = env.AI_AGENT?.trim();

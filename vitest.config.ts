@@ -7,6 +7,6 @@ export default defineConfig({
     // service/ is the relay's, run in workerd by its own config (`npm run test:service`).
     exclude: [...configDefaults.exclude, "e2e/**", ".claude/**", "service/**"],
     // Tests run wherever: never inside the session of the harness that runs them.
-    env: { CLAUDE_CODE_SESSION_ID: "", CODEX_THREAD_ID: "" },
+    env: { CLAUDE_CODE_SESSION_ID: "", CODEX_SESSION_ID: "", CODEX_THREAD_ID: "" },
   },
 });

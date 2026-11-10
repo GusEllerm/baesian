@@ -73,6 +73,8 @@ function everyKind() {
   store.startWaiting(d, "claude-code");
   store.inbox({ advance: true });
   store.inbox({ advance: true, session: "session-1" });
+  // A session's model, as the plugin's hooks keep it (B-k0w7d).
+  store.noteSessionModel("session-1", "claude-opus-5-5");
   store.addVerdict({ card: d, revision: 1, response: "defer", comment: "Later.", ...REVIEWER });
   store.markDelivered(d, { verdict: store.verdicts(d).at(-1)!, briefs: [] });
   // The vault's notes.

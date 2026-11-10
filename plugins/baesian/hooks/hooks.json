@@ -1,5 +1,5 @@
 {
-  "description": "Baesian: new verdicts at natural stopping points, an approved plan as a deck, and a choice put in chat sent back to be a card",
+  "description": "Baesian: new verdicts at natural stopping points, an approved plan as a deck, a choice put in chat sent back to be a card, and the session's model kept for the cards it files",
   "hooks": {
     "SessionStart": [
       {
@@ -51,6 +51,17 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/user-facing-edit.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/model-switched.mjs\"",
             "timeout": 10
           }
         ]
