@@ -166,6 +166,12 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
         </dt>
         <dd>Undo, for 5 seconds</dd>
         <dt>
+          <kbd>1</kbd>
+          <kbd>2</kbd>
+          <kbd>3</kbd>
+        </dt>
+        <dd>In the blind test of practice cards, your guess about the card you've just answered: no, maybe, sure</dd>
+        <dt>
           <kbd>B</kbd>
         </dt>
         <dd>Your decisions, by branch: opens them beside the desk, and closes them</dd>

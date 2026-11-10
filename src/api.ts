@@ -322,7 +322,7 @@ type PracticeOwn<E> = E extends unknown ? Omit<E, "type" | "format" | "reviewer"
 export type ApiPracticeInput = PracticeOwn<PracticeEntry>;
 
 /** The fields a practice entry may be sent with (`ApiPracticeInput`); anything else is refused. The local server and the relay share them. */
-export const PRACTICE_FIELDS: ReadonlySet<string> = new Set(["kind", "card", "revision", "answered", "blind", "final", "test", "mark"]);
+export const PRACTICE_FIELDS: ReadonlySet<string> = new Set(["kind", "card", "revision", "answered", "blind", "final", "test", "mark", "practice"]);
 
 /** What `GET /api/practice` returns: every practice entry, oldest first. */
 export interface ApiPractice {

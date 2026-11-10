@@ -43,7 +43,9 @@ describe("a practice entry (B-rehdw)", () => {
     expect(start.kind).toBe("test-start");
     const mark = practiceEntry({ kind: "mark", card: "B-fghjk", revision: 2, mark: "maybe" }, WHO, [start]);
     expect(mark).toMatchObject({ kind: "mark", card: "B-fghjk", revision: 2, mark: "maybe" });
-    expect(practiceEntry(answer({ test: true, mark: "no" }), WHO, [start])).toMatchObject({ test: true, mark: "no" });
+    expect(practiceEntry(answer({ test: true }), WHO, [start])).toMatchObject({ test: true });
+    // A guess about a practice card names the card it was rebuilt from, and that it was practice (B-9prve).
+    expect(practiceEntry({ kind: "mark", card: "B-abcde", revision: 1, mark: "sure", practice: true }, WHO, [start])).toMatchObject({ practice: true });
   });
 
   it("never carries what you typed, nor anything the server sets: those fields are refused", () => {
@@ -55,13 +57,13 @@ describe("a practice entry (B-rehdw)", () => {
     expect(() => practiceEntry([answer()], WHO, [])).toThrow(/JSON object/);
   });
 
-  it("the blind test starts once; an entry in it needs it started; an answer in it has a mark, and only one in it", () => {
+  it("the blind test starts once; an entry in it needs it started; a guess is its own entry, never on an answer", () => {
     const start = practiceEntry({ kind: "test-start" }, WHO, []);
     expect(() => practiceEntry({ kind: "test-start" }, WHO, [start])).toThrow(/started already/);
     expect(() => practiceEntry({ kind: "mark", card: "B-fghjk", revision: 1, mark: "sure" }, WHO, [])).toThrow(/hasn't started/);
-    expect(() => practiceEntry(answer({ test: true, mark: "no" }), WHO, [])).toThrow(/hasn't started/);
-    expect(() => practiceEntry(answer({ test: true }), WHO, [start])).toThrow(/has a mark/);
-    expect(() => practiceEntry(answer({ mark: "no" }), WHO, [start])).toThrow(/has a mark/);
+    expect(() => practiceEntry(answer({ test: true }), WHO, [])).toThrow(/hasn't started/);
+    expect(() => practiceEntry(answer({ test: true, mark: "no" }), WHO, [start])).toThrow(/isn.t valid/);
+    expect(() => practiceEntry({ kind: "mark", card: "B-fghjk", revision: 1, mark: "no", practice: false }, WHO, [start])).toThrow(/isn.t valid/);
     try {
       practiceEntry({ kind: "test-start" }, WHO, [start]);
     } catch (e) {
@@ -78,7 +80,7 @@ describe("on `baesian serve` (B-rehdw)", () => {
     const r1 = await post(s, { kind: "test-start" });
     expect(r1.status).toBe(201);
     expect(((await r1.json()) as { entry: PracticeEntry }).entry).toMatchObject({ kind: "test-start", reviewer: "tester", client: "web" });
-    expect((await post(s, answer({ test: true, mark: "sure" }))).status).toBe(201);
+    expect((await post(s, answer({ test: true }))).status).toBe(201);
     expect((await post(s, { kind: "mark", card: "B-fghjk", revision: 1, mark: "no" })).status).toBe(201);
     expect((await read(s)).map((e) => e.kind)).toEqual(["test-start", "answer", "mark"]);
     const files = readdirSync(join(store.live, PRACTICE_DIR));

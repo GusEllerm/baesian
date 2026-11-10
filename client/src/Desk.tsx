@@ -6,13 +6,14 @@ import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
 import { laterSuperseded, recap } from "./calibration";
-import { ARROW, Card, type CardProps, MARKS, type Mode, type Side, sideOfKind } from "./Card";
+import { ARROW, Card, type CardProps, type Mode, type Side, sideOfKind } from "./Card";
 import { usePractice, usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
 import { type DeskCard, type Practice, type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, practiceOf, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { type Outgoing, Outbox, postPractice, postVerdictTo } from "./outbox";
-import { TEST_SIZE, draws, phaseOf, practiceAnswer, practicePath, practiceWords, practised, rebuild, sources, statusOf } from "./practice";
+import { MARKS, TEST_SIZE, draws, markOf, phaseOf, practiceAnswer, practicePath, practiceWords, practised, rebuild, sources, statusOf } from "./practice";
+import type { PracticeMark } from "../../src/schema";
 import { PracticeResultPanel } from "./PracticePanel";
 import { type Confirmed, confirmAnswers, postAnswer, useEndpoints } from "./endpoints";
 import { NotConfirmed, ProofPrompt } from "./proof";
@@ -147,8 +148,6 @@ function reviewOf(a: Answered, testing: boolean): NonNullable<CardProps["review"
 /** Where a card starts: in the choice, or for one you answered in chat, showing what you said and the pick (B-hswmx). */
 const startMode = (card: ApiCard | undefined): Mode => (card && isSeen(card) ? { kind: "seen" } : { kind: "live" });
 
-/** What a card in the blind test asks before it's answered (B-xx49m). */
-const MARK_FIRST = "Say whether you think it was rebuilt from a past card first.";
 
 /**
  * What the toast says once an answer is recorded: a slider proposal accepted moves its row (B-y6jn6); Baesian's own cards
@@ -241,6 +240,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const testing = phase === "test";
   /** A practice card drawn to come next, and whether the real card answered before it said its agent had stopped (B-zw55w). */
   const [planted, setPlanted] = useState<{ card: DeskCard & { practice: Practice }; stopped: boolean }>();
+  /**
+   * In the blind test, the card you've just answered, for your guess about it on a card of its own before the next card
+   * comes (B-9prve); its answer is already on its way. While the guess is kept, `saving`; if it couldn't be, why.
+   */
+  const [toMark, setToMark] = useState<{ key: string; card: DeskCard; saving?: boolean; problem?: string }>();
   /** Real answers since the last practice card this sitting: none came yet, so the first may follow the first answer. */
   const sinceLast = useRef(Number.POSITIVE_INFINITY);
   /** The cards drawn as practice this sitting, before their answers are kept. */
@@ -302,7 +306,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     setShownAt(performance.now());
   }
   // A card counts as seen once it's been on the desk, not behind its deck's briefing or the setup survey: it loses its "new" tag.
-  const behind = !!briefing || !!setup;
+  const behind = !!briefing || !!setup || !!toMark;
   useEffect(() => {
     if (key && !behind) seen.mark(key);
   }, [key, behind, seen.mark]);
@@ -504,9 +508,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const drawAfter = (answeredCard: DeskCard) => {
     if (!phase) return;
     sinceLast.current += 1;
+    // A practice card's guess is kept before the next card comes (B-9prve), so the test's count is up to date here.
     if (planted) return;
-    const inFlight = [...answered.values()].filter((a) => a.practice && a.test && a.phase !== "sent").length;
-    if (pStatus.kind === "test" && pStatus.practice + inFlight >= TEST_SIZE) return;
+    if (pStatus.kind === "test" && pStatus.practice >= TEST_SIZE) return;
     const pool = sources(state, now, new Set([...practised(practice.entries), ...drawnHere.current]));
     const realLeft = ordered.filter((c) => keyOf(c) !== keyOf(answeredCard)).length;
     if (!draws({ phase, since: sinceLast.current, realLeft, pool: pool.length, roll: Math.random() })) return;
@@ -520,10 +524,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     if (!current) return;
     const v = verdictFor(current, answer);
     if ("problem" in v) return setProblem(v.problem);
-    // In the blind test, every card you answer is marked (B-xx49m), but one you answered in chat, which you'd know.
+    // In the blind test, every card you answer gets your guess, on a card of its own after it (B-xx49m, B-9prve), but one
+    // you answered in chat, which you'd know was real.
     const test = testing && !isSeen(current);
-    const mark = mode.kind === "reveal" || mode.kind === "write" || mode.kind === "pass" ? mode.mark : undefined;
-    if (test && !mark) return setProblem(MARK_FIRST);
     const pr = practiceOf(current);
     const words = describeAnswer(current, answer);
     // How long the card was in front of you, for your calibration: first answers only, not changes, and never a card
@@ -536,11 +539,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       const rect = h2?.getBoundingClientRect();
       if (rect) setFly({ key, from: { x: rect.left, y: rect.top }, text: current.meta[answer.option] });
     }
-    // A practice card's answer goes to the practice answers, never to an agent (B-rehdw); a real card's verdict, with its
-    // mark in the blind test, goes as any does.
-    const item: Outgoing = pr
-      ? { practice: practiceAnswer(pr, answer, test ? mark : undefined) }
-      : { verdict: v.verdict, ...(test && mark ? { mark: { kind: "mark" as const, card: current.meta.id, revision: current.meta.revision, mark } } : {}) };
+    // A practice card's answer goes to the practice answers, never to an agent (B-rehdw); a real card's verdict as any does.
+    const item: Outgoing = pr ? { practice: practiceAnswer(pr, answer, test) } : { verdict: v.verdict };
     const stopped = pr ? (stoppedFor(current) ?? false) : false;
     // A changed answer keeps its place on the path (Map.set keeps the order) and replaces what was there.
     setAnswered((m) =>
@@ -569,12 +569,34 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
     setReviewing(undefined);
     if (pr) setPlanted(undefined);
     else if (!reviewing) drawAfter(current);
+    // In the blind test, your guess about it comes next, before the next card (B-9prve).
+    if (test) {
+      setToMark({ key, card: current });
+      focusCard();
+    }
+  };
+
+  /** Keep your guess about the card you've just answered (B-9prve), then on to the next card, whose reading time starts now. */
+  const giveMark = async (mark: PracticeMark) => {
+    if (!toMark || toMark.saving) return;
+    setToMark({ ...toMark, saving: true });
+    try {
+      practice.add(await postPractice(endpoints, markOf(toMark.card, mark)));
+      exitDir.current = "fade";
+      setToMark(undefined);
+      setShownAt(performance.now());
+      focusCard();
+    } catch (e) {
+      setToMark({ ...toMark, saving: false, problem: `Your guess wasn't kept: ${e instanceof Error ? e.message : String(e)}. Try again.` });
+    }
   };
 
   const undo = () => {
     const k = outbox.current!.undo();
     if (!k) return;
     const a = answeredRef.current.get(k);
+    // Taken back, a card needs no guess yet: it gets one when you answer it again.
+    if (toMark?.key === k) setToMark(undefined);
     setAnswered((m) => {
       const n = new Map(m);
       n.delete(k);
@@ -852,9 +874,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   // The keys, read through a ref so the listeners always see the latest state.
   const pickSide = sideOf("proposal");
-  const marking = testing && !!current && !isSeen(current);
-  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking });
-  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking };
+  const marking = !!toMark;
+  const handlers = useRef({ mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking, giveMark });
+  handlers.current = { mode, reach, confirm, undo, back, beginHold, endHold, ordered, current, rarity: r?.rarity, pickSide, menuOpen, panel, briefing: !!briefing, dismissBriefing, setup: !!setup, setupKey, setupAway, marking, giveMark };
   const keyHeld = useRef<Side>(undefined);
   // Before the first paint, so a key pressed the moment the card appears is never missed.
   useLayoutEffect(() => {
@@ -873,6 +895,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       if (e.key === "Escape") {
         if (h.panel) setPanel(undefined);
         else if (h.setup) h.setupAway();
+        // The guess in the blind test isn't skipped (B-9prve): Z takes the answer back instead.
+        else if (h.marking) return;
         else if (h.briefing) h.dismissBriefing();
         else if (h.mode.kind !== "live" || reviewingRef.current) h.back();
         else if (keyHeld.current) {
@@ -896,6 +920,14 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
       if (e.key === "z" || e.key === "Z") return h.undo();
       if (e.key === "?") return setPanel((p) => (p === "keys" ? undefined : "keys"));
       const dir = ARROWS[e.key];
+      // In the blind test, the card asking your guess about the card you've just answered has 1, 2 and 3 to itself (no,
+      // maybe, sure; B-9prve): nothing reaches the next card until it's given.
+      if (h.marking) {
+        const m = MARKS.find((x) => x.key === e.key);
+        if (m || dir) e.preventDefault();
+        if (m && !e.repeat) void h.giveMark(m.mark);
+        return;
+      }
       // The setup survey has the arrows, and Enter, to itself. A focused button takes its own Enter.
       if (h.setup) {
         const enter = e.key === "Enter" && !(e.target instanceof HTMLButtonElement);
@@ -919,13 +951,6 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
           if (!e.repeat) h.dismissBriefing();
         }
         return;
-      }
-      // In the blind test, 1, 2 and 3 mark the card you're answering: no, maybe, sure (B-xx49m).
-      const marked = MARKS.find((m) => m.key === e.key);
-      if (marked && h.marking && (h.mode.kind === "reveal" || h.mode.kind === "write" || h.mode.kind === "pass")) {
-        e.preventDefault();
-        setProblem(undefined);
-        return setMode({ ...h.mode, mark: marked.mark });
       }
       if (!dir || !h.current) return;
       e.preventDefault();
@@ -967,7 +992,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   // The path: your answers this session, the card's relationships, and what's next. Behind the setup survey, no card
   // is in play: the path shows only what's next.
-  const inPlay = setup ? undefined : current;
+  const inPlay = setup || toMark ? undefined : current;
   const relations = inPlay ? relationsOf(inPlay, state) : [];
   const relById = new Map(relations.map((x) => [x.id, x]));
   const trail = [...answered.entries()]
@@ -995,7 +1020,7 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   const leanKind = mode.kind === "live" ? (leaning ? sides[leaning] : undefined) : mode.kind === "seen" ? (leaning ? sides[leaning] : "proposal") : mode.kind === "reveal" ? mode.option : undefined;
 
   // On a phone (D130). Each new card, survey step or briefing starts at its top.
-  const faceKey = setup ? `setup:${setup.step}:${setup.step === "ask" ? setup.i : ""}` : briefing ? `brief:${briefing.meta.id}` : current ? key : "empty";
+  const faceKey = setup ? `setup:${setup.step}:${setup.step === "ask" ? setup.i : ""}` : toMark ? `mark:${toMark.key}` : briefing ? `brief:${briefing.meta.id}` : current ? key : "empty";
   useLayoutEffect(() => {
     if (phone) deskRef.current?.scrollTo({ top: 0 });
   }, [faceKey, phone]);
@@ -1200,6 +1225,10 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
               <>
                 setting up › <b>Your preferences</b>
               </>
+            ) : toMark ? (
+              <>
+                blind test › <b>Your guess</b>
+              </>
             ) : (
               current && (
               <>
@@ -1262,6 +1291,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     )
                   }
                 </SetupCard>
+              ) : toMark ? (
+                // In the blind test: your guess about the card you've just answered, on a card of its own (B-9prve).
+                <MarkCard key={`mark:${toMark.key}`} name={toMark.card.meta.title} touch={touch} saving={!!toMark.saving} problem={toMark.problem} onMark={(m) => void giveMark(m)} />
               ) : briefing ? (
                 <BriefingCard
                   key={`brief:${briefing.meta.id}`}
@@ -1300,7 +1332,6 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
                     ...(reviewing && answered.get(reviewing) ? { review: reviewOf(answered.get(reviewing)!, testing) } : {}),
-                    ...(marking && mode.kind !== "review" && mode.kind !== "past" ? { test: true } : {}),
                     ...(pastCard ? { past: { words: saidOf(pastCard, now).words, chosen: chosenOf(pastCard), onBranches: () => setPanel("branches") } } : {}),
                     ...(near.length && !pastCard ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
@@ -1643,6 +1674,52 @@ function BriefingCard(p: { deck: ApiState["decks"][number]; waiting: number; tou
         </div>
       </div>
       {lift.lift && <LiftSignals labels={BRIEFING_LABELS} lift={lift.lift} progress={lift.progress} />}
+    </motion.article>
+  );
+}
+
+/**
+ * In the blind test (B-xx49m, B-9prve): once you've answered a card, a card of its own asks your guess about it, whether it
+ * was rebuilt from a past one, before the next card comes. No, Maybe or Sure, by a click, a tap or keys 1 to 3; it can't be
+ * skipped, but Z takes the answer back. The answer is already on its way; the guess is kept as you give it.
+ */
+function MarkCard(p: { name: string; touch: boolean; saving: boolean; problem: string | undefined; onMark: (mark: PracticeMark) => void }) {
+  const reduced = useReducedMotion();
+  const present = useIsPresent();
+  return (
+    <motion.article
+      tabIndex={-1}
+      className="card mark-card"
+      data-leaving={present ? undefined : true}
+      inert={!present}
+      aria-label="Blind test: was that card rebuilt from a past one?"
+      style={{ pointerEvents: present ? undefined : "none" }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: reduced ? 0 : 0.24 } }}
+      exit={{ opacity: 0, y: -16, transition: { duration: reduced ? 0 : 0.2, ease: "easeIn" } }}
+    >
+      <div className="frame" aria-hidden="true" />
+      <div className="face">
+        <p className="doing">
+          <b>Blind test</b>: your answer is on its way.
+        </p>
+        <h1>Was that card rebuilt from a past one?</h1>
+        <p className="mark-which">“{p.name}”, the card you just answered.</p>
+        <div className="mark-ways" role="group" aria-label="Your guess">
+          {MARKS.map((m) => (
+            <button type="button" key={m.mark} className="mark-way" disabled={p.saving} onClick={() => p.onMark(m.mark)}>
+              {m.label}
+              {!p.touch && <kbd>{m.key}</kbd>}
+            </button>
+          ))}
+        </div>
+        {p.problem && (
+          <p className="problem" role="alert">
+            {p.problem}
+          </p>
+        )}
+        <p className="small">A rebuilt card shows the option its agent didn't pick as the pick. You'll see which were when the test ends, once ten rebuilt cards have come.</p>
+      </div>
     </motion.article>
   );
 }

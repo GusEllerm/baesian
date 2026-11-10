@@ -433,11 +433,13 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .practice-list .parked-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 8px; background: var(--face-light); }
 .practice-list .nm { font: 700 14px/1.3 var(--ui); font-stretch: 90%; }
 .practice-list .st { font: var(--t-small); font-stretch: 92%; color: var(--ink-soft); }
-/* The blind test's mark (B-xx49m), in the reveal and the written answers, as the "Why?" line is */
-.test-mark { display: flex; flex-direction: column; gap: 6px; }
-.test-mark .lbl { font: var(--t-meta); font-stretch: 88%; font-size: 14px; }
-.test-mark .soft { font-weight: 400; color: var(--ink-soft); }
-.test-mark .chips button { display: inline-flex; gap: 8px; align-items: center; }
+/* The blind test's guess (B-xx49m, B-9prve): a card of its own after each answer, its three answers side by side */
+.mark-card .face { gap: 14px; }
+.mark-which { font: var(--t-body); font-size: 17px; color: var(--ink-soft); }
+.mark-ways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mark-way { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 52px; padding: 0 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--face-light); color: var(--ink); cursor: pointer; font: var(--t-meta); font-stretch: 88%; font-size: 16px; }
+.mark-way:hover { border-color: var(--ink); }
+.mark-way:disabled { opacity: .6; cursor: wait; }
 /* What a practice card says once answered (B-kb5yt), where a real card's toast says it was sent */
 .passkey-wait.practice-note { background: var(--face-light); box-shadow: inset 0 0 0 1.5px var(--line); }
 .passkey-wait.practice-note .cancel { padding: 0 10px; height: 38px; color: var(--ink); font-weight: 650; }

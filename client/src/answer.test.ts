@@ -147,7 +147,7 @@ describe("the outbox (D82)", () => {
     expect(items).toEqual([{ practice }]);
   });
 
-  it("sends a practice answer to its own address, never as a verdict; a mark in the blind test after its card's verdict (B-rehdw, B-xx49m)", async () => {
+  it("sends a practice answer to its own address, never as a verdict; a verdict to its own, alone (B-rehdw)", async () => {
     const calls: { url: string; body: unknown }[] = [];
     const entry = { type: "practice", format: 1, kind: "answer", card: "B-7f3kq", revision: 1, answered: "2026-11-01T10:00:00.000Z", final: "planted", reviewer: "t", client: "web", at: "2026-11-10T10:00:00.000Z" };
     vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
@@ -160,9 +160,9 @@ describe("the outbox (D82)", () => {
       expect(await post({ practice }, { keepalive: false })).toEqual({ practice: entry });
       expect(calls).toEqual([{ url: "/api/practice", body: practice }]);
       calls.length = 0;
-      const mark = { kind: "mark" as const, card: "B-7f3kq", revision: 1, mark: "maybe" as const };
-      await post({ verdict, mark }, { keepalive: false });
-      expect(calls).toEqual([{ url: "/api/verdicts", body: verdict }, { url: "/api/practice", body: mark }]);
+      // A mark in the blind test isn't held with it: it's kept on its own, after the answer (B-9prve).
+      await post({ verdict }, { keepalive: false });
+      expect(calls).toEqual([{ url: "/api/verdicts", body: verdict }]);
     } finally {
       vi.unstubAllGlobals();
     }
