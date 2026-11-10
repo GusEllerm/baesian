@@ -100,7 +100,7 @@ Each of these changed in place, at format 1, as D108 allowed. File Formats is up
 3. **On npmjs.com, the user** makes or uses an npm account with 2FA, adds a trusted publisher naming GusEllerm/baesian and `deploy.yml`, allows it `npm publish` (a trusted publisher made after 2026-09-03 allows only `npm stage publish` until told otherwise, npm's docs), and sets the package to disallow tokens. A trusted publisher can't be set up before the package's first version exists (npm's docs for `npm trust`: "the package you're configuring must already exist"), so the first version is published by hand. In order: tag `v1.0.0`; the deploy puts the service live, and the publishing job fails that once, finding no trusted publisher; the user publishes from a clean checkout of the tag, `npm ci` then `npm publish` with 2FA, with no provenance; then sets up the trusted publisher. Re-run, the job finds the version on npm and leaves it; CI publishes from the next release on, with provenance.
 4. **The release, as B-bk20v and B-3femd have it:**
    - merge v1/next into main;
-   - set the version in package.json, `service/package.json` and the plugin's manifest;
+   - set the version in package.json (`npm version <x.y.z> --no-git-tag-version`, which sets src/version.ts too), `service/package.json` and the plugin's manifest;
    - tag `vX.Y.Z` on main.
 
    The deploy then migrates the accounts database, deploys the service, and publishes the CLI.

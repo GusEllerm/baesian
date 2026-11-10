@@ -5358,7 +5358,7 @@ sig = "f93d8955844312ac"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "package.json"
-sig = "56287d7828111865"
+sig = "25d9b38aff667f3c"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5393,7 +5393,7 @@ sig = "6746675d46ad0648"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "src/store.ts#Store"
-sig = "508bb972c66a0f53"
+sig = "c16cdd5562f3a46c"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -6349,6 +6349,11 @@ sig = "d056b96f9707ba70"
 doc = "docs/vault/Modules/service.md"
 target = "src/verify.ts#VerifyResult"
 sig = "083d8693f367e77d"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "src/version.ts"
+sig = "c7f3da52af853593"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
