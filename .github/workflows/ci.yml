@@ -39,7 +39,8 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
 
       # The commit gate, again, for every pushed commit: catches --no-verify and machines without the
-      # hooks (D24). Baesian isn't on npm yet, so this repo runs its own build. The repo is linked to the hosted
+      # hooks (D24). This repo runs its own build, so each commit is checked by the Baesian it builds, where other repos
+      # run the release from npm that `baesian ci` pinned (B-c0e0d). The repo is linked to the hosted
       # service, so answers count only with the service's signature, checked against the keys pinned in the repo
       # variable BAESIAN_TRUST, outside the repo, where a commit can't change them (D142, D159).
       - name: baesian verify (pushed commits)

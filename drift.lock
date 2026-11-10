@@ -4733,7 +4733,7 @@ sig = "8d8589916533282a"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "docs/setup.md"
-sig = "f93d8955844312ac"
+sig = "9b42c75675d5a0fd"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -5353,7 +5353,7 @@ sig = "cdb30caced4f3814"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "docs/setup.md"
-sig = "f93d8955844312ac"
+sig = "9b42c75675d5a0fd"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
