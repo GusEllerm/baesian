@@ -6,9 +6,11 @@ import { cite } from "./cite.js";
 import { isShallow, rootCommits } from "./git.js";
 import { type Http, Offline, REQUEST_MS, SignedOut, readGrant, reason, refreshGrant } from "./login.js";
 import { parseDoc } from "./frontmatter.js";
-import { CARD_ID, CardDraft, type Config, DefaultBranch, type MachineGrant, Presence, type RelayEntry, RelayState, isLedgerBody, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
+import { CARD_ID, CardDraft, type Config, DefaultBranch, type MachineGrant, Presence, type RelayEntry, RelayState, type ServiceKey, asWritten, isLedgerBody, newestFormat, readRelayEntry, upgradeFile } from "./schema.js";
 import { alreadyExists, checkPath } from "./storage.js";
 import { DEFAULT_BRANCH, type Store } from "./store.js";
+import { readTrustFile } from "./trust.js";
+import { RELEASE_HEADER, TOO_OLD, VERSION } from "./version.js";
 import type { WaitOptions } from "./wait.js";
 
 // The CLI's side of the relay (M9d, Hosted Service sections 1 and 2): pulling the project's log into the live layer, as
@@ -72,6 +74,12 @@ const encodePath = (rel: string) => rel.split("/").map(encodeURIComponent).join(
 /** The relay answered, but not as hoped: a refusal that isn't about the grant. */
 export class RelayError extends Error {}
 
+/**
+ * The relay refused this Baesian as too old to read what it holds (B-4p43b), naming the release to install. Nothing was
+ * pulled or pushed; everything local works as before.
+ */
+export class TooOld extends RelayError {}
+
 // ---------------------------------------------------------------- the relay's addresses (B-7z97x)
 
 /**
@@ -108,7 +116,7 @@ export class RelayClient {
       try {
         r = await (this.http.fetch ?? fetch)(`${this.service}/v1/projects/${encodeURIComponent(this.project)}/${rest}`, {
           method,
-          headers: { authorization: `Bearer ${token}`, accept: "application/json", ...(body ? { "content-type": "application/octet-stream" } : {}) },
+          headers: { authorization: `Bearer ${token}`, accept: "application/json", [RELEASE_HEADER]: VERSION, ...(body ? { "content-type": "application/octet-stream" } : {}) },
           ...(body ? { body } : {}),
           signal,
         });
@@ -130,6 +138,8 @@ export class RelayClient {
       } catch {
         json = undefined;
       }
+      // The relay serves no Baesian too old to read what it holds (B-4p43b): it says so before anything is pulled.
+      if (r.status === TOO_OLD && typeof (json as { minimum?: unknown } | undefined)?.minimum === "string") throw new TooOld(errorOf({ status: r.status, json }));
       return { status: r.status, json };
     }
   }
@@ -138,6 +148,36 @@ export class RelayClient {
   liveUrl(): string {
     return `${this.service.replace(/^http/, "ws")}/v1/projects/${encodeURIComponent(this.project)}/live`;
   }
+}
+
+/**
+ * The service's spare keys (B-x47ek), from `GET /v1/keys`: service key files whose private halves are kept offline and
+ * which the service never signs with, for CI to pin beside the key in use. Or why they couldn't be read.
+ */
+export async function spareKeys(service: string, http: Http = {}): Promise<{ keys: ServiceKey[]; problem?: string }> {
+  const signal = http.signal ? AbortSignal.any([http.signal, AbortSignal.timeout(REQUEST_MS)]) : AbortSignal.timeout(REQUEST_MS);
+  let body: { spare?: unknown; problem?: unknown };
+  try {
+    const r = await (http.fetch ?? fetch)(`${service}/v1/keys`, { headers: { accept: "application/json", [RELEASE_HEADER]: VERSION }, signal });
+    if (r.status !== 200) {
+      await r.body?.cancel();
+      return { keys: [], problem: `${service} didn't give its keys (HTTP ${r.status})` };
+    }
+    body = (await r.json()) as typeof body;
+  } catch (e) {
+    return { keys: [], problem: `couldn't read ${service}'s keys (${reason(e)})` };
+  }
+  const keys: ServiceKey[] = [];
+  const problems = typeof body.problem === "string" ? [`${service} names a spare key it can't read: ${body.problem}`] : [];
+  for (const [i, raw] of (Array.isArray(body.spare) ? body.spare : []).entries()) {
+    try {
+      const k = readTrustFile(raw, `${service}'s spare key ${i + 1}`);
+      if (k.type === "service-key") keys.push(k);
+    } catch (e) {
+      problems.push(e instanceof Error ? e.message.split("\n")[0]! : String(e));
+    }
+  }
+  return problems.length ? { keys, problem: problems.join("; ") } : { keys };
 }
 
 /** A relay's refusal, in its own words. */
@@ -217,7 +257,7 @@ export function readRelayState(store: Store, service: string, project: string): 
 /** Replace `relay.json` whole (`Storage.replace`): a reader sees the old state or the new. */
 function saveState(store: Store, w: Working): void {
   const state = RelayState.parse({ type: "relay", format: newestFormat("relay"), service: w.service, project: w.project, pulled: w.pulled, uploaded: [...w.uploaded].sort(), ...(w.defaultBranch ? { default_branch: w.defaultBranch } : {}), at: new Date().toISOString() });
-  store.storage.replace(RELAY_STATE, encode(`${JSON.stringify(state, null, 2)}\n`));
+  store.storage.replace(RELAY_STATE, encode(`${JSON.stringify(asWritten("relay", state), null, 2)}\n`));
 }
 
 // ---------------------------------------------------------------- pulling and pushing
@@ -532,7 +572,7 @@ async function pushDefaultBranch(store: Store, client: RelayClient, run: Run): P
   if (!branch || branch === run.w.defaultBranch) return;
   let bytes: Uint8Array;
   try {
-    bytes = encode(`${JSON.stringify(DefaultBranch.parse({ type: "default-branch", format: newestFormat("default-branch"), branch }))}\n`);
+    bytes = encode(`${JSON.stringify(asWritten("default-branch", DefaultBranch.parse({ type: "default-branch", format: newestFormat("default-branch"), branch })))}\n`);
   } catch {
     return; // not a name git allows: nothing to send
   }
@@ -562,6 +602,7 @@ async function syncWith(store: Store, client: RelayClient, o: { pull: boolean; p
 function failureNote(e: unknown, service: string): string {
   if (e instanceof Offline) return `relay: ${e.message}. Everything here works as before; what's new goes up at the next command that reaches the relay.`;
   if (e instanceof SignedOut) return `relay: ${e.message}. Ask the person to run \`baesian login\` here; until then nothing goes to the reviewer or comes back.`;
+  if (e instanceof TooOld) return `relay: ${service} refused this Baesian${cite("B-4p43b")}: ${e.message} Everything here works as before; until it's upgraded, nothing goes to the reviewer or comes back.`;
   return `relay: syncing with ${service} stopped: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`;
 }
 
@@ -655,7 +696,7 @@ class Listener {
       return this.retry();
     }
     if (this.closed) return;
-    const ws = new WebSocket(this.client.liveUrl(), { headers: { authorization: `Bearer ${token}` } });
+    const ws = new WebSocket(this.client.liveUrl(), { headers: { authorization: `Bearer ${token}`, [RELEASE_HEADER]: VERSION } });
     this.ws = ws;
     ws.onopen = () => {
       this.attempts = 0;
@@ -737,7 +778,7 @@ class Listener {
     if (!p.success) return;
     const here = this.store.presence();
     if (here && Date.parse(here.at) >= Date.parse(p.data.at)) return;
-    this.store.storage.replace("presence.json", encode(`${JSON.stringify(p.data)}\n`));
+    this.store.storage.replace("presence.json", encode(`${JSON.stringify(asWritten("presence", p.data))}\n`));
   }
 
   /** Close the socket and stop retrying; let the markers' removal and a pull in progress finish, for a few seconds at most. */

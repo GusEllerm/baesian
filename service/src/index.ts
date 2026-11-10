@@ -2,22 +2,25 @@ import { DurableObject } from "cloudflare:workers";
 import { Buffer } from "node:buffer";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import type { Settings } from "../../src/routing.js";
-import { type PasskeyKey, ProjectId, type Verdict } from "../../src/schema.js";
+import { type PasskeyKey, ProjectId, type ServiceKey, type Verdict, asWritten } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
 import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { migrateObject } from "./object-migrations.js";
 import { PracticeTable } from "./practice-table.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
+import { tooOld } from "./release.js";
+import { RELEASE_HEADER } from "../../src/version.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";
 import type { GlobusConfig } from "./globus.js";
 import { HEADERS, fail, readJson } from "./http.js";
 import { machinesRoute } from "./machines.js";
 import { type Mailer, bindingMailer } from "./mail.js";
 import { type Assertion, type Batch, MAX_ENTRIES, MAX_FILE, type Outcome, REVISION, Relay, type Reply, challengeFor } from "./relay.js";
-import { type KeyEnv, NoKey, ServiceSigner } from "./signer.js";
+import { type KeyEnv, NoKey, ServiceSigner, spareKey } from "./signer.js";
 import { type SignIn, signInRoute } from "./signin.js";
 import { SqlFileStorage } from "./sql-storage.js";
 import { type Turnstile, turnstile } from "./turnstile.js";
@@ -140,6 +143,7 @@ const limiter = (binding: RateLimit | undefined) => async (key: string) => (bind
 export async function handleRequest(request: Request, env: Env, given: Partial<Services> | Access = {}): Promise<Response> {
   const services = servicesFor(env, "identify" in given ? { access: given } : given);
   const url = new URL(request.url);
+  if (url.pathname === "/v1/keys") return request.method === "GET" ? keysReply(env) : fail(405, "the service's keys are read with GET");
   if (!url.pathname.startsWith("/v1/projects/")) return accountsRequest(request, url, env, services);
   const m = /^\/v1\/projects\/([^/]+)\/(.+)$/.exec(url.pathname);
   if (!m) return fail(404, "not found: every relay address starts /v1/projects/{project}/");
@@ -169,6 +173,12 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
   if (who.kind === "session") {
     const cross = crossSite(request, env.SERVICE_ORIGIN);
     if (cross) return fail(403, cross);
+  }
+  // A machine's names its Baesian's release, and one too old to read what the relay holds is told to upgrade before it
+  // pulls anything (B-4p43b). The website is the service's own, always this release.
+  if (who.kind === "machine") {
+    const old = tooOld(request.headers.get(RELEASE_HEADER));
+    if (old) return old;
   }
   const no = refusal(route, who, project);
   if (no) return fail(403, no);
@@ -265,6 +275,32 @@ async function proofRequest(input: unknown, project: string, person: { account: 
   const r = response.response;
   const assertion: Assertion = { credential: passkey.credential, authenticator_data: r.authenticatorData, client_data: r.clientDataJSON, signature: r.signature };
   return reply(await stub.proveBatch(project, body.batch, person.account, assertion, keyFile(passkey, person.account, person.handle)));
+}
+
+/**
+ * `GET /v1/keys`, for anyone (B-x47ek): the service's keys, as the service key files a project's `trust/` holds. `service`
+ * is the key it signs with; `spare`, a key whose private half is kept offline and which it never signs with, until the day
+ * the key in use must be replaced. `baesian ci` prints the spare's line beside the key's, so CI that pins both keeps
+ * passing when the service switches. A spare the environment names but that can't be read is left out, and `problem`
+ * says why.
+ */
+export function keysReply(env: KeyEnv): Response {
+  let service: ServiceKey[] = [];
+  try {
+    service = [ServiceSigner.fromEnv(env).serviceKey()];
+  } catch (e) {
+    if (!(e instanceof NoKey)) throw e;
+  }
+  const spare = spareKey(env);
+  if (spare && "problem" in spare) console.error(`the spare key: ${spare.problem}`);
+  return reply({
+    status: 200,
+    body: {
+      service: service.map((k) => asWritten("service-key", k)),
+      spare: spare && "key" in spare ? [asWritten("service-key", spare.key)] : [],
+      ...(spare && "problem" in spare ? { problem: spare.problem } : {}),
+    },
+  });
 }
 
 /** Every address that isn't a project's: accounts and sign-in (`signInRoute()`), and machines' sign-in (`machinesRoute()`). */
@@ -374,8 +410,12 @@ export class ProjectRelay extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
-  /** The object's tables, made if they aren't there: at start, and again after `ProjectRelay.erase` emptied it. */
+  /**
+   * The object's tables, brought up to this release's schema by the numbered migrations it hasn't had (B-866d2): as it
+   * wakes, and again after `ProjectRelay.erase` emptied it.
+   */
   private open(): void {
+    migrateObject(this.ctx.storage);
     this.ledger = new PushLedger(this.ctx.storage.sql);
     this.retention = new RetentionLedger(this.ctx.storage.sql);
     this.practice = new PracticeTable(this.ctx.storage.sql);
@@ -430,8 +470,10 @@ export class ProjectRelay extends DurableObject<Env> {
 
   /** Run one address's work, and tell every listener if it changed anything. */
   private run(project: string, fn: (relay: Relay) => Reply): Reply {
+    // The relay first: after `ProjectRelay.erase`, it makes the tables again, which reading the version needs.
+    const relay = this.relay(project);
     const before = this.files.version();
-    const out = fn(this.relay(project));
+    const out = fn(relay);
     const now = this.files.version();
     if (now !== before) this.announce(now);
     return out;

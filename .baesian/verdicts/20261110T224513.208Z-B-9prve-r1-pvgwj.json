@@ -1,0 +1,14 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-9prve",
+  "revision": 1,
+  "response": "need_context",
+  "comment": "what does marking it mean here",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "ab3e6f5ed3fa3d43d8e2d92c695efad68a08a5ca83d9521735ad6ee247ab7c72",
+  "client": "hosted-desktop",
+  "at": "2026-11-10T22:45:13.208Z"
+}

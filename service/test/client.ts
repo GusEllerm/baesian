@@ -9,6 +9,7 @@ import { type TrustRoot, parseTrust } from "../../src/trust.js";
 import { BODY, draft } from "../../test/helpers.js";
 import { type DevGrants, SESSION_COOKIE, readGrants } from "../src/access.js";
 import { SqlFileStorage } from "../src/sql-storage.js";
+import { RELEASE_HEADER, VERSION } from "../../src/version.js";
 
 // What the relay's tests talk to it with: a machine (its grant's token), a person (a session cookie), or nobody, over
 // HTTP through the Worker, as the CLI (M9d) and the website (M9e) will. And a machine's own store, as the CLI's.
@@ -25,15 +26,18 @@ export type As = "machine" | "person" | "nobody" | { headers: Record<string, str
  */
 export function headersFor(as: As, project = "proj-a"): Record<string, string> {
   if (typeof as === "object") return as.headers;
-  if (as === "machine") return { authorization: `Bearer ${grants.machines.find((g) => g.project === project)!.token}` };
+  if (as === "machine") return { authorization: `Bearer ${grants.machines.find((g) => g.project === project)!.token}`, ...RELEASE };
   if (as === "person") return { cookie: `${SESSION_COOKIE}=${grants.sessions.find((g) => g.project === project)!.cookie}`, origin: ORIGIN };
   return {};
 }
 
-/** A request to the relay's Worker, as a browser or the CLI makes it. */
+/** The release the CLI names on every request (B-4p43b): this one's, as the CLI of this tree sends it. */
+export const RELEASE = { [RELEASE_HEADER]: VERSION };
+
+/** A request to the relay's Worker, as a browser or the CLI makes it: with this release's version, unless told otherwise. */
 export async function call(method: string, path: string, opts: { as?: As; project?: string; body?: string | Uint8Array; json?: unknown; headers?: Record<string, string> } = {}): Promise<Response> {
   const project = opts.project ?? "proj-a";
-  const headers: Record<string, string> = { ...headersFor(opts.as ?? "nobody", project), ...(opts.json !== undefined ? { "content-type": "application/json" } : {}), ...opts.headers };
+  const headers: Record<string, string> = { ...RELEASE, ...headersFor(opts.as ?? "nobody", project), ...(opts.json !== undefined ? { "content-type": "application/json" } : {}), ...opts.headers };
   const body = opts.json !== undefined ? JSON.stringify(opts.json) : opts.body;
   return exports.default.fetch(new Request(`${BASE}/v1/projects/${project}/${path}`, { method, headers, ...(body !== undefined ? { body } : {}) }));
 }

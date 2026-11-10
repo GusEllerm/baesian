@@ -92,6 +92,54 @@ describe("the pin `baesian ci` prints (B-pt52b)", () => {
     expect(r).toMatchObject({ ok: true, hosted: { keys: "pinned", project: "proj-test" } });
   });
 
+  it("pins the service's spare key beside its key, once, after the keys the relay sent (B-x47ek)", () => {
+    const { store, service } = linked();
+    const gus = new TestPasskey();
+    service.enrol(store, gus);
+    const spare = new TestService("relay-2");
+    const pin = ciPin(store, ORIGIN, service.project, [spare.serviceKey()]);
+    if ("problem" in pin) throw new Error(pin.problem);
+    expect(pin.lines).toEqual(['{"type":"project","format":1,"project":"proj-test"}', JSON.stringify(service.serviceKey()), JSON.stringify(spare.serviceKey()), JSON.stringify(gus.keyFile())]);
+    expect(pin.spare).toEqual(["relay-2"]);
+    // Once the relay has switched to it, its key file is in the layer, and it isn't pinned twice.
+    spare.link(store);
+    const after = ciPin(store, ORIGIN, service.project, [spare.serviceKey()]);
+    if ("problem" in after) throw new Error(after.problem);
+    expect(after.lines.filter((l) => l.includes(spare.publicKey))).toHaveLength(1);
+    expect(after.spare).toEqual([]);
+  });
+
+  it("keeps CI passing when the service switches to the spare it pinned, and only then (B-x47ek)", () => {
+    // A rehearsal: the service answers with its key; CI pins the key and the spare; the service's key is replaced by the
+    // spare, which signs the next answer; verify passes with the pin as it was. Without the spare pinned, it fails.
+    const { dir, store, service } = linked();
+    const spare = new TestService("relay-2");
+    store.syncRecord();
+    sh(dir, "add", "-A");
+    sh(dir, "commit", "-q", "-m", "Link\n\nBaesian-Ack: infra:.baesian/config.json linked");
+    const first = store.fileCard(draft(), BODY, AGENT).card.meta.id;
+    service.answer(store, { card: first, response: "accept" });
+    store.syncRecord();
+    sh(dir, "add", "-A");
+    sh(dir, "commit", "-q", "-m", `Before the switch\n\nBaesian-Card: ${first}`);
+    const withSpare = ciPin(store, ORIGIN, service.project, [spare.serviceKey()]);
+    const without = ciPin(store, ORIGIN, service.project);
+    if ("problem" in withSpare || "problem" in without) throw new Error("no pin");
+    // The switch: the relay writes the spare's key file, as it writes any key it signs with, and signs with it.
+    spare.link(store);
+    const second = store.fileCard(draft({ title: "After the switch", topic: "switch/after", question: "Does the second answer come from the spare key?" }), BODY, AGENT).card.meta.id;
+    const verdict = spare.answer(store, { card: second, response: "accept" });
+    expect(store.judge(verdict)).toEqual({ ok: true });
+    store.syncRecord();
+    sh(dir, "add", "-A");
+    sh(dir, "commit", "-q", "-m", `After the switch\n\nBaesian-Card: ${second}`);
+    const check = (lines: string[]) => verify(openRepo(dir), "HEAD~2", { merge: true, pinned: pinnedTrust({ BAESIAN_TRUST: lines.join("\n") }) ?? null });
+    expect(check(withSpare.lines)).toMatchObject({ ok: true, hosted: { keys: "pinned", project: "proj-test" } });
+    const failing = check(without.lines);
+    expect(failing.ok).toBe(false);
+    expect(JSON.stringify(failing)).toContain("trust/service-relay-2.json isn't pinned in CI");
+  });
+
   it("comes with the workflow's steps: the full history, and verify with the pinned variable, from npm", () => {
     const steps = workflowSteps("1.4.2").join("\n");
     expect(steps).toContain("fetch-depth: 0");

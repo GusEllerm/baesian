@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "no
 import type { ApiContextNote } from "./api.js";
 import { parseDoc, renderDoc } from "./frontmatter.js";
 import { type Field, type Line, type Piece, blank, cmd, literal, note } from "./style.js";
-import { type RuleMeta, type RuleRetirement, type Verdict, newestFormat, upgradeFile } from "./schema.js";
+import { type RuleMeta, type RuleRetirement, type Verdict, asWritten, newestFormat, upgradeFile } from "./schema.js";
 import { type Card, type Status, Store, normalise } from "./store.js";
 import { linkText, parseWikilink } from "./wikilinks.js";
 
@@ -461,7 +461,7 @@ function ruleNote(read: Reading, rule: { meta: RuleMeta; body: string; retired?:
 
 /** A note written from scratch. */
 function fresh(n: Rendered): string {
-  return renderDoc(n.meta, [n.head, ...n.sections.map(sectionText)].map((p) => p.trimEnd()).join("\n\n"));
+  return renderDoc(asWritten(n.kind, n.meta), [n.head, ...n.sections.map(sectionText)].map((p) => p.trimEnd()).join("\n\n"));
 }
 
 const sectionText = (s: Section) => `## ${s.heading}\n\n${s.text}`;
@@ -510,7 +510,7 @@ export function extendNote(existing: string, n: Rendered): string {
   });
   let text = out.join("\n");
   if (end.length) text = `${text.trimEnd()}\n\n${end.join("\n\n")}\n`;
-  return renderDoc(meta, text);
+  return renderDoc(asWritten(n.kind, meta), text);
 }
 
 // ---------------------------------------------------------------- planning and writing

@@ -4,7 +4,7 @@
 // `npm run migrate:local` once first. It prints how to call the relay as each of the stand-in's.
 // .dev.vars is ignored by git: these are throwaway values for this machine, never a deployed service's.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,7 +43,9 @@ writeFileSync(
   ].join("\n"),
   { mode: 0o600 },
 );
+// A machine names its Baesian's release on every request, and the relay refuses one too old (B-4p43b): this tree's.
+const { version } = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json"), "utf8"));
 console.log(`Wrote ${path}. With \`npm run dev\` running (http://localhost:8787):`);
-console.log(`  as the machine: curl -H 'authorization: Bearer ${machine}' http://localhost:8787/v1/projects/proj-dev/state`);
+console.log(`  as the machine: curl -H 'authorization: Bearer ${machine}' -H 'baesian-version: ${version}' http://localhost:8787/v1/projects/proj-dev/state`);
 console.log(`  as the person:  curl -H 'cookie: __Host-baesian-session=${session}' http://localhost:8787/v1/projects/proj-dev/state`);
 console.log("  sign-in's settings: curl http://localhost:8787/v1/config");

@@ -43,7 +43,8 @@
     "dev:client": "vite --config client/vite.config.ts",
     "demo": "vite build --config client/vite.config.ts --logLevel warn && tsx scripts/demo.ts",
     "readme-media": "vite build --config client/vite.config.ts --logLevel warn && tsx scripts/readme-media.ts",
-    "baesian": "tsx src/bin.ts"
+    "baesian": "tsx src/bin.ts",
+    "version": "node scripts/set-version.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.4.0",

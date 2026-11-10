@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync }
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { opensshPublicKey } from "../src/sshsig.js";
 
 // The real relay (M9b, M9c), run locally for the CLI's tests (M9d): the service's own Worker, from service/wrangler.jsonc,
 // started in workerd by Wrangler's `unstable_startWorker`, from the service's own packages. Its accounts database gets
@@ -32,6 +33,8 @@ export interface LocalRelay {
   db: D1Like;
   /** The relay's signing key, made for the run: a test signs with it what the service would write, such as a passkey's key file. */
   signingKey: KeyObject;
+  /** The relay's spare key (B-x47ek), made for the run: its private half, which the relay never has, and the public half it publishes. */
+  spare: { privateKey: KeyObject; id: string; publicKey: string; validAfter: string };
   /** Approve a machine's code, as a person with a fresh passkey check would on the website: their project if it's new. */
   approve(userCode: string): Promise<void>;
   /** Refuse a machine's code. */
@@ -57,6 +60,8 @@ export async function startRelay(): Promise<LocalRelay> {
   mkdirSync(join(persist, "site"));
   const sessions = PROJECTS.map((project) => ({ cookie: randomBytes(24).toString("base64url"), ...PERSON, project }));
   const signingKey = generateKeyPairSync("ed25519").privateKey;
+  const sparePrivate = generateKeyPairSync("ed25519").privateKey;
+  const spare = { privateKey: sparePrivate, id: "relay-2", publicKey: opensshPublicKey(sparePrivate), validAfter: "2026-11-10T00:00:00.000Z" };
   const worker = await unstable_startWorker({
     config: join(SERVICE_DIR, "wrangler.jsonc"),
     // The CLI's tests don't open the website (M9e), and its build may not be there yet: an empty folder in its place.
@@ -70,6 +75,10 @@ export async function startRelay(): Promise<LocalRelay> {
       TURNSTILE_SITE_KEY: { type: "plain_text", value: "1x00000000000000000000AA" },
       BAESIAN_DEV_ACCESS: { type: "plain_text", value: JSON.stringify({ machines: [], sessions }) },
       SERVICE_SIGNING_KEY: { type: "secret_text", value: signingKey.export({ format: "pem", type: "pkcs8" }) as string },
+      // A spare key, as service/scripts/spare-key.mjs makes one (B-x47ek): only its public half, as Worker variables.
+      SERVICE_SPARE_KEY_ID: { type: "plain_text", value: spare.id },
+      SERVICE_SPARE_PUBLIC_KEY: { type: "plain_text", value: spare.publicKey },
+      SERVICE_SPARE_KEY_VALID_AFTER: { type: "plain_text", value: spare.validAfter },
       // Every test signs in from one address, 127.0.0.1: the limit per address (30 a minute) is raised for them.
       LIMIT_ADDRESS: { type: "ratelimit", namespace_id: "1001", simple: { limit: 10_000, period: 60 } },
     },
@@ -93,6 +102,7 @@ export async function startRelay(): Promise<LocalRelay> {
     url,
     db,
     signingKey,
+    spare,
     async approve(userCode) {
       const d = await db.prepare("SELECT project FROM device_codes WHERE user_code = ?").bind(userCode).first<{ project: string }>();
       if (!d) throw new Error(`no machine is waiting with code ${userCode}`);

@@ -7,13 +7,15 @@ import type { z } from "zod";
 import { afterAll, describe, expect, it } from "vitest";
 import { parseDoc } from "../src/frontmatter.js";
 import { openRepo } from "../src/git.js";
-import { type HookName, RELEASED_BLOCKS, blockDigest } from "../src/hookblock.js";
+import { CHANGED_BLOCKS, type HookName, RELEASED_BLOCKS, blockDigest } from "../src/hookblock.js";
 import {
   Attachment,
   CardMeta,
   Config,
   DeckMeta,
   Fallback,
+  FILE_KINDS,
+  type FileKind,
   type FileKindName,
   GateRecord,
   LedgerMeta,
@@ -30,6 +32,7 @@ import { parseSignature } from "../src/sshsig.js";
 import type { Store } from "../src/store.js";
 import { readTrustFile } from "../src/trust.js";
 import { RecordAt } from "../src/verify.js";
+import { VERSION, compareReleases } from "../src/version.js";
 
 // What this Baesian keeps reading from every release before it, checked against the release tags of this repo, which
 // has used Baesian on itself since before v0.1.0. Each tag joins the tests as it's made.
@@ -192,5 +195,18 @@ describe("every release's hook blocks, which the gate counts as Baesian's own (B
     const released = (await import(pathToFileURL(join(sourceAt(tag), "hookblock.ts")).href)) as { HOOKS: readonly string[]; hookBlock: (name: string) => string };
     const unlisted = released.HOOKS.filter((name) => !RELEASED_BLOCKS[name as HookName]?.includes(blockDigest(released.hookBlock(name))));
     expect(unlisted, `add each one's digest to RELEASED_BLOCKS: ${unlisted.map((n) => `${n} ${blockDigest(released.hookBlock(n))}`).join(", ")}`).toEqual([]);
+  });
+});
+
+describe("the releases a rollout names, which were released (B-4p43b, B-amxkp)", () => {
+  // A new format, or a changed hook block, names the release that first has it (`since`); the release after writes it.
+  // One that names a release before this one that was never tagged would have the new one written at once.
+  const named = [
+    ...Object.entries(FILE_KINDS).flatMap(([kind, k]) => (k as FileKind).formats.map((f, i) => ({ what: `${kind} format ${i + 2}`, since: f.since }))),
+    ...Object.entries(CHANGED_BLOCKS).map(([hook, c]) => ({ what: `${hook}'s changed block`, since: c!.since })),
+  ].filter((n) => compareReleases(n.since, VERSION) < 0);
+
+  it.runIf(TAGS.length > 0)("each one before this release is a release tag", () => {
+    expect(named.filter((n) => !TAGS.includes(`v${n.since}`)).map((n) => `${n.what}: ${n.since}`)).toEqual([]);
   });
 });

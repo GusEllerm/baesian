@@ -11,7 +11,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { cose, isoCBOR } from "@simplewebauthn/server/helpers";
-import { PASSKEY_ALGS, type PasskeyKey, newestFormat } from "../../src/schema.js";
+import { PASSKEY_ALGS, type PasskeyKey, asWritten, newestFormat } from "../../src/schema.js";
 
 // Passkeys on the service (D153, D139), through SimpleWebAuthn (B-jp22m): registration with attestation "none", and
 // assertions, each with user verification required. A passkey's key also goes into each of its account's projects as a
@@ -124,7 +124,7 @@ export function keyFile(passkey: Pick<StoredPasskey, "credential" | "spki" | "al
 }
 
 /** The line to add to `BAESIAN_TRUST` in CI's settings, so `baesian verify` trusts this passkey's proofs (D159). */
-export const pinLine = (key: PasskeyKey): string => JSON.stringify(key);
+export const pinLine = (key: PasskeyKey): string => JSON.stringify(asWritten("passkey-key", key));
 
 /** A short name for a passkey, from its transports: "a passkey on this device", "a security key". */
 export function passkeyName(transports: string[] | undefined): string {

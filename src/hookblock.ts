@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
+import { VERSION, compareReleases } from "./version.js";
 
 // D54: Baesian's hooks are a marked block inside whatever hook files the repo already uses, placed right after the
 // shebang, because livedocs' pre-commit ends in `exec`. The block's text is here, apart from the installer in
@@ -100,8 +101,9 @@ function withoutBlock(text: string): string {
  * blocks (B-4rwyz) are never committed, so they're not here. Teammates and CI are often a release apart, so a block any
  * release wrote is Baesian's own, as this one's is (B-g6ywj).
  *
- * A release that changes a block adds the one it replaces here, if a release wrote it; test/releases.test.ts checks every
- * release tag's blocks are listed. A block found flawed is taken out, and from then on counts as any change to a hook.
+ * A release that changes a block adds the one it replaces here, if a release wrote it, and in `CHANGED_BLOCKS`, so
+ * `baesian init` writes it for one more release (B-amxkp); test/releases.test.ts checks every release tag's blocks are
+ * listed. A block found flawed is taken out, and from then on counts as any change to a hook.
  * A release can't know the blocks of the releases after it: a newer release's block, which this list lacks, counts as a
  * change to the hook here, as before B-np6af.
  */
@@ -116,6 +118,35 @@ export const RELEASED_BLOCKS: Readonly<Record<HookName, readonly string[]>> = {
 
 /** A block's digest, as `RELEASED_BLOCKS` lists it. */
 export const blockDigest = (block: string) => createHash("sha256").update(block).digest("hex");
+
+/** A hook whose block a release changed (B-amxkp), while the block before it is still the one written. */
+export interface ChangedBlock {
+  /**
+   * The release that first has the new block, `hookBlock()`'s, as package.json will name it. It recognises the new block
+   * and writes the one before; the releases after it write the new one.
+   */
+  since: string;
+  /** The block before, exactly as the releases before wrote it: its digest is in `RELEASED_BLOCKS`. */
+  before: string;
+}
+
+/**
+ * The hooks whose block a release changed, by hook (B-amxkp, "The old block for a release"): when a release changes what
+ * `hookBlock()` returns for a committed hook, it puts the block before here, and adds the new one's digest to
+ * `RELEASED_BLOCKS` once a release has written it. `baesian init` writes the block before until a release after `since`
+ * (`writtenBlock()`), so CI pinned a release behind (B-c0e0d), and a teammate a release behind, recognise every block a
+ * commit adds, as formats roll out under B-4p43b. An entry may go once no release it names is supported. None today.
+ */
+export const CHANGED_BLOCKS: Partial<Record<HookName, ChangedBlock>> = {};
+
+/**
+ * The block `baesian init` writes in a repo's hooks (B-amxkp): this release's, `hookBlock()`, or while a change to it is
+ * new, the block before (`CHANGED_BLOCKS`). Personal mode's blocks are never committed, so they're written new at once.
+ */
+export function writtenBlock(name: HookName, release: string = VERSION): string {
+  const changed = CHANGED_BLOCKS[name];
+  return changed && compareReleases(changed.since, release) >= 0 ? changed.before : hookBlock(name);
+}
 
 /** Whether a block is one Baesian wrote for this hook: this release's, or any released one's (B-np6af). */
 export function isBaesianBlock(name: HookName, block: string): boolean {

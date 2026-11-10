@@ -6,7 +6,7 @@ import { type Line, PLAIN, type Render, failed, next, note, render, text, warnin
 import { describeReport, detectStaged, evaluate, verdictsSinceLastCommit } from "./gate.js";
 import { git } from "./git.js";
 import { stagedSnapshot } from "./facts.js";
-import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock } from "./hookblock.js";
+import { BEGIN, END, FALLBACK_KEY, HOOKS, type HookName, NEW_HOOK, hookBlock, writtenBlock } from "./hookblock.js";
 import type { Http } from "./login.js";
 import { LIVE_DIR, RECORD_DIR, type Store, ValidationError } from "./store.js";
 import { syncRelay } from "./sync.js";
@@ -94,7 +94,8 @@ export function installHooks(store: Store, fallback: readonly string[]): Install
   }
   mkdirSync(dir, { recursive: true });
   const files = {} as InstallResult["files"];
-  for (const name of HOOKS) files[name] = writeHook(join(dir, name), hookBlock(name));
+  // The block this release writes: while a change to one is new, the block before (B-amxkp).
+  for (const name of HOOKS) files[name] = writeHook(join(dir, name), writtenBlock(name));
   setFallback(store, fallback);
   return { dir, versioned: !relative(top, dir).startsWith(".."), setHooksPath, files };
 }

@@ -8,7 +8,7 @@ import { VERSION, main } from "../src/cli.js";
 import { globToRegExp as gateGlob } from "../src/globs.js";
 import { slug } from "../src/git.js";
 import { MCP_INSTRUCTIONS } from "../src/mcp.js";
-import { Config } from "../src/schema.js";
+import { Config, writtenFormat } from "../src/schema.js";
 import { Store, modelPath } from "../src/store.js";
 // @ts-expect-error: plain JavaScript, as below
 import { modelOf, noteModel, pluginVersion, repoOf, sessionMemory, slug as hookSlug, versionNote } from "../plugins/baesian/hooks/baesian.mjs";
@@ -63,6 +63,9 @@ describe("the plugin's files", () => {
 
   it("version with the CLI: the manifest's is package.json's and the service's, as the release commit sets them (D114, B-3femd)", () => {
     const manifest = readJson(join(PLUGIN, ".claude-plugin", "plugin.json"));
+    // src/version.ts, which `npm version` sets from package.json (scripts/set-version.mjs), is what the CLI reports.
+    expect(VERSION).toBe(readJson(join(ROOT, "package.json")).version);
+    expect(readJson(join(ROOT, "package.json")).scripts.version).toBe("node scripts/set-version.mjs");
     expect(manifest.version).toBe(VERSION);
     expect(readJson(join(ROOT, "service", "package.json")).version).toBe(VERSION);
     expect(pluginVersion()).toBe(VERSION);
@@ -252,9 +255,10 @@ describe("the session's model, kept for the cards it files (B-k0w7d)", () => {
     expect(modelIn(dir, "s-1")).toBe("claude-opus-5-5");
     expect(await onModelSwitched({ hook_event_name: "PostModelSwitch", session_id: "s-1", from_model: "claude-opus-5-5", to_model: "claude-sonnet-5", requested_model: "sonnet", cwd: dir })).toBe("");
     expect(modelIn(dir, "s-1")).toBe("claude-sonnet-5");
-    // The file is Baesian's own format, which the store reads; unchanged, it isn't written again.
+    // The file is Baesian's own format, which the store reads; unchanged, it isn't written again. The hook is plain
+    // JavaScript, so it writes its format by hand: the one this release writes (B-4p43b), which this holds it to.
     const file = join(Store.open(dir).live, modelPath("s-1"));
-    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ type: "session-model", format: 1, model: "claude-sonnet-5", at: expect.any(String) });
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ type: "session-model", format: writtenFormat("session-model"), model: "claude-sonnet-5", at: expect.any(String) });
     expect(noteModel({ session_id: "s-1", model: "claude-sonnet-5", cwd: dir }, at)).toBe(false);
     expect(noteModel({ session_id: "s-1", model: "claude-opus-5-5", cwd: dir }, at)).toBe(true);
     expect(JSON.parse(readFileSync(file, "utf8")).at).toBe("2026-11-10T20:00:00.000Z");

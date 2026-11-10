@@ -73,23 +73,6 @@ export function delivered(last: number, live: Iterable<string>, sent: ReadonlyMa
   return false;
 }
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS retention_sent (machine TEXT PRIMARY KEY, seq INTEGER NOT NULL, at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS retention_delivered (card TEXT PRIMARY KEY, seq INTEGER NOT NULL, at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS retention_removed (
-  card TEXT PRIMARY KEY,
-  revision INTEGER NOT NULL,
-  level TEXT NOT NULL,
-  ended TEXT NOT NULL,
-  filed TEXT NOT NULL,
-  settled TEXT NOT NULL,
-  removed TEXT NOT NULL,
-  size INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS retention_held (by TEXT NOT NULL, row TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (by, row));
-CREATE TABLE IF NOT EXISTS retention_commits (commit_id TEXT PRIMARY KEY);
-`;
-
 /** What the relay keeps of a card whose text it removed: its ID, latest revision, level, times and size. */
 export interface RemovedRow extends ApiRemovedCard {
   size: number;
@@ -105,9 +88,8 @@ export interface RemovedRow extends ApiRemovedCard {
  *   a merge listing a commit goes only once its entries were here and went, never because they never came.
  */
 export class RetentionLedger {
-  constructor(private readonly sql: SqlStorage) {
-    sql.exec(SCHEMA);
-  }
+  /** Its tables are made by the object's migrations (`migrateObject()`). */
+  constructor(private readonly sql: SqlStorage) {}
 
   /** A machine was sent the log up to `seq`: it never goes back. */
   sent(machine: string, seq: number, at: string): void {
