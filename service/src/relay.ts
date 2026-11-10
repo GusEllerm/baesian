@@ -5,13 +5,13 @@ import { unmark } from "../../src/cite.js";
 import { parseDoc } from "../../src/frontmatter.js";
 import { afterVerdict } from "../../src/proposals.js";
 import { BAESIAN, type Settings, loosening } from "../../src/routing.js";
-import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, newestFormat, upgradeFile } from "../../src/schema.js";
+import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, asWritten, newestFormat, upgradeFile } from "../../src/schema.js";
 import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
 import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
 import type { ApiRemovedCard } from "../../src/api.js";
 import { batchChallenge } from "../../src/passkey.js";
-import { checkSigned, readTrustFile } from "../../src/trust.js";
+import { type TrustRoot, checkSigned, readTrustFile } from "../../src/trust.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
 import type { Waiting } from "./notify.js";
 import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due, isLedgerPath } from "./retention.js";
@@ -172,7 +172,7 @@ export class Relay {
    * counts as B-45xz8 counts the record at the linking commit on a machine.
    */
   store(): Store {
-    const pinned = this.signer ? { ...this.signer.trust(), passkeys: this.passkeys() } : null;
+    const pinned = this.signer ? { ...this.root(), passkeys: this.passkeys() } : null;
     const retention = this.retention;
     return Store.over(this.files, {
       branch: RELAY_BRANCH,
@@ -184,9 +184,32 @@ export class Relay {
     });
   }
 
-  /** The passkey key files in the project's `trust/`, each signed by the service's key. */
+  /**
+   * The service keys the relay's own store trusts (D142): the one it signs with, and each earlier one in the project's
+   * `trust/`, which only the relay writes (a machine's upload of a trust file is refused, `notAgentWritten()`), with the
+   * revocations there. So what it signed before it switched to its spare key (B-x47ek) still counts, as it does in CI,
+   * whose pin holds both.
+   */
+  private root(): Pick<TrustRoot, "service" | "revoked"> {
+    const own = this.signer!.trust();
+    const service = [...own.service];
+    const revoked = [...own.revoked];
+    for (const name of this.files.list("trust").filter((n) => n.startsWith("service-") && n.endsWith(".json"))) {
+      const rel = `trust/${name}`;
+      try {
+        const f = readTrustFile(JSON.parse(new TextDecoder().decode(this.files.read(rel)!)), rel);
+        if (f.type === "service-key" && !service.some((k) => k.key === f.key)) service.push(f);
+        else if (f.type === "service-key-revocation") revoked.push(f);
+      } catch {
+        // not a key file the relay wrote: skipped
+      }
+    }
+    return { service, revoked };
+  }
+
+  /** The passkey key files in the project's `trust/`, each signed by one of the service's keys (`Relay.root`). */
   private passkeys(): PasskeyKey[] {
-    const root = this.signer!.trust();
+    const root = this.root();
     const out: PasskeyKey[] = [];
     for (const name of this.files.list("trust").filter((n) => n.startsWith("passkey-") && n.endsWith(".json"))) {
       const rel = `trust/${name}`;
@@ -679,7 +702,7 @@ export class Relay {
         for (const n of need) {
           const file = n.path.slice(n.path.lastIndexOf("/") + 1);
           const proof: PasskeyProof = { type: "passkey-proof", format: newestFormat("passkey-proof"), file, ...(given.batch ? { batch: given.batch } : {}), ...given.assertion };
-          this.files.create(proofPath(n.path), new TextEncoder().encode(json(proof)));
+          this.files.create(proofPath(n.path), new TextEncoder().encode(json(asWritten("passkey-proof", proof))));
         }
         const check = this.store();
         for (const n of need) {
@@ -798,7 +821,7 @@ export class Relay {
   /** A passkey's key file, once per credential, named for it, so every project holds the same bytes at the same path. */
   private putKey(key: PasskeyKey): void {
     const path = keyFileName(key.credential);
-    if (!this.files.read(path)) this.files.create(path, new TextEncoder().encode(json(key)));
+    if (!this.files.read(path)) this.files.create(path, new TextEncoder().encode(json(asWritten("passkey-key", key))));
   }
 
   // ---------------------------------------------------------------- writing
@@ -828,7 +851,7 @@ export class Relay {
   private ensureKey(signer: ServiceSigner): void {
     const key = signer.serviceKey();
     const path = `trust/service-${key.key}.json`;
-    const bytes = new TextEncoder().encode(json(key));
+    const bytes = new TextEncoder().encode(json(asWritten("service-key", key)));
     const there = this.files.read(path);
     if (!there) this.files.create(path, bytes);
     else if (!sameBytes(there, bytes)) throw new Error(`${path} in project ${this.project} isn't this relay's key ${key.key}: a new key takes a new key ID`);

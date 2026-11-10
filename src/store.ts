@@ -64,6 +64,7 @@ import {
   describeDraftError,
   describeError,
   type FileKindName,
+  asWritten,
   newestFormat,
   upgradeFile,
 } from "./schema.js";
@@ -604,7 +605,7 @@ export class Store {
     if (this.readOnly) throw new Error("this store is a read-only view of a committed record");
     const path = this.configPath();
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
+    writeFileSync(path, `${JSON.stringify(asWritten("config", parse(Config, { ...config, format: newestFormat("config") }, "config")), null, 2)}\n`);
   }
 
   /**
@@ -624,7 +625,7 @@ export class Store {
     const configPath = opts.personal || this.personal ? join(live, PERSONAL_CONFIG) : join(record, "config.json");
     if (!existsSync(configPath)) {
       mkdirSync(dirname(configPath), { recursive: true });
-      writeFileSync(configPath, `${JSON.stringify(parse(Config, { ...config, format: newestFormat("config") }, "config"), null, 2)}\n`);
+      writeFileSync(configPath, `${JSON.stringify(asWritten("config", parse(Config, { ...config, format: newestFormat("config") }, "config")), null, 2)}\n`);
       created.push(configPath);
     }
     return created;
@@ -688,7 +689,7 @@ export class Store {
       }
     }
     const snapshot = parse(BeforeLinkingSnapshot, { type: "before-linking", format: newestFormat("before-linking"), project, at: now(), object_format: objectFormat, files }, "the before-linking snapshot");
-    this.storage.replace(BEFORE_LINKING, encode(`${JSON.stringify(snapshot, null, 2)}\n`));
+    this.storage.replace(BEFORE_LINKING, encode(`${JSON.stringify(asWritten("before-linking", snapshot), null, 2)}\n`));
   }
 
   /** The snapshot personal mode took when the clone was linked to `project` (B-4rwyz), if it took one. */
@@ -1288,7 +1289,7 @@ export class Store {
       at: now(),
     };
     const parsed = parse(GateRecord, record, "the relay's gate record");
-    this.writeOnce(`cards/${id}/gate-r${revision}-relay.json`, `${JSON.stringify(record, null, 2)}\n`);
+    this.writeOnce(`cards/${id}/gate-r${revision}-relay.json`, `${JSON.stringify(asWritten("gate", record), null, 2)}\n`);
     return parsed;
   }
 
@@ -1325,7 +1326,7 @@ export class Store {
     const gate = this.view(() => this.runGate(id, revision, draft, source));
     const card = this.writeRevision(id, revision, { ...draft, level: gate.level }, body, by);
     const rel = `cards/${id}/gate-r${revision}-cli.json`;
-    this.writeOnce(rel, `${JSON.stringify(gate.record, null, 2)}\n`);
+    this.writeOnce(rel, `${JSON.stringify(asWritten("gate", gate.record), null, 2)}\n`);
     this.toRecord(rel);
     const hard = this.hardBecause(draft, gate.level);
     return { card, gate: gate.record, ...(hard ? { hardBecause: hard } : {}), warnings: gate.warnings };
@@ -1518,7 +1519,7 @@ export class Store {
       "the rule",
     );
     const rel = `rules/${ruleId}.md`;
-    this.writeOnce(rel, renderDoc(meta, `${v.response === "correction" ? v.choice : card.meta.rule}\n`));
+    this.writeOnce(rel, renderDoc(asWritten("rule", meta), `${v.response === "correction" ? v.choice : card.meta.rule}\n`));
     this.toRecord(rel);
   }
 
@@ -1542,7 +1543,7 @@ export class Store {
       "the card",
     );
     const rel = `cards/${id}/r${revision}.md`;
-    this.writeOnce(rel, renderDoc(meta, body));
+    this.writeOnce(rel, renderDoc(asWritten("card", meta), body));
     this.toRecord(rel);
     this.toRecord(`decks/${deck}.md`);
     return { meta, body };
@@ -1560,7 +1561,7 @@ export class Store {
     if (this.storage.read(`cards/${id}/withdrawn.json`) !== undefined) throw new NotAllowed(`${id} is already withdrawn`);
     const w = parse(Withdrawal, { type: "withdrawal", format: newestFormat("withdrawal"), card: id, reason, by, at: now() }, "the withdrawal");
     const rel = `cards/${id}/withdrawn.json`;
-    this.writeOnce(rel, `${JSON.stringify(w, null, 2)}\n`);
+    this.writeOnce(rel, `${JSON.stringify(asWritten("withdrawal", w), null, 2)}\n`);
     this.toRecord(rel);
     return w;
   }
@@ -1575,7 +1576,7 @@ export class Store {
       { type: "attachment", format: newestFormat("attachment"), card: id, agent, branch: this.branch, at: now() },
       "the attachment",
     );
-    this.writeOnce(`attachments/${id}-${randomSuffix()}.json`, `${JSON.stringify(a, null, 2)}\n`);
+    this.writeOnce(`attachments/${id}-${randomSuffix()}.json`, `${JSON.stringify(asWritten("attachment", a), null, 2)}\n`);
     for (const r of this.revisions(id)) this.toRecord(`cards/${id}/r${r.meta.revision}.md`);
     this.toRecord(`decks/${card.meta.deck}.md`);
     return a;
@@ -1608,7 +1609,7 @@ export class Store {
       "the fallback",
     );
     const rel = `cards/${id}/fallback-${randomSuffix()}.json`;
-    this.writeOnce(rel, `${JSON.stringify(f, null, 2)}\n`);
+    this.writeOnce(rel, `${JSON.stringify(asWritten("fallback", f), null, 2)}\n`);
     this.toRecord(rel);
     return f;
   }
@@ -1630,7 +1631,7 @@ export class Store {
       { type: "ledger", format: newestFormat("ledger"), card: id, branch: entry.branch ?? this.branch, commit: entry.commit, at: now() },
       "the ledger entry",
     );
-    this.writeOnce(`ledger/${id}-${randomSuffix()}.md`, renderDoc(meta, body));
+    this.writeOnce(`ledger/${id}-${randomSuffix()}.md`, renderDoc(asWritten("ledger", meta), body));
     return id;
   }
 
@@ -1673,7 +1674,7 @@ export class Store {
     const rel = mergeFile(event.commit, event.branch, event.into);
     if (this.storage.read(rel) !== undefined) return undefined;
     try {
-      this.writeOnce(rel, `${JSON.stringify(event, null, 2)}\n`);
+      this.writeOnce(rel, `${JSON.stringify(asWritten("merge", event), null, 2)}\n`);
     } catch (e) {
       if (alreadyExists(e)) return undefined;
       throw e;
@@ -1744,7 +1745,7 @@ export class Store {
   touchPresence(client: string, at: string = now()): Presence {
     this.requireInit();
     const p = parse(Presence, { type: "presence", format: newestFormat("presence"), client, at }, "presence");
-    this.storage.replace("presence.json", encode(`${JSON.stringify(p)}\n`));
+    this.storage.replace("presence.json", encode(`${JSON.stringify(asWritten("presence", p))}\n`));
     return p;
   }
 
@@ -1784,7 +1785,7 @@ export class Store {
       "the deck",
     );
     try {
-      this.writeOnce(`decks/${meta.id}.md`, renderDoc(meta, body));
+      this.writeOnce(`decks/${meta.id}.md`, renderDoc(asWritten("deck", meta), body));
     } catch (e) {
       if (!alreadyExists(e)) throw e;
       throw Object.assign(new Error(`there's already a deck "${meta.id}"`), { code: "EEXIST" });
@@ -1890,7 +1891,7 @@ export class Store {
       throw new ValidationError(`${card.meta.id} wasn't held back: "you should have asked me" is only for a card the gate held, or in shadow would have`);
     }
     const name = `${compactAt(v.at)}-${v.card}-r${v.revision}-${randomSuffix()}.json`;
-    this.writeOnce(`verdicts/${name}`, `${JSON.stringify(v, null, 2)}\n`);
+    this.writeOnce(`verdicts/${name}`, `${JSON.stringify(asWritten("verdict", v), null, 2)}\n`);
     this.saveRule(card, v);
     this.retireRules(card, v);
     this.moveSlider(card, v);
@@ -2005,7 +2006,7 @@ export class Store {
     );
     const name = `${compactAt(at)}-${randomSuffix()}.json`;
     const rel = `preferences/${name}`;
-    this.writeOnce(rel, `${JSON.stringify(file, null, 2)}\n`);
+    this.writeOnce(rel, `${JSON.stringify(asWritten("preferences", file), null, 2)}\n`);
     this.toRecord(rel);
     return { name, file };
   }
@@ -2025,7 +2026,7 @@ export class Store {
     for (const id of v.retire_rules ?? []) {
       const r = parse(RuleRetirement, { type: "rule-retirement", format: newestFormat("rule-retirement"), rule: id, card: card.meta.id, by: v.reviewer, ...(v.account ? { account: v.account } : {}), ...(v.project ? { project: v.project } : {}), at: v.at }, "the retirement");
       const rel = `rules/${id}-retired.json`;
-      this.writeOnce(rel, `${JSON.stringify(r, null, 2)}\n`);
+      this.writeOnce(rel, `${JSON.stringify(asWritten("rule-retirement", r), null, 2)}\n`);
       this.toRecord(rel);
     }
   }
@@ -2228,7 +2229,7 @@ export class Store {
       "the alias",
     );
     const rel = `topics/alias-${randomSuffix()}.json`;
-    this.writeOnce(rel, `${JSON.stringify(alias, null, 2)}\n`);
+    this.writeOnce(rel, `${JSON.stringify(asWritten("topic-alias", alias), null, 2)}\n`);
     this.toRecord(rel);
     return alias;
   }
@@ -2323,7 +2324,7 @@ export class Store {
   /** Note a session's model, as the plugin's hooks do (B-k0w7d): replaced whole, in the newest format. */
   noteSessionModel(session: string, model: string): void {
     const file = parse(SessionModel, { type: "session-model", format: newestFormat("session-model"), model, at: now() }, "the session's model");
-    this.storage.replace(modelPath(session), encode(`${JSON.stringify(file)}\n`));
+    this.storage.replace(modelPath(session), encode(`${JSON.stringify(asWritten("session-model", file))}\n`));
   }
 
   /** Whether a harness's session has read this branch's inbox before: its own cursor is written at its first read. */
@@ -2351,7 +2352,7 @@ export class Store {
   private writeCursor(c: { at: string; delivered?: string[] }, session?: string): void {
     const rel = this.cursorPath(session);
     const cursor = parse(Cursor, { type: "cursor", format: newestFormat("cursor"), at: c.at, ...(c.delivered?.length ? { delivered: c.delivered } : {}) }, "the cursor");
-    this.storage.replace(rel, encode(`${JSON.stringify(cursor)}\n`));
+    this.storage.replace(rel, encode(`${JSON.stringify(asWritten("cursor", cursor))}\n`));
   }
 
   /** Every inbox item newer than `since`, delivered or not, oldest first. */
@@ -2407,7 +2408,7 @@ export class Store {
     const since = mine ? mine.w.since : at;
     const write = (beat: string) => {
       const w = parse(Waiting, { type: "waiting", format: newestFormat("waiting"), card: id, revision: card.meta.revision, agent, since, at: beat }, "the waiting marker");
-      this.storage.replace(rel, encode(`${JSON.stringify(w)}\n`));
+      this.storage.replace(rel, encode(`${JSON.stringify(asWritten("waiting", w))}\n`));
     };
     write(at);
     return { since, path: rel, refresh: (beat = now()) => write(beat), stop: () => this.storage.remove(rel) };

@@ -6,8 +6,9 @@ import { CONFIG_PATH } from "./facts.js";
 import { isShallow, rootCommits } from "./git.js";
 import { randomSuffix } from "./ids.js";
 import { userConfigPath } from "./notify.js";
-import { MachineGrant, ProjectId, newestFormat, upgradeFile } from "./schema.js";
+import { MachineGrant, ProjectId, asWritten, newestFormat, upgradeFile } from "./schema.js";
 import type { Store } from "./store.js";
+import { RELEASE_HEADER, VERSION } from "./version.js";
 
 // Signing a machine in to the hosted service (M9d), the CLI's side of M9c's machine grants: OAuth's device flow (RFC 8628)
 // at OAuth's standard endpoints (B-t5wxr), one grant per machine and project (B-84e0d), kept in a file only you can read
@@ -78,7 +79,7 @@ export function writeGrant(grant: MachineGrant): void {
   const tmp = `${path}.${randomSuffix()}.tmp`;
   const fd = openSync(tmp, "wx", 0o600);
   try {
-    writeSync(fd, `${JSON.stringify(MachineGrant.parse(grant), null, 2)}\n`);
+    writeSync(fd, `${JSON.stringify(asWritten("grant", MachineGrant.parse(grant)), null, 2)}\n`);
   } finally {
     closeSync(fd);
   }
@@ -142,7 +143,7 @@ async function postForm(service: string, name: "device" | "token" | "revoke", fi
   try {
     r = await (http.fetch ?? fetch)(`${service}/v1/machines/${name}`, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", [RELEASE_HEADER]: VERSION },
       body: new URLSearchParams(fields).toString(),
       signal,
     });

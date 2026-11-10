@@ -18,6 +18,7 @@ import { runHook } from "../src/hooks.js";
 import { DEFAULT_BRANCH, Store, mergeFile } from "../src/store.js";
 import { RELAY_STATE, agentWritten, linkProblem, unsent, unsentBeforeLinking } from "../src/sync.js";
 import { projectLine } from "../src/trust.js";
+import { RELEASE_HEADER, VERSION } from "../src/version.js";
 import { cleanup, draftFile, repo, sh } from "./helpers.js";
 import { type LocalRelay, relayAvailable, startRelay } from "./relay-harness.js";
 import { TestPasskey, TestService } from "./service.js";
@@ -26,6 +27,9 @@ import { TestPasskey, TestService } from "./service.js";
 // machine in, refreshing and revoking its grant, linking a repo, pushing and pulling, a revision revised elsewhere, a
 // new card's ID taken elsewhere, offline, pre-commit's timeout, `baesian wait` hearing an answer over the relay's socket,
 // and the first-commit check (B-5gnea). Tokens are the service's own, made for each run; none is ever printed.
+
+/** What the CLI sends on every request to the relay (B-4p43b): this release's version. */
+const AS_CLI = { [RELEASE_HEADER]: VERSION };
 
 const saved = process.env.BAESIAN_CONFIG;
 const home = realpathSync(mkdtempSync(join(tmpdir(), "baesian-home-")));
@@ -97,7 +101,7 @@ async function signedIn(project: string) {
 /** The relay's log, as a machine reads it: the paths of every entry. */
 async function relayPaths(project: string): Promise<string[]> {
   const grant = readGrant(project)!;
-  const r = await fetch(`${relay.url}/v1/projects/${project}/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}` } });
+  const r = await fetch(`${relay.url}/v1/projects/${project}/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } });
   return ((await r.json()) as { entries: { path: string }[] }).entries.map((e) => e.path);
 }
 
@@ -220,7 +224,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(await relayPaths("proj-d181")).not.toContain(legacy);
       // What the relay holds of them: no subject, no message, no file.
       const grant = readGrant("proj-d181")!;
-      const log = (await (await fetch(`${relay.url}/v1/projects/proj-d181/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { entries: { path: string; body?: string }[] };
+      const log = (await (await fetch(`${relay.url}/v1/projects/proj-d181/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } })).json()) as { entries: { path: string; body?: string }[] };
       const theirs = log.entries.filter((e) => e.path.startsWith("ledger/") || e.path.startsWith("merges/"));
       expect(theirs.map((e) => e.path).sort()).toEqual([ledgerPath, mergePath].sort());
       for (const e of theirs) expect(Buffer.from(e.body!, "base64").toString()).not.toMatch(/Secret subject|acquisition|body says|secret-path/);
@@ -228,7 +232,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       // The tip that landed, and the commit citing a card it brought (B-w41p7).
       expect(merge).toEqual({ type: "merge", format: 1, branch: "feat/runs", into: "main", commit: merged, tip: cited, at: expect.any(String), cards: [id], commits: [cited] });
       // The relay's state carries them, for the website's panel.
-      const state = (await (await fetch(`${relay.url}/v1/projects/proj-d181/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: unknown[]; commits: unknown[] };
+      const state = (await (await fetch(`${relay.url}/v1/projects/proj-d181/state`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } })).json()) as { merges: unknown[]; commits: unknown[] };
       expect(state.merges).toEqual([{ branch: "feat/runs", into: "main", commit: merged, tip: cited, at: merge.at, cards: [id], commits: [cited] }]);
       expect(state.commits).toEqual([{ commit: cited, branch: "feat/runs", card: id, at: entry.meta.at }]);
 
@@ -274,7 +278,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       await runHook(Store.open(a.dir), "post-merge", ["0"], quiet);
       expect(await relayPaths("proj-w41p7")).toEqual(expect.arrayContaining([mergeFile(filed, "feat/log", "main"), mergeFile(log, "feat/log", "main")]));
       const grant = readGrant("proj-w41p7")!;
-      const state = (await (await fetch(`${relay.url}/v1/projects/proj-w41p7/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { merges: Record<string, unknown>[] };
+      const state = (await (await fetch(`${relay.url}/v1/projects/proj-w41p7/state`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } })).json()) as { merges: Record<string, unknown>[] };
       expect(state.merges.map(({ at: _at, ...m }) => m)).toEqual([
         { branch: "feat/log", into: "main", commit: filed, tip: filed, cards: [id], commits: [filed] },
         { branch: "feat/log", into: "main", commit: log, tip: log, cards: [], commits: [log] },
@@ -286,7 +290,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
     it("goes up with a sync, as git says it here, again only when that changes; the relay's state carries it, and its log doesn't", async () => {
       const { dir, store } = await signedIn("proj-jr8mk");
       const grant = readGrant("proj-jr8mk")!;
-      const stateOf = async () => (await (await fetch(`${relay.url}/v1/projects/proj-jr8mk/state`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { defaultBranch?: string };
+      const stateOf = async () => (await (await fetch(`${relay.url}/v1/projects/proj-jr8mk/state`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } })).json()) as { defaultBranch?: string };
       const sent = () => JSON.parse(readFileSync(join(store.live, RELAY_STATE), "utf8")).default_branch as string | undefined;
       // Signing in synced: the branch the repo's first commit was made on, since there's no remote.
       expect(sent()).toBe("main");
@@ -302,12 +306,12 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       // It's state, not a file written once: never in the log, so no machine pulls it.
       expect(await relayPaths("proj-jr8mk")).not.toContain("default-branch.json");
       // Sent only when what git says changes: another machine's reading stands until this one's changes.
-      const other = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}` }, body: `${JSON.stringify({ type: "default-branch", format: 1, branch: "develop" })}\n` });
+      const other = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI }, body: `${JSON.stringify({ type: "default-branch", format: 1, branch: "develop" })}\n` });
       expect(other.status).toBe(200);
       await run(dir, ["sync"]);
       expect((await stateOf()).defaultBranch).toBe("develop");
       // Only a branch's name: anything else is refused.
-      const bad = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}` }, body: JSON.stringify({ type: "default-branch", format: 1, branch: "main; the acquisition talks" }) });
+      const bad = await fetch(`${relay.url}/v1/projects/proj-jr8mk/files/default-branch.json`, { method: "PUT", headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI }, body: JSON.stringify({ type: "default-branch", format: 1, branch: "main; the acquisition talks" }) });
       expect(bad.status).toBe(400);
       expect((await stateOf()).defaultBranch).toBe("develop");
     });
@@ -712,7 +716,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const login = await run(dir, ["login", "--machine", "laptop"]);
       expect(login.code, login.err).toBe(0);
       const grant = readGrant(project)!;
-      const log = (await (await fetch(`${relay.url}/v1/projects/${project}/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}` } })).json()) as { entries: { path: string; before_linking?: true; sig?: string }[] };
+      const log = (await (await fetch(`${relay.url}/v1/projects/${project}/log?after=0`, { headers: { authorization: `Bearer ${grant.access_token}`, ...AS_CLI } })).json()) as { entries: { path: string; before_linking?: true; sig?: string }[] };
       const entry = log.entries.find((e) => e.path.startsWith("verdicts/"))!;
       expect(entry).toMatchObject({ before_linking: true });
       expect(entry.sig).toBeUndefined();
@@ -733,7 +737,7 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const forged = { type: "verdict", format: 1, card: open, revision: 1, response: "accept", reviewer: "gus", client: "test", at };
       const put = await fetch(`${relay.url}/v1/projects/${project}/files/verdicts/${at.replace(/[-:]/g, "")}-${open}-r1-abcde.json`, {
         method: "PUT",
-        headers: { authorization: `Bearer ${readGrant(project)!.access_token}` },
+        headers: { authorization: `Bearer ${readGrant(project)!.access_token}`, ...AS_CLI },
         body: `${JSON.stringify(forged, null, 2)}\n`,
       });
       expect(put.status).toBe(201);
@@ -856,17 +860,23 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       expect(r.code, r.err).toBe(0);
       expect(r.out).toContain(`CI's pin for project proj-ci, read from ${relay.url}\n  warning: that's the service .baesian/config.json names. If it isn't the one you meant, stop here`);
       const keyName = readdirSync(join(store.live, "trust")).find((f) => /^service-.+\.json$/.test(f) && !f.endsWith("-revoked.json"))!;
-      const lines = [projectLine("proj-ci"), JSON.stringify(JSON.parse(readFileSync(join(store.live, "trust", keyName), "utf8"))), JSON.stringify(passkey.keyFile(enrolled))];
+      // The service's spare key (B-x47ek), from GET /v1/keys, beside its key: the file the relay writes the day it switches.
+      const spare = { type: "service-key", format: 1, key: relay.spare.id, public_key: relay.spare.publicKey, origin: "https://baesian.test", rp_id: "baesian.test", valid_after: relay.spare.validAfter };
+      const lines = [projectLine("proj-ci"), JSON.stringify(JSON.parse(readFileSync(join(store.live, "trust", keyName), "utf8"))), JSON.stringify(spare), JSON.stringify(passkey.keyFile(enrolled))];
       expect(r.out.split("\n").filter((l) => l.startsWith("{"))).toEqual(lines);
+      expect(r.out).toContain("the service's key, its spare (relay-2) and 1 passkey");
+      expect(r.out).toContain("The spare, relay-2, is a key the service keeps offline and never signs with: pinned now, CI keeps passing if the service ever has to replace its key with it.");
+      // The spare isn't in the project's files: the record never holds a key CI doesn't pin yet (D142).
+      expect(readdirSync(join(store.live, "trust")).filter((f) => f.includes(relay.spare.id))).toEqual([]);
       expect(r.out).toContain("Check the passkey is yours (gus's, added 2026-11-04): compare its line with the one the website showed when you added it, and with your account page, https://baesian.test/account.");
       expect(r.out).toContain("fetch-depth: 0");
       expect(r.err).toContain("left out trust/passkey-bbbbbbbbbbbb.json: it's signed by a key that isn't trusted");
       // gh gets the lines on its input, in the repo, after they're shown.
       expect(calls).toEqual([{ command: "gh", args: ["variable", "set", "BAESIAN_TRUST"], input: `${lines.join("\n")}\n`, cwd: dir }]);
-      expect(r.out.split("\n").at(-1)).toBe("set the repository variable BAESIAN_TRUST with gh: 3 lines");
+      expect(r.out.split("\n").at(-1)).toBe("set the repository variable BAESIAN_TRUST with gh: 4 lines");
       // With --json, the same lines.
       const j = await run(dir, ["ci", "--json"]);
-      expect(JSON.parse(j.out)).toMatchObject({ service: relay.url, project: "proj-ci", lines, passkeys: [{ handle: "gus" }] });
+      expect(JSON.parse(j.out)).toMatchObject({ service: relay.url, project: "proj-ci", lines, spare: ["relay-2"], passkeys: [{ handle: "gus" }] });
       // gh not on PATH: the lines are printed, and it says the variable wasn't set.
       const missing = await run(dir, ["ci", "--github"], { exec: () => ({ status: null, stdout: "", stderr: "spawn gh ENOENT", missing: true }) });
       expect(missing.code).toBe(1);
@@ -882,6 +892,54 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const elsewhere = await run(dir, ["ci"]);
       expect(elsewhere.code).toBe(1);
       expect(elsewhere.err).toContain("this machine isn't signed in to project proj-ci on https://elsewhere.example\nnext: baesian login  # first, then baesian ci");
+    });
+  });
+
+  describe("the CLI's release, which the relay checks (B-4p43b)", () => {
+    /** A fetch that keeps each request's address and headers, and sends it on, its release changed if `as` says. */
+    const watching = (seen: { url: string; release: string | null }[], as?: string | null): typeof fetch => async (input, init) => {
+      const headers = new Headers(init?.headers);
+      seen.push({ url: String(input), release: headers.get(RELEASE_HEADER) });
+      if (as === null) headers.delete(RELEASE_HEADER);
+      else if (as !== undefined) headers.set(RELEASE_HEADER, as);
+      return fetch(input, { ...init, headers });
+    };
+
+    it("is named on every request the CLI makes to the service: signing in, pulling, pushing", async () => {
+      const seen: { url: string; release: string | null }[] = [];
+      const r = linkedRepo("proj-release");
+      const login = await run(r.dir, ["login", "--machine", "test-machine"], { fetch: watching(seen) });
+      expect(login.code, login.err).toBe(0);
+      const filed = await run(r.dir, ["file", "-"], { stdin: draftFile({}), fetch: watching(seen) });
+      expect(filed.code, filed.err).toBe(0);
+      const ours = seen.filter((s) => s.url.startsWith(relay.url));
+      expect(ours.map((s) => new URL(s.url).pathname)).toEqual(expect.arrayContaining(["/v1/machines/device", "/v1/machines/token", "/v1/projects/proj-release/log"]));
+      expect(ours.filter((s) => s.release !== VERSION)).toEqual([]);
+    });
+
+    it("refuses one too old before anything is pulled or pushed, naming the release to install; everything local goes on", async () => {
+      const { dir, store } = await signedIn("proj-too-old");
+      const pulled = JSON.parse(readFileSync(join(store.live, RELAY_STATE), "utf8")).pulled as number;
+      const before = await relayPaths("proj-too-old");
+      // A Baesian older than this relay serves: one before 1.0.0, which sends no version, and one that names an old release.
+      const drafts = {
+        none: { title: "Cache entries for a day", topic: "old/cache", question: "Should the cache keep its entries for a day, or for an hour?" },
+        "0.0.1": { title: "The worker's logging library", topic: "old/logging", question: "Which logging library does the worker adopt: pino or winston?" },
+      };
+      for (const as of [null, "0.0.1"] as const) {
+        const filed = await run(dir, ["file", "-"], { stdin: draftFile(drafts[as ?? "none"]), fetch: watching([], as) });
+        expect(filed.code, filed.err).toBe(0);
+        expect(filed.err).toContain(`relay: ${relay.url} refused this Baesian:`);
+        expect(filed.err).toContain(as === null ? "this Baesian sends no version, so it's from before 1.0.0, and is too old for this service" : "Baesian 0.0.1 is too old for this service");
+        expect(filed.err).toContain(`install baesian ${VERSION} (npm install -g baesian@${VERSION}), then run the command again`);
+        expect(filed.err).toContain("Everything here works as before; until it's upgraded, nothing goes to the reviewer or comes back.");
+      }
+      // Nothing went up, nothing came down; the cards are filed here, and go up once it names a release the relay serves.
+      expect(await relayPaths("proj-too-old")).toEqual(before);
+      expect(JSON.parse(readFileSync(join(store.live, RELAY_STATE), "utf8")).pulled).toBe(pulled);
+      const sync = await run(dir, ["sync"]);
+      expect(sync.code, sync.err).toBe(0);
+      expect((await relayPaths("proj-too-old")).filter((p) => /^cards\/B-[0-9a-z]{5}\/r1\.md$/.test(p))).toHaveLength(2);
     });
   });
 });

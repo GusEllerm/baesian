@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { type KeyObject, createHash, createPrivateKey } from "node:crypto";
-import { type ServiceKey, newestFormat } from "../../src/schema.js";
-import { DRAW_NAMESPACE, NAMESPACE, opensshPublicKey, parseSignature, signMessage } from "../../src/sshsig.js";
+import { ServiceKey, describeError, newestFormat } from "../../src/schema.js";
+import { DRAW_NAMESPACE, NAMESPACE, opensshPublicKey, parseSignature, publicKeyBlob, signMessage } from "../../src/sshsig.js";
 import { signedFile } from "../../src/store.js";
 import { type TrustRoot, drawMessage } from "../../src/trust.js";
 
@@ -18,6 +18,34 @@ export interface KeyEnv {
   SERVICE_RP_ID: string;
   SERVICE_KEY_VALID_AFTER: string;
   SERVICE_KEY_VALID_BEFORE?: string;
+  /**
+   * The spare key (B-x47ek): its ID, its public half in OpenSSH's form (`ssh-ed25519 AAAA…`), and when it's valid from, as
+   * `service/scripts/spare-key.mjs` prints them. Worker variables in wrangler.jsonc's `vars`, not secrets: the private half
+   * is kept offline, and the service never signs with it. All three, or none.
+   */
+  SERVICE_SPARE_KEY_ID?: string;
+  SERVICE_SPARE_PUBLIC_KEY?: string;
+  SERVICE_SPARE_KEY_VALID_AFTER?: string;
+}
+
+/**
+ * The spare service key the environment names (B-x47ek), as the service key file it would write once it signed with
+ * it, or nothing; or why it can't be read. It names the service's origin and relying party, as the key in use does, so
+ * the line CI pins now is the file the relay writes the day it switches.
+ */
+export function spareKey(env: KeyEnv): { key: ServiceKey } | { problem: string } | undefined {
+  const { SERVICE_SPARE_KEY_ID: id, SERVICE_SPARE_PUBLIC_KEY: pub, SERVICE_SPARE_KEY_VALID_AFTER: after } = env;
+  if (!id && !pub && !after) return undefined;
+  if (!id || !pub || !after) return { problem: "the spare key takes all three of SERVICE_SPARE_KEY_ID, SERVICE_SPARE_PUBLIC_KEY and SERVICE_SPARE_KEY_VALID_AFTER" };
+  if (id === env.SERVICE_KEY_ID) return { problem: `the spare key's ID, ${id}, is the key in use's: a spare takes a new key ID` };
+  const parsed = ServiceKey.safeParse({ type: "service-key", format: newestFormat("service-key"), key: id, public_key: pub.trim(), origin: env.SERVICE_ORIGIN, rp_id: env.SERVICE_RP_ID, valid_after: after });
+  if (!parsed.success) return { problem: `the spare key isn't a service key: ${describeError(parsed.error)}` };
+  try {
+    publicKeyBlob(parsed.data.public_key);
+  } catch (e) {
+    return { problem: `the spare key's public half can't be read (${e instanceof Error ? e.message : String(e)})` };
+  }
+  return { key: parsed.data };
 }
 
 /** The relay's key is missing or isn't an Ed25519 key: it can serve what it holds, but write nothing. */

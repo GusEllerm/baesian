@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { CLIENT_INFO_META_KEY, type CallToolResult, McpServer, type ServerContext } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
@@ -32,6 +31,7 @@ import { unmarked } from "./cite.js";
 import { type Line, plainText, text as plainLine } from "./style.js";
 import { type Card, LooksLikeSecret, NoCard, NoDeck, NotAllowed, NotSetUp, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { aroundFiling, syncRelay, waitWithRelay } from "./sync.js";
+import { VERSION } from "./version.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, type WaitOptions } from "./wait.js";
 
 // The local MCP server (M7, P18): `baesian mcp`, over stdio only, started by the harness through the plugin's
@@ -105,7 +105,6 @@ export function instructionsFor(cwd: string): string {
   return MCP_INSTRUCTIONS;
 }
 
-const VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 // ---------------------------------------------------------------- schemas
 

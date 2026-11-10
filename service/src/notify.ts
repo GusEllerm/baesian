@@ -114,11 +114,8 @@ export function burst(arrivedNew: number[], now: number, when: When = WHEN): { c
  * nothing here leaves the object but a notification's counts.
  */
 export class PushLedger {
-  constructor(private readonly sql: SqlStorage) {
-    sql.exec(`CREATE TABLE IF NOT EXISTS push_arrivals (card TEXT NOT NULL, revision INTEGER NOT NULL, machine TEXT, arrived INTEGER NOT NULL, settled INTEGER, PRIMARY KEY (card, revision))`);
-    sql.exec(`CREATE TABLE IF NOT EXISTS push_sent (at INTEGER NOT NULL)`);
-    sql.exec(`CREATE TABLE IF NOT EXISTS push_pauses (machine TEXT PRIMARY KEY, cards INTEGER NOT NULL, since INTEGER NOT NULL, until INTEGER NOT NULL)`);
-  }
+  /** Its tables, push_arrivals, push_sent and push_pauses, are made by the object's migrations (`migrateObject()`). */
+  constructor(private readonly sql: SqlStorage) {}
 
   /** A card revision arrived from a machine; a new card from a machine filing a burst pauses it (B-advkh). */
   arrive(card: string, revision: number, machine: string | null, now: number, when: When = WHEN): void {

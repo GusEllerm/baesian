@@ -10,7 +10,9 @@ import { openRepo } from "../src/git.js";
 import { userConfig } from "../src/notify.js";
 import { practiceEntry } from "../src/practice-answers.js";
 import { type RunningServer, findRunningServer, serverState, startServer, writePractice } from "../src/server.js";
-import { FILE_KINDS, type FileKindName, NewerFormat, newestFormat, upgradeFile } from "../src/schema.js";
+import { FILE_KINDS, type FileKind, type FileKindName, type LaterFormat, NewerFormat, asWritten, minimumRelease, newestFormat, upgradeFile, writtenFormat } from "../src/schema.js";
+import { FIRST_STABLE, VERSION, compareReleases, isRelease } from "../src/version.js";
+import { z } from "zod";
 import { Store, ValidationError } from "../src/store.js";
 import { verify } from "../src/verify.js";
 import { writeNotes } from "../src/vault.js";
@@ -389,8 +391,8 @@ describe("the upgrade table (D156)", () => {
   });
 
   it("upgrades through a kind's functions, so a format 2 adds one, and leaves the other kinds alone", () => {
-    const upgrades = FILE_KINDS.verdict.upgrades as unknown as ((f: Record<string, unknown>) => Record<string, unknown>)[];
-    upgrades.push((f) => ({ ...f, upgraded: true }));
+    const formats = FILE_KINDS.verdict.formats as unknown as LaterFormat[];
+    formats.push({ since: VERSION, up: (f) => ({ ...f, upgraded: true }), down: ({ upgraded: _, ...f }) => f });
     try {
       expect(newestFormat("verdict")).toBe(2);
       expect(newestFormat("card")).toBe(1);
@@ -400,7 +402,7 @@ describe("the upgrade table (D156)", () => {
       expect(() => upgradeFile("verdict", { type: "verdict", format: 3 }, "v.json")).toThrow("v.json has verdict format 3; this Baesian reads up to 2: upgrade Baesian");
       expect(() => upgradeFile("card", { type: "card", format: 2 }, "r1.md")).toThrow(NewerFormat);
     } finally {
-      upgrades.pop();
+      formats.pop();
     }
   });
 
@@ -413,5 +415,102 @@ describe("the upgrade table (D156)", () => {
     }
     setFields(join(store.live, "cards", id, "r1.md"), (f) => ({ ...f, format: 1, extra: "x" }));
     expect(() => store.card(id)).toThrow(ValidationError);
+  });
+});
+
+describe("rolling out a format: the old one for a release (B-4p43b)", () => {
+  // No format changes today, so a kind made up for these tests carries one: its format 2 calls `name` `title`. Each
+  // test gives the kind the formats the release it plays has; releases are passed in, as `VERSION` is by default.
+  const KIND = "test-kind" as FileKindName;
+  const kinds = FILE_KINDS as unknown as Record<string, FileKind>;
+  const two = (since: string): LaterFormat => ({
+    since,
+    up: ({ name, ...f }) => ({ ...f, title: name }),
+    down: ({ title, ...f }) => ({ ...f, name: title }),
+  });
+  const Two = z.strictObject({ type: z.literal("test"), format: z.literal(2), title: z.string() });
+  /** The kind as a release has it: format 1 only, or with format 2 first read by `since`. */
+  const release = (since?: string) => {
+    kinds[KIND] = { name: "test kind", formats: since ? [two(since)] : [] };
+  };
+  const made = { type: "test", format: 2, title: "a title" };
+  afterEach(() => {
+    delete kinds[KIND];
+  });
+
+  it("is read by the release that adds it, which still writes the one before", () => {
+    release("1.1.0");
+    expect(newestFormat(KIND)).toBe(2);
+    expect(writtenFormat(KIND, "1.1.0")).toBe(1);
+    const written = asWritten(KIND, made, "1.1.0");
+    expect(written).toEqual({ type: "test", format: 1, name: "a title" });
+    expect(Object.keys(written).slice(0, 2)).toEqual(["type", "format"]);
+    // It reads what it writes, and what the release after it writes.
+    expect(Two.parse(upgradeFile(KIND, written, "t.json"))).toEqual(made);
+    expect(Two.parse(upgradeFile(KIND, made, "t.json"))).toEqual(made);
+  });
+
+  it("is written by the releases after it, unchanged", () => {
+    release("1.1.0");
+    for (const r of ["1.1.1", "1.2.0", "2.0.0"]) {
+      expect(writtenFormat(KIND, r), r).toBe(2);
+      expect(asWritten(KIND, made, r), r).toBe(made);
+    }
+    // A pre-release of the release that adds it comes before it, so it writes the old one too.
+    expect(writtenFormat(KIND, "1.1.0-rc.1")).toBe(1);
+  });
+
+  it("leaves a release one behind never meeting a file it refuses, and the relay stops one further behind first", () => {
+    // 1.1.0 adds format 2; 1.2.0 writes it. What each writes, read by each.
+    release("1.1.0");
+    const by11 = asWritten(KIND, made, "1.1.0");
+    const by12 = asWritten(KIND, made, "1.2.0");
+    // 1.1.0 reads both: it's one behind 1.2.0.
+    expect(Two.parse(upgradeFile(KIND, by12, "t.json"))).toEqual(made);
+    // 1.0.0 knows format 1 only: it reads what 1.1.0 writes, its next release, and refuses 1.2.0's by name (D157).
+    release();
+    expect(upgradeFile(KIND, by11, "t.json")).toEqual(by11);
+    expect(() => upgradeFile(KIND, by12, "t.json")).toThrow("t.json has test kind format 2; this Baesian reads up to 1: upgrade Baesian");
+    // So the relay running 1.2.0 serves nothing older than 1.1.0, and tells 1.0.0 to upgrade before it pulls.
+    release("1.1.0");
+    expect(minimumRelease("1.1.0")).toBe(FIRST_STABLE);
+    expect(minimumRelease("1.2.0")).toBe("1.1.0");
+  });
+
+  it("waits a release more while the release that adds it is being built", () => {
+    // During development the tree still has the last release's version: a format first read by the next one is read
+    // here, and not written.
+    release("99.0.0");
+    expect(writtenFormat(KIND)).toBe(1);
+    expect(Two.parse(upgradeFile(KIND, made, "t.json"))).toEqual(made);
+    expect(minimumRelease()).toBe(minimumRelease(VERSION));
+  });
+
+  it("serves nothing older than the first stable release, and always serves itself", () => {
+    expect(FIRST_STABLE).toBe("1.0.0");
+    expect(minimumRelease("1.0.0")).toBe("1.0.0");
+    expect(minimumRelease("1.4.2")).toBe("1.0.0");
+    // A build before 1.0.0 (this tree, until the release commit sets its version) serves its own CLI.
+    expect(minimumRelease("0.1.10")).toBe("0.1.10");
+  });
+
+  it("takes every real kind's formats in the order of the releases that add them", () => {
+    for (const [name, k] of Object.entries(kinds)) {
+      const since = k.formats.map((f) => f.since);
+      for (const s of since) expect(isRelease(s), `${name} ${s}`).toBe(true);
+      expect([...since].sort(compareReleases), name).toEqual(since);
+      // Today every kind is at format 1, written by this release.
+      expect(writtenFormat(name as FileKindName), name).toBe(1);
+    }
+  });
+});
+
+describe("release numbers", () => {
+  it("compare in semver's order", () => {
+    const inOrder = ["0.1.9", "0.1.10", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.10.0", "2.0.0"];
+    expect([...inOrder].reverse().sort(compareReleases)).toEqual(inOrder);
+    expect(compareReleases("1.0.0+build.5", "1.0.0")).toBe(0);
+    expect(() => compareReleases("1.0", "1.0.0")).toThrow("isn't a release number");
+    expect(isRelease(VERSION)).toBe(true);
   });
 });

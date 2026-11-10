@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cite } from "./cite.js";
 import { ALL_ROWS, POSITIONS, ROWS, ROW_FLOOR, rank } from "./routing.js";
+import { FIRST_STABLE, VERSION, compareReleases, laterRelease } from "./version.js";
 
 // The file formats. docs/vault/Design/File Formats.md describes them for people; this module is the
 // definition. Every type is flat (no nested objects) so the Markdown ones read well in Obsidian.
@@ -10,78 +11,133 @@ import { ALL_ROWS, POSITIONS, ROWS, ROW_FLOOR, rank } from "./routing.js";
 /** A file's fields as read, before its schema checks them. */
 type Fields = Record<string, unknown>;
 
-/** Takes a file's fields from one format of its kind to the next, in memory. */
+/** Takes a file's fields from one format of its kind to another, in memory. */
 type Upgrade = (fields: Fields) => Fields;
 
-interface FileKind {
+/** A format after a kind's first (D156), and how it rolls out (B-4p43b). */
+export interface LaterFormat {
+  /**
+   * The release that first reads it, as package.json will name it. That release still writes the format before, and the
+   * releases after it write this one, so a Baesian one release behind never meets a file it refuses (B-4p43b).
+   */
+  since: string;
+  /** Takes a file in the format before to this one, in memory, as it's read. */
+  up: Upgrade;
+  /** Takes a file in this format back to the one before, in memory, for the release that reads it but still writes that. */
+  down: Upgrade;
+}
+
+export interface FileKind {
   /** What a message calls it. */
   name: string;
-  /** `upgrades[n - 1]` takes format n to n + 1: the newest format is one more than their number. */
-  upgrades: readonly Upgrade[];
+  /** Format 2 on: `formats[n - 2]` is format n, so the newest format is one more than their number. */
+  formats: readonly LaterFormat[];
   /** What a file written before v1, with no `format`, needs in order to read as format 1, if anything. */
   beforeV1?: Upgrade;
 }
 
 /**
- * Every kind of file Baesian writes, or reads from a person, and the upgrades from each older format (D156). Each kind is
- * numbered on its own: a card format 2 leaves verdicts at 1. A file is upgraded in memory as it's read, and never
- * rewritten: files are written once (D34), and CI checks each commit against its own record (`checkCommit()`), so an old
- * commit's files must stay readable as they are. Writers write only the newest format.
+ * Every kind of file Baesian writes, or reads from a person, and each format after its first (D156). Each kind is numbered
+ * on its own: a card format 2 leaves verdicts at 1. A file is upgraded in memory as it's read, and never rewritten: files
+ * are written once (D34), and CI checks each commit against its own record (`checkCommit()`), so an old commit's files
+ * must stay readable as they are.
  *
  * A file with no `format` was written before v1, and reads as format 1. That changes nothing, except that the inbox
- * cursor gains the `type` it lacked. A format 2 adds one function to its kind's `upgrades`, and its schema changes to match.
+ * cursor gains the `type` it lacked. A format 2 adds one entry to its kind's `formats`: the release that first reads it,
+ * the upgrade to it and the way back; and its schema changes to match. That entry is the whole of its rollout (B-4p43b):
+ * every writer writes through `asWritten()`, which writes the format before until a release after `since`, and the relay
+ * serves no Baesian too old to read what's written (`minimumRelease()`).
  */
 export const FILE_KINDS = {
-  card: { name: "card", upgrades: [] },
-  "card-draft": { name: "card draft", upgrades: [] },
-  verdict: { name: "verdict", upgrades: [] },
-  withdrawal: { name: "withdrawal", upgrades: [] },
-  fallback: { name: "fallback", upgrades: [] },
-  ledger: { name: "ledger entry", upgrades: [] },
-  deck: { name: "deck", upgrades: [] },
-  rule: { name: "rule", upgrades: [] },
-  "rule-retirement": { name: "rule retirement", upgrades: [] },
-  "topic-alias": { name: "topic alias", upgrades: [] },
-  attachment: { name: "attachment", upgrades: [] },
+  card: { name: "card", formats: [] },
+  "card-draft": { name: "card draft", formats: [] },
+  verdict: { name: "verdict", formats: [] },
+  withdrawal: { name: "withdrawal", formats: [] },
+  fallback: { name: "fallback", formats: [] },
+  ledger: { name: "ledger entry", formats: [] },
+  deck: { name: "deck", formats: [] },
+  rule: { name: "rule", formats: [] },
+  "rule-retirement": { name: "rule retirement", formats: [] },
+  "topic-alias": { name: "topic alias", formats: [] },
+  attachment: { name: "attachment", formats: [] },
   // D181: a branch merged into another, as the CLI found it.
-  merge: { name: "merge", upgrades: [] },
+  merge: { name: "merge", formats: [] },
   // B-jr8mk: the repo's default branch, as the CLI read it, which it sends the relay for the website.
-  "default-branch": { name: "default branch", upgrades: [] },
-  cursor: { name: "inbox cursor", upgrades: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
+  "default-branch": { name: "default branch", formats: [] },
+  cursor: { name: "inbox cursor", formats: [], beforeV1: (f) => ({ type: "cursor", ...f }) },
   // B-k0w7d: a harness session's model, as the plugin's hooks last heard it, for the cards the session files.
-  "session-model": { name: "session model", upgrades: [] },
-  presence: { name: "presence", upgrades: [] },
-  waiting: { name: "waiting marker", upgrades: [] },
-  server: { name: "server file", upgrades: [] },
-  port: { name: "port file", upgrades: [] },
-  config: { name: "config", upgrades: [] },
-  "user-config": { name: "personal config", upgrades: [] },
-  "decision-note": { name: "decision note", upgrades: [] },
-  "rule-note": { name: "rule note", upgrades: [] },
-  preferences: { name: "preference file", upgrades: [] },
-  gate: { name: "gate record", upgrades: [] },
+  "session-model": { name: "session model", formats: [] },
+  presence: { name: "presence", formats: [] },
+  waiting: { name: "waiting marker", formats: [] },
+  server: { name: "server file", formats: [] },
+  port: { name: "port file", formats: [] },
+  config: { name: "config", formats: [] },
+  "user-config": { name: "personal config", formats: [] },
+  "decision-note": { name: "decision note", formats: [] },
+  "rule-note": { name: "rule note", formats: [] },
+  preferences: { name: "preference file", formats: [] },
+  gate: { name: "gate record", formats: [] },
   // M9a, the hosted service's proof (P16 section 7). The relay writes these, never the CLI on its own.
   /** A `.sig` beside a signed file: OpenSSH's own format (D160), with no `format` field; its number is SSHSIG's version. */
-  signature: { name: "signature", upgrades: [] },
-  "passkey-proof": { name: "passkey proof", upgrades: [] },
-  "service-key": { name: "service key", upgrades: [] },
-  "service-key-revocation": { name: "service key revocation", upgrades: [] },
-  "passkey-key": { name: "passkey key", upgrades: [] },
+  signature: { name: "signature", formats: [] },
+  "passkey-proof": { name: "passkey proof", formats: [] },
+  "service-key": { name: "service key", formats: [] },
+  "service-key-revocation": { name: "service key revocation", formats: [] },
+  "passkey-key": { name: "passkey key", formats: [] },
   /** The repo's project, a line of CI's pin beside the keys (B-mar8x); never a file in `trust/`. */
-  project: { name: "pinned project", upgrades: [] },
+  project: { name: "pinned project", formats: [] },
   // M9d, the CLI's side of the hosted service (P16 section 8): what it keeps of the relay, and the machine's grant.
-  relay: { name: "relay state", upgrades: [] },
-  grant: { name: "machine grant", upgrades: [] },
+  relay: { name: "relay state", formats: [] },
+  grant: { name: "machine grant", formats: [] },
   // B-4rwyz, personal mode: what a clone that commits nothing held when it was linked, in the record's place.
-  "before-linking": { name: "before-linking snapshot", upgrades: [] },
+  "before-linking": { name: "before-linking snapshot", formats: [] },
   // B-rehdw: an answer on a practice card, a mark in the blind test, or the test's start. Never in the record or the log.
-  practice: { name: "practice answer", upgrades: [] },
+  practice: { name: "practice answer", formats: [] },
 } as const satisfies Record<string, FileKind>;
 export type FileKindName = keyof typeof FILE_KINDS;
 
-/** The newest format of a kind of file, which is the one Baesian writes (D156). */
+/** The newest format of a kind of file this Baesian reads (D156), which its schema checks; writers write `writtenFormat()`. */
 export function newestFormat(kind: FileKindName): number {
-  return FILE_KINDS[kind].upgrades.length + 1;
+  return (FILE_KINDS[kind] as FileKind).formats.length + 1;
+}
+
+/**
+ * The format a release writes a kind of file in (B-4p43b): the newest one a release before it already reads. A release
+ * that adds a format reads it, and writes the one before; the releases after it write the new one. So a teammate, a
+ * machine or CI one release behind is never sent a file it refuses (D157).
+ */
+export function writtenFormat(kind: FileKindName, release: string = VERSION): number {
+  const formats = (FILE_KINDS[kind] as FileKind).formats;
+  let n = 1;
+  while (n <= formats.length && compareReleases(formats[n - 1]!.since, release) < 0) n++;
+  return n;
+}
+
+/**
+ * A file's fields as a release writes them (B-4p43b): made and checked in the newest format, as the schema reads it, then
+ * taken back, in memory, to `writtenFormat()` through the kind's `down` functions. Unchanged when that's the newest. Every
+ * writer of a Baesian file writes through it, so a kind's rollout is its `formats` entry and nothing else.
+ */
+export function asWritten<T extends object>(kind: FileKindName, fields: T, release: string = VERSION): T {
+  const formats = (FILE_KINDS[kind] as FileKind).formats;
+  let f = fields as unknown as Fields;
+  for (let n = newestFormat(kind); n > writtenFormat(kind, release); n--) f = { ...formats[n - 2]!.down(f), format: n - 1 };
+  return f as unknown as T;
+}
+
+/**
+ * The oldest release the hosted service serves when it runs `release` (B-4p43b): the oldest that reads every format
+ * `release` writes, and never one before `FIRST_STABLE`, since formats changed in place until then (D108). A release always
+ * serves itself, so a build of the next release, before its version is set, serves its own CLI. The relay tells an older
+ * CLI to upgrade before it pulls anything.
+ */
+export function minimumRelease(release: string = VERSION): string {
+  let oldest = FIRST_STABLE;
+  for (const k of Object.keys(FILE_KINDS) as FileKindName[]) {
+    const written = writtenFormat(k, release);
+    if (written > 1) oldest = laterRelease(oldest, (FILE_KINDS[k] as FileKind).formats[written - 2]!.since);
+  }
+  return compareReleases(oldest, release) > 0 ? release : oldest;
 }
 
 /** A schema's `format`: only the newest, since a file is upgraded before its schema reads it. */
@@ -115,7 +171,7 @@ export function upgradeFile(kind: FileKindName, fields: unknown, file: string): 
   if (typeof from !== "number" || !Number.isInteger(from) || from < 1) return f;
   const newest = newestFormat(kind);
   if (from > newest) throw new NewerFormat(file, kind, from);
-  for (let n = from; n < newest; n++) f = { ...k.upgrades[n - 1]!(f), format: n + 1 };
+  for (let n = from; n < newest; n++) f = { ...k.formats[n - 1]!.up(f), format: n + 1 };
   return f;
 }
 

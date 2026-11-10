@@ -9,7 +9,7 @@ import { type ApiPreferencesInput, type ApiState, type ApiVerdictInput, PREFEREN
 import { unmarkJson } from "./cite.js";
 import { PRACTICE_DIR, PracticeRefused, inOrder, practiceEntry } from "./practice-answers.js";
 import { afterVerdict } from "./proposals.js";
-import { LastPort, PracticeEntry, ServerInfo, newestFormat, upgradeFile } from "./schema.js";
+import { LastPort, PracticeEntry, ServerInfo, asWritten, newestFormat, upgradeFile } from "./schema.js";
 import { presets, snapshot } from "./state.js";
 import { type Store, StalePreferences, ValidationError } from "./store.js";
 import { contextNotes } from "./vault.js";
@@ -98,7 +98,7 @@ export function writePractice(live: string, e: PracticeEntry): string {
   mkdirSync(dir, { recursive: true });
   const name = `${e.at.replace(/[-:]/g, "")}-${randomBytes(4).toString("hex")}.json`;
   const tmp = join(dir, `${name}.tmp`);
-  writeFileSync(tmp, `${JSON.stringify(e, null, 2)}\n`, { flag: "wx" });
+  writeFileSync(tmp, `${JSON.stringify(asWritten("practice", e), null, 2)}\n`, { flag: "wx" });
   renameSync(tmp, join(dir, name));
   return `${PRACTICE_DIR}/${name}`;
 }
@@ -491,7 +491,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
   port = typeof address === "object" && address ? address.port : 0;
   if (reuse && port !== last) {
     const tmp = `${portPath}.${randomBytes(4).toString("hex")}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(LastPort.parse({ type: "port", format: newestFormat("port"), port }))}\n`);
+    writeFileSync(tmp, `${JSON.stringify(asWritten("port", LastPort.parse({ type: "port", format: newestFormat("port"), port })))}\n`);
     renameSync(tmp, portPath);
   }
 
@@ -502,7 +502,7 @@ export async function startServer(store: Store, opts: ServerOptions = {}): Promi
   if (opts.writeServerFile !== false) {
     const info = ServerInfo.parse({ type: "server", format: newestFormat("server"), pid: process.pid, port, token, started });
     const tmp = `${infoPath}.${randomBytes(4).toString("hex")}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(info)}\n`, { mode: 0o600 });
+    writeFileSync(tmp, `${JSON.stringify(asWritten("server", info))}\n`, { mode: 0o600 });
     renameSync(tmp, infoPath);
   }
 

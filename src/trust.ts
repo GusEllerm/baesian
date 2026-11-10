@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import type { z } from "zod";
 import { Told, cite } from "./cite.js";
 import { BadSignature, DRAW_NAMESPACE, NAMESPACE, parseSignature, publicKeyBlob, signatureMatches } from "./sshsig.js";
-import { type FileKindName, NewerFormat, PasskeyKey, PinnedProject, ServiceKey, ServiceKeyRevocation, describeError, newestFormat, upgradeFile } from "./schema.js";
+import { type FileKindName, NewerFormat, PasskeyKey, PinnedProject, ServiceKey, ServiceKeyRevocation, asWritten, describeError, newestFormat, upgradeFile } from "./schema.js";
 
 // The keys `baesian verify` and the commit gate trust in a hosted repo (D138, D142, D159), and the checks made with them.
 // In CI, the keys are pinned in CI's own settings, outside the repo, where a commit can't change them, with the repo's
@@ -54,7 +54,7 @@ export const RUN_CI = "run `baesian ci` in the linked repo, and set it to the li
 
 /** The pin's line naming the repo's project (B-mar8x), as `baesian ci` prints it: compact JSON, as each key's line is. */
 export function projectLine(project: string): string {
-  return JSON.stringify(PinnedProject.parse({ type: "project", format: newestFormat("project"), project }));
+  return JSON.stringify(asWritten("project", PinnedProject.parse({ type: "project", format: newestFormat("project"), project })));
 }
 
 /** Set a pin's project from one of its lines: a pin names one project, however many of its lines name it. */

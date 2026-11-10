@@ -80,18 +80,19 @@ import {
   text,
   warning,
 } from "./style.js";
-import { aroundFiling, linkProblem, syncRelay, waitWithRelay } from "./sync.js";
+import { aroundFiling, linkProblem, spareKeys, syncRelay, waitWithRelay } from "./sync.js";
 import { describeVerify, fileConflicts, verify } from "./verify.js";
 import { type Card, PossibleDuplicate, Store, ValidationError } from "./store.js";
 import { TRUST_ENV } from "./trust.js";
 import { cleanVaultPath, vaultPathProblem, writeNotes } from "./vault.js";
+import { VERSION } from "./version.js";
 import { DEFAULT_TIMEOUT_MS, SLICE_MS, WaitCancelled, type WaitOptions } from "./wait.js";
 
 /** Exit code when a card may duplicate an open card or a resolved decision. */
 export const EXIT_POSSIBLE_DUPLICATE = 3;
 
-/** Baesian's version, as `baesian --version` prints it. */
-export const VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+/** Baesian's version, as `baesian --version` prints it: package.json's, kept in src/version.ts. */
+export { VERSION };
 
 export interface Io {
   out: (line: string) => void;
@@ -519,7 +520,10 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
       if (relay.state === "signed-out") throw new ValidationError(`this machine isn't signed in to project ${c.project} on ${c.service}`, [{ command: "baesian login", why: "first, then baesian ci" }]);
       if (relay.state === "stopped") throw new ValidationError("this checkout doesn't sync with the project its config names, so it can't read the project's keys (above)");
       if (relay.state !== "synced") throw new ValidationError(`couldn't sync with ${c.service}, and CI's keys must come from it: run \`baesian ci\` again once it's reachable`);
-      const pin = ciPin(s, c.service, c.project);
+      // B-x47ek: the service's spare key, which it never signs with, pinned beside its key so CI passes if it switches.
+      const spare = await spareKeys(c.service, http());
+      if (spare.problem) notes([`relay: ${spare.problem}, so the pin has no spare key${cite("B-x47ek")}: run \`baesian ci\` again later to add it`]);
+      const pin = ciPin(s, c.service, c.project, spare.keys);
       if ("problem" in pin) throw new ValidationError(pin.problem);
       if (pin.skipped.length) notes(pin.skipped.map((k) => `left out ${k.file}: ${k.why}`));
       if (opts.json) json({ ...pin, steps: workflowSteps(VERSION).join("\n") });
@@ -532,13 +536,19 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
           blank,
           text(
             strong("1."),
-            ` Set the repository variable ${TRUST_ENV} to these ${pin.lines.length} lines, the project's${cite("B-mar8x")}, the service's key and ${count} (on GitHub: Settings, Secrets and variables, Actions, Variables), or run `,
+            ` Set the repository variable ${TRUST_ENV} to these ${pin.lines.length} lines, the project's${cite("B-mar8x")}, the service's key${pin.spare.length ? `, its spare (${pin.spare.join(", ")})` : ""} and ${count} (on GitHub: Settings, Secrets and variables, Actions, Variables), or run `,
             cmd("baesian ci --github"),
             ":",
           ),
           blank,
           ...pin.lines.map(literal),
           blank,
+          ...(pin.spare.length
+            ? [
+                indent(3, text(`The spare, ${pin.spare.join(", ")}, is a key the service keeps offline and never signs with${cite("B-x47ek")}: pinned now, CI keeps passing if the service ever has to replace its key with it.`)),
+                blank,
+              ]
+            : []),
         ];
         if (pin.passkeys.length) {
           const whose = pin.passkeys.map((p) => `${p.handle}'s, added ${p.enrolled.slice(0, 10)}`).join("; ");

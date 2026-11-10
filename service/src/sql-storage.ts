@@ -12,22 +12,6 @@ import { cardOfPath, isLedgerPath } from "./retention.js";
 /** What signs a file as it's written: the service's signature for the kinds it signs, undefined for the rest. */
 export type Sign = (path: string, bytes: Uint8Array) => string | undefined;
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, bytes BLOB NOT NULL, once INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS log (
-  seq INTEGER PRIMARY KEY AUTOINCREMENT,
-  path TEXT NOT NULL UNIQUE,
-  format INTEGER NOT NULL,
-  size INTEGER NOT NULL,
-  digest TEXT NOT NULL,
-  machine TEXT,
-  at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS pending (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS before_linking (path TEXT PRIMARY KEY);
-`;
-
 /** One card's entries in the log, for retention (`SqlFileStorage.cardsInLog`). */
 export interface CardInLog {
   /** Its last entry's sequence number, and when it arrived. */
@@ -100,8 +84,8 @@ export class SqlFileStorage implements Storage {
     private readonly storage: DurableObjectStorage,
     private readonly opts: { sign?: Sign; now?: () => string } = {},
   ) {
+    // Its tables, files, log, meta, pending and before_linking, are made by the object's migrations (`migrateObject()`).
     this.sql = storage.sql;
-    this.sql.exec(SCHEMA);
   }
 
   read(path: string): Uint8Array | undefined {

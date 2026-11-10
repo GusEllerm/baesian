@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { type ServiceKey, asWritten } from "./schema.js";
 import type { Store } from "./store.js";
 import { TRUST_ENV, checkSigned, projectLine } from "./trust.js";
 
@@ -21,8 +22,13 @@ export interface CiPin {
   project: string;
   /** The website's origin, as the service's key names it: where the person's account page is. */
   site: string;
-  /** `BAESIAN_TRUST`'s lines, compact JSON, one each: the project's, the service's keys and revocations, then the passkeys'. */
+  /**
+   * `BAESIAN_TRUST`'s lines, compact JSON, one each: the project's, the service's keys, its spare, its revocations, then
+   * the passkeys'.
+   */
   lines: string[];
+  /** The spare keys pinned beside the service's (B-x47ek), by key ID: the service never signs with one until it switches. */
+  spare: string[];
   passkeys: PinnedPasskey[];
   /** Passkey key files in the live layer the service's keys don't sign, which the pin leaves out. */
   skipped: { file: string; why: string }[];
@@ -34,9 +40,11 @@ const compact = (store: Store, rel: string) => JSON.stringify(JSON.parse(store.b
 /**
  * The pin for a linked repo (B-pt52b), from the live layer only: the line naming its project (B-mar8x); each service key
  * and revocation the relay sent; and each passkey key file whose `.sig` checks against those keys (`checkSigned()`), at
- * the time it was enrolled. Or why there's none yet: the relay sends its key with the project's first file.
+ * the time it was enrolled. Or why there's none yet: the relay sends its key with the project's first file. `spare` is the
+ * service's spare keys (B-x47ek), from the service itself (`spareKeys()`), each pinned beside the keys unless the relay
+ * already sent it as one: with it pinned, CI keeps passing when the service switches to it.
  */
-export function ciPin(store: Store, service: string, project: string): CiPin | { problem: string } {
+export function ciPin(store: Store, service: string, project: string, spare: readonly ServiceKey[] = []): CiPin | { problem: string } {
   const files = store.trustFiles();
   if (!files.service.length) {
     return { problem: `this machine has no key from ${service} for project ${project} yet: the relay sends it with the project's first file. File a card, then run \`baesian ci\` again` };
@@ -55,8 +63,15 @@ export function ciPin(store: Store, service: string, project: string): CiPin | {
     passkeys.push({ file, handle: key.handle, account: key.account, enrolled: key.enrolled });
     signed.push(compact(store, file));
   }
-  const lines = [projectLine(project), ...files.service.map((s) => compact(store, s.file)), ...files.revoked.map((r) => compact(store, r.file)), ...signed];
-  return { service, project, site: files.service[0]!.key.origin, lines, passkeys, skipped };
+  const spares = spare.filter((k) => !files.service.some((s) => s.key.public_key === k.public_key));
+  const lines = [
+    projectLine(project),
+    ...files.service.map((s) => compact(store, s.file)),
+    ...spares.map((k) => JSON.stringify(asWritten("service-key", k))),
+    ...files.revoked.map((r) => compact(store, r.file)),
+    ...signed,
+  ];
+  return { service, project, site: files.service[0]!.key.origin, lines, spare: spares.map((k) => k.key), passkeys, skipped };
 }
 
 /**

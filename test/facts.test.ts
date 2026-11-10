@@ -1,9 +1,11 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { commitSnapshot, detectFacts, requirementName, stagedSnapshot } from "../src/facts.js";
 import { globToRegExp } from "../src/globs.js";
-import { RELEASED_BLOCKS, blockDigest, hookBlock } from "../src/hookblock.js";
+import { CHANGED_BLOCKS, RELEASED_BLOCKS, blockDigest, hookBlock, writtenBlock } from "../src/hookblock.js";
+import { installHooks } from "../src/hooks.js";
+import { VERSION, isRelease } from "../src/version.js";
 import { cleanup, repo, sh } from "./helpers.js";
 
 afterEach(cleanup);
@@ -199,6 +201,50 @@ describe("schema and infra", () => {
       stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${OLDER}\n` });
       expect(ids(dir)).toEqual(["infra:.githooks/pre-commit"]);
     });
+
+    describe("changed by this release, rolled out a release late (B-amxkp)", () => {
+      // No block changes today, so this one is made up: this release changed pre-commit's block from OLDER, which the
+      // releases before wrote (listed above), to `hookBlock()`'s.
+      beforeEach(() => {
+        CHANGED_BLOCKS["pre-commit"] = { since: VERSION, before: OLDER };
+      });
+      afterEach(() => {
+        delete CHANGED_BLOCKS["pre-commit"];
+      });
+
+      it("is written as the block before by the release that changes it, and new by the next", () => {
+        expect(writtenBlock("pre-commit")).toBe(OLDER);
+        expect(writtenBlock("pre-commit", "99.0.0")).toBe(hookBlock("pre-commit"));
+        expect(writtenBlock("commit-msg")).toBe(hookBlock("commit-msg"));
+        // A pre-release of the release that changes it still writes the block before.
+        CHANGED_BLOCKS["pre-commit"] = { since: "1.2.0", before: OLDER };
+        expect(writtenBlock("pre-commit", "1.2.0-rc.1")).toBe(OLDER);
+        expect(writtenBlock("pre-commit", "1.2.0")).toBe(OLDER);
+        expect(writtenBlock("pre-commit", "1.2.1")).toBe(hookBlock("pre-commit"));
+      });
+
+      it("so `baesian init` writes a block the release before knows, and a teammate on the next release passes this gate", () => {
+        const { dir, store } = repo();
+        installHooks(store, []);
+        expect(readFileSync(join(dir, ".githooks", "pre-commit"), "utf8")).toBe(`#!/bin/sh\n${OLDER}\n`);
+        expect(readFileSync(join(dir, ".githooks", "commit-msg"), "utf8")).toBe(`#!/bin/sh\n${hookBlock("commit-msg")}\n`);
+        // The block init wrote is one a release before this wrote, so CI pinned a release behind counts it as Baesian's own.
+        expect(released).toContain(blockDigest(OLDER));
+        sh(dir, "add", "-A");
+        expect(ids(dir)).toEqual([]);
+        sh(dir, "commit", "-q", "-m", "Set up Baesian, this release");
+        // The next release's init writes the new block, which this release already knows as its own.
+        stage(dir, { ".githooks/pre-commit": `#!/bin/sh\n${writtenBlock("pre-commit", "99.0.0")}\n` });
+        expect(ids(dir)).toEqual([]);
+      });
+    });
+  });
+
+  it("lists, for each block a release changed, the block before as one a release wrote (B-amxkp)", () => {
+    for (const [name, c] of Object.entries(CHANGED_BLOCKS)) {
+      expect(isRelease(c!.since), name).toBe(true);
+      expect(RELEASED_BLOCKS[name as keyof typeof RELEASED_BLOCKS], name).toContain(blockDigest(c!.before));
+    }
   });
 
   it("ignores node_modules and Baesian's own record", () => {
