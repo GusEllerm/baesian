@@ -4062,6 +4062,11 @@ sig = "6e92625de3552bf4"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/PracticePanel.tsx"
+sig = "c825965f3fe24f74"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/answer.ts#READ_FIRST_MS"
 sig = "2846db50fbfc41dc"
 
@@ -4092,13 +4097,18 @@ sig = "1f8c7c02469d986e"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/model.ts#DeskCard"
+sig = "413b66a9e6da4ef6"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/model.ts#isHard"
 sig = "335c52c34d6b2212"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
-target = "client/src/model.ts#queue"
-sig = "994654274ba05f5e"
+target = "client/src/model.ts#practiceOf"
+sig = "551321fb695af4d8"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4127,8 +4137,38 @@ sig = "421e9b413116585e"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts"
+sig = "5e1b66bcbd82026e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#GAP"
+sig = "d4bcd24f01460352"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#MAX_AGE_MS"
+sig = "3bc989e229df2316"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#MIN_AGE_MS"
+sig = "7a10a63add8b4de1"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "client/src/practice.ts#Marked"
 sig = "1fc25254ed8888ef"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#RATE"
+sig = "a65426a65679a888"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#SPOTTED_P"
+sig = "1be71753257dcf6e"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4137,8 +4177,83 @@ sig = "b082491e168271a2"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
-target = "design/explorations/round3/app.js#queue"
-sig = "a1a0807df3e82fb9"
+target = "client/src/practice.ts#cameRound"
+sig = "c197c58bed2fd899"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#draws"
+sig = "8283d124226c000d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#finalChoice"
+sig = "81ccec9fe960c63e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#fisherP"
+sig = "24fa2018a562daad"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practiceAnswer"
+sig = "0d3e09223f2194be"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practiceBar"
+sig = "20343eaf02191d73"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practiceId"
+sig = "8853e5d26816b51d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practicePath"
+sig = "54b46c5b4440273d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practiceWords"
+sig = "96ebee889dbeeccf"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#practised"
+sig = "963c5ed7a92a599e"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#rebuild"
+sig = "86407f77c358954d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#resultNote"
+sig = "91590dadda94a2c6"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#resultOf"
+sig = "8a4e3ff91f63b763"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#sources"
+sig = "50ae09bbd0851d02"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#testMarks"
+sig = "e5b24a9e2b51fa81"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "client/src/practice.ts#whyNot"
+sig = "8fb55d4107c54a42"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4149,11 +4264,6 @@ sig = "0a6514f8831a74f5"
 doc = "docs/vault/Design/Practice Cards.md"
 target = "design/explorations/round4/app.js#UNDO_MS"
 sig = "7a674fa298423607"
-
-[[bindings]]
-doc = "docs/vault/Design/Practice Cards.md"
-target = "design/explorations/round4/app.js#queue"
-sig = "3de33eb997421454"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4177,11 +4287,6 @@ sig = "7a674fa298423607"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
-target = "design/explorations/round5/app.js#queue"
-sig = "3de33eb997421454"
-
-[[bindings]]
-doc = "docs/vault/Design/Practice Cards.md"
 target = "design/explorations/round5/app.js#relationsOf"
 sig = "8b5679d5f8af085f"
 
@@ -4197,8 +4302,18 @@ sig = "a529f82bf25c2a5e"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/globus.ts#whyNot"
+sig = "9f56b6fd6dde3ffc"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "service/src/index.ts#ProjectRelay"
 sig = "8e055c71244b6e6f"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "service/src/practice-table.ts#PracticeTable"
+sig = "a0437f7e909783f9"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -4227,8 +4342,33 @@ sig = "e7531a4cba508948"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
+target = "src/api.ts#PRACTICE_FIELDS"
+sig = "84d9a048d229408d"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
 target = "src/api.ts#VERDICT_FIELDS"
 sig = "9daa2130fb6f1b1c"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/practice-answers.ts#practiceEntry"
+sig = "d248ae1086795bbc"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/schema.ts#PracticeEntry"
+sig = "f5d784ab7aa397a6"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/server.ts#readPractice"
+sig = "a8d613ecabfe4f63"
+
+[[bindings]]
+doc = "docs/vault/Design/Practice Cards.md"
+target = "src/server.ts#writePractice"
+sig = "693f2411d0135278"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
