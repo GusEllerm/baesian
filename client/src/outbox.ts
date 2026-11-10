@@ -14,16 +14,16 @@ import type { Wait } from "./waiting";
 export interface Posted {
   filed?: string[];
   waiting?: Wait;
-  /** The practice entry kept with it (B-rehdw): a practice card's answer, or a real card's mark in the blind test. */
+  /** The practice entry kept, for a practice card's answer (B-rehdw). */
   practice?: PracticeEntry;
 }
 
 /**
- * What waits in the undo window: a verdict, with, in the blind test, your mark on its card (B-xx49m); or a practice card's
- * answer (B-kb5yt), which goes to its own address and never to an agent. Both wait the same, so a practice card answers
- * as a real one does.
+ * What waits in the undo window: a verdict; or a practice card's answer (B-kb5yt), which goes to its own address and never
+ * to an agent. Both wait the same, so a practice card answers as a real one does. A mark in the blind test isn't held: it
+ * comes after the answer, on a card of its own (B-9prve), and is kept at once.
  */
-export type Outgoing = { verdict: ApiVerdictInput; mark?: ApiPracticeInput } | { practice: ApiPracticeInput };
+export type Outgoing = { verdict: ApiVerdictInput } | { practice: ApiPracticeInput };
 
 export type Post = (item: Outgoing, opts: { keepalive: boolean }) => Promise<Posted | void>;
 
@@ -88,14 +88,7 @@ export const postVerdictTo =
   async (item, { keepalive }) => {
     // A practice card's answer goes to the practice address alone (B-rehdw): never to an agent, and never a verdict.
     if ("practice" in item) return { practice: await postPractice(e, item.practice, keepalive) };
-    const out = await posted(await postAnswer(e, e.verdicts, item.verdict, { keepalive, client: true, wait: true }));
-    // In the blind test, your mark on the card goes after its answer (B-xx49m). A mark that fails costs only itself.
-    if (!item.mark) return out;
-    try {
-      return { ...out, practice: await postPractice(e, item.mark, keepalive) };
-    } catch {
-      return out;
-    }
+    return posted(await postAnswer(e, e.verdicts, item.verdict, { keepalive, client: true, wait: true }));
   };
 
 /** Keep a practice entry (B-rehdw): the start of the blind test, a practice card's answer, or a mark. Rejects with the server's reason. */

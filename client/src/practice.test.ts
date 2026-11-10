@@ -5,7 +5,7 @@ import type { PracticeEntry, PracticeMark, Verdict } from "../../src/schema";
 import { comparedWords } from "./PracticePanel";
 import { keyOf, rarityOf, relationsOf, sidesFor } from "./model";
 import {
-  GAP, MAX_AGE_MS, MIN_AGE_MS, RATE, SPOTTED_P, TEST_SIZE, cameRound, draws, finalChoice, fisherP, phaseOf, practiceAnswer, practiceBar, practiceId, practicePath, practiceWords, practised, rebuild,
+  GAP, MAX_AGE_MS, MIN_AGE_MS, RATE, SPOTTED_P, TEST_SIZE, cameRound, draws, finalChoice, fisherP, markOf, phaseOf, practiceAnswer, practiceBar, practiceId, practicePath, practiceWords, practised, rebuild,
   resultNote, resultOf, resultWords, sources, statusOf, testMarks, whyNot,
 } from "./practice";
 
@@ -207,26 +207,37 @@ let t = 0;
 const tick = () => new Date(NOW + ++t * 1000).toISOString();
 const who = { type: "practice" as const, format: 1 as const, reviewer: "gus", client: "web" };
 const start = (): PracticeEntry => ({ ...who, kind: "test-start", at: tick() });
+/** A practice card's answer: in the blind test when given a mark, which is an entry of its own (`marked()`). */
 const rebuilt = (card: string, mark?: PracticeMark, over: Partial<Extract<PracticeEntry, { kind: "answer" }>> = {}): PracticeEntry => ({
-  ...who, kind: "answer", card, revision: 1, answered: ago(10), blind: "other", final: "planted", ...(mark ? { test: true as const, mark } : {}), at: tick(), ...over,
+  ...who, kind: "answer", card, revision: 1, answered: ago(10), blind: "other", final: "planted", ...(mark ? { test: true as const } : {}), at: tick(), ...over,
 });
-const real = (card: string, mark: PracticeMark): PracticeEntry => ({ ...who, kind: "mark", card, revision: 1, mark, at: tick() });
+/** A guess in the blind test, given on a card of its own after the answer (B-9prve). */
+const marked = (card: string, mark: PracticeMark, practice = false): PracticeEntry => ({ ...who, kind: "mark", card, revision: 1, mark, ...(practice ? { practice: true as const } : {}), at: tick() });
+const real = (card: string, mark: PracticeMark): PracticeEntry => marked(card, mark);
+/** A practice card in the test: its answer, then your guess about it. */
+const practiceIn = (card: string, mark: PracticeMark): PracticeEntry[] => [rebuilt(card, mark), marked(card, mark, true)];
 /** A whole test: forty cards, ten rebuilt, marked as given. */
 function test(marks: { practice: PracticeMark[]; real: PracticeMark[] }): PracticeEntry[] {
   const out = [start()];
   marks.real.forEach((m, i) => out.push(real(`B-r${String(i).padStart(4, "0")}`, m)));
-  marks.practice.forEach((m, i) => out.push(rebuilt(`B-p${String(i).padStart(4, "0")}`, m)));
+  marks.practice.forEach((m, i) => out.push(...practiceIn(`B-p${String(i).padStart(4, "0")}`, m)));
   return out;
 }
 const times = <T,>(n: number, x: T): T[] => Array.from({ length: n }, () => x);
 
 describe("answering a practice card (Practice Cards section 4, B-rehdw)", () => {
   const p = rebuild(past({}, { verdicts: [verdict({ at: ago(9) })] }));
-  it("keeps the kind of answer against the planted pick, never what you wrote; and in the test, your mark", () => {
+  it("keeps the kind of answer against the planted pick, never what you wrote; and whether it came in the test", () => {
     expect(practiceAnswer(p.practice, { kind: "choose", option: "proposal", first: "alternative", why: "it read well" })).toEqual({ kind: "answer", card: p.practice.of, revision: 1, answered: ago(9), blind: "other", final: "planted" });
     expect(practiceAnswer(p.practice, { kind: "choose", option: "alternative", first: "proposal" })).toMatchObject({ blind: "planted", final: "other" });
     expect(practiceAnswer(p.practice, { kind: "write", reason: "correction", text: "Use MySQL" })).toEqual({ kind: "answer", card: p.practice.of, revision: 1, answered: ago(9), final: "write" });
-    expect(practiceAnswer(p.practice, { kind: "pass", reason: "need_context", text: "" }, "sure")).toMatchObject({ final: "pass", test: true, mark: "sure" });
+    expect(practiceAnswer(p.practice, { kind: "pass", reason: "need_context", text: "" }, true)).toEqual({ kind: "answer", card: p.practice.of, revision: 1, answered: ago(9), final: "pass", test: true });
+  });
+
+  it("keeps your guess in the test as an entry of its own, naming a practice card's original and that it was practice (B-9prve)", () => {
+    expect(markOf(p, "maybe")).toEqual({ kind: "mark", card: p.practice.of, revision: 1, mark: "maybe", practice: true });
+    const real = past({}, { status: "open", verdicts: [] });
+    expect(markOf(real, "no")).toEqual({ kind: "mark", card: real.meta.id, revision: 1, mark: "no" });
   });
 
   it("says it was practice once answered: from what and when, the planted pick, that no agent waited, that nothing went or was kept", () => {
@@ -275,8 +286,10 @@ describe("the blind test (B-xx49m, B-bb7ga)", () => {
   });
 
   it("takes each card's latest mark, and only the first ten rebuilt cards' worth of the test", () => {
-    const entries = [start(), rebuilt("B-aaaaa", "no"), rebuilt("B-aaaaa", "sure"), real("B-ccccc", "no"), real("B-ccccc", "maybe")];
-    expect(testMarks(entries).map((m) => [m.card, m.mark])).toEqual([["B-aaaaa", "sure"], ["B-ccccc", "maybe"]]);
+    const entries = [start(), ...practiceIn("B-aaaaa", "no"), marked("B-aaaaa", "sure", true), real("B-ccccc", "no"), real("B-ccccc", "maybe")];
+    expect(testMarks(entries).map((m) => [m.card, m.practice, m.mark, m.answered])).toEqual([["B-aaaaa", true, "sure", ago(10)], ["B-ccccc", false, "maybe", undefined]]);
+    // A card answered in the test that comes back as practice in it a week later keeps both of its marks apart.
+    expect(testMarks([start(), real("B-ddddd", "no"), ...practiceIn("B-ddddd", "sure")]).map((m) => [m.practice, m.mark])).toEqual([[false, "no"], [true, "sure"]]);
     const more = test({ practice: times(TEST_SIZE + 2, "no"), real: [] });
     expect(testMarks(more).filter((m) => m.practice)).toHaveLength(TEST_SIZE);
     // A real card's mark goes after its verdict, so it may arrive after the tenth practice card's answer: it still counts.

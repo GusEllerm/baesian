@@ -551,31 +551,25 @@ const practiceWho = {
  * - `test-start`: you started the blind test (B-xx49m). Once.
  * - `answer`: your answer on a practice card: the card it was rebuilt from and its revision, when that card's final answer
  *   was given (`answered`, for B-j583c's check), your blind choice against the planted pick (`blind`), and your final
- *   answer (`final`): the planted pick, the other option, a written answer or "can't judge". In the blind test, `test` and
- *   your mark.
- * - `mark`: in the blind test, your mark on a real card you answered.
+ *   answer (`final`): the planted pick, the other option, a written answer or "can't judge"; `test` when it came in the
+ *   blind test.
+ * - `mark`: in the blind test, your guess about a card you answered, made on a card of its own after the answer (B-9prve):
+ *   the card (for a practice card, the one it was rebuilt from), and `practice` when it was a practice card.
  */
-export const PracticeEntry = z
-  .discriminatedUnion("kind", [
-    z.strictObject({ ...practiceWho, kind: z.literal("test-start") }),
-    z.strictObject({
-      ...practiceWho,
-      kind: z.literal("answer"),
-      card: CardId,
-      revision: z.number().int().min(1),
-      answered: Timestamp,
-      blind: z.enum(["planted", "other"]).optional(),
-      final: z.enum(["planted", "other", "write", "pass"]),
-      test: z.literal(true).optional(),
-      mark: PracticeMark.optional(),
-    }),
-    z.strictObject({ ...practiceWho, kind: z.literal("mark"), card: CardId, revision: z.number().int().min(1), mark: PracticeMark }),
-  ])
-  .superRefine((e, ctx) => {
-    if (e.kind === "answer" && (e.test === true) !== (e.mark !== undefined)) {
-      ctx.addIssue({ code: "custom", path: ["mark"], message: "an answer in the blind test has a mark, and only one in the test does" });
-    }
-  });
+export const PracticeEntry = z.discriminatedUnion("kind", [
+  z.strictObject({ ...practiceWho, kind: z.literal("test-start") }),
+  z.strictObject({
+    ...practiceWho,
+    kind: z.literal("answer"),
+    card: CardId,
+    revision: z.number().int().min(1),
+    answered: Timestamp,
+    blind: z.enum(["planted", "other"]).optional(),
+    final: z.enum(["planted", "other", "write", "pass"]),
+    test: z.literal(true).optional(),
+  }),
+  z.strictObject({ ...practiceWho, kind: z.literal("mark"), card: CardId, revision: z.number().int().min(1), mark: PracticeMark, practice: z.literal(true).optional() }),
+]);
 export type PracticeEntry = z.infer<typeof PracticeEntry>;
 
 /** The agent withdrawing its own card: `cards/<id>/withdrawn.json`. */

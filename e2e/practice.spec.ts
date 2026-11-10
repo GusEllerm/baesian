@@ -9,8 +9,9 @@ import { PHONES, phone, shot } from "./touch.js";
 
 // Practice cards with planted picks (B-kb5yt, docs/vault/Design/Practice Cards.md): a past card comes back with the option
 // its agent didn't pick shown as the pick, and the case the agent wrote for it (B-sy0kz). First a blind test, started from
-// your calibration, mixed into your cards about 1 in 4 with a mark on every card you answer (B-xx49m), spotted only if
-// your marks beat guessing (B-bb7ga); then about 1 in 20, saying it was practice once answered. A practice card says an
+// your calibration, mixed into your cards about 1 in 4, with your guess about every card you answer on a card of its own
+// after it (B-xx49m, B-9prve) and every toast saying only "Recorded" (B-wcb9d), spotted only if your guesses beat chance
+// (B-bb7ga); then about 1 in 20, saying it was practice once answered. A practice card says an
 // agent has stopped when the card before it did (B-zw55w). Its answers go to their own address (B-rehdw), never to an
 // agent. A real server over a temp repo, a real browser, Playwright's clock for the undo window, and Math.random held at
 // 0 so a practice card comes whenever one may. With BAESIAN_SHOTS set to a folder, each screen is saved there.
@@ -63,15 +64,24 @@ const who = { type: "practice" as const, format: 1 as const, reviewer: "tester",
 let tick = 0;
 const at = () => new Date(Date.now() - 3 * DAY + ++tick * 1000).toISOString();
 const started = (): PracticeEntry => ({ ...who, kind: "test-start", at: at() });
-const rebuiltIn = (card: string, mark: PracticeMark): PracticeEntry => ({ ...who, kind: "answer", card, revision: 1, answered: ago(10), blind: "other", final: "planted", test: true, mark, at: at() });
+/** A rebuilt card answered in the test, and then the guess about it, an entry of its own (B-9prve). */
+const rebuiltIn = (card: string, mark: PracticeMark): PracticeEntry[] => [
+  { ...who, kind: "answer", card, revision: 1, answered: ago(10), blind: "other", final: "planted", test: true, at: at() },
+  { ...who, kind: "mark", card, revision: 1, mark, practice: true, at: at() },
+];
 const markOn = (i: number, mark: PracticeMark): PracticeEntry => ({ ...who, kind: "mark", card: `B-${String(90000 + i)}`, revision: 1, mark, at: at() });
 
 /** Seed the practice answers: a test begun, with these rebuilt cards and real cards marked. */
 function seed(store: Store, rebuilt: [string, PracticeMark][], real: PracticeMark[]) {
   writePractice(store.live, started());
   real.forEach((m, i) => writePractice(store.live, markOn(i, m)));
-  for (const [id, m] of rebuilt) writePractice(store.live, rebuiltIn(id, m));
+  for (const [id, m] of rebuilt) for (const e of rebuiltIn(id, m)) writePractice(store.live, e);
 }
+
+/** The card that asks your guess in the blind test, after each answer (B-9prve). */
+const guessCard = (page: Page) => page.locator("article.card.mark-card:not([data-leaving])");
+/** A card to answer, not the guess. */
+const liveCard = (page: Page) => page.locator("article.card:not(.mark-card):not([data-leaving])");
 
 async function desk(page: Page, setup: (store: Store) => void, opts: { reduced?: boolean } = {}) {
   const r = repo();
@@ -124,18 +134,35 @@ test("the blind test: started from your calibration; every card you answer marke
   await expect(cal).toBeHidden();
   expect(readPractice(store.live).map((e) => e.kind)).toEqual(["test-start"]);
 
-  // A real card: the reveal asks whether it was rebuilt, and its answer waits for the mark.
-  const first = await question(page).textContent();
+  // A real card: answered as any card is; the reveal asks nothing more (B-9prve).
+  const first = (await question(page).textContent())!;
   await choose(page, "proposal");
-  const mark = page.locator(CARD).getByRole("group", { name: "Was this card rebuilt from a past one?" });
-  await expect(mark).toContainText("Blind test: was this card rebuilt from a past one?");
+  await expect(page.locator(CARD)).not.toContainText(/rebuilt/i);
   await confirm(page);
-  await expect(page.locator(CARD).getByRole("alert")).toHaveText("Say whether you think it was rebuilt from a past card first.");
-  await page.keyboard.press("1");
-  await expect(mark.getByRole("button", { name: /^No/ })).toHaveAttribute("aria-pressed", "true");
-  await confirm(page);
-  // Every card's toast says the same in the test: recorded, never sent.
+  // Every card's toast says the same in the test: recorded, never sent (B-wcb9d).
   await expect(page.getByText(/^Recording it in/)).toBeVisible();
+  // Then, before the next card, a card of its own asks your guess about it; the answer is already on its way.
+  const guess = guessCard(page);
+  await expect(guess.getByRole("heading", { name: "Was that card rebuilt from a past one?" })).toBeVisible();
+  await expect(guess).toContainText(`“${first.replace(/^Which way for the auth work, (\d+)\?$/, "Waiting $1")}”, the card you just answered.`);
+  await expect(guess).toContainText("Blind test: your answer is on its way.");
+  await expect(liveCard(page)).toHaveCount(0);
+  await expect(page.locator(".crumbs")).toHaveText("blind test › Your guess");
+  // Nothing skips it: not Esc, not an arrow. Z takes the answer back, and the card with it.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ArrowRight");
+  await expect(guess).toBeVisible();
+  await shot(page, "practice-guess", true);
+  await page.keyboard.press("z");
+  await expect(guessCard(page)).toHaveCount(0);
+  await expect(question(page)).toHaveText(first);
+  await choose(page, "proposal");
+  await confirm(page);
+  await expect(guessCard(page)).toBeVisible();
+  // 1, 2 or 3 give it: No.
+  await page.keyboard.press("1");
+  await expect(guessCard(page)).toHaveCount(0);
+  await expect.poll(() => readPractice(store.live).filter((e) => e.kind === "mark")).toEqual([expect.objectContaining({ kind: "mark", mark: "no", revision: 1 })]);
 
   // The next is a rebuilt card: the oldest past card's question, its options swapped, each with its own crux answer.
   const oldest = pasts[0]!;
@@ -156,21 +183,25 @@ test("the blind test: started from your calibration; every card you answer marke
   await expect(page.locator(`${CARD} .reasoning`)).toContainText(CASE);
   await expect(page.locator(`${CARD} .reasoning`)).not.toContainText(RATIONALE);
   await page.locator(CARD).getByRole("textbox").fill("Postgres is overkill here");
-  await mark.getByRole("button", { name: /^Maybe/ }).click();
   await shot(page, "practice-test-reveal", true);
   await confirm(page);
   await expect(page.getByText(/^Recording it in/)).toBeVisible();
+  // Its guess, by a click, names the card as it was shown, as any card's does.
+  await expect(guessCard(page)).toContainText(`“Run store`);
+  await guessCard(page).getByRole("button", { name: /^Maybe/ }).click();
+  await expect(guessCard(page)).toHaveCount(0);
   // On the path it reads as a real card's would, until the test ends.
   await expect(page.locator(".path")).toContainText("you chose “SQLite (WAL mode)”, not claude-code's pick");
   await expect(page.locator(".path")).not.toContainText("practice:");
   await page.clock.fastForward(5100);
   await expect(page.getByText("Recorded.", { exact: true })).toBeVisible();
-  // Kept as practice answers, apart from the record: nothing you typed, and nothing sent to an agent.
-  // The real card's mark goes after its verdict, so it may land after the practice answer.
-  await expect.poll(() => readPractice(store.live).map((e) => e.kind).sort()).toEqual(["answer", "mark", "test-start"]);
+  // Kept as practice answers, apart from the record: nothing you typed, and nothing sent to an agent. Each guess is an
+  // entry of its own, a rebuilt card's naming the card it came from, and that it was practice.
+  await expect.poll(() => readPractice(store.live).map((e) => e.kind).sort()).toEqual(["answer", "mark", "mark", "test-start"]);
   const entries = readPractice(store.live);
-  expect(entries.find((e) => e.kind === "mark")).toMatchObject({ mark: "no", revision: 1 });
-  expect(entries.find((e) => e.kind === "answer")).toMatchObject({ card: oldest.id, revision: 1, blind: "other", final: "other", test: true, mark: "maybe" });
+  expect(entries.find((e) => e.kind === "answer")).toMatchObject({ card: oldest.id, revision: 1, blind: "other", final: "other", test: true });
+  expect(entries.filter((e) => e.kind === "mark")).toEqual([expect.objectContaining({ mark: "no" }), expect.objectContaining({ card: oldest.id, mark: "maybe", practice: true })]);
+  expect(entries.filter((e) => e.kind === "mark")[0]).not.toHaveProperty("practice");
   expect(JSON.stringify(entries)).not.toContain("overkill");
   expect(store.verdicts(oldest.id)).toHaveLength(1);
 });
@@ -184,13 +215,13 @@ test("the tenth rebuilt card ends the test: its result opens, saves as a note, a
     open(s, "billing");
   });
   await choose(page, "proposal");
-  await page.keyboard.press("1");
   await confirm(page);
+  await page.keyboard.press("1");
   // The rebuilt card: the first past card that hasn't come back.
   await expect(question(page)).toHaveText(pasts[9]!.question);
   await choose(page, "proposal");
-  await page.keyboard.press("3");
   await confirm(page);
+  await page.keyboard.press("3");
   await page.clock.fastForward(5100);
   const result = panel(page, "The blind test's result");
   await expect(result).toBeVisible();
@@ -226,10 +257,10 @@ test("after the test, a practice card comes among your cards, says an agent stop
   });
   await expect(page.locator(`${CARD} .stopped`)).toHaveText("claude-code stopped");
   await choose(page, "proposal");
-  // No mark after the test.
-  await expect(page.locator(CARD).getByRole("group", { name: "Was this card rebuilt from a past one?" })).toHaveCount(0);
   await confirm(page);
   await expect(page.getByText(/^Sending to claude-code in/)).toBeVisible();
+  // No guess after the test: the next card comes at once.
+  await expect(guessCard(page)).toHaveCount(0);
   // The practice card: the first past card that hasn't come back, saying its agent stopped, as the card before it did.
   await expect(question(page)).toHaveText(pasts[10]!.question);
   await expect(page.locator(`${CARD} .stopped`)).toHaveText("claude-code stopped");
@@ -319,6 +350,35 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, ...PHONES.map
   test.describe(`${size.name}, ${size.width}×${size.height}`, () => {
     if ("phone" in size) test.use(phone(size));
     else test.use({ viewport: { width: size.width, height: size.height } });
+
+    test("the card asking your guess in the blind test passes the layout check, and a click or a tap gives it (B-9prve)", async ({ page }) => {
+      const pasts: { id: string; question: string }[] = [];
+      await desk(
+        page,
+        (s) => {
+          for (let i = 0; i < 12; i++) pasts.push(past(s, 20 - i));
+          writePractice(s.live, started());
+          open(s, "auth");
+          open(s, "billing");
+        },
+        { reduced: true },
+      );
+      const problems: string[] = [];
+      await ("phone" in size ? option(page, "proposal").tap() : option(page, "proposal").click());
+      await confirm(page);
+      await expect(guessCard(page)).toBeVisible();
+      await page.waitForTimeout(80);
+      for (const p of await page.evaluate(layoutProblems)) problems.push(`the guess: ${p}`);
+      if ("phone" in size) for (const p of await page.evaluate(smallTargets)) problems.push(`the guess: ${p}`);
+      // Its three answers are named without the keys on a screen you only touch.
+      await expect(guessCard(page).getByRole("button", { name: /^Sure/ }).locator("kbd")).toHaveCount("phone" in size ? 0 : 1);
+      await shot(page, "practice-guess-size", true);
+      const sure = guessCard(page).getByRole("button", { name: /^Sure/ });
+      await ("phone" in size ? sure.tap() : sure.click());
+      await expect(guessCard(page)).toHaveCount(0);
+      await expect(question(page)).toHaveText(pasts[0]!.question);
+      expect(problems).toEqual([]);
+    });
 
     test("a practice card can't be told from a real one by its layout, and passes the layout check", async ({ page }) => {
       let twin = "";

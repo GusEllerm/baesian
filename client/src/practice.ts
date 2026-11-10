@@ -144,6 +144,13 @@ export function draws(p: { phase: Phase; since: number; realLeft: number; pool: 
 /** How many practice cards the blind test takes (D83, B-kb5yt): it ends when the tenth is answered and marked. */
 export const TEST_SIZE = 10;
 
+/** The marks in the blind test (B-xx49m, B-bb7ga), in the words the mark card shows, with the key for each (B-9prve). */
+export const MARKS: readonly { mark: PracticeMark; label: string; key: string }[] = [
+  { mark: "no", label: "No", key: "1" },
+  { mark: "maybe", label: "Maybe", key: "2" },
+  { mark: "sure", label: "Sure", key: "3" },
+];
+
 /** Practice cards answered so far, of any phase: each card comes back once. */
 export const practised = (entries: readonly PracticeEntry[]): Set<string> => new Set(entries.flatMap((e) => (e.kind === "answer" ? [e.card] : [])));
 
@@ -158,18 +165,21 @@ export interface Marked {
 }
 
 /**
- * The blind test's marks, as its entries say: each card's latest mark, practice cards' from their answers and real ones'
- * from their marks, in the order first marked. Every real card marked counts: a real card's mark goes after its verdict,
- * so the one before the tenth practice card may arrive just after it. Two devices answering at once could go past ten
- * practice cards: the test is the first ten.
+ * The blind test's marks, as its entries say: each card's latest mark, practice and real kept apart (a card answered in the
+ * test may come back as practice in it a week later), in the order first marked, with a practice card's original's answer
+ * time from its answer. Every real card marked counts; two devices answering at once could go past ten practice cards:
+ * the test is the first ten.
  */
 export function testMarks(entries: readonly PracticeEntry[]): Marked[] {
+  const answered = new Map<string, string>();
+  for (const e of entries) if (e.kind === "answer" && e.test) answered.set(e.card, e.answered);
   const byCard = new Map<string, Marked>();
   for (const e of entries) {
-    if (e.kind === "test-start") continue;
-    const first = byCard.get(e.card)?.at ?? e.at;
-    if (e.kind === "answer" && e.test && e.mark) byCard.set(e.card, { card: e.card, practice: true, mark: e.mark, answered: e.answered, at: first });
-    if (e.kind === "mark") byCard.set(e.card, { card: e.card, practice: false, mark: e.mark, at: first });
+    if (e.kind !== "mark") continue;
+    const key = `${e.practice ? "p" : "r"}:${e.card}`;
+    const at = byCard.get(key)?.at ?? e.at;
+    const from = e.practice ? answered.get(e.card) : undefined;
+    byCard.set(key, { card: e.card, practice: e.practice === true, mark: e.mark, ...(from ? { answered: from } : {}), at });
   }
   const all = [...byCard.values()].sort((a, b) => a.at.localeCompare(b.at));
   const tenth = all.filter((m) => m.practice)[TEST_SIZE - 1];
@@ -349,10 +359,10 @@ export function resultNote(s: Extract<PracticeStatus, { kind: "spotted" | "on" }
 
 /**
  * What a practice card's answer keeps (B-rehdw): the card it came from, its blind choice and final answer against the
- * planted pick (the option the practice card showed as the pick), and in the blind test your mark. Never what you typed,
- * nor a reason you chose: only the kind of answer.
+ * planted pick (the option the practice card showed as the pick), and whether it came in the blind test. Never what you
+ * typed, nor a reason you chose: only the kind of answer. Your mark in the test is an entry of its own (`markOf()`).
  */
-export function practiceAnswer(p: Practice, answer: Answer, mark?: PracticeMark): ApiPracticeInput {
+export function practiceAnswer(p: Practice, answer: Answer, test = false): ApiPracticeInput {
   const side = (o: OptionKind) => (o === "proposal" ? ("planted" as const) : ("other" as const));
   return {
     kind: "answer",
@@ -361,8 +371,18 @@ export function practiceAnswer(p: Practice, answer: Answer, mark?: PracticeMark)
     answered: p.answered,
     ...(answer.kind === "choose" && answer.first ? { blind: side(answer.first) } : {}),
     final: answer.kind === "choose" ? side(answer.option) : answer.kind,
-    ...(mark ? { test: true as const, mark } : {}),
+    ...(test ? { test: true as const } : {}),
   };
+}
+
+/**
+ * Your mark in the blind test on a card you've just answered (B-xx49m, B-9prve: on a card of its own, after the answer):
+ * the card, or for a practice card the one it was rebuilt from, and that it was practice. Nothing shows it until the test
+ * ends.
+ */
+export function markOf(card: DeskCard, mark: PracticeMark): ApiPracticeInput {
+  const p = card.practice;
+  return { kind: "mark", card: p ? p.of : card.meta.id, revision: p ? p.revision : card.meta.revision, mark, ...(p ? { practice: true as const } : {}) };
 }
 
 /** A practice card on the path, once it may say so: "practice: you chose “Postgres”". */

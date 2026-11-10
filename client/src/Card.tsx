@@ -1,7 +1,7 @@
 import { type CSSProperties, useRef, useState } from "react";
 import type { ApiCard, ApiState } from "../../src/api";
 import { isOwnCard } from "../../src/routing";
-import type { OptionKind, PracticeMark } from "../../src/schema";
+import type { OptionKind } from "../../src/schema";
 import { PASS_REASONS, WRITE_REASONS, type PassReason, type WriteReason } from "./answer";
 import { LIFT_HINT } from "./Lift";
 import { Mark } from "./Mark";
@@ -30,10 +30,9 @@ export type Mode =
   | { kind: "seen"; rule?: boolean }
   /** `asked`: "you should have asked me", on a card the gate held back, or in shadow would have (B-87tkc). */
   /** `first`: the blind choice (D88); none on a card answered in chat, whose pick you'd seen (B-hswmx). */
-  /** `mark`: in the blind test (B-xx49m), whether you think the card was rebuilt from a past one; it goes with your answer. */
-  | { kind: "reveal"; option: OptionKind; side: Side; first?: OptionKind; why: string; rule?: boolean; retire?: string[]; asked?: boolean; mark?: PracticeMark }
-  | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean; mark?: PracticeMark }
-  | { kind: "pass"; reason?: PassReason; text: string; mark?: PracticeMark }
+  | { kind: "reveal"; option: OptionKind; side: Side; first?: OptionKind; why: string; rule?: boolean; retire?: string[]; asked?: boolean }
+  | { kind: "write"; reason?: WriteReason; text: string; rule?: boolean }
+  | { kind: "pass"; reason?: PassReason; text: string }
   /** A card you've answered this session, reopened from the path. */
   | { kind: "review" }
   /** A settled card opened from your decisions, by branch (B-v8jzy): to look at, as it was settled. */
@@ -65,8 +64,6 @@ export interface CardProps {
    * outside it says it was practice (B-kb5yt), with nothing to change.
    */
   review?: { words: string; sent: boolean; waiting?: boolean; test?: boolean; practice?: string };
-  /** The blind test is on (B-xx49m): the reveal and the written answers ask whether you think the card was rebuilt. */
-  test?: boolean;
   /** A settled card opened from your decisions, by branch: what was said, the option chosen, and the way back to them. */
   past?: { words: string; chosen?: OptionKind; onBranches: () => void };
   onReach: (dir: Side | "up" | "down") => void;
@@ -462,12 +459,6 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
           </span>
         </label>
       ))}
-      {p.test && <TestMark mark={mode.mark} touch={p.touch} onMark={(mark) => p.onMode({ ...mode, mark })} />}
-      {p.problem && (
-        <p className="problem" role="alert">
-          {p.problem}
-        </p>
-      )}
       <div className="reveal-row">
         <ConfirmButton {...p} words={confirmWords} side={mode.side} />
         {!same && (
@@ -579,35 +570,6 @@ function Review(p: CardProps) {
         </button>
       </div>
       {r?.sent && !r.test && !r.practice && <p className="small">A changed answer goes to {agent} with a brief of what it changes.</p>}
-    </div>
-  );
-}
-
-/** The marks in the blind test (B-xx49m, B-bb7ga), in the words the card shows, with the key for each. */
-export const MARKS: readonly { mark: PracticeMark; label: string; key: string }[] = [
-  { mark: "no", label: "No", key: "1" },
-  { mark: "maybe", label: "Maybe", key: "2" },
-  { mark: "sure", label: "Sure", key: "3" },
-];
-
-/**
- * In the blind test (B-xx49m): after the reveal, whether you think this card was rebuilt from a past one, asked of every
- * card you answer alike. It goes with your answer; nothing says which were rebuilt until the test ends.
- */
-function TestMark({ mark, touch, onMark }: { mark: PracticeMark | undefined; touch: boolean | undefined; onMark: (mark: PracticeMark) => void }) {
-  return (
-    <div className="test-mark" role="group" aria-label="Was this card rebuilt from a past one?">
-      <span className="lbl">
-        Blind test: was this card rebuilt from a past one? <span className="soft">A rebuilt card shows the option its agent didn't pick as the pick. You'll see which were when the test ends.</span>
-      </span>
-      <div className="chips">
-        {MARKS.map((m) => (
-          <button type="button" key={m.mark} aria-pressed={mark === m.mark} onClick={() => onMark(m.mark)}>
-            {m.label}
-            {!touch && <kbd>{m.key}</kbd>}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -726,7 +688,6 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
       {mode.kind === "write" && (mode.reason === "correction" || mode.reason === "reject") && (
         <RuleToggle card={p.card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
       )}
-      {p.test && <TestMark mark={mode.mark} touch={p.touch} onMark={(mark) => p.onMode({ ...mode, mark })} />}
       {p.problem && (
         <p className="problem" role="alert">
           {p.problem}

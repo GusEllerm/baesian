@@ -20,11 +20,13 @@ describe("practice answers on the relay (B-rehdw)", () => {
     const start = await json(await write({ kind: "test-start" }, "proj-b"));
     expect(start.status).toBe(201);
     expect(start.body.entry).toMatchObject({ type: "practice", format: 1, kind: "test-start", reviewer: "gus", account: "acct-gus", client: "hosted-desktop" });
-    expect((await json(await write({ ...answer({ test: true, mark: "maybe" }), client: "hosted-phone" }, "proj-b"))).status).toBe(201);
-    expect((await json(await write({ kind: "mark", card: "B-fghjk", revision: 1, mark: "no" }, "proj-b"))).status).toBe(201);
+    expect((await json(await write({ ...answer({ test: true }), client: "hosted-phone" }, "proj-b"))).status).toBe(201);
+    expect((await json(await write({ kind: "mark", card: "B-abcde", revision: 1, mark: "maybe", practice: true }, "proj-b"))).status).toBe(201);
     const all = (await entries("proj-b")).slice(before);
     expect(all.map((e) => e.kind)).toEqual(["test-start", "answer", "mark"]);
-    expect(all[1]).toMatchObject({ client: "hosted-phone", test: true, mark: "maybe", final: "planted", blind: "other" });
+    expect(all[1]).toMatchObject({ client: "hosted-phone", test: true, final: "planted", blind: "other" });
+    // The guess about it, on a card of its own after the answer (B-9prve).
+    expect(all[2]).toMatchObject({ kind: "mark", card: "B-abcde", mark: "maybe", practice: true });
     const again = await json(await write({ kind: "test-start" }, "proj-b"));
     expect(again.status).toBe(409);
     expect(again.body.error).toMatch(/runs once/);

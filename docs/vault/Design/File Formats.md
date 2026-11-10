@@ -158,12 +158,12 @@ Your answers on practice cards, and the blind test that comes before them ([[Pra
 | Field | Notes |
 |---|---|
 | `type`, `format` | `practice`; 1 |
-| `kind` | `test-start`: you started the blind test (B-xx49m), once. `answer`: your answer on a practice card. `mark`: in the blind test, your mark on a real card you answered |
-| `card`, `revision` | `answer`: the card the practice card was rebuilt from, and its revision; `mark`: the card marked |
+| `kind` | `test-start`: you started the blind test (B-xx49m), once. `answer`: your answer on a practice card. `mark`: in the blind test, your guess about a card you answered, practice or real, given on a card of its own after the answer (B-9prve) |
+| `card`, `revision` | `answer`: the card the practice card was rebuilt from, and its revision; `mark`: the card guessed about, or for a practice card the one it was rebuilt from |
 | `answered` | `answer`: when that card's final answer was given, for B-j583c's check |
 | `blind` | `answer`, optional: your blind choice against the planted pick, `planted` or `other`; none for a written answer or "can't judge" |
 | `final` | `answer`: `planted`, `other`, `write` or `pass` (a written answer, or "can't judge") |
-| `test`, `mark` | `answer`: in the blind test, `true`, and your mark; both or neither. `mark`: always. A mark is `no`, `maybe` or `sure` (`PracticeMark`, B-bb7ga) |
+| `test`, `mark`, `practice` | `answer`: `test`, `true` when it came in the blind test. `mark`: the guess, `no`, `maybe` or `sure` (`PracticeMark`, B-bb7ga), and `practice`, `true` when the card was a practice card, so a card answered in the test and rebuilt in it later keeps its two guesses apart |
 | `reviewer`, `account`, `client`, `at` | set by the server: who (and on the hosted service their account), the client (`web`, `hosted-desktop` or `hosted-phone`), and when |
 
 ## The others

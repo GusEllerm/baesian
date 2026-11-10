@@ -2,7 +2,7 @@
 type: design
 status: active
 authority: specifies
-summary: "P19, practice cards with planted picks (B-kb5yt, D83), decided by the user's answers to its six cards (B-sy0kz, B-rehdw, B-j583c, B-xx49m, B-bb7ga, B-zw55w) and built on a builder's branch: which past cards can be rebuilt, what a practice card keeps, swaps and drops, the tells and what's done about each, how often one comes and what it says once answered, where its answers live and why nothing reaches an agent, the calibration panel's practice row, the blind test that comes first, and the build order. Two choices found while building are open (B-9prve, B-wcb9d)."
+summary: "P19, practice cards with planted picks (B-kb5yt, D83), decided by the user's answers to its six cards (B-sy0kz, B-rehdw, B-j583c, B-xx49m, B-bb7ga, B-zw55w) and two found while building (B-9prve, B-wcb9d), and built on a builder's branch: which past cards can be rebuilt, what a practice card keeps, swaps and drops, the tells and what's done about each, how often one comes and what it says once answered, where its answers live and why nothing reaches an agent, the calibration panel's practice row, the blind test that comes first, and the build order."
 created: 2026-11-10
 updated: 2026-11-10
 reviewed: 2026-11-10
@@ -13,7 +13,7 @@ tags: [baesian, design, calibration]
 
 > **Status: decided and built (2026-11-10), on a builder's branch off `v1/next`, not merged.** Drafted by an agent on 2026-11-10 as proposal P19, after the user answered B-kb5yt with "Practice cards with planted picks", from the critique in [[Profiles and Collective Steering - Critique]]. The user then answered its six cards in deck calibration, each with its proposal: **B-sy0kz**, "A case the agent writes for its alternative"; **B-rehdw**, "On the service, for every device"; **B-j583c**, "From a week to a month old"; **B-xx49m**, "In your deck, as you work"; **B-bb7ga**, "Only if your marks beat guessing"; **B-zw55w**, "As the cards around it do". What follows is the design as those answers settled it, and as built: the client's side in [[Client Build]] item 28, the format in [[File Formats#Practice entry (B-rehdw)]], the addresses in [[src-server]] and [[service]].
 >
-> **Open, found while building:** two choices the cards didn't settle, filed in deck calibration and hard by this repo's preferences: **B-9prve**, where the blind test asks for your mark (built as its proposal, in the reveal, before you confirm), and **B-wcb9d**, what the desk says of an answer during the test (built as its proposal, only that it's recorded, on every card). Each is provisional until answered.
+> **Found while building, and answered the same day:** two choices the cards didn't settle, filed in deck calibration: **B-wcb9d**, "Only that it's recorded, on every card" (the proposal), for what the desk says of an answer during the test; and **B-9prve**, revised to r2 to say what the mark is, "On a card of its own after each answer" (the alternative, so the first build, which asked in the reveal, was rebuilt): your guess comes on a card of its own once you've answered, before the next card.
 >
 > **What runs now:** the blind test comes first, from your calibration. Until it has run and wasn't spotted, no regular practice card appears; once spotted, none ever does (D71).
 
@@ -26,6 +26,8 @@ tags: [baesian, design, calibration]
 - **B-xx49m:** the blind test runs in your deck as you work: about 1 in 4 cards is practice until ten have come, each card you answer is marked, and none says it was practice until the tenth is done.
 - **B-bb7ga:** practice cards count as spotted only if your marks beat guessing: a one-sided Fisher's exact test at 95%, maybe and sure counted as marked; one card you're sure of is one mark among the rest.
 - **B-zw55w:** a practice card says its agent has stopped when the real card before it does, and says no agent was waiting once you've answered it.
+- **B-wcb9d:** during the blind test, the desk says only that each answer is recorded, on every card; none says which went to an agent, or that Baesian proposed something from it, until the test ends.
+- **B-9prve:** in the blind test, your guess about each card you answer comes on a card of its own after the answer, before the next card; the answer is already on its way, and guessing is a step between cards.
 - **D83:** practice cards are built from resolved cards by swapping their options, each option keeping its own crux answer and "then". Live layer only: never in the record, never a verdict, never sent to an agent. A blind test of ten comes before they ship.
 - **D71:** what can't be shown consistently is dropped, not shipped weaker. So practice cards are dropped if the blind test spots them.
 - **D86, D88:** the agent's pick is hidden until you choose, sides shuffled per card and per session; both the blind choice and the final answer are kept. Practice cards rest on both: the blind choice is the measure before the case, the final answer the measure after it.
@@ -94,7 +96,7 @@ The blind test exists to find out. These are the tells the design knows of, and 
 | Background that argues for the other option | Reveal | Cards whose background speaks of the pick are never practice; the rest is measured by the blind test |
 | A layout that differs from a real card's | Any | The same card component, nothing added; a browser test compares a practice card's shape, element by element, with a real card's at a desktop's size and on two phones |
 | A count of cards that doesn't match what an agent said it filed | Any | The desk's count includes a practice card once it's in the queue. Notifications never count one |
-| "Sent to claude-code" after you answer | After | Never said of a practice card: once it's answered, it says it was practice (section 4); during the test, every card says only that it's recorded (B-wcb9d, open) |
+| "Sent to claude-code" after you answer | After | Never said of a practice card: once it's answered, it says it was practice (section 4); during the test, every card says only that it's recorded (B-wcb9d) |
 
 A tell at the reveal matters as much as one at the choice: coming round happens after the reveal, so a card you spot there measures nothing.
 
@@ -110,7 +112,7 @@ A tell at the reveal matters as much as one at the choice: coming round happens 
 
 Decided by B-rehdw: on the service, for every device.
 
-- **Each answer is one entry** (`PracticeEntry`, a new format, kind `practice`, D156): the card it was rebuilt from and its revision, when that card was answered, the blind choice and the final answer's kind against the planted pick, when, which client, and in the blind test your mark. The test's start and your marks on real cards are entries too. Never what you typed. An entry is taken only through `practiceEntry()`, which both servers share, from the fields the client may send (`PRACTICE_FIELDS`).
+- **Each answer is one entry** (`PracticeEntry`, a new format, kind `practice`, D156): the card it was rebuilt from and its revision, when that card was answered, the blind choice and the final answer's kind against the planted pick, when, which client, and whether it came in the blind test. The test's start and each guess in it are entries too: a guess names its card (for a practice card, the one it was rebuilt from) and says whether it was practice. Never what you typed. An entry is taken only through `practiceEntry()`, which both servers share, from the fields the client may send (`PRACTICE_FIELDS`).
 - **On the relay,** in a table of the project's own object (`PracticeTable`), beside its retention and notification tables, not in the files of `SqlFileStorage` or its log. So it never reaches a machine through `Relay.log`, and it's not in `ApiState`, which a machine may read; writing one moves no version, announces nothing and counts nothing. Its address, `practice`, is for a signed-in browser only: a machine's token is refused, and so is any request carrying an Authorization header. The privacy page lists them, kept while the project exists, and they're deleted with it.
 - **Locally,** without an account, in a folder of its own in the live layer (`LIVE_DIR`, `practice/`), written and read at `/api/practice` on `baesian serve` (`readPractice()`, `writePractice()`). Not one of the kinds the record copies, never uploaded when the repo is linked, and ignored by the server's watcher.
 
@@ -134,7 +136,7 @@ D83 and B-kb5yt: ten rebuilt cards among real ones, before practice cards ship, 
 
 - **Where it runs** (B-xx49m): in your deck as you work, about 1 in 4 cards until ten rebuilt cards have come.
 - **You start it yourself,** from the calibration panel, once ten past cards can come back. You know it's on, so it tests whether practice cards can be spotted by someone looking for them: the strict case D71 needs. It runs once.
-- **A mark on every card you answer,** but one answered in chat, which you'd know: "Blind test: was this card rebuilt from a past one?" No, maybe or sure. Built in the reveal and the written answers, before you confirm, with the answer waiting for it (B-9prve, open: the alternative asks on a card of its own after each answer). Real cards' answers go to their agents as usual, a real card's mark after its verdict. Every card's toast says only that it's recorded until the test ends (B-wcb9d, open: the alternative says each was sent to its agent, a rebuilt card's too).
+- **A guess about every card you answer,** but one answered in chat, which you'd know: once you've confirmed your answer, a card of its own (`<MarkCard />`) asks "Was that card rebuilt from a past one?", naming it, with No, Maybe and Sure, by a click, a tap or keys 1 to 3 (`MARKS`), before the next card comes (B-9prve). Your answer is already on its way: its undo window runs as usual, and Z takes the answer back, and the guess's card with it; nothing else skips it, Esc and the arrows included. The guess is kept as you give it (`markOf()`); if it can't be, the card says so and asks again. The next card's reading time starts once it's given. Real cards' answers go to their agents as usual. Every card's toast says only that it's recorded until the test ends (B-wcb9d).
 - **What counts as spotted** (B-bb7ga, `resultOf()`): your marks beat guessing at 95%: a one-sided Fisher's exact test over every card in the test (`fisherP()`, `SPOTTED_P`), maybe and sure counted as marked, wrong marks counting against; marking ten of forty, five right. Every real card marked counts; the test's rebuilt cards are its first ten (`testMarks()`).
 - **The result,** shown when the tenth is answered (`<PracticeResultPanel />`): whether practice cards were spotted, each practice card with your mark and how long before it its original was answered (B-j583c's check), and your marks on the real ones. **For the vault,** "Save the result as a note" gives a dated note for `Reviews/` (`resultNote()`), which you put there: B-rehdw keeps practice answers from everything that runs on your machine, `baesian sync` and the vault adapter included, so nothing there could write it. If spotted, practice cards never come (D71), and the code is to be removed; if not, they ship.
 
@@ -144,7 +146,7 @@ D83 and B-kb5yt: ten rebuilt cards among real ones, before practice cards ship, 
 2. **B-sy0kz's field** in the card format, the template, AGENTS.md's block and the skill (built), in the next release, so cards start carrying it. Practice waits for those cards to be answered and to age into the window.
 3. **The builder and the rules for which cards come back,** pure and tested, in the client's model (built: `client/src/practice.ts`).
 4. **Where answers live** (B-rehdw): the format, the local server's address, the relay's table and address, and the privacy page (built).
-5. **The blind test in the client** (B-xx49m, B-bb7ga): starting it, the rate, the marks, the held notices and the result (built; B-9prve and B-wcb9d open).
+5. **The blind test in the client** (B-xx49m, B-bb7ga, B-9prve, B-wcb9d): starting it, the rate, the guesses, the held notices and the result (built).
 6. **The blind test, run by the user.** If spotted, stop here and remove what steps 2 to 5 built.
 7. **Shipping:** 1 in 20, the notice after answering, and the calibration panel's row (built behind step 6: none comes until the test has run and wasn't spotted).
 8. **B-kb5yt's check,** a month later: the planted picks you came round to, against real ones.
@@ -163,8 +165,8 @@ Filed on 2026-11-10 in deck calibration.
 | B-xx49m, "Where the blind test runs" | `calibration/practice-test` | Mixed into the cards you answer as you work, or one sitting among past cards shown as they were? | In your deck, as you work |
 | B-bb7ga, "When practice cards count as spotted" | `calibration/practice-spotted` | Only if your marks beat guessing, or as soon as you're sure of one? | Only if your marks beat guessing |
 | B-zw55w, "Whether a practice card says an agent has stopped" | `calibration/practice-waiting` | As the cards around it do, or never, since no agent waits on it? | As the cards around it do |
-| B-9prve, "When the blind test asks for your mark" (hard) | `calibration/practice-test-mark` | In the reveal, before you confirm, or on a card of its own once you've answered? | Open: built as the proposal, provisionally |
-| B-wcb9d, "What the desk says of an answer in the blind test" (hard) | `calibration/practice-test-words` | Only that each answer is recorded, or that each was sent to its agent, a rebuilt card's too? | Open: built as the proposal, provisionally |
+| B-9prve, "When the blind test asks for your mark" (hard; r2 says what the mark is) | `calibration/practice-test-mark` | As you answer, before you confirm, or on a card of its own once you've answered? | On a card of its own after each answer |
+| B-wcb9d, "What the desk says of an answer in the blind test" (hard) | `calibration/practice-test-words` | Only that each answer is recorded, or that each was sent to its agent, a rebuilt card's too? | Only that it's recorded, on every card |
 
 ## What this changes in what B-kb5yt and D83 assumed
 
