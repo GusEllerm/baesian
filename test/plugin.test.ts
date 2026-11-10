@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AGENTS_BLOCK, agentsBlock } from "../src/agents.js";
-import { main } from "../src/cli.js";
+import { VERSION, main } from "../src/cli.js";
 import { globToRegExp as gateGlob } from "../src/globs.js";
 import { slug } from "../src/git.js";
 import { MCP_INSTRUCTIONS } from "../src/mcp.js";
 import { Config } from "../src/schema.js";
 import { Store, modelPath } from "../src/store.js";
 // @ts-expect-error: plain JavaScript, as below
-import { modelOf, noteModel, repoOf, slug as hookSlug } from "../plugins/baesian/hooks/baesian.mjs";
+import { modelOf, noteModel, pluginVersion, repoOf, sessionMemory, slug as hookSlug, versionNote } from "../plugins/baesian/hooks/baesian.mjs";
 // @ts-expect-error: plain JavaScript, as below
 import { onModelSwitched } from "../plugins/baesian/hooks/model-switched.mjs";
 // @ts-expect-error: plain JavaScript, as below
@@ -59,6 +59,15 @@ describe("the plugin's files", () => {
     expect(join(ROOT, entry.source)).toBe(PLUGIN);
     expect(readJson(join(PLUGIN, ".claude-plugin", "plugin.json")).name).toBe("baesian");
     expect(existsSync(join(PLUGIN, "skills", "baesian", "SKILL.md"))).toBe(true);
+  });
+
+  it("version with the CLI: the manifest's is package.json's and the service's, as the release commit sets them (D114, B-3femd)", () => {
+    const manifest = readJson(join(PLUGIN, ".claude-plugin", "plugin.json"));
+    expect(manifest.version).toBe(VERSION);
+    expect(readJson(join(ROOT, "service", "package.json")).version).toBe(VERSION);
+    expect(pluginVersion()).toBe(VERSION);
+    // Claude Code reads the version from plugin.json, and reports a marketplace entry that says another.
+    expect(readJson(join(ROOT, ".claude-plugin", "marketplace.json")).plugins[0]).not.toHaveProperty("version");
   });
 
   it("register the MCP server, as `baesian mcp` on PATH, with no timeouts, so one file serves both harnesses (D165)", () => {
@@ -166,6 +175,68 @@ describe("the hooks when a session starts and with your next message", () => {
   it("say nothing without the CLI", async () => {
     const missing = async () => ({ missing: true, status: 1, stdout: "", stderr: "spawnSync baesian ENOENT" });
     expect(await newVerdicts(started("/", "s-1"), missing)).toBe("");
+  });
+});
+
+describe("the CLI's release, checked at a session's start (B-pw9ak)", () => {
+  const started = (cwd: string, session = "s-1") => ({ hook_event_name: "SessionStart", session_id: session, source: "startup", cwd });
+  const at = (version: string) => async (args: string[]) => (args[0] === "--version" ? { status: 0, stdout: `${version}\n`, stderr: "" } : { status: 0, stdout: "", stderr: "" });
+  const missing = async () => ({ missing: true, status: 1, stdout: "", stderr: "spawnSync baesian ENOENT" });
+  const folders: string[] = [];
+  const memory = () => {
+    const dir = mkdtempSync(join(tmpdir(), "baesian-version-"));
+    folders.push(dir);
+    return sessionMemory("version", dir);
+  };
+  afterEach(() => {
+    for (const dir of folders.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("says nothing when the `baesian` on PATH is the plugin's release, as the CLI in this tree is", async () => {
+    const { dir } = repo();
+    expect(await versionNote(started(dir), cli, memory())).toBe("");
+    expect(await versionNote(started(dir), at("1.2.0"), memory(), "1.2.0")).toBe("");
+  });
+
+  it("asks the agent to have the person update the CLI when it's older, or the plugin when it's newer, naming the command", async () => {
+    const { dir } = repo();
+    const older = await versionNote(started(dir), at("1.1.4"), memory(), "1.2.0");
+    expect(older).toBe(
+      "The `baesian` on PATH is release 1.1.4, but Baesian's plugin is 1.2.0: the plugin's hooks and MCP tools run the `baesian` on PATH, and may expect commands or flags another release lacks. Ask the user to update the command line to the plugin's release: `npm install -g baesian@1.2.0`.\n",
+    );
+    const newer = await versionNote(started(dir), at("1.10.0"), memory(), "1.9.3");
+    expect(newer).toContain("Ask the user to update the plugin to the command line's release: in Claude Code `claude plugin update baesian@baesian`, in Codex `codex plugin add baesian@baesian`, then a new session.");
+    const odd = await versionNote(started(dir), at("dev"), memory(), "1.2.0");
+    expect(odd).toContain("Ask the user to install the same release of both: the command line with `npm install -g baesian@1.2.0`, or the plugin");
+  });
+
+  it("asks for the install when there's no `baesian` on PATH", async () => {
+    const { dir } = repo();
+    expect(await versionNote(started(dir), missing, memory(), "1.2.0")).toBe(
+      "Baesian's plugin is release 1.2.0, but there's no `baesian` command on PATH, so Baesian's hooks, its MCP tools and its commit gate can't run. Ask the user to install it: `npm install -g baesian@1.2.0`.\n",
+    );
+  });
+
+  it("says it once a session, at its start, before the new verdicts", async () => {
+    const { dir } = repo();
+    const seen = memory();
+    const first = await newVerdicts(started(dir), at("1.1.4"), seen);
+    expect(first).toMatch(/^The `baesian` on PATH is release 1\.1\.4, but Baesian's plugin is /);
+    expect(await newVerdicts(started(dir), at("1.1.4"), seen)).toBe(""); // resumed: said already
+    expect(await newVerdicts({ hook_event_name: "UserPromptSubmit", session_id: "s-2", prompt: "go on", cwd: dir }, at("1.1.4"), seen)).toBe("");
+    expect(await newVerdicts(started(dir, "s-2"), at("1.1.4"), seen)).toBe(first);
+    expect(await newVerdicts(started(dir, "s-2"), missing, seen)).toContain("there's no `baesian` command on PATH"); // a change since
+  });
+
+  it("says nothing outside a repo that uses Baesian, or when the version can't be read", async () => {
+    const plain = mkdtempSync(join(tmpdir(), "baesian-plain-"));
+    folders.push(plain);
+    expect(await versionNote(started(plain), missing, memory(), "1.2.0")).toBe("");
+    execFileSync("git", ["init", "-q"], { cwd: plain });
+    expect(await versionNote(started(plain), missing, memory(), "1.2.0")).toBe("");
+    const { dir } = repo();
+    expect(await versionNote(started(dir), async () => ({ status: 1, stdout: "", stderr: "boom" }), memory(), "1.2.0")).toBe("");
+    expect(await versionNote(started(dir), missing, memory(), "")).toBe(""); // a manifest with no version
   });
 });
 

@@ -522,7 +522,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
       const pin = ciPin(s, c.service, c.project);
       if ("problem" in pin) throw new ValidationError(pin.problem);
       if (pin.skipped.length) notes(pin.skipped.map((k) => `left out ${k.file}: ${k.why}`));
-      if (opts.json) json({ ...pin, steps: workflowSteps().join("\n") });
+      if (opts.json) json({ ...pin, steps: workflowSteps(VERSION).join("\n") });
       else {
         const page = new URL("/account", pin.site).href;
         const count = pin.passkeys.length === 1 ? "1 passkey" : `${pin.passkeys.length} passkeys`;
@@ -548,7 +548,7 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
         } else {
           lines.push(indent(3, warning(`no passkey yet: CI counts an answer on a hard card only with a passkey it pins${cite("D139", "D159")}. Add one on your account page, ${page}, and run `, cmd("baesian ci"), " again.")));
         }
-        lines.push(blank, text(strong("2."), " Add these steps to a workflow that runs on pushes to your main branch and on pull requests, as one job's steps:"), blank, ...workflowBody().map(literal));
+        lines.push(blank, text(strong("2."), " Add these steps to a workflow that runs on pushes to your main branch and on pull requests, as one job's steps:"), blank, ...workflowBody(VERSION).map(literal));
         say(lines);
       }
       if (opts.github) {

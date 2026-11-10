@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 import { openRepo } from "../src/git.js";
+import { RELEASED_BLOCKS, blockDigest, hookBlock } from "../src/hookblock.js";
 import { Store } from "../src/store.js";
 import { describeVerify as describeVerifyLines, fileConflicts, verify } from "../src/verify.js";
 import { BODY, REVIEWER, cleanup, draft, repo, sh } from "./helpers.js";
@@ -69,6 +70,28 @@ describe("per-commit checks against each commit's own record", () => {
     const r = verify(repo, "main", { merge: false });
     expect(r.commits[0]?.report.problems[0]?.problem).toBe("hard-unresolved");
     expect(r.commits[1]?.report.ok).toBe(true);
+  });
+
+  it("passes a hook block any release wrote with no ack, older or this one's, and fails one no release lists (B-np6af)", () => {
+    // An older release's block, listed as a release that changes the block lists the one it replaces.
+    const older = "# >>> baesian >>>\nif command -v baesian >/dev/null 2>&1; then\n  baesian hook pre-commit || exit $?\nfi\n# <<< baesian <<<";
+    const released = RELEASED_BLOCKS["pre-commit"] as string[];
+    released.push(blockDigest(older));
+    try {
+      const { dir, store, repo } = branched();
+      put(dir, ".githooks/pre-commit", `#!/bin/sh\n${older}\n`);
+      commit(dir, store, "A teammate on an older release runs baesian init");
+      put(dir, ".githooks/pre-commit", `#!/bin/sh\n${hookBlock("pre-commit")}\n`);
+      commit(dir, store, "Another on this release runs it again");
+      put(dir, ".githooks/pre-commit", `#!/bin/sh\n${older.replace("exit $?", ":")}\n`);
+      const bad = commit(dir, store, "A block no release wrote");
+      const r = verify(repo, "main", { merge: false });
+      expect(r.commits.map((c) => c.report.ok)).toEqual([true, true, false]);
+      expect(r.commits[2]?.report.uncovered.map((f) => f.id)).toEqual(["infra:.githooks/pre-commit"]);
+      expect(r.commits[2]?.sha).toBe(bad);
+    } finally {
+      released.splice(released.indexOf(blockDigest(older)), 1);
+    }
   });
 
   it("checks nothing before Baesian arrived in the history", () => {

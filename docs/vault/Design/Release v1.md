@@ -10,7 +10,7 @@ tags: [baesian, design, release, plan]
 
 # Release v1
 
-> **Status: plan (2026-11-10), by an agent, for the lead to hand to builders. Nothing in it is built.** M10 in [[Implementation Plan]]: "the review before publishing (D108) and the cards in deck `release`, the stability cards in deck `stability`, a licence, publishing (npm, the plugin's marketplace), and the docs". Every decision here that the [[Working Agreement]] gives the user is a card in deck `release-v1`, listed in [[#Decisions in deck release-v1]]. Only what cites a D-number or an answered card is decided; the rest is the agent's recommendation, for builders to follow once the cards it rests on are answered.
+> **Status: plan (2026-11-10), by an agent, for the lead to hand to builders; being built.** Built so far: steps 2, 5, 7, 8 and 9 ([[#The steps, in order]]); step 7 waits on the user's part on npmjs.com. M10 in [[Implementation Plan]]: "the review before publishing (D108) and the cards in deck `release`, the stability cards in deck `stability`, a licence, publishing (npm, the plugin's marketplace), and the docs". Every decision here that the [[Working Agreement]] gives the user is a card in deck `release-v1`, listed in [[#Decisions in deck release-v1]]. Only what cites a D-number or an answered card is decided; the rest is the agent's recommendation, for builders to follow once the cards it rests on are answered.
 
 ## In brief
 
@@ -31,7 +31,7 @@ tags: [baesian, design, release, plan]
 | The service is live at https://baesian.dev, deployed by `.github/workflows/deploy.yml` on a `v*` tag on main whose name matches package.json's version (B-bk20v, B-3femd) | [[Hosted Service]], [[service]] |
 | The README is a front page (B-3fgyc), leading with the hosted client (B-k3451), with the full setup in `docs/setup.md` | the README |
 | The plugin lives in this repo, with the marketplace file at its root, and versions with the CLI (D114, B-rwp68); Codex installs the same plugin from the same marketplace (D118) | [[Baesian Design]] |
-| `package.json` already has the command (`package.json#bin`), what ships (`package.json#files`: `dist` without `dist/site`) and Node 22 or later (`package.json#engines`). It's still `package.json#private`, "until the licence and the release are decided" ([[Implementation Plan#Stack]]) | |
+| `package.json` has the command (`package.json#bin`), what ships (`package.json#files`: `dist` without `dist/site` or source maps), Node 22 or later (`package.json#engines`), and, since step 7, no `private` and a `repository` naming this repo | |
 
 Today people build the CLI from a clone (`npm run build && npm link`) and add the plugin from a local path.
 
@@ -58,14 +58,14 @@ Each of these changed in place, at format 1, as D108 allowed. File Formats is up
 
 ### Findings
 
-1. **Format 1 is everything 0.1.x wrote, and that's how it should freeze.** Several kinds changed in place at format 1, and v1's schemas still read the older shapes: merges without a tip, ledger entries listing files, cursors without a type, configs that still hold the gate's lists, and proofs without a batch. All of these are additions, read as File Formats says. Bumping every kind to format 2 at v1 would buy little, since every released 0.1.x already refuses a newer format by name. **No card: it's how D156 was built.** A builder adds a test that reads the record at every release tag, `v0.1.0` to `v0.1.10`, with v1's schemas, and the test stays as releases accrue.
+1. **Format 1 is everything 0.1.x wrote, and that's how it should freeze.** Several kinds changed in place at format 1, and v1's schemas still read the older shapes: merges without a tip, ledger entries listing files, cursors without a type, configs that still hold the gate's lists, and proofs without a batch. All of these are additions, read as File Formats says. Bumping every kind to format 2 at v1 would buy little, since every released 0.1.x already refuses a newer format by name. **No card: it's how D156 was built.** A builder adds a test that reads the record at every release tag, `v0.1.0` to `v0.1.10`, with v1's schemas, and the test stays as releases accrue. **Built:** `test/releases.test.ts` reads each file of the record at every `vX.Y.Z` tag as its kind, failing on a file of a kind it doesn't know, then reads the record whole as CI does (`RecordAt`), with nothing refused. A tag made later joins it; CI's checkout has the tags (`fetch-depth: 0`), and fails without them.
 2. **No release knows another's version across the relay.** The CLI sends the relay no version, and the relay checks none. Under D157, a file in a newer format that comes down in a pull stops the next command partway, whether the service wrote it or a teammate's newer CLI did. **Card B-4p43b** asks whether a release writes a new format at once or keeps writing the old one for a release. Either way the CLI should send its version on every request, and the relay should answer a CLI it knows is too old before any pull.
 3. **The relay's tables have no version.** Each project's Durable Object makes its tables with `CREATE TABLE IF NOT EXISTS` and nothing else, and real projects are already stored. **Card B-866d2** asks for numbered migrations, run as each project wakes, or tables and columns that are only ever added to.
-4. **Hook blocks across releases.** `onlyBaesianBlock()` lets a commit add only Baesian's own block when it's exactly this version's (B-g6ywj). Its text changed three times in three days. Once teammates and CI run different releases, a teammate's `baesian init` would need an ack, and CI on another release would fail it. **Card B-np6af**, a narrower question on B-g6ywj's subject.
+4. **Hook blocks across releases.** `onlyBaesianBlock()` lets a commit add only Baesian's own block when it's exactly this version's (B-g6ywj). Its text changed three times in three days. Once teammates and CI run different releases, a teammate's `baesian init` would need an ack, and CI on another release would fail it. **Card B-np6af**, a narrower question on B-g6ywj's subject. **Built** (any released version's block): `RELEASED_BLOCKS` lists each hook's block by digest, and `onlyBaesianBlock()` accepts this release's or any listed one (`isBaesianBlock()`). Every release so far wrote the same six blocks. A release can't list the blocks of releases after it, so CI pinned a release behind (B-c0e0d) still counts a block only a newer release wrote as a change to the hook, and needs an ack, until its pin moves.
 5. **One pinned service key.** CI trusts only the keys in `BAESIAN_TRUST`, and a pinned key the record doesn't hold yet is no problem for it (`pinProblems()`). So a spare could be pinned now. Without one, replacing the service's key fails CI in every hosted repo until each owner pins again. **Card B-x47ek.**
-6. **Which Baesian CI runs.** `workflowBody()` prints `npx baesian verify`, unpinned, so each run fetches the latest release. Under D157 that keeps CI new enough to read what the service writes, but it also lets a new release change a repo's CI result with no commit. **Card B-c0e0d**, which builds on B-4p43b.
+6. **Which Baesian CI runs.** `workflowBody()` prints `npx baesian verify`, unpinned, so each run fetches the latest release. Under D157 that keeps CI new enough to read what the service writes, but it also lets a new release change a repo's CI result with no commit. **Card B-c0e0d**, which builds on B-4p43b. **Built** (pinned, moved by a commit): the steps run `npx --yes baesian@<version>`, the release that printed them.
 7. **AGENTS.md's block across releases.** `baesian init` rewrites the block to its own text, so teammates on different releases would flip it back and forth in their commits. It isn't a gate fact, and the plugin's hooks print the installed CLI's own instructions anyway. *The agent's recommendation, a two-way door:* `init` leaves a block that a newer release wrote, and says so. What the block may change between releases depends on B-4kj4d.
-8. **The plugin's version never moves.** `plugins/baesian/.claude-plugin/plugin.json#version` is 0.0.0. Claude Code and Codex both install a plugin again only when its version changes (Claude Code's plugin docs; Codex keys its plugin cache by the manifest's version), so nobody who added the marketplace would get an update. **No card:** the plugin versions with the CLI (D114, B-rwp68), and the release commit sets the version (B-3femd). The release commit sets the plugin's version to package.json's, and the deploy's tag check covers both. The version stays out of the marketplace entry, since Claude Code reads plugin.json's and reports a mismatch.
+8. **The plugin's version never moves.** `plugins/baesian/.claude-plugin/plugin.json#version` was 0.0.0 (now package.json's, 0.1.10, and a test holds them, and `service/package.json`'s, together). Claude Code and Codex both install a plugin again only when its version changes (Claude Code's plugin docs; Codex keys its plugin cache by the manifest's version), so nobody who added the marketplace would get an update. **No card:** the plugin versions with the CLI (D114, B-rwp68), and the release commit sets the version (B-3femd). The release commit sets the plugin's version to package.json's, and the deploy's tag check covers both. The version stays out of the marketplace entry, since Claude Code reads plugin.json's and reports a mismatch.
 9. **What a linked public repo publishes besides the cards' text.** That's the reviewer's handle and account ID on each answer, each passkey's public key and credential ID in `trust/`, and the model each card's agent ran on. B-vqn69 decided what a public repo's record keeps, and the privacy page covers only what the service keeps. **No card;** the setup guide says it in a sentence ([[#The docs]]).
 10. **Digests carry no algorithm name.** `card_digest`, the relay entry's digest and the passkey batch are bare SHA-256 hex. A move to another hash would be a new format, as anything is from v1, so nothing to do now.
 
@@ -77,24 +77,27 @@ Each of these changed in place, at format 1, as D108 allowed. File Formats is up
 
 **How people install it.** **Card B-n15wk:** `npm install -g baesian`, or `npx baesian` with nothing installed. The crux is the commit gate, which runs from git's hooks outside any agent session. They run `baesian` from PATH, and otherwise the fallback `baesian init` records, which is the path of the script that ran it (`selfCommand()`). Under npx, that path is in npm's cache.
 
-**What ships.** `npm pack --dry-run` on 2026-11-10, from a `dist/` built on 2026-11-05: 111 files, 1.07 MB packed and 2.57 MB unpacked.
-- **The CLI's JavaScript**, and `LICENSE.md`, the README and package.json.
-- **The client's build in `dist/client/`**, 1.19 MB of it, which `baesian serve` finds beside its module (`findClient()`, D98). So the client ships with the CLI, as D50 planned.
+**What ships.** `npm pack` on 2026-11-10 (step 7), from a clean copy of the tree with `npm ci --ignore-scripts`: 67 files, 970 kB packed and 1.9 MB unpacked (it was 111 files, 1.07 MB packed, with the source maps and a stale `dist/`).
+- **The CLI's JavaScript**, 44 modules, and `LICENSE.md`, the README and package.json.
+- **The client's build in `dist/client/`**: its page, script, stylesheet and fonts, which `baesian serve` finds beside its module (`findClient()`, D98). So the client ships with the CLI, as D50 planned.
 - **Nothing of the website or the service:** `dist/site/` and `service/` stay out.
 - **Five runtime dependencies,** all in `dependencies`. React and Motion are bundled into the client by Vite.
 - `VERSION` reads package.json, so `baesian --version` reports the release (B-3femd).
 
-**What package.json needs,** once B-emtd9 and B-xr2fa are answered:
+**What package.json needed,** once B-emtd9 and B-xr2fa were answered, all **built** in step 7:
 - **`private` goes.**
 - **A repository field,** `{"type": "git", "url": "git+https://github.com/GusEllerm/baesian.git"}`. Trusted publishing and provenance need it to match the repo exactly, case included (npm's docs).
 - **Homepage, bugs and keywords,** for npm's page.
 - **No source maps:** `!dist/**/*.map` in `files`. They're 639 KB of the package and point at `src/`, which doesn't ship. *The agent's choice; including `src/` instead is the alternative.* Under a scoped name, `publishConfig.access` is public too.
 - **`bin` and `engines` stay.** Node 22 is what Baesian needs; publishing needs Node 22.14 or later and npm 11.5.1 or later on the runner, not on people's machines.
+- **A `prepack` script** (the builder's choice, a two-way door) clears `dist/` and builds it again, so `npm pack` and `npm publish`, by CI or by hand, package only what the commit builds, never a stale module.
 
-**From CI.** **Card B-xr2fa** (hard): CI publishes on the release tag, or stages the version on npm for the user to approve with 2FA. Either way, the steps:
-1. **A publishing job in `.github/workflows/deploy.yml`, after the deploy.** It needs the deploy job, so the service goes live before the CLI that talks to it. It has `id-token: write` on that job alone; the deploy keeps `contents: read`.
-2. **Node 24, with setup-node's npm cache off** (`package-manager-cache: false`), from setup-node's docs: a poisoned cache could reach the job's credentials. Then `npm ci` and `npm run build` from a clean checkout, since `tsc` doesn't clear `dist/` and a local `dist/` can hold removed modules. Then `npm publish`, or `npm stage publish` (npm 11.15.0 or later). Provenance is automatic under trusted publishing from a public repo.
-3. **On npmjs.com, the user** makes or uses an npm account with 2FA, adds a trusted publisher naming GusEllerm/baesian and `deploy.yml`, and sets the package to disallow tokens. *Unverified:* whether a trusted publisher can be set up before the package's first version exists. If not, the user publishes or stages the first version by hand, and CI takes over from the second.
+**The proof** (2026-11-10): the tarball, installed into an empty prefix with nothing else of Baesian's on PATH, printed `0.1.10` for `baesian --version`; `baesian init` set up a scratch repo, whose first commit passed the hooks it wrote and whose next, adding a dependency, the gate blocked; and `baesian serve --no-open` served the client's page, its script and `/api/state`, each with status 200.
+
+**From CI.** **Card B-xr2fa** (hard), answered: CI publishes on the release tag. **Built** in step 7, as below, with `test/deploy-workflow.test.ts` running the workflow's own scripts. The steps:
+1. **A publishing job in `.github/workflows/deploy.yml`, after the deploy.** It needs the deploy job, so the service goes live before the CLI that talks to it. It has `id-token: write` on that job alone; the deploy keeps `contents: read`. It runs only when the deploy job says the release goes to npm: from `FIRST_NPM_RELEASE` on, the workflow's one switch for npm (B-h0vyy: 1.0.0), so no 0.1.x tag publishes anything; a pre-release isn't published either. To publish from another release, that line is the one to change.
+2. **Node 24, with setup-node's npm cache off** (`package-manager-cache: false`), from setup-node's docs: a poisoned cache could reach the job's credentials. The checkout keeps no credentials; npm must be 11.5.1 or later, or the job stops. A version npm has already (the first, published by hand, or an earlier run's) is left alone. Then `npm ci --ignore-scripts` from the clean checkout (no package in the lockfile needs its install script to build), and `npm publish`, whose `prepack` builds afresh, since `tsc` doesn't clear `dist/`. Provenance is automatic under trusted publishing from a public repo.
+3. **On npmjs.com, the user** makes or uses an npm account with 2FA, adds a trusted publisher naming GusEllerm/baesian and `deploy.yml`, allows it `npm publish` (a trusted publisher made after 2026-09-03 allows only `npm stage publish` until told otherwise, npm's docs), and sets the package to disallow tokens. A trusted publisher can't be set up before the package's first version exists (npm's docs for `npm trust`: "the package you're configuring must already exist"), so the first version is published by hand. In order: tag `v1.0.0`; the deploy puts the service live, and the publishing job fails that once, finding no trusted publisher; the user publishes from a clean checkout of the tag, `npm ci` then `npm publish` with 2FA, with no provenance; then sets up the trusted publisher. Re-run, the job finds the version on npm and leaves it; CI publishes from the next release on, with provenance.
 4. **The release, as B-bk20v and B-3femd have it:**
    - merge v1/next into main;
    - set the version in package.json, `service/package.json` and the plugin's manifest;
@@ -113,7 +116,7 @@ Each of these changed in place, at format 1, as D108 allowed. File Formats is up
 
 **Versioning,** from finding 8: each release commit sets the plugin manifest's version to the release's, and the deploy checks it beside package.json's.
 
-**How the plugin finds the CLI.** Today the hooks run `baesian` from PATH (`baesian()` in the hooks' `baesian.mjs`) and say nothing when it's missing; the MCP server runs `baesian mcp`. **Card B-pw9ak**, which builds on B-n15wk, asks whether that stays, checked against the plugin's own version, or the plugin runs its own release through npx. Between a release's merge to main and its publish on npm, the plugin on main is a release ahead of the CLI, so the check matters either way.
+**How the plugin finds the CLI.** The hooks run `baesian` from PATH (`baesian()` in the hooks' `baesian.mjs`); the MCP server runs `baesian mcp`. **Card B-pw9ak**, which builds on B-n15wk, asked whether that stays, checked against the plugin's own version, or the plugin runs its own release through npx. Between a release's merge to main and its publish on npm, the plugin on main is a release ahead of the CLI, so the check matters either way. **Built** (the one on PATH, checked): at `SessionStart`, in a repo that uses Baesian, `versionNote()` compares `baesian --version` with the manifest's version, and when they differ or there's none tells the agent once a session to ask the person to install or update, naming the command.
 
 **Not proposed here:** listing the plugin in Anthropic's plugin directory, which would be a card of its own if wanted.
 
@@ -155,14 +158,14 @@ Once the cards are answered, following B-3fgyc (the README is a front page) and 
 | # | Step | Waits on | Who |
 |---|---|---|---|
 | 1 | Answer the deck `release-v1` | — | the user |
-| 2 | A test that reads every release tag's record with v1's schemas (finding 1) | nothing | a builder, now |
+| 2 | A test that reads every release tag's record with v1's schemas (finding 1) | nothing | a builder, now: **built** |
 | 3 | The relay's tables: a version in each project's meta, with migrations, or the rule that tables only grow | B-866d2 | a builder (service) |
 | 4 | The CLI's version on every relay request, the relay's answer to one too old, and the format rollout rule in `upgradeFile()`'s writers | B-4p43b | a builder (CLI and service) |
-| 5 | Hook blocks from earlier releases recognised, or left as they are | B-np6af | a builder (gate) |
+| 5 | Hook blocks from earlier releases recognised, or left as they are | B-np6af | a builder (gate): **built** |
 | 6 | A spare service key: the user makes it and keeps it offline; the service publishes its public half; `baesian ci` prints both | B-x47ek | the user, then a builder |
-| 7 | package.json, the plugin's version, and the publishing job in the deploy workflow | B-emtd9, B-xr2fa | a builder; then the user on npmjs.com |
-| 8 | The plugin's check of the CLI's version, or its npx command | B-pw9ak (after B-n15wk) | a builder (plugin) |
-| 9 | What `baesian ci` prints | B-c0e0d (after B-4p43b) | a builder (CLI) |
+| 7 | package.json, the plugin's version, and the publishing job in the deploy workflow | B-emtd9, B-xr2fa | a builder: **built**; then the user on npmjs.com |
+| 8 | The plugin's check of the CLI's version, or its npx command | B-pw9ak (after B-n15wk) | a builder (plugin): **built** |
+| 9 | What `baesian ci` prints | B-c0e0d (after B-4p43b) | a builder (CLI): **built** |
 | 10 | The README, the setup guide, SECURITY.md, release notes | B-n15wk, B-h0vyy, B-4kj4d, B-480t1, B-yj9wc | a builder; the user turns on GitHub's private reporting or the address |
 | 11 | The release: merge v1/next into main, set the three versions, tag on main | every card above | the user |
 | 12 | After it: provenance on npm's page; a clean install on a fresh machine; the plugin from GitHub in Claude Code and in Codex; `baesian verify` in a fresh repo's CI; the vault and the user's note on D108 | the release | the lead |
@@ -213,7 +216,7 @@ None of these needs a card of its own, beyond the one it builds on. A builder wh
 ## Not verified
 
 - Whether the npm organisation name `baesian` is free: that needs a login.
-- Whether npm lets a trusted publisher be set up before the package's first version exists.
+- ~~Whether npm lets a trusted publisher be set up before the package's first version exists.~~ It doesn't (step 7, from npm's docs): the first version is published by hand.
 - How npmjs.com renders the README's relative images and `<picture>` elements.
 - Whether `npx --yes baesian@<version>` runs offline from its cache once fetched. This matters only if B-n15wk or B-pw9ak goes to npx.
 - The Codex command that refreshes a marketplace added from GitHub; `codex plugin add` again after a version change is in Codex's own help.

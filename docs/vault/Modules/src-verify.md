@@ -4,7 +4,7 @@ status: active
 authority: describes
 summary: "src/verify.ts: baesian verify, the commit gate rerun in CI against committed records, plus the merge gate and conflicting decisions; in a hosted repo, only signed answers count, checked offline with keys pinned in CI (M9a), with the repo's project beside them and one linking commit found from HEAD by ancestry (B-mar8x). Includes the GitHub Actions steps `baesian ci` prints, and how to check an answer by hand with ssh-keygen."
 created: 2026-10-23
-updated: 2026-11-05
+updated: 2026-11-10
 reviewed: 2026-10-23
 tags: [baesian, module]
 ---
@@ -88,7 +88,7 @@ The same works for a rule (`rules/<id>.md`), a topic alias, a preference file or
 
 ## In GitHub Actions
 
-In a linked repo, `baesian ci` prints the steps, and the pin's lines (B-pt52b, [[src-sync#src/ci.ts: setting up CI (B-pt52b)]]); `baesian ci --github` sets the pin with `gh`. The steps it prints (`workflowSteps()`), in a workflow that runs on pushes to the main branch and on pull requests:
+In a linked repo, `baesian ci` prints the steps, and the pin's lines (B-pt52b, [[src-sync#src/ci.ts: setting up CI (B-pt52b)]]); `baesian ci --github` sets the pin with `gh`. The steps it prints (`workflowSteps()`), in a workflow that runs on pushes to the main branch and on pull requests, here as Baesian 1.0.0 prints them:
 
 ```yaml
 - uses: actions/checkout@v7
@@ -97,21 +97,23 @@ In a linked repo, `baesian ci` prints the steps, and the pin's lines (B-pt52b, [
 - uses: actions/setup-node@v7
   with:
     node-version: 22
-# `npx baesian` runs Baesian's CLI from npm: it's to be published there, and isn't yet.
+# Baesian 1.0.0 from npm, pinned: the release that printed these steps. To move CI to another, run `baesian ci` with it, and commit the steps it prints.
 - name: baesian verify (pushed commits)
   if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-  run: npx baesian verify --base "${{ github.event.before }}"
+  run: npx --yes baesian@1.0.0 verify --base "${{ github.event.before }}"
   env:
     BAESIAN_TRUST: ${{ vars.BAESIAN_TRUST }}
 - name: baesian verify --merge (pull request)
   if: github.event_name == 'pull_request'
-  run: npx baesian verify --merge
+  run: npx --yes baesian@1.0.0 verify --merge
   env:
     BAESIAN_TRUST: ${{ vars.BAESIAN_TRUST }}
 ```
+
+**The release is pinned** (B-c0e0d): the steps run the release that printed them, `npx --yes baesian@<its version>`, so a new release changes a repo's CI result only in a commit, the one that pastes the steps a newer `baesian ci` prints. A bad or compromised release can't reach every repo's merge gate at once; the cost is that CI stays on its release until someone moves it.
 
 With no `--base`, `verify` uses `origin/$GITHUB_BASE_REF`, which pull-request runs set. Exit 1 fails the check. A pull request's run checks out the merge of the branch into its base, so a branch from before the link is checked with the link in its history.
 
 **The pin** is a repository variable: the project's line (B-mar8x) and the trust files' JSON, one per line (D142, D159), as `baesian ci` prints them from what the service sent, never from the record. Run it again after adding a passkey. A repo that isn't hosted leaves the `env` out: `BAESIAN_TRUST` set but empty fails the run, so a misnamed variable can't turn the checks off; GitHub passes a variable that isn't set as empty, so set it before the workflow first runs. The workflow file is in the repo, and a commit could edit it to drop the pin: keep it from agents' commits, with a ruleset or code owners on `.github/`, as the pin itself is kept in the settings.
 
-**Baesian isn't published yet** (`package.json` is private until it's published to npm, in M10; the licence is decided, B-qx0vq), so `npx baesian` doesn't work yet. Until it is, only this repo can run it in CI, by building itself: `npm ci && npm run build && node dist/bin.js verify --merge`. If the preferences name public modules (`gate_api`) and livedocs isn't installed in CI, the `api:` detector warns and is skipped.
+**Baesian goes to npm from 1.0.0** (B-h0vyy), published by the deploy workflow on the release tag (B-xr2fa); no 0.1.x release was published, so steps a 0.1.x printed don't run. Until 1.0.0 is out, only this repo can run it in CI, by building itself: `npm ci && npm run build && node dist/bin.js verify --merge`. If the preferences name public modules (`gate_api`) and livedocs isn't installed in CI, the `api:` detector warns and is skipped.

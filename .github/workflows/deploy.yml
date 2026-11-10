@@ -4,6 +4,9 @@ name: deploy
 # tags anywhere else deploy nothing. The service runs at https://baesian.dev (B-aa9pc) in the Cloudflare account pinned
 # in service/wrangler.jsonc (D177). Its secrets are set on the Worker itself, never here: this job holds only an API
 # token limited to deploying that Worker, migrating its accounts database and its route on baesian.dev.
+#
+# Then the same tag puts the command line on npm (B-xr2fa), once the service is live, so the CLI never reaches people
+# before the service it talks to: by npm's trusted publishing, from this file, with no token stored, and with provenance.
 
 on:
   push:
@@ -11,6 +14,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The one switch for npm (B-h0vyy): a release tagged from this one on is published to npm; one before it deploys the
+  # service only, so no 0.1.x tag ever publishes. To publish from another release, change it here, and only here.
+  FIRST_NPM_RELEASE: "1.0.0"
 
 # One deployment at a time, and never cancelled halfway.
 concurrency:
@@ -20,6 +28,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      npm: ${{ steps.npm.outputs.publish }}
     env:
       WRANGLER_SEND_METRICS: "false"
     steps:
@@ -42,14 +52,32 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             service/package-lock.json
-      # The release commit sets package.json's version to the tag's, so `baesian --version` says which release it is
-      # (B-3femd).
-      - name: The tag matches package.json's version
+      # The release commit sets the version in package.json, service/package.json and the plugin's manifest to the tag's,
+      # so `baesian --version` says which release it is (B-3femd), and everyone who added the plugin's marketplace gets
+      # the plugin's update with it (D114).
+      - name: The tag matches every version the release commit sets
         run: |
-          want="v$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_REF_NAME" != "$want" ]; then
-            echo "::error::$GITHUB_REF_NAME doesn't match package.json's version ($want): set it in the release commit, then tag (B-3femd)"
-            exit 1
+          for file in package.json service/package.json plugins/baesian/.claude-plugin/plugin.json; do
+            have="v$(node -p "require('./$file').version")"
+            if [ "$GITHUB_REF_NAME" != "$have" ]; then
+              echo "::error::$GITHUB_REF_NAME doesn't match $file's version ($have): set the version in package.json, service/package.json and the plugin's manifest in the release commit, then tag (B-3femd)"
+              exit 1
+            fi
+          done
+
+      # B-h0vyy: only a release from FIRST_NPM_RELEASE on goes to npm. A pre-release isn't published either.
+      - name: Whether npm gets this release
+        id: npm
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::notice::$GITHUB_REF_NAME is a pre-release: it deploys the service, and isn't published to npm"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "$(printf '%s\n%s\n' "$FIRST_NPM_RELEASE" "$version" | sort -V | head -n 1)" != "$FIRST_NPM_RELEASE" ]; then
+            echo "::notice::$GITHUB_REF_NAME deploys the service only: npm gets releases from v$FIRST_NPM_RELEASE on (FIRST_NPM_RELEASE, B-h0vyy)"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
       - run: npm ci
@@ -75,3 +103,53 @@ jobs:
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  # The command line, to npm (B-xr2fa), after the service. npm's trusted publisher for the package names this repo and
+  # this file, so only this job can publish, with a token npm gives it for this run alone; npm adds the provenance itself.
+  # Only this job may ask GitHub for that token (`id-token: write`). It builds afresh from the tag, with no cache, since
+  # a poisoned cache could reach the token, and runs no install scripts.
+  publish:
+    needs: deploy
+    if: needs.deploy.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: npm publishes by trusted publishing (11.5.1 or later)
+        run: |
+          have="$(npm --version)"
+          if [ "$(printf '%s\n%s\n' 11.5.1 "$have" | sort -V | head -n 1)" != 11.5.1 ]; then
+            echo "::error::npm $have can't publish by trusted publishing, which needs 11.5.1 or later"
+            exit 1
+          fi
+
+      # A version on npm already, published by hand (the first, before the trusted publisher could be set up) or by an
+      # earlier run of this workflow, is left as it is: npm never takes a version number twice.
+      - name: Whether npm has this version already
+        id: published
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version is on npm already: nothing to publish"
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.published.outputs.already == 'false'
+        run: npm ci --ignore-scripts
+      # `prepack` clears dist/ and builds it again, so the package holds only what this commit builds.
+      - if: steps.published.outputs.already == 'false'
+        run: npm publish
