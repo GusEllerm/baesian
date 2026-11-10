@@ -17,6 +17,9 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-10.*
 
+- **M10 is planned (2026-11-10):** [[Release v1]], for the lead to hand to builders ([[2026-11-10 M10 Release Plan]]). The formats review before v1 (D108, D124) found nothing that must change in place, and five things about rolling changes out once releases differ. The name `baesian` is free on npm; package.json needs `private` gone and a repository field; the plugin's version (0.0.0) must move with each release, or no one gets updates. Thirteen cards wait in deck `release-v1`: the npm name, how it's installed, how the plugin runs the CLI, publishing from CI, the first version's number, what 1.0 keeps, how a format change rolls out, which Baesian CI runs, hook blocks across releases, the relay's tables, a spare service key, a security contact, and release notes.
+  - **Next:** the user answers the deck; builders take the steps in [[Release v1#The steps, in order]].
+
 - **Releasing `v0.1.10` (2026-11-10):** the first release with the licence (`v0.1.9`, live since 2026-11-06, was tagged on the commit before it); `package.json` and `service/package.json` say 0.1.10 (B-3femd). The phone flow passes the user's check on a real device. This clone's git objects were lost on 2026-11-10 and refetched from GitHub; nothing was lost.
   - **Next:** tag `v0.1.10` once CI passes; the critics' calibration fixes, carded (from [[Profiles and Collective Steering - Critique]]), then built as answered; then M10.
 

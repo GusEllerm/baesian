@@ -1,0 +1,22 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-4kj4d",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T202438.840Z-8b5hn.json",
+  "touches": [
+    "public-api",
+    "schema"
+  ],
+  "reverse": "moderate",
+  "source": "agent",
+  "row": "public_api",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "at": "2026-11-10T21:07:12.853Z"
+}

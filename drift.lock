@@ -3208,17 +3208,17 @@ sig = "51ce45927f9f053e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "package.json"
-sig = "33c12d76b7926a65"
+sig = "80bc0941d8109b9b"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "plugins/baesian/hooks/baesian.mjs"
-sig = "4724db53562a6d66"
+sig = "d3851095da17038b"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/package.json"
-sig = "4bcfed05774a6378"
+sig = "e1d1edb41271acfa"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3248,17 +3248,17 @@ sig = "54b335e543cb554e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/relay.ts#Relay"
-sig = "90895dd1eaf04ae5"
+sig = "07b0dff5a8de19a4"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "d532ecd41fa0a867"
+sig = "72adb752ed0cc110"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/agents.ts"
-sig = "1152ddbf829873a5"
+sig = "69b70cd8d4079f3a"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3278,12 +3278,12 @@ sig = "ea47a2e110e1729b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/api.ts"
-sig = "3ebc741074d06bb3"
+sig = "31fc25741b701927"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/bin.ts"
-sig = "2540e01ffa9d34c6"
+sig = "6a792d37c7f6b91c"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3293,7 +3293,7 @@ sig = "8883755b1410374c"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/facts.ts"
-sig = "2dec46d61718ded5"
+sig = "d4c851452f15a2e1"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3313,12 +3313,12 @@ sig = "16b26c4ae6af6f6f"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/gate.ts"
-sig = "df119a68a0946c20"
+sig = "c2c7aab4d067366a"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/git.ts"
-sig = "e210d65b4671ec78"
+sig = "7001797708f3f793"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3328,17 +3328,12 @@ sig = "4f2d438cb6cb55c4"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/globs.ts"
-sig = "e5beaf70231fed9f"
+sig = "b9a8146b4f3be232"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/hookblock.ts"
-sig = "da80294a20a147eb"
-
-[[bindings]]
-doc = "docs/vault/Design/Implementation Plan.md"
-target = "src/hooks.ts"
-sig = "24e4c17d03f95eaf"
+sig = "9192b7c5a165829f"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3348,7 +3343,7 @@ sig = "1fd0df270d6858a2"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/mcp.ts"
-sig = "004119e47a6f624a"
+sig = "66907482b8d8989e"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3358,12 +3353,12 @@ sig = "780f3927f3747da4"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/ops.ts"
-sig = "57468c9466e6645c"
+sig = "b8896c7897d49787"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/quote.ts"
-sig = "c122e98d1397f13f"
+sig = "06a4a738e37ecc2d"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3373,17 +3368,17 @@ sig = "b946c30d44246e36"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts#filingProblems"
-sig = "f215c2c9d424e647"
+sig = "bf05d59d1d3251bc"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/schema.ts#filingWarnings"
-sig = "99587d0a51ed1c6d"
+sig = "97c54167889175eb"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/server.ts"
-sig = "c3e2105d22618df2"
+sig = "c2852d0d6dfe5487"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3398,7 +3393,7 @@ sig = "8f0fd8d62cebcf4b"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/state.ts#snapshot"
-sig = "8cdff03f6d232ea1"
+sig = "f57a570a62f13ea9"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3418,12 +3413,12 @@ sig = "a5a5e57ff6a04c98"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/store.ts#Store"
-sig = "3be89ff9186f71f0"
+sig = "508bb972c66a0f53"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/trailers.ts"
-sig = "64c108b9fb042ce0"
+sig = "e03fa303a8c93080"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3433,7 +3428,7 @@ sig = "873eb35f6b2f12d0"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/verify.ts"
-sig = "01c86d0107cda30b"
+sig = "ea79ef7502f60fef"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3448,12 +3443,12 @@ sig = "0ad4ac372954b514"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/verify.ts#verify"
-sig = "894f3e2691519c42"
+sig = "dc9d944f2ac47f29"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts"
-sig = "4b58ad5dcf0d9728"
+sig = "e0772b7d4ab1f592"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3463,7 +3458,7 @@ sig = "5481bc5d6b9e8cb8"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "src/wait.ts#describeBrief"
-sig = "3236ed4c8028b561"
+sig = "31940ae0f8610981"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4179,6 +4174,241 @@ sig = "083d8693f367e77d"
 doc = "docs/vault/Design/Privacy Policy.md"
 target = "src/wait.ts#PRESENCE_STALE_MS"
 sig = "0406b42d0614950c"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = ".github/workflows/deploy.yml"
+sig = "b3d6d738699b1d3d"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "client/src/site/Account.tsx"
+sig = "3994f206202487ed"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "client/src/site/Device.tsx"
+sig = "213385323054c627"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "design/explorations/round3/app.js#release"
+sig = "a2674fcd9981a618"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "design/explorations/round4/app.js#release"
+sig = "8d8589916533282a"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "design/explorations/round4/map.js#seen"
+sig = "b7090cba05fab487"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "design/explorations/round5/app.js#release"
+sig = "8d8589916533282a"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "docs/setup.md"
+sig = "f93d8955844312ac"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "package.json"
+sig = "80bc0941d8109b9b"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "plugins/baesian/hooks/baesian.mjs"
+sig = "d3851095da17038b"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/package.json"
+sig = "e1d1edb41271acfa"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#Accounts"
+sig = "302b81e29da9fed5"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#DeviceCode"
+sig = "0e16a753f0d71898"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#Flow"
+sig = "95b25333426263b3"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#Grant"
+sig = "2f94697b5698b8ea"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#PushSubscriptionRow"
+sig = "238461a1e3a37955"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/accounts.ts#Session"
+sig = "eccfe5de591bc61e"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/index.ts#Services"
+sig = "4788716bc2ecc7ee"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/push.ts#enc"
+sig = "54b335e543cb554e"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/relay.ts#Batch"
+sig = "405438a54a7eefba"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/relay.ts#Pending"
+sig = "4781fab8a91512d8"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/relay.ts#Person"
+sig = "cd4af2280d048625"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/relay.ts#Relay"
+sig = "07b0dff5a8de19a4"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/sql-storage.ts#EntryRow"
+sig = "1cb7877032eab084"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "service/src/webauthn.ts#StoredPasskey"
+sig = "00b19142874c61e7"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/api.ts#ApiCard"
+sig = "6a89af8af336d512"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/api.ts#ApiState"
+sig = "e7531a4cba508948"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/ci.ts#CiPin"
+sig = "251a53552f248d22"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/ci.ts#PinnedPasskey"
+sig = "837cd961fe040498"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/ci.ts#workflowBody"
+sig = "dac17712fa823ca8"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/cli.ts#VERSION"
+sig = "5538e9085f2626dc"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/cli.ts#files"
+sig = "836efe7451576cad"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/cli.ts#selfCommand"
+sig = "8883755b1410374c"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/hookblock.ts#hookBlock"
+sig = "8239e5aded94c1a6"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/hookblock.ts#onlyBaesianBlock"
+sig = "1372a85dbd33bce9"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/login.ts#SignInOptions"
+sig = "ba39b0554876451f"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/mcp.ts#VERSION"
+sig = "5538e9085f2626dc"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/schema.ts#upgradeFile"
+sig = "cb04b0f174427522"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/server.ts#findClient"
+sig = "35f768925db5152d"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/state.ts#StateContext"
+sig = "7e659d6c1e31d667"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/store.ts#Claim"
+sig = "9ce66a8d9f5f7181"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/store.ts#Hosted"
+sig = "185a1410724167eb"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/store.ts#Store"
+sig = "508bb972c66a0f53"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/sync.ts#RelayClient"
+sig = "c4617f6201361f0d"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/sync.ts#Working"
+sig = "f414126a6b1a9dfd"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/trust.ts#TrustRoot"
+sig = "691aa0ac407878b2"
+
+[[bindings]]
+doc = "docs/vault/Design/Release v1.md"
+target = "src/trust.ts#pinProblems"
+sig = "eb90b14866c19d34"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"

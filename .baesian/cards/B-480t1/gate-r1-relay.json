@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-480t1",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T202438.840Z-8b5hn.json",
+  "touches": [
+    "security",
+    "publishes",
+    "user-facing"
+  ],
+  "reverse": "cheap",
+  "source": "agent",
+  "row": "publishes",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-10T21:07:25.604Z"
+}
