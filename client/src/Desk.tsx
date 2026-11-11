@@ -11,7 +11,8 @@ import { usePractice, usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
 import { type DeskCard, type Practice, type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, practiceOf, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
-import { type Outgoing, Outbox, postPractice, postVerdictTo } from "./outbox";
+import { type Outgoing, Outbox, decidedIn, decidedWords, postPractice, postVerdictTo } from "./outbox";
+import { ago, decidedByAnother, sentWords as sentToWords, useTeam } from "./team";
 import { MARKS, TEST_SIZE, draws, markOf, phaseOf, practiceAnswer, practicePath, practiceWords, practised, rebuild, sources, statusOf } from "./practice";
 import type { PracticeMark } from "../../src/schema";
 import { PracticeResultPanel } from "./PracticePanel";
@@ -255,8 +256,10 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
 
   const now = serverNow(state, fetchedAt);
   const cards = byId(state);
-  const ordered = queue(state, now).filter((c) => !answered.has(keyOf(c)));
-  const aside = parked(state).filter((c) => !answered.has(keyOf(c)));
+  // On the website, in a project with members (P20): the cards sent to you lead the queue, and the rest follow (B-tzdjn).
+  const team = useTeam();
+  const ordered = queue(state, now, team).filter((c) => !answered.has(keyOf(c)));
+  const aside = parked(state, team).filter((c) => !answered.has(keyOf(c)));
   const held = heldBack(state).filter((c) => !answered.has(keyOf(c)));
   // Held back, never answered, past 90 days: listed without their text (B-ec3kj, M9f).
   const heldGone = heldRemoved(state);
@@ -283,7 +286,8 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
   // With no preference file, the setup survey is offered once, before the cards (B-5na1k), unless an agent has
   // stopped for you: then it waits until none has. A practice card in the queue counts as any card there does.
   const waitingNow = ordered.filter((c) => waitState(c, now) === "waiting").length + (planted?.stopped ? 1 : 0);
-  const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked && !pastCard;
+  // Never to a member who isn't an owner: a project's settings are its owners' (B-rxbss).
+  const offerDue = !setupOffered.offered && !state.routing.preferences && !state.routing.problem && waitingNow === 0 && !reviewCard && !picked && !pastCard && team?.role !== "member";
   const setup: Setup | undefined = setupStep ?? (offerDue ? { step: "offer" } : undefined);
   const presets = usePresets(panel === "preferences" || setup !== undefined, state.version);
   // The first card you reach from a deck with a briefing comes after its briefing card, once per deck (B-j6b75).
@@ -354,13 +358,14 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
         if (a?.practice && !a.test) setPracticeNote(practiceWords(a.practice.card, a.practice.stopped));
         if (!quiet) say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0)}`);
       },
-      failed: (k, error) => {
+      failed: (k, error, decided) => {
         setAnswered((m) => {
           const n = new Map(m);
           n.delete(k);
           return n;
         });
-        say(`That answer wasn't recorded: ${error}. The card is back.`);
+        // Another member decided it first (P20, B-v43z8): now that you've chosen too, the desk says who, and what.
+        say(decided ? decidedWords(decided) : `That answer wasn't recorded: ${error}. The card is back.`);
       },
     });
   }
@@ -428,15 +433,19 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     const gone = out.expired.flatMap((p) => keyFor.get(p) ?? []);
     const written: string[] = [];
     const refused: { key: string; why: string }[] = [];
+    // Answers another member's came before (P20, B-v43z8): not recorded, and their cards don't come back.
+    const beaten: { key: string; words: string }[] = [];
     let filed = 0;
     for (const o of out.outcomes) {
       const k = keyFor.get(o.pending);
       if (!k) continue;
       const body = o.body as { error?: string; filed?: string[] } | undefined;
+      const decided = o.status === 409 ? decidedIn(body) : undefined;
       if (o.status === 201) {
         written.push(k);
         filed += body?.filed?.length ?? 0;
       } else if (o.status === 410) gone.push(k);
+      else if (decided) beaten.push({ key: k, words: decidedWords(decided) });
       else refused.push({ key: k, why: body?.error ?? `the server answered ${o.status}` });
     }
     const names = new Map(list.map(([k, a]) => [k, a]));
@@ -450,9 +459,10 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
       }
       return n;
     });
-    drop([...gone, ...refused.map((x) => x.key)]);
+    drop([...gone, ...refused.map((x) => x.key), ...beaten.map((x) => x.key)]);
     noteExpired(gone.map((k) => names.get(k)!.name));
-    if (refused.length) {
+    if (beaten.length) say(beaten.length === 1 ? `“${names.get(beaten[0]!.key)!.name}”: ${beaten[0]!.words}` : `${NUMBER[beaten.length] ?? beaten.length} of those cards were answered by someone else first, so your answers to them weren't recorded.`);
+    else if (refused.length) {
       const one = refused.length === 1;
       say(`${one ? "That answer wasn't" : `${NUMBER[refused.length] ?? refused.length} answers weren't`} recorded: ${refused[0]!.why}. ${one ? "The card is" : "Their cards are"} back.`);
     } else if (written.length) say(`${confirmedLine(written.length, names.get(written[0]!)?.sent)}${filedWords(filed)}`);
@@ -766,7 +776,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     wasTesting.current = pStatus.kind === "test";
   }, [pStatus.kind]);
 
-  const notifications = useNotifications(state, goTo);
+  const notifications = useNotifications(state, goTo, team);
   const toggleNotify = async () => {
     const was = notifications.status;
     const now = await notifications.toggle();
@@ -1007,6 +1017,20 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
   // The path: your answers this session, the card's relationships, and what's next. Behind the setup survey, no card
   // is in play: the path shows only what's next.
   const inPlay = setup || toMark ? undefined : current;
+  // Whom the card in play was sent to, when that isn't simply you, and since when (P20, B-tzdjn): "Sent to ana 40 minutes ago."
+  const sentTo = current && !pastCard && !reviewCard && !practiceOf(current) ? sentToWords(current, team) : undefined;
+  const sentLine = sentTo && current ? `${sentTo[0]!.toUpperCase()}${sentTo.slice(1)}${sentTo.startsWith("sent") ? ` ${ago(Date.parse(current.meta.created), now)}` : ""}.` : undefined;
+  // A card that was yours to answer and that another member decided leaves the desk, which says who answered it.
+  const toAnswerId = current && !pastCard && !reviewCard && !practiceOf(current) ? current.meta.id : undefined;
+  const inFront = useRef<string>(undefined);
+  useEffect(() => {
+    const was = inFront.current;
+    inFront.current = toAnswerId;
+    if (!was || was === toAnswerId) return;
+    const card = cards.get(was);
+    const who = decidedByAnother(card, team);
+    if (who && ![...answeredRef.current.keys()].some((k) => k.startsWith(`${was}@`))) say(`${who} answered “${card!.meta.title}”, so it's off your desk.`);
+  });
   const relations = inPlay ? relationsOf(inPlay, state) : [];
   const relById = new Map(relations.map((x) => [x.id, x]));
   const trail = [...answered.entries()]
@@ -1028,6 +1052,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
       stopped: waitState(c, now) === "waiting",
       fresh: seen.isNew(keyOf(c)),
       ...(link ? { link } : {}),
+      ...(sentToWords(c, team) ? { sent: sentToWords(c, team)! } : {}),
     };
   });
   const leaning = lean ?? handLean ?? hover;
@@ -1146,7 +1171,17 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
           </svg>
           <span className="bar-lbl">Branches</span> <kbd>B</kbd>
         </button>
-        <MoreMenu open={menuOpen} notify={notifications.status} held={held.length + heldGone.length} touch={touch} site={!!endpoints.hosted} onOpen={setMenuOpen} onPanel={showPanel} onNotify={() => void toggleNotify()} />
+        <MoreMenu
+          open={menuOpen}
+          notify={notifications.status}
+          held={held.length + heldGone.length}
+          touch={touch}
+          site={!!endpoints.hosted}
+          {...(team?.role === "member" ? { member: true } : {})}
+          onOpen={setMenuOpen}
+          onPanel={showPanel}
+          onNotify={() => void toggleNotify()}
+        />
       </header>
       {endpoints.hosted && <ProofPrompt />}
       {panel === "keys" && <KeysPanel touch={touch} phone={phone} onClose={() => setPanel(undefined)} />}
@@ -1179,6 +1214,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
       )}
       {panel === "preferences" && (
         <PreferencesPanel
+          {...(team?.role === "member" ? { ownersOnly: true } : {})}
           routing={state.routing}
           cards={pastCards(state.cards)}
           presets={presets}
@@ -1342,6 +1378,8 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
                     rarity: r.rarity,
                     stakes: stakesLine(current, deps),
                     wait: waitOf(current),
+                    ...(sentLine ? { sent: sentLine } : {}),
+                    ...((team?.handles.size ?? 0) > 1 ? { others: true } : {}),
                     sides,
                     mode,
                     rules: state.rules,

@@ -11,11 +11,15 @@ export interface KeptState {
   fetchedAt: number;
 }
 
-/** How many cards wait for you in a project, and how many of them are hard or blocking (`GET …/waiting`). */
+/**
+ * How many cards wait for you in a project, and how many of them are hard or blocking (`GET …/waiting`); and, of those,
+ * the ones that were sent to you (`yours`, P20, B-tzdjn), which in a project of one is all of them.
+ */
 export interface WaitingCounts {
   total: number;
   hard: number;
   blocking: number;
+  yours?: { total: number; hard: number; blocking: number };
 }
 
 const states = new Map<string, KeptState>();

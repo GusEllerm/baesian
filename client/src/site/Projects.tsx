@@ -8,8 +8,9 @@ import { type Account, ApiError, call, day, projectName } from "./api";
 import { follow } from "./nav";
 import { Field, Notice, Problem, Sheet, Shell, To } from "./Page";
 
-// Your projects (M9e): each repo you've linked, by the name you gave it (B-zqkwk), opening its desk at
-// /projects/{project}, the relay's own address for it (B-7z97x). Renamed here; the ID only in a tooltip (D69's spirit).
+// Your projects (M9e): each repo you've linked, and each you've joined (P20), by its name (B-zqkwk), opening its desk at
+// /projects/{project}, the relay's own address for it (B-7z97x). Renamed here by an owner; the ID only in a tooltip
+// (D69's spirit). Each has a link to its members.
 // A project whose desk, in this tab, left answers waiting for your passkey says so (B-a6xpc). Each project has an inbox
 // (B-fzr1e): how many cards wait for you there, asked of each project in parallel as the page opens (B-wgbdh), and again
 // whenever a project says it changed (B-gty71), shown from what this tab last heard until the answers come (`kept.ts`).
@@ -78,7 +79,7 @@ function useInboxes(ids: readonly string[]): Inboxes {
       call<WaitingCounts>("GET", `/v1/projects/${encodeURIComponent(id)}/waiting`)
         .then(
           (c) => {
-            keepCounts(id, { total: c.total, hard: c.hard, blocking: c.blocking });
+            keepCounts(id, { total: c.total, hard: c.hard, blocking: c.blocking, ...(c.yours ? { yours: { total: c.yours.total, hard: c.yours.hard, blocking: c.yours.blocking } } : {}) });
             if (!stopped) setInboxes((m) => new Map(m).set(id, c));
             // Answered again after a refusal (signed back in, in another tab): its connection is held again.
             hear(id);
@@ -133,14 +134,15 @@ export function Projects({ account, reload, notice }: { account: Account; reload
 
   return (
     <Shell who={account.handle}>
-      <Sheet title="Your projects" lead={account.projects.length ? "Each is a repo whose agents send you their decisions, with an inbox of the cards waiting for you. Open one to answer them." : undefined}>
+      <Sheet title="Your projects" lead={account.projects.length ? "Each is a repo whose agents send their decisions here, with an inbox of the cards waiting for you. Open one to answer them." : undefined}>
         <Notice text={done} />
         <Problem text={problem} />
         {account.projects.length === 0 ? (
           <div className="site-empty">
             <p>No projects yet.</p>
             <p className="small">
-              A project is made when you approve its first machine. In a repo where Baesian is set up, run <code>baesian login --service {location.origin}</code>, then open the address it prints.
+              A project is made when you approve its first machine. In a repo where Baesian is set up, run <code>baesian login --service {location.origin}</code>, then open the address it prints. To join someone else's project, ask
+              one of its owners for a link.
             </p>
           </div>
         ) : (
@@ -166,21 +168,29 @@ export function Projects({ account, reload, notice }: { account: Account; reload
                     <span className="st inbox-line" data-waiting={waitingIn(inboxes.get(p.id)) > 0 || undefined}>
                       {inboxLine(inboxes.get(p.id))}
                     </span>
-                    <span className="st">Linked {day(p.created)}</span>
+                    <span className="st">{p.role === "owner" ? `Linked ${day(p.created)}` : `You're a member · linked ${day(p.created)}`}</span>
                     {waiting.has(p.id) && <span className="st waits">{waitingLine(waiting.get(p.id)!)}</span>}
                   </a>
-                  <button
-                    type="button"
-                    className="switch end"
-                    aria-label={`Rename ${projectName(p)}`}
-                    onClick={() => {
-                      setRenaming(p.id);
-                      setName(p.name ?? "");
-                      setDone(undefined);
-                    }}
-                  >
-                    Rename
-                  </button>
+                  <span className="ends">
+                    <a className="switch" href={`/projects/${encodeURIComponent(p.id)}/members`} onClick={follow(`/projects/${encodeURIComponent(p.id)}/members`)} aria-label={`Members of ${projectName(p)}`}>
+                      Members
+                    </a>
+                    {/* A project's name is its owners' to change (B-rxbss). */}
+                    {p.role === "owner" && (
+                      <button
+                        type="button"
+                        className="switch"
+                        aria-label={`Rename ${projectName(p)}`}
+                        onClick={() => {
+                          setRenaming(p.id);
+                          setName(p.name ?? "");
+                          setDone(undefined);
+                        }}
+                      >
+                        Rename
+                      </button>
+                    )}
+                  </span>
                 </li>
               ),
             )}

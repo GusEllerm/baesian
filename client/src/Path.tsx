@@ -33,6 +33,8 @@ export interface NextStep {
   fresh: boolean;
   /** How the current card relates to it, when it does: shown on its row, not listed twice. */
   link?: Relation;
+  /** In a project with members (P20): whom it was sent to, when that isn't you, "sent to ana" or "passed on by ana". */
+  sent?: string;
 }
 /** The card's own motion: where its drag, lean or swipe has moved it from where it rests, and how far it has turned. */
 export interface CardMotion {
@@ -280,6 +282,7 @@ export function Path(p: PathProps) {
                   {n.name}
                 </span>
                 {n.link && <span className={`tag link${n.link.kind === "conflict" || n.link.kind === "rule" ? " c" : ""}`}>{linkWords(n.link)}</span>}
+                {n.sent && <span className="tag sent">{n.sent}</span>}
               </span>
               <span className="node">
                 <Mark kind={n.rarity} size={16} stopped={n.stopped} />

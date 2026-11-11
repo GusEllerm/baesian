@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiCard } from "../../src/api";
 import { describeAnswer, verdictFor } from "./answer";
 import { LOCAL } from "./endpoints";
-import { Outbox, postVerdictTo } from "./outbox";
+import { type Decided, Outbox, decidedIn, decidedWords, postVerdictTo } from "./outbox";
 
 // What the reviewer answers, as the verdicts the server records (M4 step 5c).
 
@@ -133,6 +133,29 @@ describe("the outbox (D82)", () => {
     box.flush();
     await new Promise((r) => setTimeout(r, 0));
     expect(failed).toEqual(["B-7f3kq is at revision 2; a verdict on r1 is stale"]);
+  });
+
+  it("says who decided first when another member's answer came before yours, and what they chose (P20, B-v43z8)", async () => {
+    // The relay's refusal, as its verdicts address gives it: 409, with who decided and whether yours was the same.
+    const refusal = { error: "ben decided this card already, so your answer wasn't written", decided: { by: "ben", at: "2026-11-11T10:00:00.000Z", decision: "SQLite", same: false } };
+    const fetched = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(refusal), { status: 409, headers: { "content-type": "application/json" } }));
+    try {
+      const failed: { error: string; decided: Decided | undefined }[] = [];
+      const box = new Outbox(postVerdictTo(LOCAL), 5000, { sent: () => {}, failed: (_c, error, decided) => failed.push({ error, decided }) });
+      box.hold("B-7f3kq", { verdict });
+      box.flush();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(failed).toEqual([{ error: refusal.error, decided: refusal.decided }]);
+    } finally {
+      fetched.mockRestore();
+    }
+    expect(decidedWords({ by: "ben", at: "", decision: "SQLite", same: false })).toBe("ben had already answered it, and chose “SQLite”. Your answer wasn't recorded.");
+    expect(decidedWords({ by: "ben", at: "", decision: "SQLite", same: true })).toBe("ben had already answered it, the same way, so there's nothing more to do.");
+    // An answer with no option to name (they wrote their own, say).
+    expect(decidedWords({ by: "ben", at: "", same: false })).toBe("ben had already answered it, and chose differently. Your answer wasn't recorded.");
+    // Any other 409 (a stale revision) is a failure as before.
+    expect(decidedIn({ error: "stale" })).toBeUndefined();
+    expect(decidedIn({ decided: { by: "ben", at: "x", same: true } })).toEqual({ by: "ben", at: "x", same: true });
   });
 
   it("holds a practice card's answer the same way, for the same undo window (B-kb5yt)", async () => {

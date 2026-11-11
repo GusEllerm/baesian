@@ -43,6 +43,10 @@ export interface CardProps {
   rarity: Rarity;
   stakes: string;
   wait: WaitState;
+  /** In a project with members (P20): whom the card was sent to, when that isn't you: "Sent to ana 40 minutes ago." */
+  sent?: string;
+  /** The project has other members (P20): passing a card on leaves it with them (B-tzdjn). */
+  others?: boolean;
   sides: Record<Side, OptionKind>;
   mode: Mode;
   /** Your rules, to offer retiring the ones the option you chose breaks (D119). */
@@ -102,6 +106,8 @@ export function Card(p: CardProps) {
       <p className="doing">
         <b>{agentOf(card)}</b> is {m.doing}
       </p>
+      {/* In a project with members (P20, B-tzdjn): whom it was sent to, when that isn't you. Any member answers it. */}
+      {p.sent && <p className="sent-to">{p.sent}</p>}
       <h1>{m.question}</h1>
       {mode.kind === "seen" && <Seen {...p} mode={mode} />}
       {mode.kind === "write" || mode.kind === "pass" ? null : (
@@ -695,7 +701,7 @@ function Written(p: CardProps & { mode: Extract<Mode, { kind: "write" | "pass" }
       )}
       <div className="row">
         <button type="button" className="send" disabled={!mode.reason} onClick={p.onSend}>
-          {mode.reason === "not_my_area" ? `Ask ${agent} to find another reviewer` : `Send to ${agent}`}
+          {mode.reason === "not_my_area" ? (p.others ? "Pass it on to the other members" : `Ask ${agent} to find another reviewer`) : `Send to ${agent}`}
         </button>
         {!p.touch && (
           <span className="small">

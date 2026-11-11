@@ -68,12 +68,42 @@ export interface Passkey {
   last_used: string | null;
 }
 
-/** A project of yours (B-zqkwk: its name is kept with it). */
+/** What you are in a project (P20, B-rxbss): one of its owners, or a member. */
+export type Role = "owner" | "member";
+
+/** A project you're a member of (B-zqkwk: its name is kept with it), and what you are in it (P20). */
 export interface Project {
   id: string;
   name: string | null;
   created: string;
+  role: Role;
 }
+
+/** One of a project's members, as `GET /v1/account/projects/{project}/members` lists them (P20). */
+export interface ProjectMember {
+  account: string;
+  handle: string;
+  role: Role;
+  joined: string;
+  /** The asker. */
+  you?: boolean;
+  /** The account that made the project: always an owner, and can't leave it. */
+  holds?: boolean;
+}
+
+/** A project's members, your role in it, and, to an owner, the links to it that haven't been used. */
+export interface ProjectMembers {
+  project: string;
+  name: string | null;
+  role: Role;
+  members: ProjectMember[];
+  invites?: { created: string; expires: string; by: string }[];
+}
+
+/** The address of a project's members, links and roles. */
+export const membersAddress = (project: string, rest = "members") => `/v1/account/projects/${encodeURIComponent(project)}/${rest}`;
+
+export const membersOf = (project: string) => call<ProjectMembers>("GET", membersAddress(project));
 
 /** `GET /v1/account`. */
 export interface Account {

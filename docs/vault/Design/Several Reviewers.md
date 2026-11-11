@@ -10,7 +10,7 @@ tags: [baesian, design, hosted, reviewers]
 
 # Several Reviewers
 
-> **Status: a proposal (P20), decided by nine cards (2026-11-11), and being built: steps 1 and 2 of "The build" are done, in the service; nothing of it is released.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
+> **Status: a proposal (P20), decided by ten cards (2026-11-11), and being built: steps 1 to 3 of "The build" are done, the service and the website; nothing of it is released.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
 >
 > **The first five cards (deck `reviewers`) were answered the same day,** four with the proposal and one against it:
 > - **B-j032t**, "A few developers on one repo": built first for developers who each run their own agents; the map from kinds of decision to people comes second.
@@ -29,7 +29,7 @@ tags: [baesian, design, hosted, reviewers]
 >
 > **A tenth, B-aaj69 (deck `reviewers-joining`), was answered the same day, against the proposal's ten minutes:** "After half an hour": a blocking or hard card still waiting half an hour after it arrived is notified to the members it wasn't sent to.
 >
-> **Next:** step 3 of "The build", the website.
+> **Next:** step 4 of "The build", the CLI and the plugin; then a different answer raised and settled (5), and the privacy policy's lines as a card (6), before any release.
 
 ## In brief
 
@@ -144,7 +144,13 @@ Stage 1, in steps, each tested and committed by itself. Found while planning it:
    - A member who leaves, or whose account is deleted: the cards sent to them are the owners' from then, and an owner is told. While an account is closed and can still be restored, its cards stay sent to it.
    - Each member is told at most four times an hour from a project, and isn't told while they're at the desk, whoever else is.
    - A notification counts every card waiting for the member it goes to, not only those sent to them: its words don't change (B-mjf3g).
-3. **The website.** The projects you're a member of; a members page, with the link; the desk's queue, yours first, each card marked with whom it was sent to; what the desk says when someone else answers first.
+3. **The website.** The projects you're a member of; a members page, with the link; the desk's queue, yours first, each card marked with whom it was sent to; what the desk says when someone else answers first. *Built (2026-11-11), [[Client Build]] item 31; decided by the agent while building it, each in the [[Decision Log]]:*
+   - The members page is at the desk's address with `/members` after it; a link opens `/join`, with its code after the `#`, which is kept in the tab while someone signs in or signs up, and is never in an address the service is asked for.
+   - Only the cards that weren't sent to you are marked ("sent to ana", "sent to the owners", "passed on by ana"); a project of one shows no marks.
+   - A card another member decides while it's in front of you leaves your desk, which says who answered it and not what they chose. An answer of yours that arrives second isn't recorded, and the desk then says who came first and what they chose.
+   - An inbox counts every card on your desk, and says how many were sent to you when that isn't all of them.
+   - A member sees the project's preferences as they are, with nothing to change, and is never offered the setup survey. A card only owners answer isn't on a member's desk.
+   - Removing a member, and leaving, ask first; whoever made the project has nothing to press.
 4. **The CLI and the plugin.** `baesian login` for a member; who answered, in `baesian inbox` and `baesian wait`; the instructions' wording; `baesian verify`'s message for a member's passkey that isn't pinned.
 5. **A different answer.** Answering a decided card yourself, blind; raising a difference; the card it becomes, and who may settle it.
 6. **The privacy policy,** as a card, then the docs.

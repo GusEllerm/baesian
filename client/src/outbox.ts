@@ -27,6 +27,39 @@ export type Outgoing = { verdict: ApiVerdictInput } | { practice: ApiPracticeInp
 
 export type Post = (item: Outgoing, opts: { keepalive: boolean }) => Promise<Posted | void>;
 
+/**
+ * On the website, in a project with members (P20): another member decided the card first, so this answer wasn't written
+ * (the relay's 409, B-v43z8). Who decided, when, what they chose, and whether this answer would have been the same.
+ */
+export interface Decided {
+  by: string;
+  at: string;
+  decision?: string;
+  same: boolean;
+}
+
+/** An answer refused because someone else decided its card first. */
+export class DecidedFirst extends Error {
+  constructor(
+    message: string,
+    readonly decided: Decided,
+  ) {
+    super(message);
+  }
+}
+
+/** What a refused answer's reply says of who decided first, if that's why it was refused. */
+export const decidedIn = (body: unknown): Decided | undefined => {
+  const d = (body as { decided?: Partial<Decided> } | undefined)?.decided;
+  return d && typeof d.by === "string" && typeof d.same === "boolean" ? { by: d.by, at: String(d.at ?? ""), same: d.same, ...(typeof d.decision === "string" ? { decision: d.decision } : {}) } : undefined;
+};
+
+/** What the desk says when someone else decided a card first: who, and what they chose, now that you've chosen too. */
+export function decidedWords(d: Decided): string {
+  if (d.same) return `${d.by} had already answered it, the same way, so there's nothing more to do.`;
+  return `${d.by} had already answered it, and chose ${d.decision ? (/[“”]/.test(d.decision) ? d.decision : `“${d.decision}”`) : "differently"}. Your answer wasn't recorded.`;
+}
+
 export interface Held {
   card: string;
   item: Outgoing;
@@ -40,7 +73,7 @@ export class Outbox {
   constructor(
     private readonly post: Post,
     private readonly ms: number,
-    private readonly events: { sent: (card: string, posted?: Posted) => void; failed: (card: string, error: string) => void },
+    private readonly events: { sent: (card: string, posted?: Posted) => void; failed: (card: string, error: string, decided?: Decided) => void },
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -74,7 +107,7 @@ export class Outbox {
     this.held = undefined;
     this.post(item, { keepalive }).then(
       (posted) => (posted ? this.events.sent(card, posted) : this.events.sent(card)),
-      (e: unknown) => this.events.failed(card, e instanceof Error ? e.message : String(e)),
+      (e: unknown) => this.events.failed(card, e instanceof Error ? e.message : String(e), e instanceof DecidedFirst ? e.decided : undefined),
     );
   }
 }
@@ -107,10 +140,13 @@ async function posted(r: Response): Promise<Posted> {
     return filed?.length ? { filed } : {};
   }
   let reason = `the server answered ${r.status}`;
+  let decided: Decided | undefined;
   try {
-    reason = ((await r.json()) as { error?: string }).error ?? reason;
+    const body = (await r.json()) as { error?: string };
+    reason = body.error ?? reason;
+    decided = r.status === 409 ? decidedIn(body) : undefined;
   } catch {
     // no JSON: keep the status
   }
-  throw new Error(reason);
+  throw decided ? new DecidedFirst(reason, decided) : new Error(reason);
 }

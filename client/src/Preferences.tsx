@@ -92,6 +92,8 @@ export function PreferencesPanel(p: {
   onSaved: (text: string) => void;
   onSurvey: () => void;
   onClose: () => void;
+  /** On the website, for a member who isn't an owner (P20, B-rxbss): the settings as they are, with nothing to change. */
+  ownersOnly?: boolean;
 }) {
   const { routing } = p;
   const endpoints = useEndpoints();
@@ -152,7 +154,14 @@ export function PreferencesPanel(p: {
   });
 
   return (
-    <Panel label="Your preferences" onClose={p.onClose} id="prefs-panel" wide>
+    <Panel label={p.ownersOnly ? "The project's preferences" : "Your preferences"} onClose={p.onClose} id="prefs-panel" wide>
+      {p.ownersOnly && (
+        <p className="owners-note" role="note">
+          Only this project's owners change these settings. They're shown as they are now.
+        </p>
+      )}
+      {/* For a member, every control below is off: a disabled fieldset turns off all it holds. */}
+      <fieldset className="plain" disabled={!!p.ownersOnly}>
       <div className="panel-head">
         <p className="lede">
           Agents file a card for each decision that's hard to undo, and each card falls in a row by what it changes. A row's stop decides two things: whether its cards reach you, and what the agent does
@@ -237,13 +246,13 @@ export function PreferencesPanel(p: {
 
       <div className="pref-foot">
         <p className="pref-total">{heldWords(replayed.total, "These settings")}</p>
-        <label className="why-line">
+        <label className="why-line" hidden={!!p.ownersOnly}>
           <span className="lbl">
             Why? <span className="soft">Optional. It's kept with the change.</span>
           </span>
           <input type="text" autoComplete="off" placeholder="One line" value={reason} onChange={(e) => setReason(e.target.value)} />
         </label>
-        <div className="row">
+        <div className="row" hidden={!!p.ownersOnly}>
           <button type="button" className="send" disabled={!changed || status.kind === "saving"} onClick={() => void save()}>
             {status.kind === "saving" ? "Saving…" : "Save"}
           </button>
@@ -268,12 +277,15 @@ export function PreferencesPanel(p: {
           {file
             ? `Last changed by ${file.by} on ${new Date(file.at).toLocaleDateString(undefined, { day: "numeric", month: "long" })}${file.from_card ? ", from Baesian's proposal" : presetName(file.profile) ? `, from “${presetName(file.profile)}”` : ""}.`
             : "None saved yet, so “Today” applies, in shadow."}{" "}
-          <button type="button" className="link" onClick={p.onSurvey}>
-            Find a preset from example decisions
-          </button>
+          {!p.ownersOnly && (
+            <button type="button" className="link" onClick={p.onSurvey}>
+              Find a preset from example decisions
+            </button>
+          )}
         </p>
       </div>
       <GatePathsSection routing={routing} onSaved={p.onSaved} />
+      </fieldset>
     </Panel>
   );
 }

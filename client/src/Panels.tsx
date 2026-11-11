@@ -19,7 +19,18 @@ export type PanelKind = "calibration" | "branches" | "keys" | "deck" | "held" | 
 const NOTIFY_WORDS: Record<NotifyStatus, string> = { on: "on", off: "off", blocked: "blocked", unsupported: "" };
 
 /** "More": the panels, and notifications. It closes on Esc, on a click elsewhere, and once you've picked. */
-export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number; touch: boolean; site?: boolean; onOpen: (open: boolean) => void; onPanel: (kind: PanelKind) => void; onNotify: () => void }) {
+export function MoreMenu(p: {
+  open: boolean;
+  notify: NotifyStatus;
+  held: number;
+  touch: boolean;
+  site?: boolean;
+  /** On the website, for a member who isn't an owner (P20, B-rxbss): the preferences are the project's, to see. */
+  member?: boolean;
+  onOpen: (open: boolean) => void;
+  onPanel: (kind: PanelKind) => void;
+  onNotify: () => void;
+}) {
   const menu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!p.open) return;
@@ -52,7 +63,7 @@ export function MoreMenu(p: { open: boolean; notify: NotifyStatus; held: number;
             )}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("preferences"))}>
-            Your preferences
+            {p.member ? "The project's preferences" : "Your preferences"}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("held"))}>
             Held back <span className="state">{p.held || "none"}</span>

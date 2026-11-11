@@ -4,7 +4,9 @@ import { useMe } from "./api";
 import { Account } from "./Account";
 import { Counts } from "./Counts";
 import { Device } from "./Device";
-import { signInHere, takeFragment, useWhere } from "./nav";
+import { Join, joinWaiting, keepJoinCode } from "./Join";
+import { Members } from "./Members";
+import { go, signInHere, takeFragment, useWhere } from "./nav";
 import { Go, Problem, Sheet, Shell, To } from "./Page";
 import { Project } from "./Project";
 import { Privacy } from "./Privacy";
@@ -24,6 +26,12 @@ import { SignUp } from "./SignUp";
 //   /counts             what the service counts of its use, every field (D141, B-7nq85): anyone may open it
 //   /privacy            the privacy policy (M9f): anyone may open it
 //   /projects/{project} the project's desk
+//   /projects/{project}/members  its members, and for an owner the link that adds one (P20)
+//   /join#{code}        join a project by a link its owner sent (P20, B-jsady)
+
+// A link to join a project carries its code after the `#`: it's kept in this tab and taken out of the address before
+// anything else happens, since signing in first would lose it.
+if (location.pathname === "/join") keepJoinCode();
 
 /** The pages anyone may open; every other needs you signed in. */
 const OPEN = new Set(["/sign-up", "/sign-in", "/recover", "/counts", "/privacy"]);
@@ -54,6 +62,11 @@ export function Site() {
   useEffect(() => {
     if (needsIn && me.kind === "signed-out") signInHere();
   }, [needsIn, me.kind]);
+  // Someone who signed up, or came in through Globus, to use a link lands on their projects: the link is shown next, once.
+  const toJoin = path === "/" && me.kind === "in" && joinWaiting();
+  useEffect(() => {
+    if (toJoin) go("/join", { replace: true });
+  }, [toJoin]);
   if (path === "/sign-up") return <SignUp onIn={me.reload} />;
   if (path === "/sign-in") return <SignIn onIn={me.reload} />;
   if (path === "/recover") return <Recover onIn={me.reload} />;
@@ -77,8 +90,11 @@ export function Site() {
   if (path === "/") return <Projects account={account} reload={me.reload} notice={welcome} />;
   if (path === "/account") return <Account account={account} reload={me.reload} />;
   if (path === "/device") return <Device handle={account.handle} freshUntil={account.fresh_until} />;
+  if (path === "/join") return <Join account={account} reload={me.reload} />;
   const project = /^\/projects\/([^/]+)$/.exec(path)?.[1];
   if (project) return <Project key={project} id={decodeURIComponent(project)} account={account} />;
+  const members = /^\/projects\/([^/]+)\/members$/.exec(path)?.[1];
+  if (members) return <Members key={members} id={decodeURIComponent(members)} account={account} reload={me.reload} />;
   return (
     <Shell who={account.handle}>
       <Sheet title="No page here" lead="This address isn't one of the site's pages.">

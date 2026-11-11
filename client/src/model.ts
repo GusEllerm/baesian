@@ -1,6 +1,7 @@
 import { type ApiCard, type ApiRemovedCard, type ApiState, type Status, WAITING_STALE_MS } from "../../src/api";
 import { BAESIAN } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
+import { type Team, ownersOnly, sentToMe, waitsForMe } from "./team";
 
 // M4 step 5b: what the client works out from the server's snapshot (D96). Pure functions, ported from the round 5
 // prototype's data.js and app.js (design/explorations/round5/), now over real cards. Nothing here is inferred by
@@ -160,23 +161,32 @@ export const serverNow = (state: ApiState, fetchedAtMs: number, nowMs: number = 
  * turn, the area with the rarest card first, and within it the rarest first, oldest first among equals.
  * Only open cards are in it, and audits (D151): passed-on and deferred cards are parked (`parked`), and held cards
  * wait in their own list (`heldBack`) unless they're drawn for audit.
+ *
+ * On the website, in a project with members (`team`, P20): the cards sent to you come first, in that order, then the
+ * rest of what waits for you, in that order (B-tzdjn). What waits for you is `waitsForMe()`: a card another member
+ * passed on is in it, and one only owners answer isn't, unless you're one.
  */
-export function queue(state: ApiState, nowMs: number): ApiCard[] {
+export function queue(state: ApiState, nowMs: number, team?: Team): ApiCard[] {
   const cards = byId(state);
-  const open = state.cards.filter((c) => c.status === "open");
+  const open = state.cards.filter((c) => waitsForMe(c, team));
   const rank = new Map(open.map((c) => [c.meta.id, RARITY[rarityOf(c, liveDependents(c, cards).length).rarity].rank]));
   const waitingNow = (c: ApiCard) => waitState(c, nowMs) === "waiting";
-  const best = new Map<string, number>();
-  for (const c of open) best.set(areaOf(c), Math.max(best.get(areaOf(c)) ?? 0, rank.get(c.meta.id)!));
   const byRank = (a: ApiCard, b: ApiCard) => rank.get(b.meta.id)! - rank.get(a.meta.id)! || a.meta.created.localeCompare(b.meta.created);
-  const first = open.filter(waitingNow).sort(byRank);
-  const rest = open.filter((c) => !waitingNow(c)).sort((a, b) => {
-    const x = areaOf(a), y = areaOf(b);
-    if (x !== y) return best.get(y)! - best.get(x)! || x.localeCompare(y);
-    return byRank(a, b);
-  });
-  const audits = state.cards.filter((c) => c.audit).sort((a, b) => a.meta.created.localeCompare(b.meta.created));
-  return spaceOut([...first, ...rest], audits);
+  const inOrder = (list: ApiCard[]): ApiCard[] => {
+    const best = new Map<string, number>();
+    for (const c of list) best.set(areaOf(c), Math.max(best.get(areaOf(c)) ?? 0, rank.get(c.meta.id)!));
+    const first = list.filter(waitingNow).sort(byRank);
+    const rest = list.filter((c) => !waitingNow(c)).sort((a, b) => {
+      const x = areaOf(a), y = areaOf(b);
+      if (x !== y) return best.get(y)! - best.get(x)! || x.localeCompare(y);
+      return byRank(a, b);
+    });
+    return [...first, ...rest];
+  };
+  const mine = team ? open.filter((c) => sentToMe(c, team)) : open;
+  const others = team ? open.filter((c) => !sentToMe(c, team)) : [];
+  const audits = state.cards.filter((c) => c.audit && !(team && ownersOnly(c) && team.role !== "owner")).sort((a, b) => a.meta.created.localeCompare(b.meta.created));
+  return spaceOut([...inOrder(mine), ...inOrder(others)], audits);
 }
 
 /** How many other cards come before each audit in the queue. */
@@ -197,8 +207,11 @@ export function spaceOut(cards: ApiCard[], audits: ApiCard[], every = AUDIT_EVER
   return [...out, ...audits.slice(next)];
 }
 
-/** Cards that need the reviewer, but not now: passed to another reviewer, or deferred. */
-export const parked = (state: ApiState): ApiCard[] => state.cards.filter((c) => c.status === "rerouted" || c.status === "deferred");
+/**
+ * Cards that need the reviewer, but not now: passed on, or deferred. In a project with members (`team`, P20), a card
+ * someone else passed on isn't parked for you: it's in your queue.
+ */
+export const parked = (state: ApiState, team?: Team): ApiCard[] => state.cards.filter((c) => (c.status === "rerouted" && !waitsForMe(c, team)) || c.status === "deferred");
 
 /**
  * Cards the gate held back, whose agents went ahead (D150): out of the queue, and in the "Held back" list, where any

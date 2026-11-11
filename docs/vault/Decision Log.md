@@ -280,6 +280,16 @@ views:
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-11 `[agent decision]` **Several reviewers on the website, as built** (P20 stage 1, step 3; B-r51ts, B-tzdjn, B-jsady, B-rxbss, B-v43z8; [[Several Reviewers]], [[Client Build]] item 31), by the lead agent. What the cards left open:
+  - **Two new pages:** a project's members at the desk's address with `/members` after it, mirroring the service's own address for them (B-7z97x's pattern); and `/join`, which a link opens. The link's code stays after the `#`: the site takes it out of the address at once, keeps it in the tab while someone signs in or signs up, and sends it only in a request's body.
+  - **Marks only where a card isn't yours:** "sent to ana", "sent to the owners", "passed on by ana", on the path's next cards and on the card in play, with how long ago. A project of one shows none, and its inbox reads as before.
+  - **An inbox counts every card on your desk,** and says how many were sent to you when that isn't all: "5 waiting, 2 sent to you, 1 hard".
+  - **Who, not what, until you've chosen.** A card another member decides while it's in front of you leaves your desk, which names who answered it and not their choice. An answer of yours that reaches the relay second isn't recorded; the desk then says who came first and what they chose, or that it was the same. Raising the difference is step 5.
+  - **Passing a card on,** in a project with other members, says "Pass it on to the other members".
+  - **A member sees the project's preferences as they are,** every control off, and is never offered the setup survey. A card only owners answer isn't on a member's desk.
+  - **Removing a member, and leaving, ask first,** in that member's row, saying what follows. Renaming a project is offered only to its owners.
+  - **Someone who signs up to use a link** is taken on to the project it's for, not to an empty list of projects.
+
 - 2026-11-11 `[agent decision]` **Whom a card is sent to, and who's told, as built** (P20 stage 1, step 2; B-2n7s4, B-tzdjn, B-r51ts; [[Several Reviewers]], [[service]]), by the lead agent. What the cards left open:
   - **How long before the others are told was card B-aaj69's,** a hard card: the step was built and committed with neither of its answers in it (`WHEN.othersMs` was `null`), and the half hour the user chose was set once it was answered.
   - **A card only owners answer waits for no other member:** it isn't in a member's count, and they aren't told of it, since they couldn't answer it (B-rxbss).

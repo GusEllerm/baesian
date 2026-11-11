@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type CreationOptionsJSON, makePasskey } from "../webauthn";
 import { ApiError, call, useConfig } from "./api";
+import { joinWaiting } from "./Join";
 import { go, takeFragment } from "./nav";
 import { Field, Go, Problem, Sheet, Shell, ShownOnce, To } from "./Page";
 import { Turnstile } from "./Turnstile";
@@ -93,8 +94,9 @@ export function SignUp({ onIn }: { onIn: () => Promise<void> }) {
             <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
             <span>I've saved my recovery code</span>
           </label>
-          <Go disabled={!saved} onClick={() => go("/", { replace: true })}>
-            Go to your projects
+          {/* Signed up to use a link to a project (P20, B-jsady), which this tab kept: on to it. */}
+          <Go disabled={!saved} onClick={() => go(joinWaiting() ? "/join" : "/", { replace: true })}>
+            {joinWaiting() ? "Go on to the project you were invited to" : "Go to your projects"}
           </Go>
         </Sheet>
       </Shell>

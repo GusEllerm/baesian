@@ -96,6 +96,8 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 
 .doing { margin: -6px 0 -4px; font: var(--t-meta); font-stretch: 90%; font-weight: 500; color: var(--ink-soft); }
 .doing b { color: var(--ink); font-weight: 650; }
+/* In a project with members (P20): whom the card was sent to, when that isn't you. */
+.sent-to { margin: 0 0 -4px; font: var(--t-small); font-stretch: 90%; font-weight: 600; color: var(--ink-soft); }
 .card h1 { margin: 0; font: var(--t-question); text-wrap: pretty; }
 .crux { display: flex; flex-direction: column; gap: 3px; margin: -2px 0 -4px; }
 .crux p { font: var(--t-body); font-size: 16.5px; color: var(--ink); }
@@ -216,6 +218,7 @@ kbd { font: 700 11.5px/1 var(--ui); display: inline-block; min-width: 18px; padd
 .tag.p { color: var(--ink-faint); }
 .path .row .tag.link { color: var(--ink); }
 .path .row .tag.link.c { color: var(--left); }
+.path .row .tag.sent { font-weight: 600; color: var(--ink-soft); }
 .path .row.now { min-height: 44px; }
 .path .row.now .node { border-radius: 50%; background: var(--face); box-shadow: 0 0 0 2px var(--ink); }
 .path .row.now .lbl { visibility: hidden; }
@@ -640,6 +643,10 @@ body.drawer-open .drawer { transform: none; visibility: visible; transition: tra
 .pref-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
 .pref-total { font: var(--t-body); font-size: 16px; }
 .pref-foot .why-line input { max-width: 460px; }
+.pref-foot [hidden] { display: none; }
+/* For a member who isn't an owner (P20, B-rxbss): the settings as they are, every control off. */
+fieldset.plain { margin: 0; padding: 0; border: 0; min-width: 0; }
+.owners-note { margin: 0 0 12px; padding: 9px 12px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 6%, transparent); font: var(--t-meta); font-stretch: 90%; font-weight: 500; }
 .pref-foot .send:disabled + .cancel, .cancel:disabled { opacity: .5; cursor: default; }
 .link { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; font-weight: 700; color: var(--right); text-decoration: underline; text-underline-offset: 2px; }
 
@@ -886,7 +893,12 @@ a.wordmark { color: inherit; text-decoration: none; }
 .site-row .nm { grid-column: 1; font: var(--t-option); font-size: 17px; overflow-wrap: anywhere; }
 .site-row .st { grid-column: 1; font: var(--t-small); font-stretch: 90%; color: var(--ink-soft); }
 .site-row .end { grid-column: 2; grid-row: 1 / span 2; height: 40px; }
+/* A row's controls, when it has more than one (P20): side by side at its end; under its text on a phone. */
+.site-row .ends { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-items: center; }
+.site-row .ends .switch { display: inline-flex; align-items: center; justify-content: center; height: 40px; text-decoration: none; white-space: nowrap; }
+.site-row.editing p { font: var(--t-body); font-size: 16px; }
 .site-row.project { padding: 0 10px 0 0; }
+.site-row.project .ends { grid-row: 1; }
 .site-row.project .open { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-content: center; min-height: 56px; padding: 10px 14px; border-radius: 10px; color: inherit; text-decoration: none; }
 .site-row.project .open > .nm, .site-row.project .open > .st { grid-column: 2; }
 /* Each project's inbox (B-fzr1e): a tray, empty, or holding a card with the count of what waits for you. */
@@ -988,6 +1000,9 @@ code.once.big { font-size: 19px; letter-spacing: .08em; }
   .site-sheet .lead { font-size: 16px; }
   .site-go, .site-alt { align-self: stretch; min-width: 0; min-height: 48px; }
   .site-row .end { height: 44px; }
+  .site-row .ends { grid-column: 1 / -1; grid-row: auto; margin-top: 8px; }
+  .site-row .ends .switch { flex: 1 1 0; height: 44px; }
+  .site-row.project .ends { grid-row: auto; margin: 0; padding: 0 0 10px 10px; }
   .push-install .switch { align-self: stretch; }
   .count-kind dl > div { grid-template-columns: minmax(0, 1fr); }
   .site-foot { margin-top: 22px; }

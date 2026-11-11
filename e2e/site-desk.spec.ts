@@ -379,7 +379,7 @@ test("the site reads your account once as it opens, and a project's state once a
   expect(reads.account).toBe(1);
 
   const socket = page.waitForEvent("websocket");
-  await row.getByRole("link").click();
+  await row.locator("a.open").click();
   await (await socket).waitForEvent("framereceived");
   await expect(page.getByText("All caught up.")).toBeVisible();
   await page.waitForLoadState("networkidle");
@@ -437,7 +437,7 @@ test("each project's inbox: how many cards wait for you, by level, asked of each
   await expect(row("Crumb's shop")).toContainText("2 waiting for you, 1 blocking");
 
   // One answered on the desk: back on your projects, the inbox says so.
-  await row("Crumb's shop").getByRole("link").click();
+  await row("Crumb's shop").locator("a.open").click();
   await expect(page.locator(CARD)).toBeVisible();
   await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
   await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
@@ -497,7 +497,7 @@ test("a project opened again in the tab shows at once, as it was, refreshing, wi
     await route.continue();
   });
   await page.locator("a.wordmark").click();
-  await page.getByRole("listitem").filter({ hasText: "Crumb's shop" }).getByRole("link").click();
+  await page.getByRole("listitem").filter({ hasText: "Crumb's shop" }).locator("a.open").click();
   await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which cache?");
   await expect(page.locator(".bar .refreshing")).toHaveText("Refreshing…");
   await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();

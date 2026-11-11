@@ -94,18 +94,21 @@ export function Device({ handle, freshUntil }: { handle: string; freshUntil: str
   }
   if (step.step === "asked") {
     const a = step.asked;
-    const where = a.new_project ? "a new project" : a.yours ? projectName({ name: a.name ?? null }) : "a project of another account's";
+    const where = a.new_project ? "a new project" : a.yours ? projectName({ name: a.name ?? null }) : "a project you aren't a member of";
     return (
       <Shell who={handle}>
         <Sheet title="Sign in a machine?" lead={<><b>{a.machine}</b> asks to sign in to <b>{where}</b>.</>}>
           <p className="site-code">
             Check that your terminal shows this code: <b>{step.code}</b>
           </p>
-          <p>If you approve, it can file cards and hear your answers in this project. It can never answer them: only you can, here.</p>
+          <p>
+            If you approve, it can file cards and hear {a.new_project ? "your answers" : "the answers to them"} in this project. It can never answer them: only {a.new_project ? "you" : "a person"} can, here.
+            {!a.new_project && a.yours && " The cards its agents file are sent to you first."}
+          </p>
           {a.new_project && (
             <div className="site-callout">
               <p>
-                <b>Approving makes a new project, owned by you.</b> Its cards come from this repo, and only you answer them.
+                <b>Approving makes a new project, owned by you.</b> Its cards come from this repo, and only you answer them, until you add someone else to it.
               </p>
               <Field
                 label="What should it be called?"
@@ -121,7 +124,7 @@ export function Device({ handle, freshUntil }: { handle: string; freshUntil: str
           {!a.yours && (
             <div className="site-callout">
               <p>
-                <b>This project belongs to another account,</b> so this machine can't sign in to it here. Refuse it. To answer this repo's cards yourself, take <code>service</code> and <code>project</code> out of the repo's <code>.baesian/config.json</code> and run <code>baesian login</code> again: it links the repo as a new project of yours.
+                <b>You aren't a member of this project,</b> so this machine can't sign in to it here. Refuse it. To join the project, ask one of its owners for a link, then run <code>baesian login</code> again. To answer this repo's cards in a project of your own instead, take <code>service</code> and <code>project</code> out of the repo's <code>.baesian/config.json</code> first: <code>baesian login</code> then links the repo as a new project of yours.
               </p>
             </div>
           )}

@@ -82,7 +82,16 @@ export function SignIn({ onIn }: { onIn: () => Promise<void> }) {
   const next = nextPage("");
   return (
     <Shell>
-      <Sheet title="Sign in" lead={next.startsWith("/device") ? "Sign in to approve the machine that's asking." : "Use the passkey you made when you signed up: on this device, your phone, or a security key."}>
+      <Sheet
+        title="Sign in"
+        lead={
+          next.startsWith("/device")
+            ? "Sign in to approve the machine that's asking."
+            : next.startsWith("/join")
+              ? "Sign in to join the project you were sent a link to. New here? Create an account first: this tab keeps the link meanwhile."
+              : "Use the passkey you made when you signed up: on this device, your phone, or a security key."
+        }
+      >
         {justClosed && <Notice text={`Your account is closed, and you're signed out. It will be deleted on ${dayOf(justClosed)}, with everything in it. To keep it, sign in with your passkey before then.`} />}
         <Problem text={problem} />
         <Go busy={busy} busyText="Waiting for your passkey…" disabled={!start.ready} onClick={() => void signIn()}>
