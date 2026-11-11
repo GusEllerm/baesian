@@ -5297,6 +5297,11 @@ sig = "4f7d45732c6da701"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = ".github/workflows/deploy.yml"
+sig = "30b9c293045b2b02"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "client/src/Desk.tsx"
 sig = "866eeff2f5edf28c"
 
@@ -5399,11 +5404,6 @@ sig = "c16cdd5562f3a46c"
 doc = "docs/vault/Home.md"
 target = "src/verify.ts#VerifyResult"
 sig = "083d8693f367e77d"
-
-[[bindings]]
-doc = "docs/vault/Home.md"
-target = "src/version.ts"
-sig = "09ae1673eec05c42"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"

@@ -2,12 +2,12 @@
 type: session
 status: active
 livedocs: snapshot
-summary: "2026-11-10: the steps before tagging 1.0.0. security@baesian.dev forwards to the user; a service test broken by the pinned spare key fixed; the release commit 247e62f sets 1.0.0 in the three versions and src/version.ts; main fast-forwarded to it and CI passed. The user tags v1.0.0 next."
+summary: "2026-11-10: 1.0.0 released. security@baesian.dev forwards to the user; a service test broken by the pinned spare key fixed; the release commit 247e62f; the user tagged v1.0.0, the service deployed, the user published baesian@1.0.0 to npm by hand, and the re-run deploy made the GitHub Release."
 created: 2026-11-10
 tags: [baesian, session]
 ---
 
-# 2026-11-10: the release commit for 1.0.0
+# 2026-11-10: the release commit, and 1.0.0 released
 
 The lead, on `v1/next`, after M10 was merged ([[2026-11-10 M10 Docs]]).
 
@@ -26,8 +26,15 @@ The steps on Home before the tag: the security@ forwarding, the release commit, 
 
 None new. The steps were decided before: B-3femd (the release commit), B-h0vyy (1.0.0), B-x47ek (the spare key).
 
+## The release
+
+- **The tag:** the user tagged `v1.0.0` on `origin/main` (`247e62f`). The deploy job passed; `/v1/keys` publishes `relay-1` and the spare `relay-2`. The publish job failed as planned: npm answered 404, the package not existing and no trusted publisher set up.
+- **The first publish, by hand:** from a clean clone of the tag, `npm ci --ignore-scripts && npm publish`. The first try was refused with 403: npm requires 2FA on the account (or a granular token that bypasses it) to publish, and the account had none. With 2FA on, `npm publish` asked for a browser confirmation and printed `+ baesian@1.0.0`. The tarball's shasum, `8589d72…`, was the same as CI's build of the tag.
+- **npm staged it:** for about seven minutes the registry showed only `0.0.0-stage`, "Temporary package placeholder for staged publishing", as `latest`; then 1.0.0 appeared as `latest` with no approval asked for. npm's docs: staging a package that doesn't exist yet publishes that placeholder, publicly; it stays as a version.
+- **The GitHub Release:** the failed jobs re-run (`gh run rerun --failed`); the publish job found 1.0.0 on npm and skipped; the release job made "Baesian 1.0.0" from `docs/release-notes/1.0.0.md`.
+
 ## Next
 
-- The user tags `git tag v1.0.0 origin/main && git push origin v1.0.0`. The service deploys and refuses every 0.1.x CLI from then on; the publish job fails once, by design.
-- The user publishes 1.0.0 by hand from a clean checkout (`npm ci`, `npm publish`), adds the trusted publisher on npmjs.com (GitHub Actions, `GusEllerm/baesian`, `deploy.yml`) with "Require 2FA and disallow tokens", and re-runs the failed jobs, which makes the GitHub Release.
-- Then `npm install -g baesian` in place of the linked clone, the plugin from GitHub, and `baesian ci --github` here and in chorus_conservancy.
+- The user, on npmjs.com, adds the trusted publisher (GitHub Actions, `GusEllerm/baesian`, `deploy.yml`, no environment), allows it `npm publish`, and sets publishing access to require 2FA and disallow tokens. Without it, 1.0.1's publish job fails.
+- `npm install -g baesian` in place of the linked clone; the plugin from GitHub; `baesian ci --github` here and in chorus_conservancy, for the spare key.
+- A look at npm's page for the README ([[Release v1#Not verified]]); optionally deprecate `0.0.0-stage`.
