@@ -1,6 +1,6 @@
 {
   "name": "baesian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "FSL-1.1-ALv2",
   "description": "Swipe review for agent decisions: agents file decision cards, a human answers them, verdicts flow back through git.",
   "keywords": [

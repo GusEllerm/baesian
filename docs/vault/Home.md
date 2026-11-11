@@ -17,8 +17,8 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-10.*
 
-- **The website, quicker, and each project's inbox, on v1/next, not released (2026-11-10)** ([[2026-11-10 Website Speed and Inboxes]]): the state read once as a project opens, and the account once; a project opened again shows at once from the tab's copy, "Refreshing…", answers held until it's up to date (B-3va5g), kept in the tab only (B-9n2c3); each project on the projects page has an inbox, a tray and how many cards wait, asked of each project (B-wgbdh, B-fzr1e).
-  - **Next:** release it as 1.0.1, which, before 2026-11-13 03:04 UTC, also validates npm's trusted publisher; a lighter first load; then several reviewers per project.
+- **The website, quicker, and each project's inbox; 1.0.1's release commit is on main (2026-11-10), the tag next** ([[2026-11-10 Website Speed and Inboxes]]): the state read once as a project opens, and the account once; a project opened again shows at once from the tab's copy, "Refreshing…", answers held until it's up to date (B-3va5g), kept in the tab only (B-9n2c3); each project on the projects page has an inbox, a tray and how many cards wait, asked of each project (B-wgbdh, B-fzr1e).
+  - **Next:** the user tags `v1.0.1` on main (`git tag v1.0.1 origin/main`), before 2026-11-13 03:04 UTC so CI's publish validates npm's trusted publisher; then `npm install -g baesian` and the plugin updated; a lighter first load; then several reviewers per project.
 
 - **`v1.0.0`, live and published (2026-11-10): M10 built, merged and released** ([[Release v1]]; [[2026-11-10 M10 Release Plan]], [[2026-11-10 M10 Service Steps]], [[2026-11-10 M10 Docs]]):
   - every release's record reads as v1; any released hook block counts as Baesian's, and a changed one is written a release late (B-np6af, B-amxkp); `baesian ci` pins CI to its release (B-c0e0d) and a spare key (B-x47ek: `relay-2`, made, its private half offline); the plugin checks the `baesian` on PATH (B-pw9ak);

@@ -1,7 +1,7 @@
 {
   "name": "baesian",
   "displayName": "Baesian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Put an agent's hard-to-undo design decisions to you as cards, and bring your verdicts back into the session",
   "author": { "name": "Gus Ellerm" },
   "repository": "https://github.com/GusEllerm/baesian",
