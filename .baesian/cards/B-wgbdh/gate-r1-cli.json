@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-wgbdh",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T211332.205Z-cy56q.json",
+  "touches": [
+    "schema",
+    "public-api",
+    "privacy"
+  ],
+  "reverse": "moderate",
+  "source": "agent",
+  "row": "privacy",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "row",
+  "at": "2026-11-11T03:39:07.695Z"
+}
