@@ -4,7 +4,7 @@ import { type WaitingCounts, keepCounts, keptCounts } from "../kept";
 import { listen } from "../live";
 import { type Inbox, inboxLine, waitingIn } from "./inbox";
 import { waitingByProject, waitingLine } from "../waiting";
-import { type Account, call, day, projectName } from "./api";
+import { type Account, ApiError, call, day, projectName } from "./api";
 import { follow } from "./nav";
 import { Field, Notice, Problem, Sheet, Shell, To } from "./Page";
 
@@ -38,7 +38,8 @@ function InboxTray({ counts }: { counts: Inbox | undefined }) {
  * as the page opens (B-wgbdh), and of a project again whenever it says it changed (B-gty71): the page holds each
  * project's live connection (`listen()`), the one its desk uses, which says so as it opens, after every change, and when
  * it comes back after closing. So a card filed while the page is in view shows within a second or two, with no reload.
- * Every project is asked again, too, when the page comes back into view, should a connection be down.
+ * Every project is asked again, too, when the page comes back into view, should a connection be down. A project that
+ * answers 401, 403 or 404 is listened to no more, until it answers again.
  */
 function useInboxes(ids: readonly string[]): Inboxes {
   const key = ids.join(" ");
@@ -49,6 +50,27 @@ function useInboxes(ids: readonly string[]): Inboxes {
     // One ask of a project at a time: a change heard while one is on its way is asked about once it lands.
     const asking = new Set<string>();
     const again = new Set<string>();
+    const stops = new Map<string, () => void>();
+    /**
+     * Hold a project's connection, unless it's held already. Its first word, as it opens, is asked about too: a card may
+     * have come between the count and it. So is its closing, before it's opened again, which is how the page hears that
+     * it's been refused.
+     */
+    const hear = (id: string) => {
+      if (stopped || stops.has(id)) return;
+      stops.set(id, listen(liveAddress(id), { changed: () => ask(id), reopening: () => ask(id) }));
+    };
+    /**
+     * A project that refuses is listened to no more: signed out (here or in another tab), every connection; no longer
+     * yours, its own. Left alone, each would be tried again every few seconds for as long as the page stayed open.
+     */
+    const refused = (id: string, status: number) => {
+      const gone = status === 401 ? [...stops.keys()] : status === 403 || status === 404 ? [id] : [];
+      for (const g of gone) {
+        stops.get(g)?.();
+        stops.delete(g);
+      }
+    };
     const ask = (id: string) => {
       if (stopped) return;
       if (asking.has(id)) return void again.add(id);
@@ -58,9 +80,14 @@ function useInboxes(ids: readonly string[]): Inboxes {
           (c) => {
             keepCounts(id, { total: c.total, hard: c.hard, blocking: c.blocking });
             if (!stopped) setInboxes((m) => new Map(m).set(id, c));
+            // Answered again after a refusal (signed back in, in another tab): its connection is held again.
+            hear(id);
           },
-          // What was heard before stays; with nothing, the inbox says it couldn't check.
-          () => !stopped && setInboxes((m) => (m.has(id) ? m : new Map(m).set(id, "failed"))),
+          (e: unknown) => {
+            if (e instanceof ApiError) refused(id, e.status);
+            // What was heard before stays; with nothing, the inbox says it couldn't check.
+            if (!stopped) setInboxes((m) => (m.has(id) ? m : new Map(m).set(id, "failed")));
+          },
         )
         .finally(() => {
           asking.delete(id);
@@ -68,13 +95,12 @@ function useInboxes(ids: readonly string[]): Inboxes {
         });
     };
     all.forEach(ask);
-    // The connection's first word, as it opens, is asked about too: a card may have come between the count and it.
-    const stops = all.map((id) => listen(liveAddress(id), { changed: () => ask(id) }));
+    all.forEach(hear);
     const back = () => document.visibilityState === "visible" && all.forEach(ask);
     document.addEventListener("visibilitychange", back);
     return () => {
       stopped = true;
-      for (const stop of stops) stop();
+      for (const stop of stops.values()) stop();
       document.removeEventListener("visibilitychange", back);
     };
   }, [key]);

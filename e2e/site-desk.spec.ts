@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Page, expect, test } from "@playwright/test";
+import { type Page, type WebSocketRoute, expect, test } from "@playwright/test";
 import { Store } from "../src/store.js";
 import { BODY, cleanup, draft, draftFile, repo, sh } from "../test/helpers.js";
 import { layoutProblems, smallTargets } from "./layout.js";
@@ -446,6 +446,37 @@ test("each project's inbox: how many cards wait for you, by level, asked of each
   await page.locator("a.wordmark").click();
   await expect(row("Crumb's shop").locator(".inbox-line")).toHaveText(/^1 waiting for you/);
   await expect(row("Crumb's shop").locator(".inbox-count")).toHaveText("1");
+});
+
+test("signed out in another tab, your projects page stops trying its projects' connections (B-gty71)", async ({ page, context }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  await linkThroughPage(page, dir, "Crumb's shop");
+  // The page's connections go through here, so the test can drop one, as a network does.
+  const held: WebSocketRoute[] = [];
+  await page.routeWebSocket(/\/v1\/projects\/[^/]+\/live$/, (ws) => {
+    ws.connectToServer();
+    held.push(ws);
+  });
+  const asked: number[] = [];
+  page.on("response", (r) => {
+    if (/\/v1\/projects\/[^/]+\/waiting$/.test(new URL(r.url()).pathname)) asked.push(r.status());
+  });
+  await page.goto(`${site.url}/`);
+  await expect(page.getByRole("listitem").filter({ hasText: "Crumb's shop" })).toContainText("Nothing waiting");
+  await page.waitForLoadState("networkidle");
+  expect(held).toHaveLength(1);
+
+  // Signed out elsewhere: the sign-in's cookie is gone. Then the connection drops.
+  await context.clearCookies();
+  await held[0]!.close();
+  // As it's opened again the page asks the project, hears it isn't signed in, and stops: one more try at most. Left
+  // alone it would try again after two seconds, then five, then every ten, for as long as the page stayed open.
+  await expect.poll(() => asked.at(-1), { timeout: 5000 }).toBe(401);
+  await page.waitForTimeout(3500);
+  expect(held.length).toBeLessThanOrEqual(2);
+  // What it last heard stays on the page.
+  await expect(page.getByRole("listitem").filter({ hasText: "Crumb's shop" })).toContainText("Nothing waiting");
 });
 
 test("a project opened again in the tab shows at once, as it was, refreshing, with answers held until it's up to date (B-3va5g)", async ({ page }) => {
