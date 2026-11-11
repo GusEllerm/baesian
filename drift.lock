@@ -8,7 +8,7 @@ sig = "b7090cba05fab487"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -38,7 +38,7 @@ sig = "33c84d59e213a3b4"
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Design/Baesian Design.md"
@@ -2858,7 +2858,7 @@ sig = "249d0f6980692f9d"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "src/version.ts#VERSION"
-sig = "fc41f4590dfb39ba"
+sig = "9b95b4fbb56279f2"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3573,7 +3573,7 @@ sig = "51ce45927f9f053e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3583,7 +3583,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4808,7 +4808,7 @@ sig = "9b42c75675d5a0fd"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -4818,7 +4818,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -5048,7 +5048,7 @@ sig = "249d0f6980692f9d"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "src/version.ts#VERSION"
-sig = "fc41f4590dfb39ba"
+sig = "9b95b4fbb56279f2"
 
 [[bindings]]
 doc = "docs/vault/Design/Routing and Preferences.md"
@@ -5393,7 +5393,7 @@ sig = "9b42c75675d5a0fd"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5403,7 +5403,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
@@ -5493,7 +5493,7 @@ sig = "7871414a5c16aa74"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5503,7 +5503,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6458,7 +6458,7 @@ sig = "083d8693f367e77d"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "src/version.ts"
-sig = "e50fb86bca4958ae"
+sig = "691034537ada17f4"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -7283,7 +7283,7 @@ sig = "0dd797709deafd37"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "package.json"
-sig = "574b2c3ed8480fa9"
+sig = "90a77d7c9130d2f7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -7298,7 +7298,7 @@ sig = "33c84d59e213a3b4"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/package.json"
-sig = "787fec4520c03c2e"
+sig = "7c61f04e8b3c7ba0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

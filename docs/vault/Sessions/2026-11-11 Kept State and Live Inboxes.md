@@ -2,7 +2,7 @@
 type: session
 status: active
 livedocs: snapshot
-summary: "2026-11-11, on v1/next, not released: the website's delay measured on baesian.dev and found to be the relay building a project's state on every request, not the state's size; the state is now kept as built in the project's database until the project changes (B-evrec), and the projects page holds each project's live connection, so a new card shows without a reload (B-gty71). The account's lists are read together."
+summary: "2026-11-11, prepared as 1.0.2 and waiting for the tag: the website's delay measured on baesian.dev and found to be the relay building a project's state on every request, not the state's size; the state is now kept as built in the project's database until the project changes (B-evrec), and the projects page holds each project's live connection, so a new card shows without a reload (B-gty71). The account's lists are read together."
 created: 2026-11-11
 tags: [baesian, session]
 ---
@@ -42,7 +42,8 @@ The benchmark and its fixture are in the session's scratchpad, not the repo.
 - **B-evrec, "Kept in the project's database"** ([[service]]): the relay keeps the state it built in a table of the project's database, `built` (the object's migration 2), and sends it as that text until the project changes. Every write empties the table in its own transaction; two seconds after the last change the state is built again; the clock, the object's start and the reviewer's presence are added as it's sent; a kept state holds only until a waiting marker in it would go stale; the waiting counts are kept with it. Here, a kept state is sent in a millisecond, against 70 to build one.
 - **B-gty71, "Told by each project"** ([[Client Build]] item 30): the projects page holds each project's live connection (`listen()`, which the desk now uses too) and asks a project for its count again whenever it says it changed.
 - **Found by the browser tests:** a constant exported from the Worker's main module stopped the Worker starting ("Incorrect type for map entry"), which the service's own tests can't see, since they import the module rather than run it. It moved to `service/src/built.ts`, and `worker-exports.test.ts` now checks the module's exports.
-- **Tests:** 1,023 unit tests, the service's 182 and 68, and all 169 browser tests pass. The tests for the kept state fail when a write no longer empties it or a kept state outlives its markers; the inbox's browser test fails without the connection, as the page did for the user.
+- **The projects page stops trying a project that refuses it** (`371cf67`): signed out in another tab, its connections were tried again every ten seconds for as long as the page stayed open.
+- **Tests:** 1,023 unit tests, the service's 182 and 68, and all 170 browser tests pass, at 1.0.2. The tests for the kept state fail when a write no longer empties it or a kept state outlives its markers; the inbox's browser test fails without the connection, as the page did for the user.
 
 ## Decisions
 
@@ -55,6 +56,6 @@ B-evrec and B-gty71, each in `Decisions/`; the agent's own in the [[Decision Log
 
 ## Next
 
-- Release it (1.0.2: a migration of each project's tables, so a rollback to 1.0.1 would refuse projects 1.0.2 has woken, as B-866d2 has it), then time a project's open on baesian.dev.
+- ~~Release it.~~ **Prepared as 1.0.2** at the user's word: the release commit on `main`, with its notes, waiting for the user's tag. It migrates each project's tables, so a rollback to 1.0.1 would refuse projects 1.0.2 has woken, as B-866d2 has it; a fix goes forward. Then time a project's open on baesian.dev.
 - If each change still costs too much: keep each file parsed, so a build is quicker; and find the second a project takes after a long idle.
 - Then several reviewers per project: its goals and how collaboration works come first, as a proposal, then cards.

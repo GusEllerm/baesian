@@ -17,10 +17,11 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-11.*
 
-- **On `v1/next`, not released (2026-11-11): the state kept as built, and inboxes that hear of new cards** ([[2026-11-11 Kept State and Live Inboxes]]). Measured on baesian.dev: a project's second to open is the relay building its state on every request (0.6 to 0.9 s for 222 cards), not sending it (20 ms), so the plan to send less text was dropped.
+- **`1.0.2`, prepared and waiting for the user's tag (2026-11-11): the state kept as built, and inboxes that hear of new cards** ([[2026-11-11 Kept State and Live Inboxes]]). Measured on baesian.dev: a project's second to open is the relay building its state on every request (0.6 to 0.9 s for 222 cards), not sending it (20 ms), so the plan to send less text was dropped.
   - **Built:** the relay keeps the state it built in the project's database until the project changes, and builds it again two seconds after a change (B-evrec, the object's migration 2); the projects page holds each project's live connection, so a card filed while it's in view shows without a reload (B-gty71); the account's lists are read together.
   - **Not verified:** the gain on Cloudflare, an estimate (about 0.2 s to open a project that hasn't changed) until it's deployed and timed.
-  - **Next:** release it as 1.0.2 and time a project's open; then several reviewers per project, its goals and how collaboration works first, as a proposal.
+  - **The release:** the release commit is on `main`; the user tags `v1.0.2` there, from this checkout. It migrates each project's tables as the project wakes, so rolling the service back to 1.0.1 afterwards would refuse every project 1.0.2 has woken (B-866d2): a fix goes forward, as 1.0.3.
+  - **Next:** time a project's open on baesian.dev once it's deployed; then several reviewers per project, its goals and how collaboration works first, as a proposal.
 
 - **`v1.0.1`, live and published (2026-11-10): the website, quicker, and each project's inbox** ([[2026-11-10 Website Speed and Inboxes]]): the state read once as a project opens, and the account once; a project opened again shows at once from the tab's copy, "Refreshing…", answers held until it's up to date (B-3va5g), kept in the tab only (B-9n2c3); each project on the projects page has an inbox, a tray and how many cards wait, asked of each project (B-wgbdh, B-fzr1e).
   - **Released:** the user tagged `v1.0.1`; the deploy's three jobs passed at once: the service deployed, CI published `baesian@1.0.1` to npm by trusted publishing, with provenance (the first CI publish, which validated the trusted publisher), and the GitHub Release was made.
