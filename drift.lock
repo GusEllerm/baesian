@@ -6148,7 +6148,7 @@ sig = "80fbde1084563a89"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/vitest.config.ts"
-sig = "fd52da7ed3a02a7c"
+sig = "23ffbfc4ca232d12"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"

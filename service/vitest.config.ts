@@ -34,6 +34,11 @@ export default defineConfig(async () => ({
           TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           BAESIAN_DEV_ACCESS: JSON.stringify(TEST_GRANTS),
           SERVICE_SIGNING_KEY: generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }) as string,
+          // No spare key (B-x47ek): the deployed service's, in wrangler.jsonc, names baesian.dev; test/release.test.ts
+          // sets its own where it needs one.
+          SERVICE_SPARE_KEY_ID: "",
+          SERVICE_SPARE_PUBLIC_KEY: "",
+          SERVICE_SPARE_KEY_VALID_AFTER: "",
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
           GLOBUS_ISSUER: "https://globus.test",
           GLOBUS_CLIENT_ID: "baesian-test-client",
