@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { type WaitingCounts, keepCounts, keptCounts } from "../kept";
+import { type Inbox, inboxLine, waitingIn } from "./inbox";
 import { waitingByProject, waitingLine } from "../waiting";
 import { type Account, call, day, projectName } from "./api";
 import { follow } from "./nav";
@@ -6,10 +8,61 @@ import { Field, Notice, Problem, Sheet, Shell, To } from "./Page";
 
 // Your projects (M9e): each repo you've linked, by the name you gave it (B-zqkwk), opening its desk at
 // /projects/{project}, the relay's own address for it (B-7z97x). Renamed here; the ID only in a tooltip (D69's spirit).
-// A project whose desk, in this tab, left answers waiting for your passkey says so (B-a6xpc).
+// A project whose desk, in this tab, left answers waiting for your passkey says so (B-a6xpc). Each project has an inbox
+// (B-fzr1e): how many cards wait for you there, asked of each project in parallel as the page opens (B-wgbdh), shown from
+// what this tab last heard until the answers come (`kept.ts`).
+
+/** Each project's inbox: its counts, or that asking failed; a project not yet answered isn't in the map. */
+type Inboxes = Map<string, Inbox>;
+
+/** An inbox tray (B-fzr1e): empty when nothing waits, holding a card, with the count, when something does. */
+function InboxTray({ counts }: { counts: Inbox | undefined }) {
+  const n = waitingIn(counts);
+  return (
+    <span className="inbox" data-full={n > 0 || undefined} aria-hidden="true">
+      <svg width="34" height="30" viewBox="0 0 34 30">
+        {/* A card resting in the tray, behind its front. */}
+        {n > 0 && <rect className="inbox-card" x="10" y="4" width="14" height="15" rx="1.5" />}
+        <path className="inbox-back" d="M4 17.5 8.2 8.5h17.6l4.2 9" />
+        <path className="inbox-front" d="M4 17.5h7.25l1.6 3.1h8.3l1.6-3.1H30v7.25a1.75 1.75 0 0 1-1.75 1.75H5.75A1.75 1.75 0 0 1 4 24.75Z" />
+      </svg>
+      {n > 0 && <span className="inbox-count">{n > 99 ? "99+" : n}</span>}
+    </span>
+  );
+}
+
+/** Ask each project how many cards wait in it (`GET /v1/projects/{project}/waiting`), all at once; again when the page comes back into view. */
+function useInboxes(ids: readonly string[]): Inboxes {
+  const key = ids.join(" ");
+  const [inboxes, setInboxes] = useState<Inboxes>(() => new Map(ids.flatMap((id) => (keptCounts(id) ? [[id, keptCounts(id)!] as const] : []))));
+  useEffect(() => {
+    let stopped = false;
+    const ask = () => {
+      for (const id of key ? key.split(" ") : []) {
+        call<WaitingCounts>("GET", `/v1/projects/${encodeURIComponent(id)}/waiting`).then(
+          (c) => {
+            keepCounts(id, { total: c.total, hard: c.hard, blocking: c.blocking });
+            if (!stopped) setInboxes((m) => new Map(m).set(id, c));
+          },
+          // What was heard before stays; with nothing, the inbox says it couldn't check.
+          () => !stopped && setInboxes((m) => (m.has(id) ? m : new Map(m).set(id, "failed"))),
+        );
+      }
+    };
+    ask();
+    const back = () => document.visibilityState === "visible" && ask();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [key]);
+  return inboxes;
+}
 
 export function Projects({ account, reload, notice }: { account: Account; reload: () => Promise<void>; notice?: string | undefined }) {
   const [waiting] = useState(() => waitingByProject());
+  const inboxes = useInboxes(account.projects.map((p) => p.id));
   const [renaming, setRenaming] = useState<string>();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,7 +86,7 @@ export function Projects({ account, reload, notice }: { account: Account; reload
 
   return (
     <Shell who={account.handle}>
-      <Sheet title="Your projects" lead={account.projects.length ? "Each is a repo whose agents send you their decisions. Open one to answer its cards." : undefined}>
+      <Sheet title="Your projects" lead={account.projects.length ? "Each is a repo whose agents send you their decisions, with an inbox of the cards waiting for you. Open one to answer them." : undefined}>
         <Notice text={done} />
         <Problem text={problem} />
         {account.projects.length === 0 ? (
@@ -61,7 +114,11 @@ export function Projects({ account, reload, notice }: { account: Account; reload
               ) : (
                 <li key={p.id} className="site-row project">
                   <a className="open" href={`/projects/${encodeURIComponent(p.id)}`} onClick={follow(`/projects/${encodeURIComponent(p.id)}`)} title={p.id}>
+                    <InboxTray counts={inboxes.get(p.id)} />
                     <span className="nm">{projectName(p)}</span>
+                    <span className="st inbox-line" data-waiting={waitingIn(inboxes.get(p.id)) > 0 || undefined}>
+                      {inboxLine(inboxes.get(p.id))}
+                    </span>
                     <span className="st">Linked {day(p.created)}</span>
                     {waiting.has(p.id) && <span className="st waits">{waitingLine(waiting.get(p.id)!)}</span>}
                   </a>

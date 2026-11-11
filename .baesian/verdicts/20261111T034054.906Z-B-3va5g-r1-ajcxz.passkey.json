@@ -1,0 +1,14 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261111T034054.906Z-B-3va5g-r1-ajcxz.json",
+  "batch": [
+    "5a61aed82560161fd73ce1bf5abce79e01ce891d141b732ef2c1d5f5afd074c7",
+    "0467a7d637f9191ecde92d31439fa8c3e124afcc53f2573db55eab01af774770",
+    "bd3b3571b97bafbbfb269f8e793f957bd949b50c13a8bb676e65655303075af9"
+  ],
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoic2hyaTZzVnVnbUVZSlNub2xPR1VjX21Xc3V0czRZaE5zT09sbjN0THIyOCIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEYCIQDr5slPHrT7gMzS9MYkZZHU_iZpAxwqYjqHq3I4pPHd4gIhAMhh5By5buKdwlnWMuFo9yO3BTC1b4H4hDRGUK01L2Yz"
+}

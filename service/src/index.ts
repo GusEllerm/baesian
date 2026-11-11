@@ -7,7 +7,7 @@ import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
 import { deleteClosed } from "./deletion.js";
-import { PushLedger, WHEN, decide, pushText } from "./notify.js";
+import { PushLedger, WHEN, countWaiting, decide, pushText } from "./notify.js";
 import { migrateObject } from "./object-migrations.js";
 import { PracticeTable } from "./practice-table.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
@@ -88,14 +88,14 @@ export function servicesFor(env: Env, given: Partial<Services> = {}): Services {
 type Who = "read" | "upload" | "answer" | "person";
 
 interface Route {
-  name: "log" | "state" | "presets" | "live" | "pushes" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "batches" | "proofs" | "practice";
+  name: "log" | "state" | "presets" | "live" | "pushes" | "waiting" | "upload" | "stop-waiting" | "verdicts" | "aliases" | "preferences" | "presence" | "batches" | "proofs" | "practice";
   who: Who;
   path?: string;
 }
 
 /** What an address under a project is, by its method and the rest of its path; or why it's none. */
 function routeOf(method: string, rest: string): Route | Response {
-  const reads: Record<string, Route["name"]> = { log: "log", state: "state", presets: "presets", live: "live", pushes: "pushes" };
+  const reads: Record<string, Route["name"]> = { log: "log", state: "state", presets: "presets", live: "live", pushes: "pushes", waiting: "waiting" };
   const answers: Record<string, Route["name"]> = { verdicts: "verdicts", aliases: "aliases", preferences: "preferences", presence: "presence", batches: "batches", proofs: "proofs" };
   if (rest.startsWith("files/")) {
     let path: string;
@@ -114,7 +114,7 @@ function routeOf(method: string, rest: string): Route | Response {
   if (answer) return method === "POST" ? { name: answer, who: "answer" } : fail(405, `${rest} takes a POST`);
   // Practice answers (B-rehdw): read and written by a person in a browser, never by a machine.
   if (rest === "practice") return method === "GET" || method === "POST" ? { name: "practice", who: "person" } : fail(405, "practice is read with GET and written with POST");
-  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, verdicts, aliases, preferences, batches, proofs, presence and practice`);
+  return fail(404, `no address ${rest} under a project: the relay has log, files/{path}, state, presets, live, pushes, waiting, verdicts, aliases, preferences, batches, proofs, presence and practice`);
 }
 
 /** Why `who` may not use a route, or nothing (Hosted Service section 3). Each grant is for one project; a session, for its own. */
@@ -198,6 +198,8 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       return reply(await stub.presets(project));
     case "pushes":
       return reply(await stub.pushes(project));
+    case "waiting":
+      return reply(await stub.waiting(project));
     case "live":
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return fail(426, "live updates are a WebSocket: send Upgrade: websocket");
       return stub.fetch(request);
@@ -517,6 +519,14 @@ export class ProjectRelay extends DurableObject<Env> {
     }
     if (out.status < 300) await this.keepAlarm();
     return out;
+  }
+
+  /**
+   * How many cards wait for the reviewer, and at which levels (B-wgbdh): what the desk's queue holds and a notification
+   * counts, for the projects page, which asks each project as it opens. Counts only, never a card's text.
+   */
+  async waiting(project: string): Promise<Reply> {
+    return this.run(project, (r) => ({ status: 200, body: countWaiting(r.waiting()) }));
   }
 
   /** The machines whose cards don't notify now (a burst, B-advkh), for the project's page to say so. */

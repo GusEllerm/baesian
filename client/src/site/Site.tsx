@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { keptFor } from "../kept";
 import { useMe } from "./api";
 import { Account } from "./Account";
 import { Counts } from "./Counts";
@@ -46,6 +47,9 @@ export function Site() {
     shown.current = path;
     void reload();
   }, [path, reload]);
+  // What this tab kept is for whoever is signed in now: another account, or nobody, starts afresh (B-9n2c3).
+  const signedIn = me.kind === "in" ? me.account.id : me.kind === "signed-out" ? null : undefined;
+  if (signedIn !== undefined) keptFor(signedIn ?? undefined);
   const needsIn = !OPEN.has(path) && path !== "/";
   useEffect(() => {
     if (needsIn && me.kind === "signed-out") signInHere();

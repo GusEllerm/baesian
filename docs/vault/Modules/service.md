@@ -34,6 +34,7 @@ The package is `service/`, with `service/wrangler.jsonc` and its own `service/pa
 | `GET presets` | machine or person | the presets and the survey, as `/api/presets` (`Relay.presets`) |
 | `GET live` | machine or person | a hibernating WebSocket (below); without `Upgrade: websocket`, 426 |
 | `GET pushes` | machine or person | the machines whose cards don't notify now, after a burst (`ProjectRelay.pushes`, below): `{ paused: [{ machine, cards, minutes, until }] }` |
+| `GET waiting` | machine or person | how many cards wait for the reviewer, and how many of them are hard or blocking (`ProjectRelay.waiting`, B-wgbdh): `{ total, hard, blocking }`, counted as a notification counts them (`countWaiting()`). The projects page asks each project as it opens; counts only, never a card's text |
 | `POST verdicts` | person | an answer (`Relay.verdict`), taking the local server's fields (`VERDICT_FIELDS`) and `client`: 201 with the verdict, the card's status and the cards Baesian filed after it; or 202 when it takes the passkey, and waits (below) |
 | `POST aliases` | person | a topic merge, `{ from, to }` (`Relay.alias`) |
 | `POST preferences` | person | a preference change (`Relay.preferences`), the local server's fields (`PREFERENCE_FIELDS`); 409 when made from an older view; 202 when it lets more cards past you, or makes the commit gate see less (B-qkek1) |
@@ -175,7 +176,7 @@ When they go is card B-advkh, "Stopping cards at once, the rest in a digest"; wh
 - more than 20 new cards from one machine within 10 minutes (`burst()`) pause its cards' notifications for an hour after its latest (`pauseMs`); they're on the desk, and other notifications count them; the project's page says so, from `GET pushes`;
 - a card answered, withdrawn or revised before its time is settled without one.
 
-What's waiting is what the desk's queue holds (`Relay.waiting`): open cards and audits, at their level in force. The notification (**`pushText()`**) counts all of them, with the hard and blocking ones, and the project's name (B-zqkwk): "2 cards waiting in Shop (1 hard)", "Tap to open them."; its page is `/projects/{project}` and its tag `baesian:{project}`. It goes to every browser of the project's owner that gets them (`ProjectRelay.send`); one its push service says is gone is deleted (`Accounts.dropSubscription`), and each delivered one's `last_sent` is set. Without `VAPID_KEY`, nothing is sent.
+What's waiting is what the desk's queue holds (`Relay.waiting`): open cards and audits, at their level in force, counted by **`countWaiting()`**, as `GET waiting` gives them to the projects page (B-wgbdh). The notification (**`pushText()`**) counts all of them, with the hard and blocking ones, and the project's name (B-zqkwk): "2 cards waiting in Shop (1 hard)", "Tap to open them."; its page is `/projects/{project}` and its tag `baesian:{project}`. It goes to every browser of the project's owner that gets them (`ProjectRelay.send`); one its push service says is gone is deleted (`Accounts.dropSubscription`), and each delivered one's `last_sent` is set. Without `VAPID_KEY`, nothing is sent.
 
 ## Usage counts (service/src/usage.ts)
 

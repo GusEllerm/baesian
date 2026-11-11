@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { keptFor } from "../kept";
 import { waitingByProject, waitingLine } from "../waiting";
 import { type CreationOptionsJSON, type RequestOptionsJSON, makePasskey } from "../webauthn";
 import { type Account as AccountData, type Ceremony, type Passkey, ago, call, day, projectName, reauthStart, reauthWith, useConfig, useFresh, usePrepared } from "./api";
@@ -114,6 +115,8 @@ export function Account({ account, reload }: { account: AccountData; reload: () 
   const signOut = (everywhere: boolean) =>
     run(everywhere ? "everywhere" : "here", async () => {
       await call("POST", "/v1/account/signout", { everywhere });
+      // What this tab kept of your projects goes with you (B-9n2c3).
+      keptFor(undefined);
       go("/sign-in", { replace: true });
     });
 

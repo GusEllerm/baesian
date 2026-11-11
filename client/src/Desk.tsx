@@ -1,5 +1,5 @@
 import { AnimatePresence, type MotionStyle, type MotionValue, animate, motion, useDragControls, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ApiAliasInput, ApiCard, ApiState } from "../../src/api";
 import { isOwnCard, suggestPreset } from "../../src/routing";
 import { nearTopics } from "../../src/similarity";
@@ -28,6 +28,7 @@ import { PathSheet } from "./Sheet";
 import { POSITION_NAMES, ROW_NAMES, type Draft, pastCards, replacesOf, rowInSentence, surveyAnswersOf, surveyChange } from "./prefs";
 import { PreferencesPanel, postPreferences, usePresets } from "./Preferences";
 import { AskFace, OfferFace, ResultFace, SURVEY_SIDES, type Setup } from "./Survey";
+import { follow } from "./site/nav";
 
 // M4 steps 5c to 5e: the desk, where you answer. It holds what you've answered this session, the mode the card is
 // in, the reading time (D91), the keys, the lean and the drag, the hold on mythic cards (D67), and the undo window
@@ -181,7 +182,7 @@ function messy(id: string, depth: number) {
   return { r: ((h % 9) - 4) * 0.55 + (depth % 2 ? 0.9 : -0.9), dx: ((h >> 4) % 9) - 4, dy: 3 + depth * 3 + ((h >> 8) % 3) };
 }
 
-export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt: number; notice?: string | undefined }) {
+export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: ApiState; fetchedAt: number; notice?: string | undefined; refreshing?: boolean }) {
   const salt = useMemo(() => Math.random().toString(36).slice(2), []);
   const reduced = useReducedMotion();
   /** Where it reads and answers: the local server, or on the website the project's relay (M9e). */
@@ -366,7 +367,11 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
   useEffect(() => {
     const leave = () => outbox.current!.flush(true);
     addEventListener("pagehide", leave);
-    return () => removeEventListener("pagehide", leave);
+    return () => {
+      removeEventListener("pagehide", leave);
+      // Left within the site's app (its back button, say), the desk sends what's held as leaving the page would.
+      leave();
+    };
   }, []);
 
   // ---------------------------------------------------------------- answers waiting for your passkey (B-a6xpc)
@@ -490,6 +495,12 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   // Leaving the page while answers wait, or a hard answer is still in its undo window, asks first: closed, they're lost.
   const unconfirmed = waits.length > 0 || [...answered.values()].some((a) => a.phase === "held" && a.hard);
+  /** The wordmark's click, on the website: to your projects in the app, unless leaving would lose something unconfirmed. */
+  const toProjects = (e: ReactMouseEvent) => {
+    if (unconfirmed) return;
+    outbox.current!.flush(true);
+    follow("/")(e);
+  };
   useEffect(() => {
     if (!unconfirmed) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -522,6 +533,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
 
   const commit = (answer: Answer) => {
     if (!current) return;
+    // The copy this tab kept from before, still refreshing (B-3va5g): someone may have answered the card elsewhere since,
+    // and the latest answer is the one that counts, so answers wait until the project is up to date.
+    if (refreshing) return say("This project is still refreshing: answer once it's up to date, in a moment.");
     const v = verdictFor(current, answer);
     if ("problem" in v) return setProblem(v.problem);
     // In the blind test, every card you answer gets your guess, on a card of its own after it (B-xx49m, B-9prve), but one
@@ -1104,7 +1118,9 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         {endpoints.hosted ? (
           // On the website (M9e): the wordmark goes to your projects, and the project's name says where you are (B-zqkwk).
           <>
-            <a className="wordmark" href="/" title="Your projects">
+            {/* To your projects within the site's app, so what this tab kept stays (B-3va5g), with answers in their undo window
+                sent first, as leaving the page sends them. With answers unconfirmed, the page is left, which asks first. */}
+            <a className="wordmark" href="/" title="Your projects" onClick={toProjects}>
               Baesian
             </a>
             <span className="place" title={endpoints.hosted.name ? undefined : endpoints.hosted.project}>
@@ -1116,6 +1132,8 @@ export function Desk({ state, fetchedAt, notice }: { state: ApiState; fetchedAt:
         )}
         <p className="summary" aria-live="polite">
           {summary}
+          {/* The copy this tab kept, until a fresh read replaces it (B-3va5g). */}
+          {refreshing && <span className="refreshing"> Refreshing…</span>}
         </p>
         {/* B-v8jzy: your decisions, by branch, in a drawer; B opens and closes it too. */}
         <button type="button" className="bar-btn branches" aria-haspopup="dialog" aria-expanded={drawerOpen} aria-controls="branches-drawer" onClick={() => showPanel("branches")}>

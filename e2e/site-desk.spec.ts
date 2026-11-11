@@ -388,6 +388,79 @@ test("the site reads your account once as it opens, and a project's state once a
   expect(reads.account).toBe(2);
 });
 
+/** An agent files a card in a linked repo, through the real CLI, which uploads it. */
+async function fileThrough(dir: string, title: string, level: string) {
+  const r = await cli(dir, ["file", "-", "--json"], { stdin: draftFile({ title, question: `${title}?`, topic: `inbox/${title.toLowerCase().replaceAll(" ", "-")}`, reverse: "cheap", touches: [], level }) });
+  expect(r.code, r.err).toBe(0);
+}
+
+test("each project's inbox: how many cards wait for you, by level, asked of each project as the page opens, following your answers", async ({ page }) => {
+  await signedUp(page);
+  const shop = repo();
+  const bakery = repo();
+  const project = await linkThroughPage(page, shop.dir, "Crumb's shop");
+  await linkThroughPage(page, bakery.dir, "The bakery", "desktop");
+  await fileThrough(shop.dir, "Which cache", "blocking");
+  await fileThrough(shop.dir, "How runs are named", "provisional");
+  const asked: string[] = [];
+  page.on("request", (r) => {
+    const m = /^\/v1\/projects\/([^/]+)\/waiting$/.exec(new URL(r.url()).pathname);
+    if (m) asked.push(m[1]!);
+  });
+  await page.addInitScript((key) => localStorage.setItem(key, "true"), `baesian:${project}:setup`);
+
+  await page.goto(`${site.url}/`);
+  await expect(page.getByText("with an inbox of the cards waiting for you")).toBeVisible();
+  const row = (name: string) => page.getByRole("listitem").filter({ hasText: name });
+  await expect(row("Crumb's shop")).toContainText("2 waiting for you, 1 blocking");
+  await expect(row("Crumb's shop").locator(".inbox-count")).toHaveText("2");
+  await expect(row("The bakery")).toContainText("Nothing waiting");
+  await expect(row("The bakery").locator(".inbox-count")).toHaveCount(0);
+  expect(asked.sort()).toEqual([project, Store.open(bakery.dir).config().project!].sort());
+  await siteShot(page, "projects-inboxes");
+
+  // One answered on the desk: back on your projects, the inbox says so.
+  await row("Crumb's shop").getByRole("link").click();
+  await expect(page.locator(CARD)).toBeVisible();
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  // Past the undo window, the relay has it.
+  await expect(page.getByText("Sent to claude-code.")).toBeVisible({ timeout: 10_000 });
+  await page.locator("a.wordmark").click();
+  await expect(row("Crumb's shop").locator(".inbox-line")).toHaveText(/^1 waiting for you/);
+  await expect(row("Crumb's shop").locator(".inbox-count")).toHaveText("1");
+});
+
+test("a project opened again in the tab shows at once, as it was, refreshing, with answers held until it's up to date (B-3va5g)", async ({ page }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  const project = await linkThroughPage(page, dir, "Crumb's shop");
+  await fileThrough(dir, "Which cache", "provisional");
+  await page.addInitScript((key) => localStorage.setItem(key, "true"), `baesian:${project}:setup`);
+  await page.goto(`${site.url}/projects/${project}`);
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which cache?");
+  await expect(page.locator(".bar .refreshing")).toHaveCount(0);
+
+  // Back to your projects, then in again, with the state held back: the desk is there at once, from the tab's copy.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(`**/v1/projects/${project}/state`, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.locator("a.wordmark").click();
+  await page.getByRole("listitem").filter({ hasText: "Crumb's shop" }).getByRole("link").click();
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which cache?");
+  await expect(page.locator(".bar .refreshing")).toHaveText("Refreshing…");
+  await page.locator(`${CARD} .opt[data-kind="proposal"]`).click();
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  await expect(page.getByText("This project is still refreshing: answer once it's up to date, in a moment.")).toBeVisible();
+  release();
+  await expect(page.locator(".bar .refreshing")).toHaveCount(0);
+  await page.locator(CARD).getByRole("button", { name: /Confirm/ }).click();
+  await expect(page.getByText(/Sending to claude-code/)).toBeVisible();
+});
+
 // ---------------------------------------------------------------- laid out
 
 async function check(page: Page, problems: string[], name: string, touch: boolean) {

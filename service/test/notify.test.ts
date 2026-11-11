@@ -230,6 +230,35 @@ describe("when a notification goes (B-advkh)", () => {
   });
 });
 
+describe("what's waiting, for the projects page (B-wgbdh)", () => {
+  it("counts the cards waiting by level, drops one once it's answered, and answers the project's machines but nobody else", async () => {
+    const o = await owner();
+    const waiting = async () => {
+      const r = await o.person.browser.get(`/v1/projects/${o.project}/waiting`);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return r.body;
+    };
+    expect(await waiting()).toEqual({ total: 0, hard: 0, blocking: 0 });
+    await file(o, { level: "hard" });
+    const blocking = await file(o, { level: "blocking" });
+    await file(o, { level: "provisional" });
+    expect(await waiting()).toEqual({ total: 3, hard: 1, blocking: 1 });
+    const answered = await o.person.browser.post(`/v1/projects/${o.project}/verdicts`, { card: blocking, revision: 1, response: "accept" });
+    expect(answered.status, JSON.stringify(answered.body)).toBe(201);
+    expect(await waiting()).toEqual({ total: 2, hard: 1, blocking: 0 });
+    // A machine signed in to the project reads it, as it reads the state; it's read with GET only.
+    const machine = await call("GET", "waiting", { as: asMachine(o), project: o.project });
+    expect(machine.status).toBe(200);
+    expect(await machine.json()).toEqual({ total: 2, hard: 1, blocking: 0 });
+    expect((await call("POST", "waiting", { as: asMachine(o), project: o.project, body: "{}" })).status).toBe(405);
+    // Somebody else's account doesn't.
+    const other = await signUp();
+    const theirs = await other.browser.get(`/v1/projects/${o.project}/waiting`);
+    expect(theirs.status).toBe(403);
+    expect(theirs.body).not.toHaveProperty("total");
+  });
+});
+
 describe("browsers that are gone", () => {
   it("deletes a subscription its push service answers 410 or 404 for, and keeps the others", async () => {
     const o = await owner({ browsers: 3 });

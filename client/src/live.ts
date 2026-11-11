@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ApiPractice, ApiState } from "../../src/api";
 import type { PracticeEntry } from "../../src/schema";
 import { type Endpoints, hostedClient, useEndpoints } from "./endpoints";
+import { dropState, keepState, keptState } from "./kept";
 
 export type Live =
   | { kind: "loading" }
@@ -9,8 +10,11 @@ export type Live =
   /** On the website: signed in, but the project isn't one of yours (403). */
   | { kind: "not-yours"; message: string }
   | { kind: "error"; message: string }
-  /** `fetchedAt` is when the snapshot arrived, by this browser's clock, so the server's clock can be read forward. */
-  | { kind: "ready"; state: ApiState; fetchedAt: number };
+  /**
+   * `fetchedAt` is when the snapshot arrived, by this browser's clock, so the server's clock can be read forward. On the
+   * website, `refreshing` while it's the copy this tab kept from before, until a fresh read replaces it (B-3va5g).
+   */
+  | { kind: "ready"; state: ApiState; fetchedAt: number; refreshing?: boolean };
 
 /**
  * The live layer, as the server sees it (D96): one snapshot, read again whenever the server says it changed.
@@ -52,18 +56,26 @@ const RECONNECT_MS = [1000, 2000, 5000, 10_000];
 /** A ping on the live socket this often, which the relay answers without waking (B-bv49e), so no proxy drops it as idle. */
 const PING_MS = 30_000;
 
+/** How long a read that failed while the desk shows its kept copy waits before it tries again. */
+const REREAD_MS = 5000;
+
 /**
  * One project's state on the website (M9e, B-17wn9): the relay's snapshot, read as the local server's is, and read again
  * whenever its live socket says the project changed (B-bv49e). The socket is opened again when it closes, and the state
- * read again then, so nothing is missed while it was down.
+ * read again then, so nothing is missed while it was down. A project this tab has read before starts from that copy,
+ * marked as refreshing until the first read comes back (B-3va5g); each read is kept for the next time (`kept.ts`).
  */
 export function useHostedState(e: Endpoints): Live {
-  const [live, setLive] = useState<Live>({ kind: "loading" });
+  const [live, setLive] = useState<Live>(() => {
+    const kept = keptState(e.state);
+    return kept ? { kind: "ready", ...kept, refreshing: true } : { kind: "loading" };
+  });
   const stateUrl = e.state;
   const liveUrl = e.hosted?.live;
   useEffect(() => {
     let stopped = false;
-    let newest = 0;
+    let newest = keptState(stateUrl)?.state.version ?? 0;
+    let reread: ReturnType<typeof setTimeout> | undefined;
     let ws: WebSocket | undefined;
     let attempts = 0;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -85,8 +97,12 @@ export function useHostedState(e: Endpoints): Live {
       try {
         const r = await fetch(stateUrl, { credentials: "same-origin" });
         if (stopped) return;
-        if (r.status === 401) return setLive({ kind: "signed-out" });
+        if (r.status === 401) {
+          dropState(stateUrl);
+          return setLive({ kind: "signed-out" });
+        }
         if (r.status === 403 || r.status === 404) {
+          dropState(stateUrl);
           const body = (await r.json().catch(() => ({}))) as { error?: string };
           return setLive({ kind: "not-yours", message: body.error ?? `the service answered ${r.status}` });
         }
@@ -94,10 +110,16 @@ export function useHostedState(e: Endpoints): Live {
         const state = (await r.json()) as ApiState;
         if (!stopped && state.version >= newest) {
           newest = state.version;
-          setLive({ kind: "ready", state, fetchedAt: Date.now() });
+          const fetchedAt = Date.now();
+          keepState(stateUrl, { state, fetchedAt });
+          setLive({ kind: "ready", state, fetchedAt });
         }
       } catch (err) {
-        if (!stopped) setLive({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+        if (stopped) return;
+        // Showing the kept copy, the desk stays, still refreshing, with answers held, and reads again shortly.
+        setLive((had) => (had.kind === "ready" && had.refreshing ? had : { kind: "error", message: err instanceof Error ? err.message : String(err) }));
+        clearTimeout(reread);
+        reread = setTimeout(() => void load(), REREAD_MS);
       }
     };
     const open = () => {
@@ -138,6 +160,7 @@ export function useHostedState(e: Endpoints): Live {
     return () => {
       stopped = true;
       clearTimeout(retry);
+      clearTimeout(reread);
       clearInterval(ping);
       ws?.close();
     };

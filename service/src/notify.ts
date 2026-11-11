@@ -88,10 +88,13 @@ export function decide(s: { now: number; arrivals: Arrival[]; waiting: Waiting[]
   if (!due.length) return { settle, ...(times.length ? { next: Math.min(...times) } : {}) };
   const recent = s.sent.filter((t) => t > s.now - HOUR);
   if (recent.length >= when.capPerHour) return { settle, next: Math.min(...recent) + HOUR };
-  const hard = s.waiting.filter((w) => w.level === "hard").length;
-  const blocking = s.waiting.filter((w) => w.level === "blocking").length;
   const at = due.some(urgent);
-  return { send: { urgency: at ? "high" : "normal", reason: at ? "at once" : "digest", total: s.waiting.length, hard, blocking }, settle: [...settle, ...loud] };
+  return { send: { urgency: at ? "high" : "normal", reason: at ? "at once" : "digest", ...countWaiting(s.waiting) }, settle: [...settle, ...loud] };
+}
+
+/** How many cards wait, and how many of them are hard or blocking: what a notification says, and the projects page (B-wgbdh). */
+export function countWaiting(waiting: readonly Waiting[]): { total: number; hard: number; blocking: number } {
+  return { total: waiting.length, hard: waiting.filter((w) => w.level === "hard").length, blocking: waiting.filter((w) => w.level === "blocking").length };
 }
 
 /** A notification's words (B-mjf3g): counts and levels only, never a card's text; "2 cards waiting in Shop (1 hard)". */

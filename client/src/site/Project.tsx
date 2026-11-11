@@ -48,7 +48,7 @@ export function Project({ id, account }: { id: string; account: Account }) {
   if (live.kind === "ready") {
     return (
       <EndpointsContext.Provider value={endpoints}>
-        <Desk state={live.state} fetchedAt={live.fetchedAt} notice={paused.length ? paused.map(pausedLine).join(" ") : undefined} />
+        <Desk state={live.state} fetchedAt={live.fetchedAt} refreshing={!!live.refreshing} notice={paused.length ? paused.map(pausedLine).join(" ") : undefined} />
       </EndpointsContext.Provider>
     );
   }
