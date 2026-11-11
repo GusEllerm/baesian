@@ -84,7 +84,8 @@ export class SqlFileStorage implements Storage {
     private readonly storage: DurableObjectStorage,
     private readonly opts: { sign?: Sign; now?: () => string } = {},
   ) {
-    // Its tables, files, log, meta, pending and before_linking, are made by the object's migrations (`migrateObject()`).
+    // Its tables, files, log, meta, pending and before_linking, are made by the object's migrations (`migrateObject()`),
+    // as is `built`, which every write empties (`BuiltTable`).
     this.sql = storage.sql;
   }
 
@@ -211,8 +212,14 @@ export class SqlFileStorage implements Storage {
     return row ? Number(row.value) : 1;
   }
 
+  /**
+   * The version moves, and what was built from the project as it was goes (`BuiltTable`, B-evrec): here, in the write's
+   * own transaction, so the kept state is never older than the files, and text that retention removes is gone from it in
+   * the same step.
+   */
   private bump(): void {
     this.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)", String(this.version() + 1));
+    this.sql.exec("DELETE FROM built");
   }
 
   /** A value the relay keeps for itself, apart from the live layer. */

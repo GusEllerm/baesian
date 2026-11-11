@@ -8,10 +8,11 @@ export const HEADERS = { "content-type": "application/json; charset=utf-8", "cac
 export const MAX_JSON = 64 * 1024;
 
 /** A reply as a response, with any headers besides (a cookie, say). */
-export const respond = ({ status, body }: Reply, extra: Record<string, string> | [string, string][] = []): Response => {
-  const headers = new Headers(status === 204 || body === undefined ? { "cache-control": "no-store" } : HEADERS);
+export const respond = ({ status, body, text }: Reply, extra: Record<string, string> | [string, string][] = []): Response => {
+  const none = status === 204 || (body === undefined && text === undefined);
+  const headers = new Headers(none ? { "cache-control": "no-store" } : HEADERS);
   for (const [k, v] of Array.isArray(extra) ? extra : Object.entries(extra)) headers.append(k, v);
-  return status === 204 || body === undefined ? new Response(null, { status, headers }) : new Response(`${JSON.stringify(body)}\n`, { status, headers });
+  return none ? new Response(null, { status, headers }) : new Response(`${text ?? JSON.stringify(body)}\n`, { status, headers });
 };
 
 export const fail = (status: number, error: string, more: Record<string, unknown> = {}) => respond({ status, body: { error, ...more } });

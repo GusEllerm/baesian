@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS push_pauses (machine TEXT PRIMARY KEY, cards INTEGER 
 CREATE TABLE IF NOT EXISTS practice (seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, entry TEXT NOT NULL);
 `,
   },
+  {
+    version: 2,
+    name: "the state as last built, kept until the project changes (B-evrec)",
+    sql: "CREATE TABLE built (part INTEGER PRIMARY KEY, value TEXT NOT NULL)",
+  },
 ];
 
 /** The schema version this release's code needs: the last migration's. */

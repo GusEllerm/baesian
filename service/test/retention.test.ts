@@ -8,6 +8,7 @@ import { type RelayEntry, ledgerBody, readRelayEntry } from "../../src/schema.js
 import { MemoryStorage } from "../../src/storage.js";
 import { type Store, mergeFile } from "../../src/store.js";
 import type { ProjectRelay } from "../src/index.js";
+import type { Relay } from "../src/relay.js";
 import { RETENTION, RetentionLedger, cardOfPath, delivered, due } from "../src/retention.js";
 import { type Person, machineLogin, signUp } from "./browser.js";
 import { call, fileCard, machineStore } from "./client.js";
@@ -93,7 +94,7 @@ async function keepSignedIn(o: Owner, ...machines: string[]): Promise<void> {
 
 /** Retention's daily look, as the object's alarm runs it. */
 const sweep = (o: Owner) => inObject(o, (relay) => relay.sweep(o.project, now));
-const state = async (o: Owner) => (await inObject(o, (relay) => relay.state(o.project))).body as ApiState;
+const state = async (o: Owner) => JSON.parse((await inObject(o, (relay) => relay.state(o.project))).text!) as ApiState;
 const entriesOf = (entries: RelayEntry[], id: string) => entries.filter((e) => cardOfPath(e.path) === id);
 const sent = (o: Owner) => inObject(o, (_r, s) => new RetentionLedger(s.storage.sql).sentTo());
 
@@ -163,7 +164,15 @@ describe("an answered card (B-9jqt4)", () => {
 
     at(t0 + 59 * DAY + MINUTE);
     await keepSignedIn(o);
+    // The state as built is kept until the project changes (B-evrec), with the card's text in it.
+    const keptText = () => inObject(o, (_r, s) => s.storage.sql.exec<{ value: string }>("SELECT value FROM built ORDER BY part").toArray().map((r) => r.value).join(""));
+    expect(await keptText()).toContain("access token");
     expect(await sweep(o)).toEqual([answered]);
+    // It went with the card's text, in the same step; what's built next holds none of it.
+    expect(await keptText()).toBe("");
+    expect((await state(o)).removed).toEqual([expect.objectContaining({ id: answered, ended: "answered" })]);
+    expect(await keptText()).toContain(open);
+    expect(await keptText()).not.toContain("access token");
 
     // The log keeps every entry, without its body: path, size, digest, machine and time.
     const entries = await pull(o);
@@ -480,6 +489,22 @@ describe("a held card nobody answers (B-ec3kj)", () => {
     let s = await state(o);
     expect(s.cards.find((c) => c.meta.id === held)).toMatchObject({ status: "held" });
     expect(s.cards.find((c) => c.meta.id === audit)).toMatchObject({ status: "held", audit: true });
+    // What waits, kept with the state as built (B-evrec), is what the store itself counts: the open card and the audit,
+    // each at its level in force, never the card held back.
+    const waits = await inObject(o, (relay) => {
+      const r = (relay as unknown as { relay(project: string): Relay }).relay(o.project);
+      const store = r.store();
+      const own = store.view(() =>
+        store.cards().flatMap((c) => {
+          const status = store.status(c.meta.id);
+          const drawn = status === "held" && !!store.gateRecord(c.meta.id, c.meta.revision)?.drawn;
+          return status === "open" || drawn ? [{ card: c.meta.id, revision: c.meta.revision, level: store.levelOf(c.meta.id) ?? c.meta.level }] : [];
+        }),
+      );
+      return { kept: r.waiting(), own };
+    });
+    expect(waits.kept).toEqual(waits.own);
+    expect(waits.kept.map((w) => w.card).sort()).toEqual([audit, open].sort());
 
     at(t0 + 90 * DAY - MINUTE);
     expect(await sweep(o)).toEqual([]);

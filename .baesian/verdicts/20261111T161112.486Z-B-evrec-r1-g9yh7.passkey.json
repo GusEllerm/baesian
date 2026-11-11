@@ -1,0 +1,9 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261111T161112.486Z-B-evrec-r1-g9yh7.json",
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSWpZa2hDMG9yNmI2ZlFFRTJJVzk0ZzRtWG9Ibk5mT2E4TWQwZjlYZ200TSIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEYCIQDttJcstIbOJSztsuQi5zSNSUz-HF9wV70briDWWIwUTgIhAK6BMWQGPUHGTF7a8rLG1Z09jOBoOW6colFfgkmww-nY"
+}

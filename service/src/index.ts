@@ -6,6 +6,7 @@ import { type PasskeyKey, ProjectId, type ServiceKey, type Verdict, asWritten } 
 import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
 import { Accounts } from "./accounts.js";
+import { BUILD_AFTER_MS, BuiltTable } from "./built.js";
 import { deleteClosed } from "./deletion.js";
 import { PushLedger, WHEN, countWaiting, decide, pushText } from "./notify.js";
 import { migrateObject } from "./object-migrations.js";
@@ -31,8 +32,10 @@ import { type RelyingParty, authenticationOptions, keyFile, verifyAssertion } fr
 // accounts and sign-in (M9c), in one D1 database (B-ytdt2). Live updates are hibernating WebSockets (B-bv49e).
 // docs/vault/Modules/service.md describes it.
 
-export const reply = ({ status, body }: Reply): Response =>
-  status === 204 || body === undefined ? new Response(null, { status, headers: { "cache-control": "no-store" } }) : new Response(`${JSON.stringify(body)}\n`, { status, headers: HEADERS });
+export const reply = ({ status, body, text }: Reply): Response =>
+  status === 204 || (body === undefined && text === undefined)
+    ? new Response(null, { status, headers: { "cache-control": "no-store" } })
+    : new Response(`${text ?? JSON.stringify(body)}\n`, { status, headers: HEADERS });
 
 export interface Env extends KeyEnv, AccessEnv {
   PROJECTS: DurableObjectNamespace<ProjectRelay>;
@@ -395,6 +398,10 @@ export class ProjectRelay extends DurableObject<Env> {
   private retention!: RetentionLedger;
   /** Practice answers (B-rehdw): a table of their own, never in the files or the log. */
   private practice!: PracticeTable;
+  /** The state as last built (B-evrec): kept until a write empties it. */
+  private built!: BuiltTable;
+  /** The timer that builds the state again after a change (`ProjectRelay.buildSoon`). */
+  private building: ReturnType<typeof setTimeout> | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -421,6 +428,7 @@ export class ProjectRelay extends DurableObject<Env> {
     this.ledger = new PushLedger(this.ctx.storage.sql);
     this.retention = new RetentionLedger(this.ctx.storage.sql);
     this.practice = new PracticeTable(this.ctx.storage.sql);
+    this.built = new BuiltTable(this.ctx.storage);
     this.files = new SqlFileStorage(this.ctx.storage, {
       sign: (path, bytes) => {
         if (!signedFile(path)) return undefined;
@@ -446,6 +454,8 @@ export class ProjectRelay extends DurableObject<Env> {
         // closing already
       }
     }
+    clearTimeout(this.building);
+    this.building = undefined;
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.visited.clear();
@@ -467,7 +477,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const known = this.files.meta("project");
     if (known === undefined) this.files.setMeta("project", project);
     else if (known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
-    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention);
+    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention, this.built);
   }
 
   /** Run one address's work, and tell every listener if it changed anything. */
@@ -477,8 +487,30 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = this.files.version();
     const out = fn(relay);
     const now = this.files.version();
-    if (now !== before) this.announce(now);
+    if (now !== before) {
+      this.announce(now);
+      this.buildSoon(project);
+    }
     return out;
+  }
+
+  /**
+   * A change emptied what was built (B-evrec): shortly after the last one, the state is built again and kept, so the
+   * next read finds it, even one that comes long after this object has left memory. A burst of writes is built once; a
+   * read that comes first builds it itself, and this then finds it kept. If the object goes before the timer does, the
+   * next read builds it.
+   */
+  private buildSoon(project: string): void {
+    clearTimeout(this.building);
+    this.building = setTimeout(() => {
+      this.building = undefined;
+      if (this.erased) return;
+      try {
+        this.relay(project).build();
+      } catch (e) {
+        console.error(`building project ${project}'s state after a change failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }, BUILD_AFTER_MS);
   }
 
   private announce(version: number): void {

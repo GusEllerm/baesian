@@ -1,18 +1,20 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
-import { PREFERENCE_FIELDS, VERDICT_FIELDS } from "../../src/api.js";
+import { PREFERENCE_FIELDS, VERDICT_FIELDS, WAITING_STALE_MS } from "../../src/api.js";
 import { unmark } from "../../src/cite.js";
 import { parseDoc } from "../../src/frontmatter.js";
 import { afterVerdict } from "../../src/proposals.js";
-import { BAESIAN, type Settings, loosening } from "../../src/routing.js";
+import { BAESIAN, type Settings, higherLevel, loosening } from "../../src/routing.js";
 import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, asWritten, newestFormat, upgradeFile } from "../../src/schema.js";
 import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
 import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
-import type { ApiRemovedCard } from "../../src/api.js";
+import type { ApiCard, ApiRemovedCard, ApiState } from "../../src/api.js";
 import { batchChallenge } from "../../src/passkey.js";
 import { type TrustRoot, checkSigned, readTrustFile } from "../../src/trust.js";
+import { VERSION } from "../../src/version.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
+import type { Built, BuiltTable } from "./built.js";
 import type { Waiting } from "./notify.js";
 import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due, isLedgerPath } from "./retention.js";
 import { harnessOf } from "./usage.js";
@@ -31,6 +33,8 @@ import { agentKind, beforeLinkingKind, notAgentWritten, uploadProblem } from "./
 export interface Reply {
   status: number;
   body?: unknown;
+  /** The body as JSON text made already (the state, kept as built, B-evrec): sent as it is, in place of `body`. */
+  text?: string;
 }
 
 /** The branch the relay's own store files on: Baesian's own cards, filed after an answer, name it as their source. */
@@ -151,6 +155,19 @@ export const keyFileName = (credential: string) => `trust/passkey-${createHash("
 /** An entry as an upload's reply gives it: everything but the bytes, which the machine has. */
 const receipt = (e: RelayEntry | undefined) => e && { seq: e.seq, path: e.path, format: e.format, size: e.size, digest: e.digest, ...(e.machine ? { machine: e.machine } : {}), ...(e.before_linking ? { before_linking: true } : {}), at: e.at };
 
+/**
+ * The cards waiting for the reviewer among a state's cards, as the desk's queue has them: open cards, and audits (held,
+ * drawn, unanswered), each at its level in force, as `Store.levelOf` gives it: the card's own, raised in a hosted repo by
+ * the relay's gate record, which is the gate record a state carries there.
+ */
+export function waitingOf(cards: readonly ApiCard[], hosted: boolean): Waiting[] {
+  return cards.flatMap((c) =>
+    c.status === "open" || c.audit
+      ? [{ card: c.meta.id, revision: c.meta.revision, level: hosted && c.gate?.outcome === "shown" && c.gate.level ? higherLevel(c.meta.level, c.gate.level) : c.meta.level }]
+      : [],
+  );
+}
+
 export class Relay {
   constructor(
     private readonly files: SqlFileStorage,
@@ -163,6 +180,8 @@ export class Relay {
     private readonly started: string,
     /** Retention's own tables (M9f): what each machine was sent, and the cards whose text went. */
     private readonly retention?: RetentionLedger,
+    /** Where the state is kept once built (B-evrec); without it, every read builds it. */
+    private readonly kept?: BuiltTable,
   ) {}
 
   /**
@@ -239,28 +258,72 @@ export class Relay {
     return { status: 200, body: { entries, head, more: (entries.at(-1)?.seq ?? head) < head } };
   }
 
-  /** The state, as `baesian serve`'s `/api/state` gives it (B-17wn9), built by `snapshot()` over the project's store. */
-  state(): Reply {
-    const state = snapshot(this.store(), { version: this.files.version(), server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH } });
-    // The cards whose text retention removed: listed without it (B-ec3kj), and never answerable.
-    const removed = this.retention?.removedCards() ?? [];
-    return { status: 200, body: removed.length ? { ...state, removed } : state };
+  /**
+   * The state, as `baesian serve`'s `/api/state` gives it (B-17wn9): what `snapshot()` builds over the project's store,
+   * kept as built until the project changes (B-evrec, `Relay.built`), with the clock, when this object started and the
+   * reviewer's presence added as it's sent, since none of them moves the project's version.
+   */
+  state(now: number = Date.now()): Reply {
+    const { rest } = this.built(now);
+    const server: ApiState["server"] = { started: this.started, now: new Date(now).toISOString(), watch: "events" };
+    // The heartbeat is read as it is now, through a store that checks nothing: it's the reviewer's own, never signed.
+    const presence = Store.over(this.files, { branch: RELAY_BRANCH }).presence();
+    return { status: 200, text: `{"server":${JSON.stringify(server)},${presence ? `"presence":${JSON.stringify(presence)},` : ""}${rest.slice(1)}` };
   }
 
   /**
    * The cards waiting for the reviewer, as the desk's queue has them (open cards, and audits: held, drawn, unanswered), at
-   * their level in force: what a notification counts (M9e step 2, B-mjf3g).
+   * their level in force: what a notification counts (M9e step 2, B-mjf3g), and the projects page (B-wgbdh). Kept with the
+   * state as built (`Relay.built`), so asking costs a build only when the project has changed since the last one.
    */
-  waiting(): Waiting[] {
+  waiting(now: number = Date.now()): Waiting[] {
+    return this.kept?.waiting(this.files.version(), this.stamp(), now) ?? this.built(now).waiting;
+  }
+
+  /** Build the state and keep it, unless it's kept already: after a change, so the next read finds it (B-evrec). */
+  build(now: number = Date.now()): void {
+    this.waiting(now);
+  }
+
+  /**
+   * What `snapshot()` makes of the project as it is now, and the cards waiting in it: kept in the project's database
+   * (B-evrec) and used again until a write empties it (`SqlFileStorage`'s version moving), a waiting marker that was fresh
+   * in it would have gone stale, or the release or the service's key changes (`Relay.stamp`). With nothing kept, or
+   * nowhere to keep it, it's built.
+   */
+  private built(now: number): Built {
+    const version = this.files.version();
+    const stamp = this.stamp();
+    const kept = this.kept?.get(version, stamp, now);
+    if (kept) return kept;
     const store = this.store();
-    return store.view(() =>
-      store.cards().flatMap((c) => {
-        const id = c.meta.id;
-        const status = store.status(id);
-        const audit = status === "held" && !!store.gateRecord(id, c.meta.revision)?.drawn;
-        return status === "open" || audit ? [{ card: id, revision: c.meta.revision, level: store.levelOf(id) ?? c.meta.level }] : [];
-      }),
-    );
+    const state = snapshot(store, { version, server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH }, now });
+    // Left out, and added as the state is sent: the clock, this object's start, and the heartbeat, which moves no version.
+    const { server: _server, presence: _presence, ...rest } = state;
+    // The cards whose text retention removed: listed without it (B-ec3kj), and never answerable.
+    const removed = this.retention?.removedCards() ?? [];
+    // A marker goes stale by the clock alone (D90): what's built says "waiting" only until the first fresh one would.
+    const fresh = state.cards.flatMap((c) => c.waiting.filter((w) => !w.stale).map((w) => Date.parse(w.at) + WAITING_STALE_MS)).filter(Number.isFinite);
+    const built: Built = {
+      rest: JSON.stringify(removed.length ? { ...rest, removed } : rest),
+      waiting: waitingOf(state.cards, store.hosted() !== undefined),
+      ...(fresh.length ? { until: Math.min(...fresh) } : {}),
+    };
+    try {
+      this.kept?.keep(version, stamp, built);
+    } catch (e) {
+      // Not kept (the database is full, say): this read is answered all the same, and the next builds it again.
+      console.error(`keeping project ${this.project}'s state failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return built;
+  }
+
+  /**
+   * What a kept state was built by: this release's code, at this address, with the service's key as it is. A deploy that
+   * changes any of them finds nothing kept under its own stamp, and builds afresh.
+   */
+  private stamp(): string {
+    return createHash("sha256").update(JSON.stringify([VERSION, this.origin, this.signer?.trust() ?? this.keyProblem ?? null])).digest("hex").slice(0, 32);
   }
 
   // ---------------------------------------------------------------- what's counted (D141, B-7nq85)

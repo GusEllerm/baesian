@@ -1,0 +1,9 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261111T161316.781Z-B-gty71-r1-a2kry.json",
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVEk1ZXRmMGw3ZHFfYXJJTHFndHFrcDVEb3UyYTAzelduNUdVRTNvX1FJRSIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEUCIDniOY653T3RFsq-nD-lC1SR4hZiEuyhUt2_IYd01v1aAiEA3fLKTbz3LKcVHvqJx1LV03EDhrxSiFj2oUuZjBH9Iso"
+}

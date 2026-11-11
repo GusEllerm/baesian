@@ -1857,13 +1857,23 @@ sig = "eccfe5de591bc61e"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
+target = "service/src/built.ts#About"
+sig = "d8525329e3c71ab8"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
+target = "service/src/built.ts#BuiltTable"
+sig = "98b11bf098cb7694"
+
+[[bindings]]
+doc = "docs/vault/Design/File Formats.md"
 target = "service/src/globus.ts#client"
 sig = "c96dc974039c26ee"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "b28efc8d23121daf"
+sig = "59e2ce87634b8c20"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1873,7 +1883,7 @@ sig = "4788716bc2ecc7ee"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#reply"
-sig = "0101404b91b31a70"
+sig = "367b9a2c6a224ebe"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1908,7 +1918,7 @@ sig = "8d34b5d7f9904b60"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/object-migrations.ts#OBJECT_MIGRATIONS"
-sig = "f919540500be00d4"
+sig = "f3944337e27342eb"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1943,7 +1953,7 @@ sig = "4781fab8a91512d8"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/relay.ts#Relay"
-sig = "092332f5c8bfc08e"
+sig = "894c498455e6f30e"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2003,7 +2013,7 @@ sig = "1cb7877032eab084"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "7c862320494453fc"
+sig = "80c57b9993fcdffe"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3573,7 +3583,7 @@ sig = "e3b2293e4667d9d7"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/http.ts#respond"
-sig = "d828e18d910b6f80"
+sig = "2569989a080d0106"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3593,12 +3603,12 @@ sig = "54b335e543cb554e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/relay.ts#Relay"
-sig = "092332f5c8bfc08e"
+sig = "894c498455e6f30e"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "7c862320494453fc"
+sig = "80c57b9993fcdffe"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4833,7 +4843,7 @@ sig = "ff494bae1126ad27"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "service/src/object-migrations.ts#OBJECT_MIGRATIONS"
-sig = "f919540500be00d4"
+sig = "f3944337e27342eb"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -4848,7 +4858,7 @@ sig = "54b335e543cb554e"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "service/src/relay.ts#Relay"
-sig = "092332f5c8bfc08e"
+sig = "894c498455e6f30e"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -5592,6 +5602,36 @@ sig = "247e326d5b1cf623"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts"
+sig = "aecfda7c52ef45d9"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts#BUILD_AFTER_MS"
+sig = "e01095e523ef0f3d"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts#Built"
+sig = "6b0b23d87ead307d"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts#BuiltTable"
+sig = "98b11bf098cb7694"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts#PART"
+sig = "709a266cce76a685"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/built.ts#inParts"
+sig = "efe42c4e95886251"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/deletion.ts#DELETION"
 sig = "a0569201dd9ca520"
 
@@ -5657,8 +5697,13 @@ sig = "cdb9c393fd798be7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/http.ts#respond"
+sig = "2569989a080d0106"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "b28efc8d23121daf"
+sig = "59e2ce87634b8c20"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5689,6 +5734,11 @@ sig = "3129224b56ce62c8"
 doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#keysReply"
 sig = "3e4d68fa26d1d3a2"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/index.ts#reply"
+sig = "367b9a2c6a224ebe"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5778,7 +5828,7 @@ sig = "d283881da80d3127"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/object-migrations.ts"
-sig = "894f3fe747b82351"
+sig = "5e6d386d97886c9e"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5788,7 +5838,7 @@ sig = "ff494bae1126ad27"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/object-migrations.ts#OBJECT_MIGRATIONS"
-sig = "f919540500be00d4"
+sig = "f3944337e27342eb"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5943,7 +5993,12 @@ sig = "509350cb13abdd33"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#Relay"
-sig = "092332f5c8bfc08e"
+sig = "894c498455e6f30e"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#Reply"
+sig = "49b5ff4f3bca1607"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -5954,6 +6009,11 @@ sig = "50191f24eb7d1f73"
 doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#keyFileName"
 sig = "8b6bbedbe69862ea"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#waitingOf"
+sig = "fa184610ac73b39d"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6048,7 +6108,7 @@ sig = "1cb7877032eab084"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "7c862320494453fc"
+sig = "80c57b9993fcdffe"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6217,6 +6277,11 @@ sig = "af77fc68f6c164b0"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "src/mcp.ts#text"
+sig = "43b99ce18e168f18"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "src/modes.ts#preferences"
 sig = "e5dbb565b2d37a8a"
 
@@ -6307,6 +6372,11 @@ sig = "3960645b517c764c"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "src/state.ts#snapshot"
+sig = "f57a570a62f13ea9"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "src/storage.ts#FileExists"
 sig = "fe0d1c21c75288f0"
 
@@ -6339,6 +6409,11 @@ sig = "79d5bc2aaedc102b"
 doc = "docs/vault/Modules/service.md"
 target = "src/store.ts#signedFile"
 sig = "b8aa1dfd4969566c"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
+target = "src/style.ts#text"
+sig = "cc70bdddc1d300eb"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -7228,12 +7303,12 @@ sig = "313b973eb2189d8a"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/src/relay.ts#Relay"
-sig = "092332f5c8bfc08e"
+sig = "894c498455e6f30e"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/src/sql-storage.ts#SqlFileStorage"
-sig = "7c862320494453fc"
+sig = "80c57b9993fcdffe"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
