@@ -2,7 +2,7 @@
 type: session
 status: active
 livedocs: snapshot
-summary: "2026-11-10: the website measured (a project took 2.3 s to open, its state read twice), two duplicate reads fixed, then four cards answered and built: a project's last state kept in the tab and shown while it refreshes, answers held meanwhile; nothing kept on the device; each project's inbox on the projects page, its counts asked of each project. On v1/next, not released."
+summary: "2026-11-10, released as 1.0.1: the website measured (a project took 2.3 s to open, its state read twice), two duplicate reads fixed, then four cards answered and built: a project's last state kept in the tab and shown while it refreshes, answers held meanwhile; nothing kept on the device; each project's inbox on the projects page, its counts asked of each project. On v1/next, not released."
 created: 2026-11-10
 tags: [baesian, session]
 ---
@@ -31,6 +31,6 @@ The four cards, each in `Decisions/`; the agent's own, in the [[Decision Log]] (
 
 ## Next
 
-- Release it: a 1.0.1 published by CI before 2026-11-13 03:04 UTC would also validate npm's trusted publisher, which otherwise expires and has to be made again before the next release ([[Release v1]]).
+- ~~Release it.~~ **Released as 1.0.1:** the release commit `c372faf` (with a fix to a service test that took the oldest release served for the service's own; at 1.0.1 it serves 1.0.0 still); the user tagged `v1.0.1` (first in the chorus_conservancy checkout by mistake, where the tag was pushed to that repo, with nothing run there); the deploy, CI's npm publish with provenance, which validated the trusted publisher, and the GitHub Release all passed at once. npm listed 1.0.1 about seven minutes after the publish.
 - A lighter first load: the state carries every card's full text, so a project's first open in a tab still takes about 1.5 s.
 - Then several reviewers per project: what it means for a card to go to more than one inbox.
