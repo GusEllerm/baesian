@@ -68,7 +68,20 @@ export function useHostedState(e: Endpoints): Live {
     let attempts = 0;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let ping: ReturnType<typeof setInterval> | undefined;
+    // One read at a time. The socket says the project's version as it opens, while the first read is still on its way;
+    // a change announced during a read is read again only if that read came back older than it.
+    let reading = false;
+    let announced = 0;
     const load = async () => {
+      if (reading) return;
+      reading = true;
+      // What was announced before this read starts, it reads.
+      announced = 0;
+      await read();
+      reading = false;
+      if (!stopped && announced > newest) void load();
+    };
+    const read = async () => {
       try {
         const r = await fetch(stateUrl, { credentials: "same-origin" });
         if (stopped) return;
@@ -97,7 +110,13 @@ export function useHostedState(e: Endpoints): Live {
       socket.onmessage = (m) => {
         try {
           const msg = JSON.parse(String(m.data)) as { type?: string; version?: number };
-          if (msg.type === "changed" && (typeof msg.version !== "number" || msg.version > newest)) void load();
+          if (msg.type !== "changed") return;
+          // With no version, it's newer than anything read so far.
+          const version = typeof msg.version === "number" ? msg.version : Number.POSITIVE_INFINITY;
+          if (version > newest) {
+            announced = Math.max(announced, version);
+            void load();
+          }
         } catch {
           // a pong, or nothing the relay sends: ignored
         }

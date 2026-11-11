@@ -355,6 +355,39 @@ test("a project that isn't yours says so, and where yours are", async ({ page })
   await expect(heading(page, "Your projects")).toBeVisible();
 });
 
+test("the site reads your account once as it opens, and a project's state once as its desk does, though the socket opens mid-read", async ({ page }) => {
+  await signedUp(page);
+  const { dir } = repo();
+  const project = await linkThroughPage(page, dir, "Crumb's shop");
+  await page.addInitScript((key) => localStorage.setItem(key, "true"), `baesian:${project}:setup`);
+  const reads = { account: 0, state: 0 };
+  page.on("request", (r) => {
+    const path = new URL(r.url()).pathname;
+    if (path === "/v1/account") reads.account++;
+    if (path === `/v1/projects/${project}/state`) reads.state++;
+  });
+  // The state comes slowly, so the live socket's first message, the project's version, lands while it's being read.
+  await page.route(`**/v1/projects/${project}/state`, async (route) => {
+    await new Promise((r) => setTimeout(r, 600));
+    await route.continue();
+  });
+
+  await page.goto(`${site.url}/`);
+  const row = page.getByRole("listitem").filter({ hasText: "Crumb's shop" });
+  await expect(row).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(reads.account).toBe(1);
+
+  const socket = page.waitForEvent("websocket");
+  await row.getByRole("link").click();
+  await (await socket).waitForEvent("framereceived");
+  await expect(page.getByText("All caught up.")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(reads.state).toBe(1);
+  // Moving to another page reads the account again: that page may have changed it.
+  expect(reads.account).toBe(2);
+});
+
 // ---------------------------------------------------------------- laid out
 
 async function check(page: Page, problems: string[], name: string, touch: boolean) {

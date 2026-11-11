@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMe } from "./api";
 import { Account } from "./Account";
 import { Counts } from "./Counts";
@@ -37,9 +37,13 @@ export function Site() {
     const f = takeFragment();
     return f.get("signed_in") ? `Signed in through Globus as ${f.get("signed_in")}.` : undefined;
   });
-  // Each page reads the account afresh: a page before it may have changed it (a project made, a passkey added).
+  // Each page reads the account afresh: a page before it may have changed it (a project made, a passkey added). The
+  // first page doesn't: `useMe()` has just read it.
   const reload = me.reload;
+  const shown = useRef(path);
   useEffect(() => {
+    if (shown.current === path) return;
+    shown.current = path;
     void reload();
   }, [path, reload]);
   const needsIn = !OPEN.has(path) && path !== "/";
