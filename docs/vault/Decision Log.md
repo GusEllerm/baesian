@@ -5,7 +5,7 @@ authority: log
 livedocs: snapshot
 summary: "Every Baesian decision, with who made it: the user's decisions, agent proposals awaiting the user, and agent two-way-door choices the user can overturn."
 created: 2026-10-23
-updated: 2026-11-10
+updated: 2026-11-11
 reviewed: 2026-10-23
 tags: [baesian, decisions]
 ---
@@ -278,6 +278,17 @@ views:
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-11-11 `[agent decision]` **The state kept as built, and the projects page hearing of new cards, as built** (B-evrec, B-gty71; [[service]], [[Client Build]] item 30; [[2026-11-11 Kept State and Live Inboxes]]), by the lead agent. The user asked for a lighter first load, then, having had to reload the projects page to see a card, whether it checks on a timer. Measured first: sending a project's state takes 20 milliseconds, and building it most of a second, on every request, so trimming the cards' text would have saved little. The two cards were answered: the state kept in the project's database; the projects page told by each project. What the cards left open:
+  - **Every write empties the kept state in its own transaction** (`SqlFileStorage`'s version moving), rather than each read comparing versions alone: text that retention removes is then gone from the copy in the same step (R-1sxpy), whatever happens next. The version and a stamp are checked on reading as well.
+  - **It's built again two seconds after the last change, by a timer in the object's memory, not its alarm.** The alarm also decides notifications, and running it early would settle arrivals as seen up to ten seconds sooner while the reviewer's presence is still fresh: a change to when notifications go, which nobody asked for. If the object leaves memory before the timer, the next read builds it.
+  - **The clock, the object's start and the reviewer's presence are added as the state is sent,** since none moves the project's version. A waiting marker goes stale by the clock alone, so a kept state holds only until its first fresh marker would.
+  - **The waiting counts come from the kept state** (`waitingOf()`), so asking for them builds the whole state when the project has changed, about twice the work the count alone took, and keeps it for the read that follows. B-wgbdh still holds: each project is asked, and the answer is exact.
+  - **A stamp of the release, the service's address and its key** goes with what's kept, so a new release builds afresh rather than send what older code made.
+  - **The account's five lists are read together** (`GET /v1/account`): each was a trip to the accounts database, one after another.
+  - **The projects page asks each project twice as it opens,** once directly and once at its connection's first word, since a card could come between the two and the count carries no version to tell. Putting the version on the count would save the second ask; it changes the address's reply, so it wasn't done without a card.
+  - **A Worker's main module may export only handlers, functions and classes:** a constant exported from `service/src/index.ts` stopped the Worker starting, which only the browser tests saw. `worker-exports.test.ts` now checks it in the service's own tests.
+  - **Not done:** making each build quicker (44% of it is parsing the cards' YAML, 17% checking signatures), and the second a project's object takes to start after a long idle.
 
 - 2026-11-10 `[agent decision]` **The website, quicker, and each project's inbox, as built** (B-3va5g, B-9n2c3, B-wgbdh, B-fzr1e; [[Client Build]] item 29, [[service]]), by the lead agent. The user asked for caching, after noticing the delay between pages, and for each project to show whether cards wait, as inboxes. The four cards were answered: the kept copy shown while it refreshes; only in the tab's memory; counts asked of each project (against the agent's pick, a stored count); projects, each with an inbox. B-acay5, the first filing of the counts card, was withdrawn and filed again as B-wgbdh, because its proposal needed a new line in the privacy policy that it hadn't said, and so touched privacy. What the cards left open:
   - **Two duplicate reads were bugs, fixed without a card:** the project's state read twice as it opened (the live socket's version arrives during the first read), and the account twice on the first page.
