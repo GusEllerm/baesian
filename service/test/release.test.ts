@@ -3,6 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 import type { MemoryStorage } from "../../src/storage.js";
+import { minimumRelease } from "../../src/schema.js";
 import { Store } from "../../src/store.js";
 import { checkSigned, parseTrust, pinProblems } from "../../src/trust.js";
 import { FIRST_STABLE, RELEASE_HEADER, TOO_OLD, VERSION } from "../../src/version.js";
@@ -32,7 +33,9 @@ describe("the CLI's release, on every request a machine makes (B-4p43b)", () => 
       const r = await exports.default.fetch(new Request(`${BASE}/v1/projects/proj-a/log?after=0`, { headers }));
       const s = await status(r);
       expect(s.status, String(sent)).toBe(TOO_OLD);
-      expect(s).toMatchObject({ minimum: VERSION, release: VERSION });
+      // The oldest it serves is the oldest that reads what it writes, which needn't be its own release (1.0.0 serves
+      // 1.0.0; 1.0.1, which changed no format, still does).
+      expect(s).toMatchObject({ minimum: minimumRelease(VERSION), release: VERSION });
       expect(s.error).toContain(`install baesian ${VERSION} (npm install -g baesian@${VERSION}), then run the command again. Nothing was sent or received.`);
     }
     // An upload, and the live socket, the same.
