@@ -2,7 +2,7 @@
 type: session
 status: active
 livedocs: snapshot
-summary: "2026-11-11, prepared as 1.0.2 and waiting for the tag: the website's delay measured on baesian.dev and found to be the relay building a project's state on every request, not the state's size; the state is now kept as built in the project's database until the project changes (B-evrec), and the projects page holds each project's live connection, so a new card shows without a reload (B-gty71). The account's lists are read together."
+summary: "2026-11-11, released as 1.0.2: the website's delay measured on baesian.dev and found to be the relay building a project's state on every request, not the state's size; the state is now kept as built in the project's database until the project changes (B-evrec), and the projects page holds each project's live connection, so a new card shows without a reload (B-gty71). The account's lists are read together."
 created: 2026-11-11
 tags: [baesian, session]
 ---
@@ -49,13 +49,34 @@ The benchmark and its fixture are in the session's scratchpad, not the repo.
 
 B-evrec and B-gty71, each in `Decisions/`; the agent's own in the [[Decision Log]] (2026-11-11).
 
+## Released, and measured again
+
+The user tagged `v1.0.2` (on the right repo this time). The deploy's three jobs passed: the service deployed, CI published `baesian@1.0.2` to npm by trusted publishing, with provenance (listed as `latest` about three minutes later), and the GitHub Release was made.
+
+Measured on baesian.dev minutes after, signed in, the same requests, interleaved, each timed to its first byte:
+
+| Request | Before, over a request that does no work | After, over one |
+|---|---|---|
+| a project's waiting counts | 0.35 to 0.55 s more | no more (0.56 s against 0.56 s) |
+| a project's state | 0.65 to 0.95 s more | about 0.1 s more (0.67 s), and about one read in four 0.45 s more |
+
+- **The times themselves don't compare with the morning's.** The browser was reaching the service through Cloudflare's São Paulo location (`colo=GRU`, over HTTP/3; `curl` from the same machine reached Boston and Chicago), which put about 0.4 s on every request: 0.15 to 0.19 s for the service's keys against 0.04 s, 0.56 s for a request to the project that does no work against 0.15 s. So what's compared is each request against one on the same route that does no work.
+- **The slower reads of the state aren't builds:** the project's version didn't move, its only waiting marker was stale already, and the counts, read between them, came from what was kept. Not explained; the 0.9 MB crossing from the project's object to São Paulo is the first suspect.
+- **One read took 2.9 seconds:** it arrived as the user's answer to B-fb760 was being written, and waited behind it.
+- **The account's read** is three trips to the accounts database where it was seven: 0.57 to 0.64 s on that route, where seven would have been about a second.
+- **The first read of the project after the deploy** took 1.6 s: its tables migrated, and its state built.
+
+## The rule
+
+The user's answer to Baesian's own card, B-n392b ("A pattern in your answers on website"), asked for a rule from B-wgbdh and B-gty71. Drafted as B-fb760 and accepted: R-mvbvy, "What the website shows of a project's cards comes from the project itself, exact and current: the project is asked, or says when it changes; never a copy kept outside the project, or one refreshed on a timer." It covers no gate facts. B-evrec keeps to it: its copy is in the project's own database, and never older than the files.
+
 ## Not verified
 
-- **The gain on Cloudflare.** A kept state should be sent in about 0.2 seconds, by the time a small request to a project takes there; it's an estimate until a release is deployed and a project's open is timed again. The same for the account's read.
+- **The times on an ordinary route.** By the differences above, a project that hasn't changed should send its counts in about 0.15 s and its state in about 0.25 s when the browser reaches a nearby Cloudflare location.
 - **The timer under real load:** that a burst of uploads from `baesian sync` is one build, not several, on Cloudflare's clock.
+- **Why the CLI couldn't reach the service for about 20 seconds** while the rule's draft was filed, before the release; it worked on the next try.
 
 ## Next
 
-- ~~Release it.~~ **Prepared as 1.0.2** at the user's word: the release commit on `main`, with its notes, waiting for the user's tag. It migrates each project's tables, so a rollback to 1.0.1 would refuse projects 1.0.2 has woken, as B-866d2 has it; a fix goes forward. Then time a project's open on baesian.dev.
-- If each change still costs too much: keep each file parsed, so a build is quicker; and find the second a project takes after a long idle.
-- Then several reviewers per project: its goals and how collaboration works come first, as a proposal, then cards.
+- Several reviewers per project: its goals and how collaboration works come first, as a proposal, then cards.
+- Left for later: keeping each file parsed, so a build is quicker (each change still costs one, 0.6 to 0.9 s, your own answers included); the second a project takes after a long idle; the state's slower reads.
