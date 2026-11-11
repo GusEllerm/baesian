@@ -1,0 +1,16 @@
+{
+  "type": "verdict",
+  "format": 1,
+  "card": "B-r51ts",
+  "revision": 1,
+  "response": "alternative",
+  "choice": "Every member's",
+  "comment": "It seems simpler to me to make cards available to all members. To route a card to  a specific person could block development until they action it right? Perhaps there is a middle ground, cards are sent to others and team members can see that?",
+  "first_choice": "alternative",
+  "reviewer": "GusEllerm",
+  "account": "acct-d4wpc6m1gy02",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "card_digest": "f01c404ade997610ec0054ce7d70d4d6c5d2a9463a5d2224dc9b2b49c54b4f92",
+  "client": "hosted-desktop",
+  "at": "2026-11-11T18:04:46.676Z"
+}

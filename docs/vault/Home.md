@@ -17,9 +17,10 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-11.*
 
-- **Several reviewers per project: proposed, five cards waiting (2026-11-11)** ([[Several Reviewers]], P20; [[2026-11-11 Several Reviewers Proposal]]). A project has members, and every card still has one reviewer, by name; the research is [[Several Reviewers - Research]], from three strands kept in full. Nothing is built.
-  - **Waiting on the user,** in deck `reviewers`: who it's built for first (B-j032t), whose a card is (B-r51ts), who a card reaches first (B-2n7s4), what a second person's different answer does (B-v43z8), which cards take two answers (B-1yeqe).
-  - **Next:** the mechanics as cards, once those are answered; then stage 1, members and whose card it is.
+- **Several reviewers per project: partly decided, four cards waiting (2026-11-11)** ([[Several Reviewers]], P20; [[2026-11-11 Several Reviewers Proposal]]). The research is [[Several Reviewers - Research]], from three strands kept in full. Nothing is built.
+  - **Decided by the first five cards** (deck `reviewers`): built first for a few developers on one repo (B-j032t); a card is every member's, and the first answer decides (B-r51ts, against the proposal's one reviewer per card: "to route a card to a specific person could block development"); it reaches whoever runs its agent first (B-2n7s4); a second person's different answer is settled by someone, with both kept (B-v43z8); two answers only on the kinds a team marks (B-1yeqe).
+  - **Waiting on the user,** in deck `reviewers-joining`: who's told when a card comes in (B-tzdjn, the middle ground the user described), how CI trusts a member's passkey (B-9e7cn), how someone joins (B-jsady), who changes a project's settings and rules (B-rxbss).
+  - **Next:** stage 1, members and every member's cards, once those are answered; the privacy policy's wording as a card with the build.
 
 - **`v1.0.2`, live and published (2026-11-11): the state kept as built, and inboxes that hear of new cards** ([[2026-11-11 Kept State and Live Inboxes]]). Measured on baesian.dev: a project's second to open is the relay building its state on every request (0.6 to 0.9 s for 222 cards), not sending it (20 ms), so the plan to send less text was dropped.
   - **Built:** the relay keeps the state it built in the project's database until the project changes, and builds it again two seconds after a change (B-evrec, the object's migration 2); the projects page holds each project's live connection, so a card filed while it's in view shows without a reload (B-gty71); the account's lists are read together.

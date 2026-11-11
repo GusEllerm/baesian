@@ -2,7 +2,7 @@
 type: session
 status: active
 livedocs: snapshot
-summary: "2026-11-11, on v1/next: the proposal for several reviewers per project (P20) drafted, from a read of what assumes one reviewer today and three research strands (review tools; decision rights and judgment by several people; how teams oversee agents); five cards on its goals and model filed in deck reviewers. Nothing built."
+summary: "2026-11-11, on v1/next: the proposal for several reviewers per project (P20) drafted, from a read of what assumes one reviewer today and three research strands (review tools; decision rights and judgment by several people; how teams oversee agents); five cards on its goals and model filed in deck reviewers and answered the same day, one against the proposal (a card is every member's); the proposal revised, and four more cards filed in deck reviewers-joining. Nothing built."
 created: 2026-11-11
 tags: [baesian, session]
 ---
@@ -34,7 +34,20 @@ The user's next piece: several reviewers per project, "what it means for cards t
 
 Wording quoted from documentation in the strands came through a fetch that summarises pages; each strand lists what it couldn't verify. Nothing in the research is a study of two people each blind to an agent's proposal and to each other.
 
+## The first five answers, and what followed
+
+The user answered all five the same day:
+- **B-j032t:** "A few developers on one repo".
+- **B-r51ts:** "Every member's", against the proposal's one reviewer per card, with: "It seems simpler to me to make cards available to all members. To route a card to a specific person could block development until they action it right? Perhaps there is a middle ground, cards are sent to others and team members can see that?"
+- **B-2n7s4:** "Whoever runs the agent". **B-v43z8:** "Someone settles it". **B-1yeqe:** "Only the kinds a team marks".
+
+On their question: only a hard card makes its agent wait; a blocking card's agent gives up after nine minutes and carries on (D46). No reply was made on the card: it asked a question the chat answers, and a reply reopens a card.
+
+Read together, B-r51ts and B-2n7s4 say any member can answer any card, and a card is still sent to someone. [[Several Reviewers]] was rewritten to that: every waiting card is every member's; it's sent to whoever runs its agent, and shown as such; "it's outside my expertise" tells the others; cover is no longer needed, since nothing is one person's alone; a raised difference goes to whoever gave neither answer.
+
+**Four more cards, in deck `reviewers-joining`,** each hard: B-tzdjn (who's told when a card comes in: the middle ground, or everyone alike), B-9e7cn (how CI comes to trust a member's passkey), B-jsady (how someone joins), B-rxbss (who changes a project's settings and rules).
+
 ## Next
 
-- The user answers the five cards. Then the mechanics, as cards: where members and the map are kept and who signs them; how CI comes to trust a member's passkey; how someone joins and leaves; the privacy policy; the clock; what a member sees of a card that's with someone else.
-- Then stage 1 is built.
+- The user answers the four. Then stage 1 is built: members, and every member's cards. Its hardest part is how a verdict counts: today the latest decides, and with B-v43z8 the first stands unless settled otherwise, which every release that reads the record has to agree on.
+- The privacy policy's wording, as a card with the build.
