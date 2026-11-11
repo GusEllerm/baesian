@@ -315,20 +315,26 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
   const tail = path.split("/").slice(4).map(decodeURIComponent);
   const body = async (): Promise<Record<string, unknown> | Response> => (m === "GET" || m === "DELETE" ? {} : readObject(request));
   if (route === "GET /") {
-    const passkeys = await s.accounts.passkeys(account.id);
-    const globus = await s.accounts.globusOf(account.id);
+    // Read together: each is one trip to the accounts database, and none waits on another's answer.
+    const [passkeys, globus, emails, projects, counted] = await Promise.all([
+      s.accounts.passkeys(account.id),
+      s.accounts.globusOf(account.id),
+      s.accounts.emails(account.id),
+      s.accounts.projectsOf(account.id),
+      s.usage ? s.usage.counted(account.id) : false,
+    ]);
     return respond({
       status: 200,
       body: {
         id: account.id,
         handle: account.handle,
         created: account.created,
-        emails: await s.accounts.emails(account.id),
+        emails,
         passkeys: passkeys.map((p) => listed(p, account)),
         globus: globus ? { linked: globus.linked } : null,
-        projects: await s.accounts.projectsOf(account.id),
+        projects,
         fresh_until: new Date(Date.parse(ses.verified) + LIMITS.freshMs).toISOString(),
-        usage: { counted: s.usage ? await s.usage.counted(account.id) : false },
+        usage: { counted },
       },
     });
   }
