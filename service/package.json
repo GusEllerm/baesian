@@ -1,6 +1,6 @@
 {
   "name": "baesian-relay",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "license": "FSL-1.1-ALv2",
   "private": true,
   "description": "Baesian's hosted service: the relay (M9b), a Cloudflare Worker with one Durable Object per project running Baesian's own store over each project's files, and accounts and sign-in (M9c) in one D1 database.",

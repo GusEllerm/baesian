@@ -17,12 +17,13 @@ This vault is the long-term memory for **Baesian**: swipe review for agent decis
 
 *As of 2026-11-10.*
 
-- **M10 is built and merged on v1/next (2026-11-10); 1.0.0 is next** ([[Release v1]]; [[2026-11-10 M10 Release Plan]], [[2026-11-10 M10 Service Steps]], [[2026-11-10 M10 Docs]]):
+- **M10 is built and merged, and 1.0.0's release commit is on main (2026-11-10); the tag is next** ([[Release v1]]; [[2026-11-10 M10 Release Plan]], [[2026-11-10 M10 Service Steps]], [[2026-11-10 M10 Docs]]):
   - every release's record reads as v1; any released hook block counts as Baesian's, and a changed one is written a release late (B-np6af, B-amxkp); `baesian ci` pins CI to its release (B-c0e0d) and a spare key (B-x47ek: `relay-2`, made, its private half offline); the plugin checks the `baesian` on PATH (B-pw9ak);
   - the relay migrates each project as it wakes (B-866d2); the CLI names its release on every request, the relay refuses one too old, and formats roll out a release late (B-4p43b, B-4kj4d); from 1.0.0 every 0.1.x CLI is told to install 1.0.0;
   - npm `baesian` from the 1.0.0 tag on, published by CI with provenance after the service deploys (B-emtd9, B-xr2fa, B-h0vyy); a GitHub Release from each tag's `docs/release-notes/<version>.md` (B-yj9wc); the README and setup guide install from npm and the plugin from `GusEllerm/baesian` (B-n15wk); SECURITY.md with security@baesian.dev (B-480t1).
   - **Practice cards (P19) are merged too** ([[Practice Cards]]): the blind test first, then practice cards behind it; they need cards carrying `alternative_rationale` that are a week old.
-  - **Next, 1.0.0:** the user forwards security@baesian.dev; the release commit sets 1.0.0 in package.json, service/package.json and the plugin's manifest (`npm version` also writes `src/version.ts`); v1/next goes to main; the user tags `v1.0.0` on main (`git tag v1.0.0 origin/main`). The service deploys and the publish job fails once, by design: the user publishes 1.0.0 by hand, sets up npm's trusted publisher, and re-runs the failed jobs, which makes the GitHub Release. Then `npm install -g baesian`, the plugin from GitHub, `baesian ci --github` here and in chorus_conservancy.
+  - **1.0.0's release commit is on main (2026-11-10):** package.json, service/package.json, the plugin's manifest and `src/version.ts` say 1.0.0, and security@baesian.dev forwards to the user, as privacy@ does (Cloudflare Email Routing).
+  - **Next, 1.0.0:** the user tags `v1.0.0` on main (`git tag v1.0.0 origin/main`). The service deploys and the publish job fails once, by design: the user publishes 1.0.0 by hand, sets up npm's trusted publisher, and re-runs the failed jobs, which makes the GitHub Release. Then `npm install -g baesian`, the plugin from GitHub, `baesian ci --github` here and in chorus_conservancy.
 
 - **`v0.1.10`, live (2026-11-10)** ([[2026-11-10 Repair, v0.1.10 and Calibration]]): the licence, and the calibration fixes: a card's model from the harness (B-k0w7d), preference-crux misses (B-ab06a), one test both ways for slider moves (B-jtsfh). Main was moved up to the user's tag (B-1fhvq). The phone flow passed a real-device check.
 
