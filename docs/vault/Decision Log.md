@@ -280,6 +280,17 @@ views:
 
 ## Agent decisions (two-way doors; the user may overturn)
 
+- 2026-11-11 `[agent decision]` **Members on the service, as built** (P20 stage 1, step 1; B-r51ts, B-jsady, B-rxbss, B-v43z8; [[Several Reviewers]], [[service]]), by the lead agent. What the cards left open:
+  - **No format of the record changes.** A second member's answer on a card someone else decided is refused by the relay and never written, so "the latest answer decides" stays true of the record for every release that reads it; a raised difference will be a conflict card naming one card (D35), which the store already settles. The proposal had said it would need a rollout a release late.
+  - **The account that made a project still holds it** (`projects.owner`): always an owner, never removed, and the one whose deletion deletes the project, so the privacy policy's promise about deleting an account is unchanged. Closing that account closes its projects for every member at once. Deleting a member's account leaves the projects it was only a member of. What happens when a holder wants to hand a project on is for a later card.
+  - **A link's code goes after the `#`** of its address, which a browser never sends to a server; the service sees it only in the body of the request that looks it up or uses it, and keeps only its hash.
+  - **Making a link, and changing who owns a project, ask for the passkey afresh,** as approving a machine does. Joining by a link doesn't.
+  - **An answer from before linking names no account,** so it's the owners' to change, not any member's.
+  - **Merging topics stays any member's:** it's part of answering a card.
+  - **Practice answers are read and judged per account:** a member never sees another's, and one member's blind test is no part of another's.
+  - **Members are listed with the holder first,** then in the order they joined.
+  - **Found on the way:** today's earlier commits put a blank line between `Baesian-Card` and `Co-Authored-By`, so git read only the last as a trailer: the ledger has no entry tying the 1.0.2 commits to B-evrec, B-gty71 and B-3femd. They're released, so the gap stays; from here the trailers share one paragraph.
+
 - 2026-11-11 `[agent decision]` **The state kept as built, and the projects page hearing of new cards, as built** (B-evrec, B-gty71; [[service]], [[Client Build]] item 30; [[2026-11-11 Kept State and Live Inboxes]]), by the lead agent. The user asked for a lighter first load, then, having had to reload the projects page to see a card, whether it checks on a timer. Measured first: sending a project's state takes 20 milliseconds, and building it most of a second, on every request, so trimming the cards' text would have saved little. The two cards were answered: the state kept in the project's database; the projects page told by each project. What the cards left open:
   - **Every write empties the kept state in its own transaction** (`SqlFileStorage`'s version moving), rather than each read comparing versions alone: text that retention removes is then gone from the copy in the same step (R-1sxpy), whatever happens next. The version and a stamp are checked on reading as well.
   - **It's built again two seconds after the last change, by a timer in the object's memory, not its alarm.** The alarm also decides notifications, and running it early would settle arrivals as seen up to ten seconds sooner while the reviewer's presence is still fresh: a change to when notifications go, which nobody asked for. If the object leaves memory before the timer, the next read builds it.

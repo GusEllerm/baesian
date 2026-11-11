@@ -47,7 +47,18 @@ Read together, B-r51ts and B-2n7s4 say any member can answer any card, and a car
 
 **Four more cards, in deck `reviewers-joining`,** each hard: B-tzdjn (who's told when a card comes in: the middle ground, or everyone alike), B-9e7cn (how CI comes to trust a member's passkey), B-jsady (how someone joins), B-rxbss (who changes a project's settings and rules).
 
+## The four answers, and the first step built
+
+All four were answered with the proposal: **B-tzdjn** "Sent to one, open to all"; **B-9e7cn** "Added to CI's settings by hand"; **B-jsady** "A link the owner sends"; **B-rxbss** "Only its owners". [[Several Reviewers]] records them, and its build in six steps.
+
+**Found while planning: no format of the record has to change.** The relay refuses a second member's answer on a decided card, so nothing a release reads means anything new; a raised difference is a conflict card naming one card (D35).
+
+**Step 1, members on the service, is built** (`1122af4`; [[service]]): the accounts database's `members` and `invites` (migration 6); an owner's link, good once for seven days; any member answering, only owners changing settings or answering a rule's draft; a second person's answer on a decided card refused, also after waiting for the passkey; leaving and removing; practice answers per account; deleting an account erasing only the projects it holds. The service's tests are 198 and 68, all passing, five runs in a row; the website's 43 browser tests pass against it. Nothing on the website shows members yet.
+
+**Found on the way:** the day's earlier commits had a blank line between `Baesian-Card` and `Co-Authored-By`, so the ledger has no entry tying the 1.0.2 commits to B-evrec, B-gty71 and B-3femd. A local hook also refused two shell commands that held the words of the accounts code; the edits were made with the editor instead.
+
 ## Next
 
-- The user answers the four. Then stage 1 is built: members, and every member's cards. Its hardest part is how a verdict counts: today the latest decides, and with B-v43z8 the first stands unless settled otherwise, which every release that reads the record has to agree on.
-- The privacy policy's wording, as a card with the build.
+- Step 2: whom each card was sent to, noted by the relay; a notification to them at once, to the others after a while; the counts saying what was sent to you.
+- Step 3, the website: the projects you're a member of; a members page with the link; the desk's queue, yours first; what it says when someone else answers first.
+- Then the CLI's words, a different answer raised and settled, and the privacy policy's lines as a card, before any release.
