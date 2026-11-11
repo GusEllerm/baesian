@@ -5126,6 +5126,171 @@ target = "src/verify.ts#checkMerge"
 sig = "ad9a1a96c5bf3624"
 
 [[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/AnswerBars.tsx"
+sig = "7a18b76f3dc4314c"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/Desk.tsx"
+sig = "4ad29ee539b9ea6e"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/Lift.tsx"
+sig = "fe6629d2f01883d9"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/Path.tsx"
+sig = "ec22ff818f2accfd"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/kept.ts#account"
+sig = "23def7182c4ab21d"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/lanes.ts#Lane"
+sig = "3598444652f0b240"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/model.ts#Relation"
+sig = "9f8bbe9695c33412"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/site/Account.tsx"
+sig = "162d660dd2e3d11f"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/site/Device.tsx"
+sig = "213385323054c627"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/site/api.ts#Passkey"
+sig = "941ee7166ebfc8f5"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/site/api.ts#Project"
+sig = "78e7599468eb1f5f"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "client/src/site/app.ts#PushRow"
+sig = "d441be56dc7c82bb"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/access.ts#Access"
+sig = "e3b2293e4667d9d7"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/accounts.ts#Accounts"
+sig = "302b81e29da9fed5"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/accounts.ts#Project"
+sig = "67fb9a93d66b22a0"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/accounts.ts#PushSubscriptionRow"
+sig = "238461a1e3a37955"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/accounts.ts#Session"
+sig = "eccfe5de591bc61e"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/index.ts#ProjectRelay"
+sig = "59e2ce87634b8c20"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/index.ts#Route"
+sig = "fa42a95a19aca21c"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/object-migrations.ts#ObjectMigration"
+sig = "27c33947b22fa6ec"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/practice-table.ts#PracticeTable"
+sig = "313b973eb2189d8a"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/uploads.ts#AgentKind"
+sig = "f534da52f4c4ffab"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "service/src/webauthn.ts#StoredPasskey"
+sig = "00b19142874c61e7"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/api.ts#ApiPreferenceFile"
+sig = "4a889f934759c0aa"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/api.ts#Brief"
+sig = "a89589bb14fd5a16"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/merges.ts#MergeDetector"
+sig = "be9918f1596a1667"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/merges.ts#Ref"
+sig = "b5313824c0d39963"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/report.ts#routingReport"
+sig = "b82b1e1708e99019"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/routing.ts#Preset"
+sig = "8592e3be27d919fe"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/schema.ts#FileKind"
+sig = "a7a3d521cd099540"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/server.ts#ServerOptions"
+sig = "e291114dde80f7dd"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/store.ts#InForce"
+sig = "93fa6a79bb7dd919"
+
+[[bindings]]
+doc = "docs/vault/Design/Several Reviewers.md"
+target = "src/store.ts#Store"
+sig = "c16cdd5562f3a46c"
+
+[[bindings]]
 doc = "docs/vault/Design/Usage Counts Balancing Test.md"
 target = "client/src/endpoints.ts#Endpoints"
 sig = "454c8207549fb12b"
@@ -10749,6 +10914,11 @@ sig = "6b7d54b629bba9af"
 doc = "docs/vault/Research/Profiles and Collective Steering - Critique.md"
 target = "src/wait.ts#outcomeOf"
 sig = "2a93d4f9fdabf52e"
+
+[[bindings]]
+doc = "docs/vault/Research/Several Reviewers - Strand C Overseeing Agents in Teams.md"
+target = "service/src/accounts.ts#Project"
+sig = "67fb9a93d66b22a0"
 
 [[bindings]]
 doc = "docs/vault/Working Agreement.md"
