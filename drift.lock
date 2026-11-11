@@ -223,7 +223,7 @@ sig = "db29f3c14362e308"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/endpoints.ts"
-sig = "8b56330e44d87cbb"
+sig = "3b3b54b78bca635a"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -253,7 +253,12 @@ sig = "fe6307f13feab2cc"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/endpoints.ts#hostedEndpoints"
-sig = "208fd6d652f100fc"
+sig = "941aa8747d5183e2"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/endpoints.ts#liveAddress"
+sig = "6243a658da8f2675"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -408,12 +413,17 @@ sig = "81be54c39b881d09"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/live.ts"
-sig = "b3c49ad4ef9d8799"
+sig = "89f9cfcc32a1ab80"
+
+[[bindings]]
+doc = "docs/vault/Design/Client Build.md"
+target = "client/src/live.ts#listen"
+sig = "c60004487412059c"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/live.ts#useHostedState"
-sig = "ce61ff6881b7a464"
+sig = "95a0f05bf56605e5"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -863,7 +873,7 @@ sig = "0dd797709deafd37"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/site/Projects.tsx"
-sig = "1c05d3cc2aa427df"
+sig = "8c8f3f1ae600b3bb"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"

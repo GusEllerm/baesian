@@ -34,10 +34,13 @@ export const LOCAL: Endpoints = {
   practice: "/api/practice",
 };
 
+/** A project's live connection on the relay (B-bv49e): a WebSocket at the site's own host. */
+export const liveAddress = (project: string): string => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/v1/projects/${encodeURIComponent(project)}/live`;
+
 /** One project's addresses on the relay (B-7z97x). */
 export function hostedEndpoints(project: string, name: string | null): Endpoints {
   const base = `/v1/projects/${encodeURIComponent(project)}`;
-  const ws = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/live`;
+  const ws = liveAddress(project);
   return {
     state: `${base}/state`,
     presence: `${base}/presence`,

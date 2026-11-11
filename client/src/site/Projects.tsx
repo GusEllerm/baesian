@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { liveAddress } from "../endpoints";
 import { type WaitingCounts, keepCounts, keptCounts } from "../kept";
+import { listen } from "../live";
 import { type Inbox, inboxLine, waitingIn } from "./inbox";
 import { waitingByProject, waitingLine } from "../waiting";
 import { type Account, call, day, projectName } from "./api";
@@ -9,8 +11,8 @@ import { Field, Notice, Problem, Sheet, Shell, To } from "./Page";
 // Your projects (M9e): each repo you've linked, by the name you gave it (B-zqkwk), opening its desk at
 // /projects/{project}, the relay's own address for it (B-7z97x). Renamed here; the ID only in a tooltip (D69's spirit).
 // A project whose desk, in this tab, left answers waiting for your passkey says so (B-a6xpc). Each project has an inbox
-// (B-fzr1e): how many cards wait for you there, asked of each project in parallel as the page opens (B-wgbdh), shown from
-// what this tab last heard until the answers come (`kept.ts`).
+// (B-fzr1e): how many cards wait for you there, asked of each project in parallel as the page opens (B-wgbdh), and again
+// whenever a project says it changed (B-gty71), shown from what this tab last heard until the answers come (`kept.ts`).
 
 /** Each project's inbox: its counts, or that asking failed; a project not yet answered isn't in the map. */
 type Inboxes = Map<string, Inbox>;
@@ -31,29 +33,48 @@ function InboxTray({ counts }: { counts: Inbox | undefined }) {
   );
 }
 
-/** Ask each project how many cards wait in it (`GET /v1/projects/{project}/waiting`), all at once; again when the page comes back into view. */
+/**
+ * Each project's count of the cards waiting in it (`GET /v1/projects/{project}/waiting`), asked of every project at once
+ * as the page opens (B-wgbdh), and of a project again whenever it says it changed (B-gty71): the page holds each
+ * project's live connection (`listen()`), the one its desk uses, which says so as it opens, after every change, and when
+ * it comes back after closing. So a card filed while the page is in view shows within a second or two, with no reload.
+ * Every project is asked again, too, when the page comes back into view, should a connection be down.
+ */
 function useInboxes(ids: readonly string[]): Inboxes {
   const key = ids.join(" ");
   const [inboxes, setInboxes] = useState<Inboxes>(() => new Map(ids.flatMap((id) => (keptCounts(id) ? [[id, keptCounts(id)!] as const] : []))));
   useEffect(() => {
     let stopped = false;
-    const ask = () => {
-      for (const id of key ? key.split(" ") : []) {
-        call<WaitingCounts>("GET", `/v1/projects/${encodeURIComponent(id)}/waiting`).then(
+    const all = key ? key.split(" ") : [];
+    // One ask of a project at a time: a change heard while one is on its way is asked about once it lands.
+    const asking = new Set<string>();
+    const again = new Set<string>();
+    const ask = (id: string) => {
+      if (stopped) return;
+      if (asking.has(id)) return void again.add(id);
+      asking.add(id);
+      call<WaitingCounts>("GET", `/v1/projects/${encodeURIComponent(id)}/waiting`)
+        .then(
           (c) => {
             keepCounts(id, { total: c.total, hard: c.hard, blocking: c.blocking });
             if (!stopped) setInboxes((m) => new Map(m).set(id, c));
           },
           // What was heard before stays; with nothing, the inbox says it couldn't check.
           () => !stopped && setInboxes((m) => (m.has(id) ? m : new Map(m).set(id, "failed"))),
-        );
-      }
+        )
+        .finally(() => {
+          asking.delete(id);
+          if (again.delete(id)) ask(id);
+        });
     };
-    ask();
-    const back = () => document.visibilityState === "visible" && ask();
+    all.forEach(ask);
+    // The connection's first word, as it opens, is asked about too: a card may have come between the count and it.
+    const stops = all.map((id) => listen(liveAddress(id), { changed: () => ask(id) }));
+    const back = () => document.visibilityState === "visible" && all.forEach(ask);
     document.addEventListener("visibilitychange", back);
     return () => {
       stopped = true;
+      for (const stop of stops) stop();
       document.removeEventListener("visibilitychange", back);
     };
   }, [key]);

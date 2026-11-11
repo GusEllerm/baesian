@@ -60,10 +60,60 @@ const PING_MS = 30_000;
 const REREAD_MS = 5000;
 
 /**
+ * A project's live connection on the website (B-bv49e), kept open. `changed` hears each version the relay announces: one
+ * as the connection opens, and one after every change. A connection that closes is opened again, later each time
+ * (`RECONNECT_MS`), and `reopening` is called just before, since anything may have changed while it was down. A ping keeps
+ * a proxy from dropping it as idle. Returns how to stop.
+ */
+export function listen(liveUrl: string, on: { changed: (version: number) => void; reopening?: () => void }): () => void {
+  let stopped = false;
+  let ws: WebSocket | undefined;
+  let attempts = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const open = () => {
+    if (stopped) return;
+    const socket = new WebSocket(liveUrl);
+    ws = socket;
+    socket.onopen = () => {
+      attempts = 0;
+    };
+    socket.onmessage = (m) => {
+      let msg: { type?: string; version?: number };
+      try {
+        msg = JSON.parse(String(m.data)) as { type?: string; version?: number };
+      } catch {
+        return; // a pong, or nothing the relay sends: ignored
+      }
+      if (msg.type !== "changed") return;
+      // With no version, it's newer than anything heard so far.
+      on.changed(typeof msg.version === "number" ? msg.version : Number.POSITIVE_INFINITY);
+    };
+    socket.onclose = () => {
+      if (ws === socket) ws = undefined;
+      if (stopped) return;
+      retry = setTimeout(() => {
+        on.reopening?.();
+        open();
+      }, RECONNECT_MS[Math.min(attempts++, RECONNECT_MS.length - 1)]);
+    };
+  };
+  open();
+  const ping = setInterval(() => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send("ping");
+  }, PING_MS);
+  return () => {
+    stopped = true;
+    clearTimeout(retry);
+    clearInterval(ping);
+    ws?.close();
+  };
+}
+
+/**
  * One project's state on the website (M9e, B-17wn9): the relay's snapshot, read as the local server's is, and read again
- * whenever its live socket says the project changed (B-bv49e). The socket is opened again when it closes, and the state
- * read again then, so nothing is missed while it was down. A project this tab has read before starts from that copy,
- * marked as refreshing until the first read comes back (B-3va5g); each read is kept for the next time (`kept.ts`).
+ * whenever its live connection says the project changed (`listen()`, B-bv49e), and when that connection comes back after
+ * closing, so nothing is missed while it was down. A project this tab has read before starts from that copy, marked as
+ * refreshing until the first read comes back (B-3va5g); each read is kept for the next time (`kept.ts`).
  */
 export function useHostedState(e: Endpoints): Live {
   const [live, setLive] = useState<Live>(() => {
@@ -76,12 +126,8 @@ export function useHostedState(e: Endpoints): Live {
     let stopped = false;
     let newest = keptState(stateUrl)?.state.version ?? 0;
     let reread: ReturnType<typeof setTimeout> | undefined;
-    let ws: WebSocket | undefined;
-    let attempts = 0;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let ping: ReturnType<typeof setInterval> | undefined;
-    // One read at a time. The socket says the project's version as it opens, while the first read is still on its way;
-    // a change announced during a read is read again only if that read came back older than it.
+    // One read at a time. The connection says the project's version as it opens, while the first read is still on its
+    // way; a change announced during a read is read again only if that read came back older than it.
     let reading = false;
     let announced = 0;
     const load = async () => {
@@ -122,47 +168,21 @@ export function useHostedState(e: Endpoints): Live {
         reread = setTimeout(() => void load(), REREAD_MS);
       }
     };
-    const open = () => {
-      if (stopped || !liveUrl) return;
-      const socket = new WebSocket(liveUrl);
-      ws = socket;
-      socket.onopen = () => {
-        attempts = 0;
-      };
-      socket.onmessage = (m) => {
-        try {
-          const msg = JSON.parse(String(m.data)) as { type?: string; version?: number };
-          if (msg.type !== "changed") return;
-          // With no version, it's newer than anything read so far.
-          const version = typeof msg.version === "number" ? msg.version : Number.POSITIVE_INFINITY;
-          if (version > newest) {
+    void load();
+    const stop = liveUrl
+      ? listen(liveUrl, {
+          changed: (version) => {
+            if (version <= newest) return;
             announced = Math.max(announced, version);
             void load();
-          }
-        } catch {
-          // a pong, or nothing the relay sends: ignored
-        }
-      };
-      socket.onclose = () => {
-        if (ws === socket) ws = undefined;
-        if (stopped) return;
-        retry = setTimeout(() => {
-          void load();
-          open();
-        }, RECONNECT_MS[Math.min(attempts++, RECONNECT_MS.length - 1)]);
-      };
-    };
-    void load();
-    open();
-    ping = setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN) ws.send("ping");
-    }, PING_MS);
+          },
+          reopening: () => void load(),
+        })
+      : undefined;
     return () => {
       stopped = true;
-      clearTimeout(retry);
       clearTimeout(reread);
-      clearInterval(ping);
-      ws?.close();
+      stop?.();
     };
   }, [stateUrl, liveUrl]);
   return live;

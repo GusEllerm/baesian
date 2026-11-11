@@ -394,7 +394,7 @@ async function fileThrough(dir: string, title: string, level: string) {
   expect(r.code, r.err).toBe(0);
 }
 
-test("each project's inbox: how many cards wait for you, by level, asked of each project as the page opens, following your answers", async ({ page }) => {
+test("each project's inbox: how many cards wait for you, by level, asked of each project as the page opens, following your answers, and a card filed while you look (B-gty71)", async ({ page }) => {
   await signedUp(page);
   const shop = repo();
   const bakery = repo();
@@ -416,8 +416,25 @@ test("each project's inbox: how many cards wait for you, by level, asked of each
   await expect(row("Crumb's shop").locator(".inbox-count")).toHaveText("2");
   await expect(row("The bakery")).toContainText("Nothing waiting");
   await expect(row("The bakery").locator(".inbox-count")).toHaveCount(0);
-  expect(asked.sort()).toEqual([project, Store.open(bakery.dir).config().project!].sort());
+  // Each project is asked as the page opens, and once more as its live connection opens and says its version: a card
+  // could have come between the two.
+  const theBakery = Store.open(bakery.dir).config().project!;
+  await page.waitForLoadState("networkidle");
+  expect([...new Set(asked)].sort()).toEqual([project, theBakery].sort());
+  expect(asked.filter((p) => p === theBakery).length).toBeLessThanOrEqual(2);
   await siteShot(page, "projects-inboxes");
+
+  // A card filed while the page stays in view (B-gty71): its project says it changed, the page asks it again, and the
+  // inbox shows it, with no reload and nothing clicked.
+  await page.evaluate(() => void ((window as unknown as { stayed: boolean }).stayed = true));
+  const before = asked.length;
+  await fileThrough(bakery.dir, "Which oven", "hard");
+  await expect(row("The bakery")).toContainText("1 waiting for you, 1 hard", { timeout: 10_000 });
+  await expect(row("The bakery").locator(".inbox-count")).toHaveText("1");
+  expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
+  // Only the project that changed was asked again.
+  expect(asked.slice(before).every((p) => p === theBakery)).toBe(true);
+  await expect(row("Crumb's shop")).toContainText("2 waiting for you, 1 blocking");
 
   // One answered on the desk: back on your projects, the inbox says so.
   await row("Crumb's shop").getByRole("link").click();
