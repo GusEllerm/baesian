@@ -15,8 +15,8 @@ import { PushStandIn, type TestBrowser } from "./push-service.js";
 // Several reviewers per project (P20), stage 1, step 2: whom each card was sent to, and who's told. A card is every
 // member's (B-r51ts); it's sent to the member whose machine filed it (B-2n7s4), or, when only owners answer it, to nobody
 // in particular. The member it was sent to is told as the one reviewer was (B-advkh); the others, only when it's passed on
-// to them, or after a while (B-tzdjn; how long is card B-aaj69's). Each member's counts say what was sent to them. The push
-// service is a stand-in; the clock is the test's.
+// to them, or once a blocking or hard card has waited half an hour (B-tzdjn, B-aaj69). Each member's counts say what was
+// sent to them. The push service is a stand-in; the clock is the test's.
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -173,9 +173,13 @@ describe("whom a card is sent to (B-2n7s4: whoever runs the agent)", () => {
     const draft = bens.draftRule(id, "Small dev dependencies need no card.", ["dep:vitest-*"], { agent: "claude-code" });
     await upload(t, t.ben, bens);
     expect((await sentTo(t, t.ana))[draft.meta.id]).toBeUndefined();
-    // It's among the owner's, not the member's, though it waits on both desks.
-    expect((await counts(t, t.ana)).yours.total).toBe(1);
-    expect(await counts(t, t.ben)).toMatchObject({ total: 1, yours: none });
+    // It's the owner's, and waits for no other member, who couldn't answer it (B-rxbss): Ana alone is told of it.
+    expect(await counts(t, t.ana)).toEqual({ total: 1, hard: 0, blocking: 0, yours: { total: 1, hard: 0, blocking: 0 } });
+    expect(await counts(t, t.ben)).toEqual({ ...none, yours: none });
+    later(WHEN.digestMs!);
+    await alarm(t);
+    expect(titles(t.ana)).toEqual([`1 card waiting in Project ${t.project}`]);
+    expect(titles(t.ben)).toEqual([]);
   });
 });
 
@@ -201,6 +205,41 @@ describe("who is told of a card (B-tzdjn: sent to one, open to all)", () => {
     await alarm(t);
     expect(titles(t.ben).at(-1)).toBe(`3 cards waiting in Project ${t.project} (1 hard, 1 blocking)`);
     expect(titles(t.ben)).toHaveLength(2);
+    expect(titles(t.ana)).toHaveLength(1);
+  });
+
+  it("the others once a blocking or hard card has waited half an hour (B-aaj69), and never of a provisional one on its own", async () => {
+    expect(WHEN.othersMs).toBe(30 * MINUTE);
+    const t = await team();
+    const t0 = now;
+    const blocking = await file(t, t.ben, { level: "blocking" });
+    await file(t, t.ben, { level: "provisional" });
+    later(WHEN.soonMs);
+    await alarm(t);
+    expect(titles(t.ben)).toEqual([`2 cards waiting in Project ${t.project} (1 blocking)`]);
+    // The alarm looks again when the half hour is up, and not before.
+    expect(await alarmAt(t)).toBe(t0 + 30 * MINUTE);
+    at(t0 + 29 * MINUTE);
+    await alarm(t);
+    expect(titles(t.ana)).toEqual([]);
+    at(t0 + 30 * MINUTE);
+    await alarm(t);
+    expect(titles(t.ana)).toEqual([`2 cards waiting in Project ${t.project} (1 blocking)`]);
+    expect(titles(t.ben)).toHaveLength(1);
+    // Told once. A card answered within its half hour tells nobody else; a provisional one never does, however long.
+    const hard = await file(t, t.ben, { level: "hard" });
+    later(WHEN.soonMs);
+    await alarm(t);
+    expect(titles(t.ben)).toHaveLength(2);
+    later(10 * MINUTE);
+    expect((await answer(t, t.ana, { card: blocking })).status).toBe(201);
+    const waits = await answer(t, t.ben, { card: hard });
+    const asked = await t.ben.person.browser.post(under(t, "batches"), { pending: [waits.body.passkey.pending] });
+    const done = await t.ben.person.browser.post(under(t, "proofs"), { batch: asked.body.passkey.batch, response: t.ben.person.passkey.sign(asked.body.passkey.challenge) });
+    expect(done.body.answers[0].status, JSON.stringify(done.body)).toBe(201);
+    await file(t, t.ben, { level: "provisional" });
+    later(WHEN.digestMs! + HOUR);
+    await alarm(t);
     expect(titles(t.ana)).toHaveLength(1);
   });
 

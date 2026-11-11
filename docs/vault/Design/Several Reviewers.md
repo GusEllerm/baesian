@@ -27,7 +27,7 @@ tags: [baesian, design, hosted, reviewers]
 > - **B-jsady**, "A link the owner sends": good once, for seven days; no address is kept.
 > - **B-rxbss**, "Only its owners": owners change the gate's settings, accept rules, add and remove members, and settle a difference two members can't; a project can have several.
 >
-> **A tenth, B-aaj69 (deck `reviewers-joining`), is with the user:** how long a blocking or hard card waits before the members it wasn't sent to are told, ten minutes or half an hour. Until it's answered the service tells them of such a card only when it's passed on.
+> **A tenth, B-aaj69 (deck `reviewers-joining`), was answered the same day, against the proposal's ten minutes:** "After half an hour": a blocking or hard card still waiting half an hour after it arrived is notified to the members it wasn't sent to.
 >
 > **Next:** step 3 of "The build", the website.
 
@@ -100,7 +100,7 @@ Each says what it's for, the evidence (by strand and finding, as [[Several Revie
 - *The rest of what's waiting:* after them, each marked with whom it was sent to and how long it has waited. You can answer any of them.
 - *Decided:* in the project's history, with who decided. You can open one and **answer it yourself**, blind: its answer and who gave it stay hidden until you've chosen.
 
-**Who is told** (B-tzdjn). The member a card was sent to, at once; the others only if it's still waiting after a while, sooner when an agent has stopped for it.
+**Who is told** (B-tzdjn, B-aaj69). The member a card was sent to, at once; the others only if a blocking or hard card is still waiting half an hour after it arrived. A provisional card never tells the others on its own.
 
 **"It's outside my expertise."** From the member a card was sent to, it tells the others now. It no longer parks the card: it's every member's already.
 
@@ -118,7 +118,7 @@ Each says what it's for, the evidence (by strand and finding, as [[Several Revie
 
 **Ana and Ben.** Ana's agent files a card on a schema change. It's sent to Ana: first in her queue, and on Ben's desk after his own, marked "sent to Ana". She answers; it leaves both. Next morning Ben sees it under "Decided", opens it and answers it himself, blind. He chooses the other option. The desk shows him Ana's answer and asks whether to raise it. He does, with his reason. Ana gave one of the two answers, so it goes to the project's other owner; with only the two of them, each sees the other's reason, and neither changes, so Ana's stands, as she's the owner. The decision's note says Ben would have chosen otherwise, and why. The agent is told nothing, since nothing changed.
 
-**Away.** At night Ana's agent stops on a blocking card. It's sent to Ana, who isn't there. `baesian wait` gives up after its nine minutes and carries on with its pick, as now. A while after the card arrived, Ben is told too, and answers it over breakfast. Ana's desk says Ben answered it. Had it been a hard card, the agent would have waited for whichever of them came first.
+**Away.** At night Ana's agent stops on a blocking card. It's sent to Ana, who isn't there. `baesian wait` gives up after its nine minutes and carries on with its pick, as now. Half an hour after the card arrived, Ben is told too, and answers it over breakfast. Ana's desk says Ben answered it. Had it been a hard card, the agent would have waited for whichever of them came first.
 
 **A statistician** (stage 2). The team's map says the cards on statistical method are sent to Sam. Ana's agent files one about a prior. It leads Sam's queue, not Ana's; Ana sees it marked "sent to Sam", and could answer it. Sam answers from a phone.
 
@@ -138,7 +138,7 @@ Stage 1, in steps, each tested and committed by itself. Found while planning it:
 
 1. **Members on the service.** *Built (2026-11-11), [[service#Who answers what (P20, B-r51ts, B-rxbss, B-v43z8)]].* The accounts database's `members` and `invites`; an owner's link, good once for seven days; joining, leaving, removing; a member's machine signing in to the project; only owners changing the settings and accepting rules; a second member's answer on a decided card refused.
 2. **Sent to, and who's told.** The relay notes whom each card was sent to; a notification goes to them at once, to the others after a while; the counts say what was sent to you. *Built (2026-11-11), [[service#Whom a card is sent to (P20, B-2n7s4, B-tzdjn; service/src/sent-to.ts)]]; decided by the agent while building it, each in the [[Decision Log]]:*
-   - A card only owners answer (a rule's draft, a proposed move of a setting) is sent to nobody in particular, whoever's machine filed it.
+   - A card only owners answer (a rule's draft, a proposed move of a setting) is sent to nobody in particular, whoever's machine filed it, and waits for no other member: it isn't in their count, and they aren't told of it.
    - "It's outside my expertise" tells the others at once only from whoever the card was sent to (its member, or an owner when it was sent to nobody in particular). From anyone else it puts the card aside for them alone. Either way it stops waiting for whoever passed it, and still waits for everyone else; once every member has passed it, it waits for nobody, as now.
    - A passed-on card stays marked as sent to its member: it's among nobody's own.
    - A member who leaves, or whose account is deleted: the cards sent to them are the owners' from then, and an owner is told. While an account is closed and can still be restored, its cards stay sent to it.
@@ -182,8 +182,9 @@ Each line is a later card or an agent's decision, once the cards above are answe
 | B-9e7cn | How CI comes to trust a member's passkey | Added to CI's settings by hand |
 | B-jsady | How someone joins | A link the owner sends |
 | B-rxbss | Who changes a project's settings and rules | Only its owners |
+| B-aaj69 | How long before the others are told | After half an hour (the alternative) |
 
-**Later, each its own card:** what the privacy policy says; how long before the others are told; the map (stage 2); what an owner sees of a member's calibration.
+**Later, each its own card:** what the privacy policy says; the map (stage 2); what an owner sees of a member's calibration.
 
 ## Not in this proposal
 

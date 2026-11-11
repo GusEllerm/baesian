@@ -1918,7 +1918,7 @@ sig = "b2abd2a767a21d81"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/notify.ts#Waiting"
-sig = "545d337e2620fc31"
+sig = "ebf3c31025738ab7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -1963,7 +1963,7 @@ sig = "4781fab8a91512d8"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/relay.ts#Relay"
-sig = "61ad481e08f7578c"
+sig = "eaf00bcb3deee3e7"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3633,12 +3633,12 @@ sig = "6b368b2ab468b2cf"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/notify.ts"
-sig = "6ac386d31e885655"
+sig = "00e3cc218aff43ec"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/notify.ts#Waiting"
-sig = "545d337e2620fc31"
+sig = "ebf3c31025738ab7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -3648,7 +3648,7 @@ sig = "54b335e543cb554e"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/relay.ts#Relay"
-sig = "61ad481e08f7578c"
+sig = "eaf00bcb3deee3e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4918,7 +4918,7 @@ sig = "54b335e543cb554e"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "service/src/relay.ts#Relay"
-sig = "61ad481e08f7578c"
+sig = "eaf00bcb3deee3e7"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -6053,17 +6053,17 @@ sig = "b2abd2a767a21d81"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#WHEN"
-sig = "8fb732466cbad9ac"
+sig = "b46a47fc987e1491"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#Waiting"
-sig = "545d337e2620fc31"
+sig = "ebf3c31025738ab7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#When"
-sig = "0caa8ca1b950c240"
+sig = "cc632c2e3ca0189b"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6073,7 +6073,7 @@ sig = "12b29cd971688acc"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#countFor"
-sig = "6e5b6646e8d29288"
+sig = "c26e761891bab702"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6083,7 +6083,7 @@ sig = "3d858a8473011347"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#decide"
-sig = "f39711ae3f3473d8"
+sig = "1d45a0ae9617572c"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6098,12 +6098,12 @@ sig = "d283881da80d3127"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#sentTo"
-sig = "5ef865dda518e1d9"
+sig = "1998901b88f76560"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/notify.ts#waitsFor"
-sig = "d768b7164b987794"
+sig = "6a0998042f10b58d"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6278,7 +6278,7 @@ sig = "509350cb13abdd33"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#Relay"
-sig = "61ad481e08f7578c"
+sig = "eaf00bcb3deee3e7"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6297,8 +6297,13 @@ sig = "8b6bbedbe69862ea"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
+target = "service/src/relay.ts#ownersOnly"
+sig = "a2286cb0287ef096"
+
+[[bindings]]
+doc = "docs/vault/Modules/service.md"
 target = "service/src/relay.ts#waitingOf"
-sig = "5f146542c231a73f"
+sig = "65aad6ee4c4e730d"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -7608,7 +7613,7 @@ sig = "2599fece8665cdee"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/src/relay.ts#Relay"
-sig = "61ad481e08f7578c"
+sig = "eaf00bcb3deee3e7"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"

@@ -179,10 +179,14 @@ export function waitingOf(cards: readonly ApiCard[], hosted: boolean): Waiting[]
         level: hosted && c.gate?.outcome === "shown" && c.gate.level ? higherLevel(c.meta.level, c.gate.level) : c.meta.level,
         ...(c.sent_to !== undefined ? { to: c.sent_to } : {}),
         ...(passed ? { passed } : {}),
+        ...(ownersOnly(c.meta) ? { owners: true as const } : {}),
       },
     ];
   });
 }
+
+/** Whether a card is one only a project's owners answer (B-rxbss): a rule's draft, a pattern to make a rule of, or a proposed move of a setting. */
+export const ownersOnly = (meta: { rule?: unknown; convention?: unknown; pref_row?: unknown }): boolean => meta.rule !== undefined || meta.convention !== undefined || meta.pref_row !== undefined;
 
 /**
  * The accounts that passed a card on: those whose latest answer on its latest revision is "it's outside my expertise".
@@ -372,7 +376,7 @@ export class Relay {
    */
   forOwners(id: string): boolean {
     const meta = this.store().card(id)?.meta;
-    return meta !== undefined && (meta.rule !== undefined || meta.convention !== undefined || meta.pref_row !== undefined);
+    return meta !== undefined && ownersOnly(meta);
   }
 
   /** The preferences in force: what a change is counted against. */
@@ -717,7 +721,7 @@ export class Relay {
     if (rest.revision !== card.meta.revision) return fail(409, `${rest.card} is at revision ${card.meta.revision}; a verdict on r${String(rest.revision)} is stale`);
     // What Baesian proposes that changes the project for everyone is its owners' to answer (P20, B-rxbss): a rule's
     // draft, a pattern to make a rule of, and a move of one of the gate's settings. Any member answers the rest (B-r51ts).
-    if (who.role !== "owner" && (card.meta.rule !== undefined || card.meta.convention !== undefined || card.meta.pref_row !== undefined)) {
+    if (who.role !== "owner" && ownersOnly(card.meta)) {
       return fail(403, "this card changes the project's rules or settings, which only its owners do: ask one of them");
     }
     const card_digest = createHash("sha256").update(store.bytes(`cards/${rest.card}/r${card.meta.revision}.md`)).digest("hex");

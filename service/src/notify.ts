@@ -13,7 +13,7 @@ export interface When {
   digestMs: number | null;
   /**
    * A blocking or hard card still waiting this long after it arrived is notified to the members it wasn't sent to
-   * (B-tzdjn); null: they're never told of it on its own. A provisional card never notifies them on its own.
+   * (B-tzdjn, B-aaj69); null: they're never told of it on its own. A provisional card never notifies them on its own.
    */
   othersMs: number | null;
   /** At most this many notifications per project in any hour. */
@@ -28,9 +28,8 @@ export interface When {
 export const WHEN: When = {
   soonMs: 10_000,
   digestMs: 3 * 3600_000,
-  // How long before the others are told is card B-aaj69's to say, and it isn't answered: until it is, they're told of
-  // another member's card only when it's passed on to them.
-  othersMs: null,
+  // "After half an hour" (B-aaj69): long enough that most cards are answered by their own member first.
+  othersMs: 30 * 60_000,
   capPerHour: 4,
   burstCards: 20,
   burstWindowMs: 10 * 60_000,
@@ -61,7 +60,8 @@ export interface Member {
  * A card waiting for a reviewer, as the desk's queue has it (open, or an audit), at its level in force. With several
  * members (P20): `to` is the account it was sent to (B-tzdjn), absent when that's nobody in particular, the project's
  * owners; `passed` is the accounts that passed it on ("it's outside my expertise"), for whom it no longer waits, while
- * it still does for everyone else, whoever it was sent to.
+ * it still does for everyone else, whoever it was sent to; `owners` marks a card only the project's owners answer
+ * (B-rxbss), which waits for no other member.
  */
 export interface Waiting {
   card: string;
@@ -69,13 +69,14 @@ export interface Waiting {
   level: Level;
   to?: string;
   passed?: string[];
+  owners?: true;
 }
 
-/** Whether a waiting card waits for a member: any card does (B-r51ts), but one they passed on. */
-export const waitsFor = (w: Waiting, account: string): boolean => !w.passed?.includes(account);
+/** Whether a waiting card waits for a member: any card does (B-r51ts), but one they passed on, and one only owners answer when they aren't one. */
+export const waitsFor = (w: Waiting, who: Member): boolean => !w.passed?.includes(who.account) && !(w.owners && who.role !== "owner");
 
 /** Whether a waiting card was sent to a member (B-tzdjn): to their account, or to nobody in particular when they're an owner. */
-export const sentTo = (w: Waiting, who: Member): boolean => waitsFor(w, who.account) && (w.to === who.account || (w.to === undefined && who.role === "owner"));
+export const sentTo = (w: Waiting, who: Member): boolean => waitsFor(w, who) && (w.to === who.account || (w.to === undefined && who.role === "owner"));
 
 /** The cards nobody has passed on: what waits when it isn't asked for a member, as before there were several. */
 export const waitingForAll = (waiting: readonly Waiting[]): Waiting[] => waiting.filter((w) => !w.passed?.length);
@@ -86,7 +87,7 @@ export const waitingForAll = (waiting: readonly Waiting[]): Waiting[] => waiting
  */
 export function countFor(waiting: readonly Waiting[], who?: Member): { total: number; hard: number; blocking: number; yours?: { total: number; hard: number; blocking: number } } {
   if (!who) return countWaiting(waitingForAll(waiting));
-  const theirs = waiting.filter((w) => waitsFor(w, who.account));
+  const theirs = waiting.filter((w) => waitsFor(w, who));
   return { ...countWaiting(theirs), yours: countWaiting(theirs.filter((w) => sentTo(w, who))) };
 }
 
@@ -110,7 +111,8 @@ const key = (x: { card: string; revision: number }) => `${x.card}/r${x.revision}
 /**
  * The rules (B-advkh), as one function of what's known now, for one person: `who`, a member of the project (P20), or with
  * none, the one reviewer there was before there were members, to whom everything was sent.
- * - an arrival no longer waiting for them (answered, withdrawn, revised, or passed on by them) is settled;
+ * - an arrival that doesn't wait for them (answered, withdrawn, revised, passed on by them, or only an owner's to answer
+ *   when they aren't one) is settled;
  * - while they're present in a client, nothing is sent, and what arrived is settled as seen (D41);
  * - an arrival from a paused machine never notifies on its own;
  * - a card sent to them (B-tzdjn): a blocking or hard arrival is due `soonMs` after it arrived; a provisional one
@@ -125,7 +127,7 @@ const key = (x: { card: string; revision: number }) => `${x.card}/r${x.revision}
 export function decide(s: { now: number; arrivals: Arrival[]; waiting: Waiting[]; present: boolean; sent: number[]; pauses: Pause[]; when?: When; who?: Member }): Decision {
   const when = s.when ?? WHEN;
   const who = s.who;
-  const theirs = who ? s.waiting.filter((w) => waitsFor(w, who.account)) : s.waiting;
+  const theirs = who ? s.waiting.filter((w) => waitsFor(w, who)) : s.waiting;
   const waits = new Map(theirs.map((w) => [key(w), w]));
   const settle = s.arrivals.filter((a) => !waits.has(key(a)));
   const live = s.arrivals.filter((a) => waits.has(key(a)));
