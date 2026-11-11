@@ -1,5 +1,5 @@
 import { AccountId, ProjectId } from "../../src/schema.js";
-import { type Accounts, LIMITS, type Session } from "./accounts.js";
+import { type Accounts, LIMITS, type Role, type Session } from "./accounts.js";
 import { same } from "./secret.js";
 
 // Who may do what on the service (Hosted Service section 3). A person signs in in a browser and holds a session cookie;
@@ -8,12 +8,12 @@ import { same } from "./secret.js";
 
 /**
  * Who's asking. Each machine grant is for one project (B-84e0d); a session is a person's, and is for the project an
- * address names only if their account may answer there.
+ * address names only if their account is one of its members (P20), with the role it has there: an owner's, or a member's.
  * - a **session**: a person signed in in a browser, with a cookie made by a passkey sign-in. Only a session answers.
  * - a **machine**: a grant made by `baesian login` on one machine, sent as a bearer token. It files and hears; it never answers.
  */
 export type Principal =
-  | { kind: "session"; account: string; handle: string; project: string | undefined; session?: Session }
+  | { kind: "session"; account: string; handle: string; project: string | undefined; role?: Role; session?: Session }
   | { kind: "machine"; machine: string; account: string; project: string; grant?: string };
 
 /** What sign-in gives the relay: who a request is from, or nobody. */
@@ -91,8 +91,8 @@ export function accountAccess(accounts: Accounts): Access {
       }
       const s = await accounts.session(cookie(request, SESSION_COOKIE));
       if (!s) return undefined;
-      const member = project !== undefined && (await accounts.member(s.account, project));
-      return { kind: "session", account: s.account, handle: s.handle, project: member ? project : undefined, session: s };
+      const role = project === undefined ? undefined : await accounts.role(s.account, project);
+      return { kind: "session", account: s.account, handle: s.handle, project: role ? project : undefined, ...(role ? { role } : {}), session: s };
     },
   };
 }
@@ -147,7 +147,8 @@ export function devAccess(grants: DevGrants): Access {
       }
       const value = cookie(request, SESSION_COOKIE);
       const s = value === undefined ? undefined : grants.sessions.find((g) => same(g.cookie, value));
-      return s && { kind: "session", account: s.account, handle: s.handle, project: s.project };
+      // The stand-in's person owns the stand-in's project, as the one reviewer did before there were members.
+      return s && { kind: "session", account: s.account, handle: s.handle, project: s.project, role: "owner" };
     },
   };
 }

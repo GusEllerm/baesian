@@ -30,6 +30,8 @@ export const LIMITS = {
   deviceIntervalS: 5,
   /** A last use is written at most every 5 minutes, so reading isn't a write each time. */
   touchMs: 5 * 60_000,
+  /** A link that adds a member is good for seven days, once (B-jsady). */
+  inviteMs: 7 * DAY,
 } as const;
 
 export type FlowKind = "signup" | "recover" | "signin" | "fresh" | "enrol" | "globus" | "restore";
@@ -119,12 +121,37 @@ export function projectName(raw: unknown): string | undefined {
   return name.length >= 1 && [...name].length <= PROJECT_NAME_MAX && !/[\u0000-\u001f\u007f-\u009f]/.test(name) ? name : undefined;
 }
 
-/** A project on the service: its random ID, its owner, the name its owner gave it (B-zqkwk), and when it was made. */
+/**
+ * A project on the service: its random ID, the account that made it and holds it (`owner`: deleting that account deletes
+ * the project, B-b46z3), the name it was given (B-zqkwk), and when it was made.
+ */
 export interface Project {
   id: string;
   owner: string;
   name: string | null;
   created: string;
+}
+
+/**
+ * What a member is in a project (P20, B-rxbss): an owner adds and removes members, and changes the project's settings and
+ * rules; a member reads it and answers its cards (B-r51ts). The account that holds the project is always an owner.
+ */
+export type Role = "owner" | "member";
+
+/** One of a project's members: the account, its handle, its role, and when it joined. */
+export interface Member {
+  account: string;
+  handle: string;
+  role: Role;
+  joined: string;
+}
+
+/** A project an account is a member of, with its role there. */
+export interface MemberProject {
+  id: string;
+  name: string | null;
+  created: string;
+  role: Role;
 }
 
 /** A browser's subscription to web push (the `push_subscriptions` table, M9e step 2). */
@@ -382,19 +409,142 @@ export class Accounts {
     return this.db.prepare("SELECT id, owner, name, created FROM projects WHERE id = ?").bind(id).first<Project>();
   }
 
-  /** An account's projects, oldest first, each with its name (B-zqkwk). */
-  async projectsOf(account: string): Promise<{ id: string; name: string | null; created: string }[]> {
+  /**
+   * The projects an account is a member of (P20), oldest first, each with its name (B-zqkwk) and the account's role there.
+   * A project whose holder's account is closed isn't among them: it's closed with it (B-b46z3).
+   */
+  async projectsOf(account: string): Promise<MemberProject[]> {
+    return (
+      await this.db
+        .prepare("SELECT p.id, p.name, p.created, m.role FROM members m JOIN projects p ON p.id = m.project JOIN accounts h ON h.id = p.owner WHERE m.account = ? AND h.closed IS NULL ORDER BY p.created, p.id")
+        .bind(account)
+        .all<MemberProject>()
+    ).results;
+  }
+
+  /**
+   * The projects an account holds: the ones it made, which are deleted with it (B-b46z3). Never the projects it's only a
+   * member of: deleting a member's account leaves those as they are.
+   */
+  async projectsHeldBy(account: string): Promise<{ id: string; name: string | null; created: string }[]> {
     return (await this.db.prepare("SELECT id, name, created FROM projects WHERE owner = ? ORDER BY created").bind(account).all<{ id: string; name: string | null; created: string }>()).results;
   }
 
-  /** Rename a project its owner owns (B-zqkwk). Returns whether there was one to rename. */
+  /** Rename a project, by one of its owners (B-zqkwk, B-rxbss). Returns whether there was one of theirs to rename. */
   async renameProject(account: string, id: string, name: string): Promise<boolean> {
-    return (await this.db.prepare("UPDATE projects SET name = ? WHERE id = ? AND owner = ?").bind(name, id, account).run()).meta.changes > 0;
+    if ((await this.role(account, id)) !== "owner") return false;
+    return (await this.db.prepare("UPDATE projects SET name = ? WHERE id = ?").bind(name, id).run()).meta.changes > 0;
   }
 
-  /** Whether an account may answer in a project: in v1, its owner (P15 section 2). */
+  /**
+   * An account's role in a project, or nothing if it isn't a member (P20). Nobody has a role in a project whose holder's
+   * account is closed: the project is closed with it, for every member, until it's restored or deleted (B-b46z3).
+   */
+  async role(account: string, project: string): Promise<Role | undefined> {
+    const r = await this.db
+      .prepare("SELECT m.role FROM members m JOIN projects p ON p.id = m.project JOIN accounts h ON h.id = p.owner WHERE m.project = ? AND m.account = ? AND h.closed IS NULL")
+      .bind(project, account)
+      .first<{ role: Role }>();
+    return r?.role;
+  }
+
+  /** Whether an account may read a project and answer its cards: any member (B-r51ts). */
   async member(account: string, project: string): Promise<boolean> {
-    return (await this.db.prepare("SELECT 1 AS x FROM projects WHERE id = ? AND owner = ?").bind(project, account).first()) !== null;
+    return (await this.role(account, project)) !== undefined;
+  }
+
+  /** A project's members, each with its handle and role: the account that holds the project first, then in the order they joined. */
+  async members(project: string): Promise<Member[]> {
+    return (
+      await this.db
+        .prepare("SELECT m.account, a.handle, m.role, m.joined FROM members m JOIN accounts a ON a.id = m.account JOIN projects p ON p.id = m.project WHERE m.project = ? ORDER BY (m.account = p.owner) DESC, m.joined, a.handle")
+        .bind(project)
+        .all<Member>()
+    ).results;
+  }
+
+  // ---------------------------------------------------------------- joining and leaving a project (P20, B-jsady, B-rxbss)
+
+  /**
+   * A link that adds one person to a project (B-jsady): its code, shown once, and when it stops working. Only the code's
+   * hash is kept, with who made it. The caller checks that an owner is asking.
+   */
+  async invite(project: string, by: string): Promise<{ code: string; expires: string }> {
+    const code = token();
+    const now = this.now();
+    const expires = this.later(LIMITS.inviteMs);
+    await this.db.batch([
+      this.db.prepare("DELETE FROM invites WHERE project = ? AND expires <= ?").bind(project, now),
+      this.db.prepare("INSERT INTO invites (hash, project, created_by, created, expires) VALUES (?, ?, ?, ?, ?)").bind(hashOf(code), project, by, now, expires),
+    ]);
+    return { code, expires };
+  }
+
+  /** A project's links that still work: when each was made, by whom, and until when. Never a code: none is kept. */
+  async invites(project: string): Promise<{ created: string; expires: string; by: string }[]> {
+    return (
+      await this.db
+        .prepare("SELECT i.created, i.expires, a.handle AS by FROM invites i JOIN accounts a ON a.id = i.created_by WHERE i.project = ? AND i.used_by IS NULL AND i.expires > ? ORDER BY i.created")
+        .bind(project, this.now())
+        .all<{ created: string; expires: string; by: string }>()
+    ).results;
+  }
+
+  /** Cancel a project's links that haven't been used. Returns how many there were. */
+  async cancelInvites(project: string): Promise<number> {
+    return (await this.db.prepare("DELETE FROM invites WHERE project = ? AND used_by IS NULL").bind(project).run()).meta.changes;
+  }
+
+  /** What a link is for, if it still works: the project, its name, and who made the link. */
+  async lookInvite(code: string): Promise<{ project: string; name: string | null; by: string; expires: string } | undefined> {
+    const r = await this.db
+      .prepare("SELECT i.project, p.name, a.handle AS by, i.expires FROM invites i JOIN projects p ON p.id = i.project JOIN accounts a ON a.id = i.created_by JOIN accounts h ON h.id = p.owner WHERE i.hash = ? AND i.used_by IS NULL AND i.expires > ? AND h.closed IS NULL")
+      .bind(hashOf(code), this.now())
+      .first<{ project: string; name: string | null; by: string; expires: string }>();
+    return r ?? undefined;
+  }
+
+  /**
+   * Join a project by a link (B-jsady): the link is used up and the account becomes a member, both or neither. A link
+   * works once, until it expires. Someone who's a member already uses nothing up.
+   */
+  async acceptInvite(code: string, account: string): Promise<{ project: string; name: string | null; joined: boolean } | { problem: string }> {
+    const invite = await this.lookInvite(code);
+    if (!invite) return { problem: "this link doesn't work: it was used already, it expired, or it was cancelled. Ask one of the project's owners for a new one" };
+    if (await this.member(account, invite.project)) return { project: invite.project, name: invite.name, joined: false };
+    const now = this.now();
+    const hash = hashOf(code);
+    const [used, added] = await this.db.batch([
+      this.db.prepare("UPDATE invites SET used_by = ?, used = ? WHERE hash = ? AND used_by IS NULL AND expires > ?").bind(account, now, hash, now),
+      // Only if this account used it up just now: two people opening one link at once can't both join.
+      this.db.prepare("INSERT INTO members (project, account, role, joined, added_by) SELECT project, ?, 'member', ?, created_by FROM invites WHERE hash = ? AND used_by = ? AND used = ?").bind(account, now, hash, account, now),
+    ]);
+    if (!used?.meta.changes || !added?.meta.changes) return { problem: "this link was used a moment ago: ask one of the project's owners for a new one" };
+    return { project: invite.project, name: invite.name, joined: true };
+  }
+
+  /**
+   * Remove a member from a project, or leave it: the membership goes, and that account's machines are signed out of the
+   * project, in one batch. The account that holds the project can't leave it or be removed. Returns whether a member went.
+   */
+  async removeMember(project: string, account: string): Promise<boolean | { problem: string }> {
+    const p = await this.project(project);
+    if (!p) return false;
+    if (p.owner === account) return { problem: "the account that made a project holds it, and can't leave it or be removed: deleting that account deletes the project" };
+    const now = this.now();
+    const [gone] = await this.db.batch([
+      this.db.prepare("DELETE FROM members WHERE project = ? AND account = ?").bind(project, account),
+      this.db.prepare("UPDATE grants SET revoked = ? WHERE project = ? AND account = ? AND revoked IS NULL").bind(now, project, account),
+    ]);
+    return (gone?.meta.changes ?? 0) > 0;
+  }
+
+  /** Make a member an owner, or an owner a member (B-rxbss). The account that holds the project stays an owner. */
+  async setRole(project: string, account: string, role: Role): Promise<boolean | { problem: string }> {
+    const p = await this.project(project);
+    if (!p) return false;
+    if (p.owner === account && role !== "owner") return { problem: "the account that made a project holds it, and stays an owner" };
+    return (await this.db.prepare("UPDATE members SET role = ? WHERE project = ? AND account = ?").bind(role, project, account).run()).meta.changes > 0;
   }
 
   // ---------------------------------------------------------------- push subscriptions (M9e step 2, B-nk97q)
@@ -463,16 +613,24 @@ export class Accounts {
   }
 
   /**
-   * A person approves a machine: the project is made for them if it's new, with the name they gave it (B-zqkwk), and must
-   * be theirs if it isn't. Returns whether the project was new, or why not.
+   * A person approves a machine: the project is made for them if it's new, with the name they gave it (B-zqkwk), and
+   * they become its first member, an owner; if it isn't new, they must be one of its members (P20). Returns whether the
+   * project was new, or why not.
    */
   async approveDevice(d: DeviceCode, account: string, name?: string): Promise<{ created: boolean } | { problem: string }> {
     const p = await this.project(d.project);
-    if (p && p.owner !== account) return { problem: `project ${d.project} belongs to another account: link this repo again, as a new project` };
+    if (p && !(await this.member(account, d.project))) {
+      return { problem: `project ${d.project} is someone else's, and you aren't a member of it: ask one of its owners for a link to join, then sign this machine in again; or link this repo again, as a new project` };
+    }
     if (!p && !name) return { problem: "a new project needs a name" };
     const now = this.now();
     await this.db.batch([
-      ...(p ? [] : [this.db.prepare("INSERT INTO projects (id, owner, name, created) VALUES (?, ?, ?, ?)").bind(d.project, account, name, now)]),
+      ...(p
+        ? []
+        : [
+            this.db.prepare("INSERT INTO projects (id, owner, name, created) VALUES (?, ?, ?, ?)").bind(d.project, account, name, now),
+            this.db.prepare("INSERT INTO members (project, account, role, joined) VALUES (?, ?, 'owner', ?)").bind(d.project, account, now),
+          ]),
       this.db.prepare("UPDATE device_codes SET approved_by = ? WHERE hash = ? AND approved_by IS NULL AND denied = 0").bind(account, d.hash),
     ]);
     return { created: !p };
@@ -578,14 +736,16 @@ export class Accounts {
 
   /**
    * Close an account (B-b46z3): from now, every sign-in is ended, every machine's grant revoked, every browser's
-   * subscription to notifications removed, and its flows dropped, in one batch. Returns whether it was open.
+   * subscription to notifications removed, and its flows dropped, in one batch. The projects it holds close with it, for
+   * every member (P20): their machines are signed out of those projects too, and nobody has a role there (`Accounts.role`)
+   * until the account is restored. Returns whether it was open.
    */
   async close(account: string): Promise<boolean> {
     const now = this.now();
     const [closed] = await this.db.batch([
       this.db.prepare("UPDATE accounts SET closed = ? WHERE id = ? AND closed IS NULL").bind(now, account),
       this.db.prepare("DELETE FROM sessions WHERE account = ?").bind(account),
-      this.db.prepare("UPDATE grants SET revoked = ? WHERE account = ? AND revoked IS NULL").bind(now, account),
+      this.db.prepare("UPDATE grants SET revoked = ? WHERE (account = ? OR project IN (SELECT id FROM projects WHERE owner = ?)) AND revoked IS NULL").bind(now, account, account),
       this.db.prepare("DELETE FROM push_subscriptions WHERE account = ?").bind(account),
       this.db.prepare("DELETE FROM flows WHERE account = ?").bind(account),
     ]);
@@ -605,7 +765,8 @@ export class Accounts {
   /**
    * Delete an account and every row under it, in one batch (B-b46z3): its raw usage events, its flows (and those for
    * its addresses), its machines' grants and spent refresh tokens, device codes it approved or for its projects, its
-   * browsers' subscriptions, sign-ins, Globus identity, recovery code, passkeys, email addresses, projects, and itself.
+   * browsers' subscriptions, sign-ins, Globus identity, recovery code, passkeys, email addresses, its memberships and the
+   * links it made (P20), the projects it holds with their members and links, and itself.
    * Each table is named rather than left to the cascades, so nothing rests on the database enforcing them. Daily usage
    * totals (`usage_daily`) name no one, and stay. The projects' relay data is the caller's to erase first.
    */
@@ -623,6 +784,8 @@ export class Accounts {
       this.db.prepare("DELETE FROM recovery_codes WHERE account = ?").bind(account),
       this.db.prepare("DELETE FROM passkeys WHERE account = ?").bind(account),
       this.db.prepare("DELETE FROM emails WHERE account = ?").bind(account),
+      this.db.prepare(`DELETE FROM invites WHERE created_by = ? OR project IN (${owned})`).bind(account, account),
+      this.db.prepare(`DELETE FROM members WHERE account = ? OR project IN (${owned})`).bind(account, account),
       this.db.prepare("DELETE FROM projects WHERE owner = ?").bind(account),
       this.db.prepare("DELETE FROM accounts WHERE id = ?").bind(account),
     ]);

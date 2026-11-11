@@ -8,12 +8,13 @@ import { BAESIAN, type Settings, higherLevel, loosening } from "../../src/routin
 import { CARD_ID, MergeEvent, type PasskeyKey, type PasskeyProof, Preferences, type RelayEntry, type Verdict, asWritten, newestFormat, upgradeFile } from "../../src/schema.js";
 import { presets, snapshot } from "../../src/state.js";
 import { checkPath } from "../../src/storage.js";
-import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
+import { type InForce, NoCard, NotAllowed, type PreferenceChange, StalePreferences, Store, ValidationError, normalise, proofPath, settingsOf, verdictFileCard } from "../../src/store.js";
 import type { ApiCard, ApiRemovedCard, ApiState } from "../../src/api.js";
 import { batchChallenge } from "../../src/passkey.js";
 import { type TrustRoot, checkSigned, readTrustFile } from "../../src/trust.js";
 import { VERSION } from "../../src/version.js";
 import { PRESENCE_STALE_MS } from "../../src/wait.js";
+import type { Role } from "./accounts.js";
 import type { Built, BuiltTable } from "./built.js";
 import type { Waiting } from "./notify.js";
 import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due, isLedgerPath } from "./retention.js";
@@ -58,10 +59,14 @@ export const PENDING_MS = 30 * 60_000;
 /** The most waiting answers one tap confirms (B-a6xpc). */
 export const MAX_BATCH = 50;
 
-/** A person signed in, as the Worker found them: their account, handle and client (P16 section 7). */
+/**
+ * A person signed in, as the Worker found them: their account and handle (P16 section 7), and their role in the project
+ * (P20, B-rxbss): any member answers its cards; only an owner changes its settings and rules.
+ */
 export interface Person {
   account: string;
   handle: string;
+  role: Role;
 }
 
 /** An answer, as the store writes it: a verdict, or a change to the preferences. */
@@ -666,6 +671,11 @@ export class Relay {
     const card = store.card(rest.card);
     if (!card) return fail(404, `no card ${rest.card}`);
     if (rest.revision !== card.meta.revision) return fail(409, `${rest.card} is at revision ${card.meta.revision}; a verdict on r${String(rest.revision)} is stale`);
+    // What Baesian proposes that changes the project for everyone is its owners' to answer (P20, B-rxbss): a rule's
+    // draft, a pattern to make a rule of, and a move of one of the gate's settings. Any member answers the rest (B-r51ts).
+    if (who.role !== "owner" && (card.meta.rule !== undefined || card.meta.convention !== undefined || card.meta.pref_row !== undefined)) {
+      return fail(403, "this card changes the project's rules or settings, which only its owners do: ask one of them");
+    }
     const card_digest = createHash("sha256").update(store.bytes(`cards/${rest.card}/r${card.meta.revision}.md`)).digest("hex");
     const fields = { ...(rest as Parameters<Store["addVerdict"]>[0]), reviewer: who.handle, account: who.account, project: this.project, card_digest, client: asClient };
     return this.answer({ kind: "verdict", fields }, who);
@@ -713,7 +723,7 @@ export class Relay {
   private answer(a: Answer, who: Person): Reply {
     let out;
     try {
-      out = this.attempt(a, {});
+      out = this.attempt(a, { role: who.role });
     } catch (e) {
       return answerFailed(e);
     }
@@ -747,10 +757,12 @@ export class Relay {
    * batch's list when the tap confirmed more than one file (B-a6xpc); and each proof must count, by the same checks
    * `baesian verify` makes, before anything is kept.
    */
-  private attempt(a: Answer, given: { at?: string; assertion?: Assertion; key?: PasskeyKey; need?: Needed[]; batch?: string[] }): { done: unknown } | { need: Needed[]; at: string } {
+  private attempt(a: Answer, given: { at?: string; assertion?: Assertion; key?: PasskeyKey; need?: Needed[]; batch?: string[]; role?: Role }): { done: unknown } | { need: Needed[]; at: string } {
     try {
       const done = this.write((s, mark) => {
         if (given.key) this.putKey(given.key);
+        // Checked as it's written, so an answer that waited for the passkey is checked again when the tap comes.
+        if (a.kind === "verdict") notAnothers(s, a.fields, given.role);
         const before = s.inForce();
         const { result, at } = runAnswer(a, s, given.at);
         const written = this.files.writtenSince(mark);
@@ -946,8 +958,36 @@ function clientOf(client: unknown): (typeof CLIENTS)[number] | undefined {
 }
 
 /** An answer the store refused, as the local server says it (src/server.ts). */
+/**
+ * A card another member has decided already (P20, B-v43z8, "Someone settles it"): a second person's answer never
+ * replaces the first, so it isn't written. It says who decided, and whether this answer would have been the same.
+ */
+export class DecidedByAnother extends Error {
+  constructor(readonly decided: { by: string; at: string; decision: string | undefined; same: boolean }) {
+    super(`${decided.by} decided this card already${decided.same ? ", as you would have" : ""}: a second person's answer doesn't replace the first`);
+  }
+}
+
+/**
+ * Refuse a verdict on a card someone else has decided (`DecidedByAnother`). The member who decided it may change their
+ * own answer, as before, and the agent is told of the change (D81). An answer from before linking names no account
+ * (B-3zjjx): it's the project's owners' to change. `role` is absent when an answer that waited for the passkey is
+ * written at last: it was checked when it was composed.
+ */
+function notAnothers(s: Store, v: { card: string; revision: number; response: Verdict["response"]; choice?: string | undefined; account?: string | undefined }, role: Role | undefined): void {
+  if (s.status(v.card) !== "resolved") return;
+  const last = s.verdicts(v.card).filter((x) => x.revision === v.revision).at(-1);
+  if (!last) return;
+  if (last.account ? last.account === v.account : role !== "member") return;
+  const card = s.card(v.card);
+  const decision = s.decision(v.card);
+  const would = v.response === "accept" ? card?.meta.proposal : v.response === "alternative" || v.response === "correction" ? v.choice : undefined;
+  throw new DecidedByAnother({ by: last.reviewer, at: last.at, decision, same: would !== undefined && decision !== undefined && normalise(would) === normalise(decision) });
+}
+
 function answerFailed(e: unknown): Reply {
   const message = e instanceof Error ? e.message : String(e);
+  if (e instanceof DecidedByAnother) return { status: 409, body: { error: message, decided: e.decided } };
   if (e instanceof NoKey) return fail(503, message);
   if (e instanceof ValidationError) return fail(400, message);
   if (e instanceof StalePreferences || e instanceof NotAllowed || /stale/.test(message)) return fail(409, message);

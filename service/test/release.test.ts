@@ -107,7 +107,7 @@ describe("the service's spare key (B-x47ek)", () => {
         const signer = ServiceSigner.fromEnv(vars);
         return new Relay(new SqlFileStorage(state.storage, { sign: signer.sign }), signer, undefined, "proj-a", ORIGIN, new Date().toISOString(), new RetentionLedger(state.storage.sql));
       };
-      const who = { account: "acct-gus", handle: REVIEWER.reviewer };
+      const who = { account: "acct-gus", handle: REVIEWER.reviewer, role: "owner" as const };
       const files = new SqlFileStorage(state.storage);
       // A machine files cards and uploads them, as the CLI does.
       const machine = machineStore();

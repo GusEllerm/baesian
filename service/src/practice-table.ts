@@ -16,23 +16,27 @@ export class PracticeTable {
   /** Its table, `practice`, is made by the object's migrations (`migrateObject()`, B-866d2). */
   constructor(private readonly sql: SqlStorage) {}
 
-  /** Every entry, in the order written. A row this service can't read is skipped. */
-  entries(): PracticeEntry[] {
+  /**
+   * One account's entries, in the order written: practice answers are a person's own, so a project's other members never
+   * see them, and one member's blind test is no part of another's (P20). A row this service can't read is skipped.
+   */
+  entries(account: string): PracticeEntry[] {
     return this.sql
       .exec<{ entry: string }>("SELECT entry FROM practice ORDER BY seq")
       .toArray()
       .flatMap((r) => {
         try {
-          return [PracticeEntry.parse(upgradeFile("practice", JSON.parse(r.entry), "a practice row"))];
+          const entry = PracticeEntry.parse(upgradeFile("practice", JSON.parse(r.entry), "a practice row"));
+          return entry.account === account ? [entry] : [];
         } catch {
           return [];
         }
       });
   }
 
-  /** `GET .../practice`: every entry, oldest first. */
-  read(): Reply {
-    return { status: 200, body: { entries: this.entries() } };
+  /** `GET .../practice`: every entry of the asker's, oldest first. */
+  read(account: string): Reply {
+    return { status: 200, body: { entries: this.entries(account) } };
   }
 
   /**
@@ -44,7 +48,7 @@ export class PracticeTable {
     const asClient = client === undefined ? "hosted-desktop" : (CLIENTS as readonly unknown[]).includes(client) ? (client as string) : undefined;
     if (!asClient) return { status: 400, body: { error: `client is one of ${CLIENTS.join(", ")}` } };
     try {
-      const entry = practiceEntry(typeof input === "object" && input !== null && !Array.isArray(input) ? rest : input, { reviewer: who.handle, account: who.account, client: asClient }, this.entries());
+      const entry = practiceEntry(typeof input === "object" && input !== null && !Array.isArray(input) ? rest : input, { reviewer: who.handle, account: who.account, client: asClient }, this.entries(who.account));
       this.sql.exec("INSERT INTO practice (at, entry) VALUES (?, ?)", entry.at, JSON.stringify(asWritten("practice", entry)));
       return { status: 201, body: { entry } };
     } catch (e) {

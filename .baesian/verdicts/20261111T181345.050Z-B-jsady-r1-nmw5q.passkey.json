@@ -1,0 +1,15 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261111T181345.050Z-B-jsady-r1-nmw5q.json",
+  "batch": [
+    "937db542d8364b14d4c7920dc846cefb858620bd2fcb25a18fd60e45f3389318",
+    "d183e607a3fee23d27d8a0dcec22191e215bc3681e4351f3cf4da11f15e2b4fd",
+    "d8471349b0587b47db4f8471a19d996520e4ec2dfb4df3bb14f50cb9d3c33a9c",
+    "594dced39a2115252fc3fa67cb910581134dd57a7eac46890d4a1301f8b3e1ae"
+  ],
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYlhSdmV5N1JYYlJXck9KM0p3UHVUXzZtV3Zuc3lrYWNUWTEycEZVYnJ1cyIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEYCIQCm5BYvdOaGKhK-dnlSQu4Gym70Ub7Oxqi4KeWa3NhKZgIhAPT2PMMku0c3xLBK3w-nPhySMgFw9k2atl1sjosZss0L"
+}

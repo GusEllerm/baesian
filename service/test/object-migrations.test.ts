@@ -116,7 +116,7 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
       const s = await woke.state("proj-old");
       expect(s.status).toBe(200);
       expect(JSON.parse(s.text!)).toMatchObject({ version: 7 });
-      expect((await woke.practiceRead("proj-old")).status).toBe(200);
+      expect((await woke.practiceRead("proj-old", "acct-gus")).status).toBe(200);
     });
   });
 

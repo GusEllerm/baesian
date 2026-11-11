@@ -50,15 +50,16 @@ export async function restoreAccount(accounts: Accounts, account: Account, mail:
 }
 
 /**
- * Delete every account closed 14 days ago or more (B-b46z3): each owned project's relay data first (`erase`, the
- * project's Durable Object emptied), then the account's rows (`Accounts.erase`). An account whose projects can't all be
- * erased is left for the next day. Returns the accounts deleted.
+ * Delete every account closed 14 days ago or more (B-b46z3): the relay data of each project it holds first (`erase`, the
+ * project's Durable Object emptied), then the account's rows (`Accounts.erase`). Only the projects it holds
+ * (`Accounts.projectsHeldBy`): a project it was only a member of stays, without it (P20). An account whose projects
+ * can't all be erased is left for the next day. Returns the accounts deleted.
  */
 export async function deleteClosed(accounts: Accounts, erase: (project: string) => Promise<void>, now: number = Date.now()): Promise<string[]> {
   const out: string[] = [];
   for (const id of await accounts.closedBefore(new Date(now - DELETION.graceMs).toISOString())) {
     try {
-      for (const p of await accounts.projectsOf(id)) await erase(p.id);
+      for (const p of await accounts.projectsHeldBy(id)) await erase(p.id);
       await accounts.erase(id);
       out.push(id);
     } catch (e) {

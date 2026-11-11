@@ -20,7 +20,7 @@ import type { GlobusConfig } from "./globus.js";
 import { HEADERS, fail, readJson } from "./http.js";
 import { machinesRoute } from "./machines.js";
 import { type Mailer, bindingMailer } from "./mail.js";
-import { type Assertion, type Batch, MAX_ENTRIES, MAX_FILE, type Outcome, REVISION, Relay, type Reply, challengeFor } from "./relay.js";
+import { type Assertion, type Batch, MAX_ENTRIES, MAX_FILE, type Outcome, type Person, REVISION, Relay, type Reply, challengeFor } from "./relay.js";
 import { type KeyEnv, NoKey, ServiceSigner, spareKey } from "./signer.js";
 import { type SignIn, signInRoute } from "./signin.js";
 import { SqlFileStorage } from "./sql-storage.js";
@@ -127,6 +127,8 @@ function refusal(route: Route, who: Principal, project: string): string | undefi
   if (route.who === "upload" && who.kind !== "machine") return "only a machine uploads the files an agent writes";
   if (route.who === "answer" && who.kind !== "session") return "a machine never answers: answers come only from a person signed in in a browser";
   if (route.who === "person" && who.kind !== "session") return "practice answers are a person's own: only someone signed in in a browser reads or writes them, never a machine";
+  // A project's settings are its owners' to change (P20, B-rxbss); any member answers its cards (B-r51ts).
+  if (route.name === "preferences" && who.kind === "session" && who.role !== "owner") return "only a project's owners change its settings: ask one of them";
   return undefined;
 }
 
@@ -186,7 +188,7 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
   const no = refusal(route, who, project);
   if (no) return fail(403, no);
   const stub = env.PROJECTS.get(env.PROJECTS.idFromName(project));
-  const person = who.kind === "session" ? { account: who.account, handle: who.handle } : undefined;
+  const person: Person | undefined = who.kind === "session" ? { account: who.account, handle: who.handle, role: who.role ?? "member" } : undefined;
   switch (route.name) {
     case "log": {
       const after = Number(url.searchParams.get("after") ?? 0);
@@ -230,7 +232,7 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       return proofRequest(input, project, person!, stub, env, services);
     }
     case "practice": {
-      if (request.method === "GET") return reply(await stub.practiceRead(project));
+      if (request.method === "GET") return reply(await stub.practiceRead(project, person!.account));
       const input = await readJson(request);
       if (input instanceof Response) return input;
       return reply(await stub.practiceWrite(project, input, person!));
@@ -658,7 +660,9 @@ export class ProjectRelay extends DurableObject<Env> {
     return this.run(project, (r) => r.stopWaiting(path));
   }
 
-  async answer(project: string, kind: "verdicts" | "aliases" | "preferences", input: unknown, who: { account: string; handle: string }): Promise<Reply> {
+  async answer(project: string, kind: "verdicts" | "aliases" | "preferences", input: unknown, who: Person): Promise<Reply> {
+    // A project's settings are its owners' (B-rxbss): checked here too, beside the Worker's check, since this writes them.
+    if (kind === "preferences" && who.role !== "owner") return { status: 403, body: { error: "only a project's owners change its settings: ask one of them" } };
     const before = this.relay(project).settings();
     const out = this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
     if (out.status === 201) await this.countAnswer(project, who.account, kind === "verdicts" ? "verdict" : kind === "aliases" ? "alias" : "preferences", out, before);
@@ -702,9 +706,9 @@ export class ProjectRelay extends DurableObject<Env> {
    * Practice answers (B-rehdw), a person's own: read and written in their own table, never through the store, so nothing
    * is logged, signed, announced or counted.
    */
-  async practiceRead(project: string): Promise<Reply> {
+  async practiceRead(project: string, account: string): Promise<Reply> {
     this.relay(project);
-    return this.practice.read();
+    return this.practice.read(account);
   }
 
   async practiceWrite(project: string, input: unknown, who: { account: string; handle: string }): Promise<Reply> {

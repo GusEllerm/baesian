@@ -48,7 +48,8 @@ describe("a machine signs in (RFC 8628)", () => {
     // The project is the person's now: their session reaches it, and the Machines page lists the machine.
     expect((await call("GET", "state", { as: { headers: { cookie: `__Host-baesian-session=${p.browser.session}`, origin: env.SERVICE_ORIGIN } }, project: proj })).status).toBe(200);
     expect((await p.browser.get("/v1/account/machines")).body.machines).toEqual([{ id: t.body.grant, machine: "spark-7", project: proj, project_name: "Bakery shop", created: expect.any(String), last_used: expect.any(String) }]);
-    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "Bakery shop", created: expect.any(String) }]);
+    // Whoever approves a new project's first machine is its first member, an owner (P20).
+    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "Bakery shop", created: expect.any(String), role: "owner" }]);
 
     // Another machine for the project asks no name, and the approval page gives the one it has.
     const second = await oauth("/v1/machines/device", { client_id: "baesian-cli", project: proj, machine: "spark-8" });
@@ -66,7 +67,7 @@ describe("a machine signs in (RFC 8628)", () => {
     const r = await rename(p, "  The  bakery ");
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ id: proj, name: "The bakery" });
-    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "The bakery", created: expect.any(String) }]);
+    expect((await p.browser.get("/v1/account")).body.projects).toEqual([{ id: proj, name: "The bakery", created: expect.any(String), role: "owner" }]);
     // Someone else's project isn't renamed; nor is it renamed from another site.
     expect((await rename(q, "Mine now")).status).toBe(404);
     expect((await p.browser.request("PATCH", `/v1/account/projects/${proj}`, { json: { name: "Elsewhere" }, headers: { origin: "https://evil.example", "sec-fetch-site": "cross-site" } })).status).toBe(403);
@@ -81,7 +82,7 @@ describe("a machine signs in (RFC 8628)", () => {
     const d = await oauth("/v1/machines/device", { client_id: "baesian-cli", project: proj, machine: "theirs" });
     await reauth(q);
     const r = await q.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: true });
-    expect(r).toMatchObject({ status: 409, body: { error: expect.stringMatching(/belongs to another account/) } });
+    expect(r).toMatchObject({ status: 409, body: { error: expect.stringMatching(/is someone else's, and you aren't a member of it: ask one of its owners for a link to join/) } });
     expect((await q.browser.get(`/v1/account/machines/approve?code=${d.body.user_code}`)).body.yours).toBe(false);
     expect((await q.browser.post("/v1/account/machines/approve", { code: d.body.user_code, approve: false })).body.approved).toBe(false);
     expect((await oauth("/v1/machines/token", { client_id: "baesian-cli", grant_type: DEVICE, device_code: d.body.device_code })).body.error).toBe("access_denied");

@@ -1,6 +1,6 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import type { PasskeyKey } from "../../src/schema.js";
-import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, type PushSubscriptionRow, Taken, normalEmail, projectName } from "./accounts.js";
+import { type Account, type Accounts, type Flow, HANDLE, LIMITS, PROJECT_NAME_MAX, type PushSubscriptionRow, type Session, Taken, normalEmail, projectName } from "./accounts.js";
 import { SESSION_COOKIE, clearCookie, cookie, crossSite, sessionCookie } from "./access.js";
 import { closeAccount, deletesAt, restoreAccount } from "./deletion.js";
 import { type GlobusConfig, authorizationUrl, identityFrom, newRoundTrip, whyNot } from "./globus.js";
@@ -50,7 +50,7 @@ async function keysOf(s: SignIn, account: Account): Promise<PasskeyKey[]> {
   return (await s.accounts.passkeys(account.id)).map((p) => keyFile(p, account.id, account.handle));
 }
 
-/** Put the account's key files into every project it owns. A failure is logged: an answer that needs a key puts it there again. */
+/** Put the account's key files into every project it's a member of. A failure is logged: an answer that needs a key puts it there again. */
 async function spreadKeys(s: SignIn, account: Account): Promise<void> {
   const keys = await keysOf(s, account);
   for (const p of await s.accounts.projectsOf(account.id)) {
@@ -307,6 +307,65 @@ async function recoverFinish(s: SignIn, request: Request): Promise<Response> {
 
 // ---------------------------------------------------------------- signed in: the account
 
+/**
+ * A project's members (P20), under `/v1/account/projects/{project}/`. To any member: `GET members`, and `DELETE
+ * members/{account}` for themselves, which is leaving. To its owners only (B-rxbss): `POST invites`, a link that adds one
+ * person (B-jsady), with the passkey checked afresh; `DELETE invites`, cancelling the unused ones; `PATCH
+ * members/{account}`, a role; and `DELETE members/{account}`, removing someone. A project that isn't the asker's is 404.
+ */
+async function membersRoute(s: SignIn, request: Request, m: string, tail: string[], ses: Session, account: Account): Promise<Response> {
+  const [project, what, other] = tail as [string, string, string | undefined];
+  const role = await s.accounts.role(account.id, project);
+  if (!role || tail.length > 3) return fail(404, "no project of yours with that ID");
+  const owners = "only a project's owners do that: ask one of them";
+  if (what === "members" && other === undefined) {
+    if (m !== "GET") return fail(405, "a project's members are read with GET");
+    const p = (await s.accounts.project(project))!;
+    const members = await s.accounts.members(project);
+    return respond({
+      status: 200,
+      body: {
+        project,
+        name: p.name,
+        role,
+        // `you` marks the asker; `holds`, the account that made the project, which can't leave it.
+        members: members.map((x) => ({ account: x.account, handle: x.handle, role: x.role, joined: x.joined, ...(x.account === account.id ? { you: true } : {}), ...(x.account === p.owner ? { holds: true } : {}) })),
+        ...(role === "owner" ? { invites: await s.accounts.invites(project) } : {}),
+      },
+    });
+  }
+  if (what === "invites" && other === undefined) {
+    if (role !== "owner") return fail(403, owners);
+    if (m === "DELETE") return respond({ status: 200, body: { cancelled: await s.accounts.cancelInvites(project) } });
+    if (m !== "POST") return fail(405, "a link is made with POST, and the unused ones cancelled with DELETE");
+    if (!s.accounts.fresh(ses)) return fail(403, "making a link that adds a member asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
+    const { code, expires } = await s.accounts.invite(project, account.id);
+    // The code goes after the `#`, which a browser never sends to a server: it reaches the service only in the body of
+    // the request that looks the link up or uses it, and is shown here once.
+    return respond({ status: 201, body: { link: `${s.rp.origin}/join#${code}`, expires } });
+  }
+  if (what === "members" && other !== undefined) {
+    if (m === "DELETE") {
+      if (other !== account.id && role !== "owner") return fail(403, owners);
+      const r = await s.accounts.removeMember(project, other);
+      if (typeof r === "object") return fail(409, r.problem);
+      return r ? respond({ status: 204 }) : fail(404, "no member of this project with that ID");
+    }
+    if (m === "PATCH") {
+      if (role !== "owner") return fail(403, owners);
+      const input = await readObject(request);
+      if (input instanceof Response) return input;
+      if (input.role !== "owner" && input.role !== "member") return fail(400, "a role is owner or member");
+      if (!s.accounts.fresh(ses)) return fail(403, "changing who owns a project asks for your passkey: check it with /v1/account/reauth, then try again", { reauth: true });
+      const r = await s.accounts.setRole(project, other, input.role);
+      if (typeof r === "object") return fail(409, r.problem);
+      return r ? respond({ status: 200, body: { account: other, role: input.role } }) : fail(404, "no member of this project with that ID");
+    }
+    return fail(405, "a member is removed with DELETE, and given a role with PATCH");
+  }
+  return fail(404, "no project of yours with that ID");
+}
+
 async function accountRoute(s: SignIn, request: Request, path: string, m: string, url: URL): Promise<Response> {
   const who = await session(s, request);
   if (who instanceof Response) return who;
@@ -399,7 +458,30 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     if (input instanceof Response) return input;
     const name = projectName(input.name);
     if (!name) return fail(400, `give the project a name: 1 to ${PROJECT_NAME_MAX} characters`);
-    return (await s.accounts.renameProject(account.id, tail[0]!, name)) ? respond({ status: 200, body: { id: tail[0], name } }) : fail(404, "no project of yours with that ID");
+    return (await s.accounts.renameProject(account.id, tail[0]!, name)) ? respond({ status: 200, body: { id: tail[0], name } }) : fail(404, "no project of yours to rename with that ID: only a project's owners rename it");
+  }
+  // A project's members, and the links that add one (P20).
+  if (path.startsWith("/v1/account/projects/") && tail.length >= 2 && (tail[1] === "members" || tail[1] === "invites")) return membersRoute(s, request, m, tail, ses, account);
+  if (route === "POST /invites/look" || route === "POST /invites/accept") {
+    const input = await body();
+    if (input instanceof Response) return input;
+    if (!isText(input.code)) return fail(400, "give the link's code: what follows the # in the link");
+    if (route === "POST /invites/look") {
+      const invite = await s.accounts.lookInvite(input.code);
+      if (!invite) return fail(404, "this link doesn't work: it was used already, it expired, or it was cancelled. Ask one of the project's owners for a new one");
+      return respond({ status: 200, body: { project: invite.project, name: invite.name, by: invite.by, expires: invite.expires, member: await s.accounts.member(account.id, invite.project) } });
+    }
+    const r = await s.accounts.acceptInvite(input.code, account.id);
+    if ("problem" in r) return fail(404, r.problem);
+    // A new member's passkeys' key files go into the project, so a hard answer of theirs can be proved there (P16 section 7).
+    if (r.joined) {
+      try {
+        await s.putKeys(r.project, await keysOf(s, account));
+      } catch (e) {
+        console.error(`putting ${account.id}'s passkey keys into project ${r.project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return respond({ status: 200, body: { project: r.project, name: r.name, joined: r.joined } });
   }
   if (m === "DELETE" && path.startsWith("/v1/account/machines/") && tail.length === 1) {
     return (await s.accounts.revoke(tail[0]!, account.id)) ? respond({ status: 204 }) : fail(404, "no machine of yours with that ID");
@@ -408,7 +490,8 @@ async function accountRoute(s: SignIn, request: Request, path: string, m: string
     const d = await s.accounts.deviceByUserCode(normalUserCode(url.searchParams.get("code") ?? ""));
     if (!d) return fail(404, "no machine is waiting with that code, or it expired");
     const p = await s.accounts.project(d.project);
-    const yours = !p || p.owner === account.id;
+    // Yours to approve a machine for: a new project, or one you're a member of (P20).
+    const yours = !p || (await s.accounts.member(account.id, d.project));
     return respond({ status: 200, body: { machine: d.machine, project: d.project, new_project: !p, yours, ...(p && yours ? { name: p.name } : {}), expires: d.expires, can: "file cards and hear answers in this project; never answer" } });
   }
   if (route === "POST /machines/approve") {
