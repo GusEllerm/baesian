@@ -297,7 +297,7 @@ The relay ([[service]]; [[Formats for v1]] section 8, [[Hosted Service]] section
 
 **The service's keys (B-x47ek).** `GET /v1/keys`, for anyone: `{ service, spare }`, each a list of service key files (`ServiceKey`): the key the service signs with, and the spare it publishes and never signs with, whose line CI pins beside its key; `problem` when a spare is named but can't be read. The spare's file is the one the relay writes in a project's `trust/` the day it switches to it; until then it's in no project's files.
 
-**Each project's tables (B-866d2)** are numbered: the meta table's key `schema` holds the project's schema version, and the object runs the migrations after it as it wakes, in one transaction (`OBJECT_MIGRATIONS`, [[service]]). Migration 1 is the tables below, with `practice` (B-rehdw); a project made before migrations has none, and reads as version 0.
+**Each project's tables (B-866d2)** are numbered: the meta table's key `schema` holds the project's schema version, and the object runs the migrations after it as it wakes, in one transaction (`OBJECT_MIGRATIONS`, [[service]]). Migration 1 is the tables below, with `practice` (B-rehdw); a project made before migrations has none, and reads as version 0. Migration 2 adds `built`, the state as last built (B-evrec); migration 3, the members' tables and columns below (P20).
 
 **The relay's entry** (`RelayEntry`, read with `readRelayEntry()`), as `GET …/log?after={seq}` sends them, in `{ entries, head, more }`, at most 1,000 at a time:
 
@@ -334,13 +334,21 @@ What's logged: every file written once, uploaded or written by the relay. What i
 
 The state (`ApiState`) carries the removed cards as `removed`, a list of `ApiRemovedCard`: `id`, `revision`, `level`, `ended`, `filed`, `settled`, `removed`. Only the relay sets it.
 
-**Notifications' state** (M9e step 2, B-advkh, [[service#Notifications (service/src/notify.ts)]]): three more tables in each project's object, apart from its files and log, never logged, signed or sent, kept by `PushLedger`. Times are milliseconds since 1970.
+**Notifications' state** (M9e step 2, B-advkh, [[service#Notifications (service/src/notify.ts)]]): four more tables in each project's object, apart from its files and log, never logged, signed or sent, kept by `PushLedger`. Times are milliseconds since 1970.
 
 | Table | One row per | Columns |
 |---|---|---|
-| `push_arrivals` | card revision a machine uploaded | `card`, `revision`; `machine`, the uploading machine's name; `arrived`; `settled`, when a notification told it, it was seen while you were present, or it never would notify (a burst), else null. Settled rows go after an hour |
-| `push_sent` | notification sent | `at`; kept an hour, for the cap |
+| `push_arrivals` | card revision a machine uploaded | `card`, `revision`; `machine`, the uploading machine's name; `arrived`; `settled`, when it stopped waiting for anyone (or, in a project with no members known, when a notification told it, it was seen, or it never would notify), else null; `handed`, when whoever it was sent to passed it on, else null (P20, migration 3). Settled rows go after an hour |
+| `push_told` | arrival settled for one member (P20, migration 3) | `card`, `revision`, `account`; `at`, when a notification told them of it, they saw it while present, or it was never to notify them. Rows go with their arrival, and with a member who leaves |
+| `push_sent` | notification sent | `at`; `account`, the member it went to (migration 3; null on a row from before); kept an hour, for each member's cap |
 | `push_pauses` | machine that filed a burst | `machine`; `cards`, how many new cards it filed in the window; `since`, the window's first; `until`, when its cards notify again; kept an hour after |
+
+**Whom each card was sent to, and who's there** (P20, B-2n7s4, B-tzdjn, [[service#Whom a card is sent to (P20, B-2n7s4, B-tzdjn; service/src/sent-to.ts)]]): two more tables in each project's object, made by migration 3, the relay's own notes: in no file, never logged, signed or sent to a machine. The state says whom each card's latest revision was sent to, as `ApiCard.sent_to`, an account; only the relay sets it.
+
+| Table | One row per | Columns |
+|---|---|---|
+| `sent_to` | card revision a machine uploaded (`SentTo`) | `card`, `revision`; `account`, the member whose machine uploaded it, or null for nobody in particular, the project's owners: a card only owners answer, a machine that names no account, or a member who has since left; `at`. Rows go when the card's text does |
+| `presence_of` | member who has been at the desk (`MemberPresence`) | `account`; `client`, `phone` or `desktop`; `at`, their last heartbeat. Kept a day; there for 90 seconds |
 
 **Answers proved by the passkey** (M9c, [[service#Answers that take the passkey (D139, D163, M9c)]]): the relay writes a verdict or preference file that needs a proof only with it, in the same transaction, each as its own entry: the file and its `sig`, then `<file>.passkey.json`. A passkey key file is `trust/passkey-<suffix>.json` with the suffix the first 12 hex digits of the SHA-256 of its credential ID (`keyFileName()`), so every project holds the same bytes at the same path; it's put in each project of its account, signed, before any proof made with it.
 

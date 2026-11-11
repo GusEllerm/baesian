@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS practice (seq INTEGER PRIMARY KEY AUTOINCREMENT, at T
     name: "the state as last built, kept until the project changes (B-evrec)",
     sql: "CREATE TABLE built (part INTEGER PRIMARY KEY, value TEXT NOT NULL)",
   },
+  {
+    version: 3,
+    name: "several reviewers (P20): whom each card was sent to, each member's presence, whom a notification told, and when a card was passed on (B-tzdjn)",
+    sql: `
+CREATE TABLE sent_to (card TEXT NOT NULL, revision INTEGER NOT NULL, account TEXT, at INTEGER NOT NULL, PRIMARY KEY (card, revision));
+CREATE TABLE presence_of (account TEXT PRIMARY KEY, client TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE push_told (card TEXT NOT NULL, revision INTEGER NOT NULL, account TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (card, revision, account));
+ALTER TABLE push_sent ADD COLUMN account TEXT;
+ALTER TABLE push_arrivals ADD COLUMN handed INTEGER;
+`,
+  },
 ];
 
 /** The schema version this release's code needs: the last migration's. */

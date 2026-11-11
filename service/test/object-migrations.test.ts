@@ -9,8 +9,11 @@ import { NewerSchema, OBJECT_MIGRATIONS, type ObjectMigration, SCHEMA_KEY, SCHEM
 // baesian.dev already, made by releases 0.1.0 to 0.1.10 with `CREATE TABLE IF NOT EXISTS`: they must come through with
 // every row.
 
-/** Every table a project's object holds at this release: migration 1's, and `built` (migration 2, B-evrec). */
-const TABLES = ["before_linking", "built", "files", "log", "meta", "pending", "practice", "push_arrivals", "push_pauses", "push_sent", "retention_commits", "retention_delivered", "retention_held", "retention_removed", "retention_sent"];
+/** The tables migration 3 made, for several reviewers (P20, B-tzdjn). */
+const MEMBERS = ["presence_of", "push_told", "sent_to"];
+
+/** Every table a project's object holds at this release: migration 1's, `built` (migration 2, B-evrec), and migration 3's. */
+const TABLES = ["before_linking", "built", "files", "log", "meta", "pending", "practice", "presence_of", "push_arrivals", "push_pauses", "push_sent", "push_told", "retention_commits", "retention_delivered", "retention_held", "retention_removed", "retention_sent", "sent_to"];
 
 /** The tables 0.1.10 made, exactly as its code wrote them (service/src/sql-storage.ts, retention.ts, notify.ts at v0.1.10). */
 const RELEASED_0_1_10 = [
@@ -55,6 +58,17 @@ const tablesOf = (sql: SqlStorage) =>
 /** Every row of every table, for comparing before and after. */
 const rowsOf = (sql: SqlStorage, tables: string[]) => Object.fromEntries(tables.map((t) => [t, sql.exec(`SELECT * FROM ${t} ORDER BY 1`).toArray()]));
 
+/** Rows as they were before migration 3 gave two tables a column each, both empty in every row there was. */
+function withoutNewColumns(rows: Record<string, Record<string, unknown>[]>): Record<string, Record<string, unknown>[]> {
+  const drop = (table: string, column: string) =>
+    (rows[table] ?? []).map((r) => {
+      const { [column]: added, ...rest } = r;
+      expect(added).toBeNull();
+      return rest;
+    });
+  return { ...rows, ...(rows.push_sent ? { push_sent: drop("push_sent", "account") } : {}), ...(rows.push_arrivals ? { push_arrivals: drop("push_arrivals", "handed") } : {}) };
+}
+
 /** A fresh object, emptied, as a release before migrations left one: `make` writes its tables and rows. */
 function asReleasedBefore(state: DurableObjectState, make: (sql: SqlStorage) => void): void {
   state.storage.sql.exec("DELETE FROM meta");
@@ -68,16 +82,16 @@ const bytes = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
 describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
   it("are numbered from 1 with no gaps, migration 1 being every table the relay had", () => {
     expect(OBJECT_MIGRATIONS.map((m) => m.version)).toEqual(OBJECT_MIGRATIONS.map((_, i) => i + 1));
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3);
   });
 
   it("are all made, at this release's version, in a new project", () =>
     runInDurableObject(env.PROJECTS.get(env.PROJECTS.newUniqueId()), (_i, state) => {
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
       expect(schemaVersion(state.storage.sql)).toBe(SCHEMA_VERSION);
-      expect(state.storage.sql.exec("SELECT value FROM meta WHERE key = ?", SCHEMA_KEY).one().value).toBe("2");
+      expect(state.storage.sql.exec("SELECT value FROM meta WHERE key = ?", SCHEMA_KEY).one().value).toBe("3");
       // Waking again changes nothing.
-      expect(migrateObject(state.storage)).toEqual({ from: 2, to: 2 });
+      expect(migrateObject(state.storage)).toEqual({ from: 3, to: 3 });
     }));
 
   it("bring a project 0.1.10 made up to date as it wakes, every row kept, and it serves as before", async () => {
@@ -98,14 +112,14 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
         sql.exec("INSERT INTO push_pauses (machine, cards, since, until) VALUES ('laptop', 9, 1, 2)");
         before = rowsOf(sql, tablesOf(sql));
       });
-      expect(tablesOf(state.storage.sql)).toEqual(TABLES.filter((t) => t !== "practice" && t !== "built"));
+      expect(tablesOf(state.storage.sql)).toEqual(TABLES.filter((t) => t !== "practice" && t !== "built" && !MEMBERS.includes(t)));
       expect(schemaVersion(state.storage.sql)).toBe(0);
 
       // It wakes with this release's code.
       const woke = new ProjectRelay(state, env as unknown as Env);
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
-      expect(schemaVersion(state.storage.sql)).toBe(2);
-      const after = rowsOf(state.storage.sql, Object.keys(before));
+      expect(schemaVersion(state.storage.sql)).toBe(3);
+      const after = withoutNewColumns(rowsOf(state.storage.sql, Object.keys(before)));
       expect({ ...after, meta: after.meta!.filter((r) => r.key !== SCHEMA_KEY) }).toEqual(before);
       expect(state.storage.sql.exec("SELECT COUNT(*) AS n FROM practice").one().n).toBe(0);
 
@@ -126,7 +140,7 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
         sql.exec(RELEASED_0_1_10[0]!);
         sql.exec("INSERT INTO meta (key, value) VALUES ('project', 'proj-older'), ('version', '3')");
       });
-      expect(migrateObject(state.storage)).toEqual({ from: 0, to: 2 });
+      expect(migrateObject(state.storage)).toEqual({ from: 0, to: 3 });
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
       expect(state.storage.sql.exec("SELECT value FROM meta WHERE key = 'version'").one().value).toBe("3");
     }));
@@ -145,13 +159,13 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
         sql.exec("INSERT INTO practice (at, entry) VALUES ('2026-11-10T00:00:00.000Z', '{}')");
         before = rowsOf(sql, tablesOf(sql));
       });
-      expect(tablesOf(state.storage.sql)).toEqual(TABLES.filter((t) => t !== "built"));
+      expect(tablesOf(state.storage.sql)).toEqual(TABLES.filter((t) => t !== "built" && !MEMBERS.includes(t)));
       expect(schemaVersion(state.storage.sql)).toBe(1);
 
       const woke = new ProjectRelay(state, env as unknown as Env);
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
-      expect(schemaVersion(state.storage.sql)).toBe(2);
-      const after = rowsOf(state.storage.sql, Object.keys(before));
+      expect(schemaVersion(state.storage.sql)).toBe(3);
+      const after = withoutNewColumns(rowsOf(state.storage.sql, Object.keys(before)));
       expect({ ...after, meta: after.meta!.filter((r) => r.key !== SCHEMA_KEY) }).toEqual({ ...before, meta: before.meta!.filter((r) => (r as { key: string }).key !== SCHEMA_KEY) });
       // Nothing is kept until the state is first read; then it is, at the project's version, which reading doesn't move.
       expect(state.storage.sql.exec("SELECT COUNT(*) AS n FROM built").one().n).toBe(0);
@@ -162,29 +176,60 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
     });
   });
 
+  it("give a project 1.0.2 left at schema 2 its tables for several reviewers, every row kept, and it notifies as before (P20)", async () => {
+    const stub = env.PROJECTS.get(env.PROJECTS.newUniqueId());
+    await runInDurableObject(stub, async (_i, state) => {
+      let before: Record<string, unknown[]> = {};
+      asReleasedBefore(state, (sql) => {
+        // As 1.0.2 left a project: migrations 1 and 2, with a card that arrived and a notification that went.
+        sql.exec(OBJECT_MIGRATIONS[0]!.sql);
+        sql.exec(OBJECT_MIGRATIONS[1]!.sql);
+        sql.exec("INSERT INTO meta (key, value) VALUES ('project', 'proj-102'), ('version', '9'), (?, '2')", SCHEMA_KEY);
+        sql.exec("INSERT INTO push_arrivals (card, revision, machine, arrived, settled) VALUES ('B-aaaaa', 1, 'laptop', 1762300000000, NULL), ('B-bbbbb', 2, 'laptop', 1762300001000, 1762300011000)");
+        sql.exec("INSERT INTO push_sent (at) VALUES (1762300011000)");
+        sql.exec("INSERT INTO built (part, value) VALUES (0, 'kept by 1.0.2')");
+        before = rowsOf(sql, tablesOf(sql));
+      });
+      expect(tablesOf(state.storage.sql)).toEqual(TABLES.filter((t) => !MEMBERS.includes(t)));
+      expect(schemaVersion(state.storage.sql)).toBe(2);
+
+      const woke = new ProjectRelay(state, env as unknown as Env);
+      expect(tablesOf(state.storage.sql)).toEqual(TABLES);
+      expect(schemaVersion(state.storage.sql)).toBe(3);
+      const after = withoutNewColumns(rowsOf(state.storage.sql, Object.keys(before)));
+      expect({ ...after, meta: after.meta!.filter((r) => r.key !== SCHEMA_KEY) }).toEqual({ ...before, meta: before.meta!.filter((r) => (r as { key: string }).key !== SCHEMA_KEY) });
+      // Nobody is noted as sent a card that arrived before, or as told of one: such a card is its owners'.
+      for (const t of MEMBERS) expect(state.storage.sql.exec(`SELECT COUNT(*) AS n FROM ${t}`).one().n).toBe(0);
+      // Its alarm runs: the arrival whose card isn't waiting is settled, and nothing is sent.
+      await woke.alarm();
+      expect(state.storage.sql.exec("SELECT COUNT(*) AS n FROM push_arrivals WHERE settled IS NULL").one().n).toBe(0);
+      expect((await woke.waiting("proj-102", { account: "acct-gus", role: "owner" })).body).toEqual({ total: 0, hard: 0, blocking: 0, yours: { total: 0, hard: 0, blocking: 0 } });
+    });
+  });
+
   it("run in one transaction: a migration that fails keeps nothing of any", () =>
     runInDurableObject(env.PROJECTS.get(env.PROJECTS.newUniqueId()), (_i, state) => {
       const next: ObjectMigration[] = [
         ...OBJECT_MIGRATIONS,
-        { version: 3, name: "a column", sql: "ALTER TABLE files ADD COLUMN kind TEXT" },
-        { version: 4, name: "a mistake", sql: "CREATE TABLE later (x INTEGER); INSERT INTO nowhere VALUES (1)" },
+        { version: 4, name: "a column", sql: "ALTER TABLE files ADD COLUMN kind TEXT" },
+        { version: 5, name: "a mistake", sql: "CREATE TABLE later (x INTEGER); INSERT INTO nowhere VALUES (1)" },
       ];
       expect(() => migrateObject(state.storage, next)).toThrow();
-      expect(schemaVersion(state.storage.sql)).toBe(2);
+      expect(schemaVersion(state.storage.sql)).toBe(3);
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
       expect(state.storage.sql.exec("PRAGMA table_info(files)").toArray().map((c) => c.name)).toEqual(["path", "bytes", "once"]);
       // Fixed, they run in order, once each, and may change a table.
-      next[3] = { version: 4, name: "a table", sql: "CREATE TABLE later (x INTEGER)" };
-      expect(migrateObject(state.storage, next)).toEqual({ from: 2, to: 4 });
+      next[4] = { version: 5, name: "a table", sql: "CREATE TABLE later (x INTEGER)" };
+      expect(migrateObject(state.storage, next)).toEqual({ from: 3, to: 5 });
       expect(state.storage.sql.exec("PRAGMA table_info(files)").toArray().map((c) => c.name)).toEqual(["path", "bytes", "once", "kind"]);
-      expect(migrateObject(state.storage, next)).toEqual({ from: 4, to: 4 });
+      expect(migrateObject(state.storage, next)).toEqual({ from: 5, to: 5 });
     }));
 
   it("refuse a project a newer release migrated, rather than guess at its tables", () =>
     runInDurableObject(env.PROJECTS.get(env.PROJECTS.newUniqueId()), (_i, state) => {
-      state.storage.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '3')", SCHEMA_KEY);
+      state.storage.sql.exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '4')", SCHEMA_KEY);
       expect(() => migrateObject(state.storage)).toThrow(NewerSchema);
-      expect(() => migrateObject(state.storage)).toThrow("this project's storage is at schema 3, newer than this release's 2");
+      expect(() => migrateObject(state.storage)).toThrow("this project's storage is at schema 4, newer than this release's 3");
       expect(() => new ProjectRelay(state, env as unknown as Env)).toThrow(NewerSchema);
     }));
 
@@ -195,6 +240,6 @@ describe("a project's tables, migrated as its object wakes (B-866d2)", () => {
       expect(tablesOf(state.storage.sql)).toEqual([]);
       expect((await (instance as ProjectRelay).state("proj-erased")).status).toBe(200);
       expect(tablesOf(state.storage.sql)).toEqual(TABLES);
-      expect(schemaVersion(state.storage.sql)).toBe(2);
+      expect(schemaVersion(state.storage.sql)).toBe(3);
     }));
 });

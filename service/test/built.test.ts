@@ -61,7 +61,12 @@ const get = async <T>(o: Owner, path: string): Promise<T> => {
   return r.body as T;
 };
 const state = (o: Owner) => get<ApiState>(o, "state");
-const counts = (o: Owner) => get<{ total: number; hard: number; blocking: number }>(o, "waiting");
+// In a project of one, every waiting card was sent to its one member: `yours` is the same count (B-tzdjn).
+const counts = async (o: Owner) => {
+  const { yours, ...all } = await get<{ total: number; hard: number; blocking: number; yours: object }>(o, "waiting");
+  expect(yours).toEqual(all);
+  return all;
+};
 const post = (o: Owner, path: string, json: unknown) => o.person.browser.post(`/v1/projects/${o.project}/${path}`, json);
 
 interface About {

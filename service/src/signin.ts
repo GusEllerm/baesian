@@ -31,6 +31,8 @@ export interface SignIn {
   globus: GlobusConfig | undefined;
   /** Put an account's passkeys' key files into one of its projects, signed (P16 section 7). */
   putKeys(project: string, keys: PasskeyKey[]): Promise<void>;
+  /** Tell a project's relay that a member has left it (P20): the cards sent to them are the owners' again. */
+  memberGone(project: string, account: string): Promise<void>;
   /** Web push (M9e step 2): the VAPID key's public half, for browsers to subscribe with, if the service has the key. */
   vapidPublicKey: string | undefined;
   /** Whether a subscription may name the stand-in push service (a local run, or a test). */
@@ -349,7 +351,14 @@ async function membersRoute(s: SignIn, request: Request, m: string, tail: string
       if (other !== account.id && role !== "owner") return fail(403, owners);
       const r = await s.accounts.removeMember(project, other);
       if (typeof r === "object") return fail(409, r.problem);
-      return r ? respond({ status: 204 }) : fail(404, "no member of this project with that ID");
+      if (!r) return fail(404, "no member of this project with that ID");
+      // They're gone already; the relay's notes of them follow, and a failure there is logged, not theirs to see.
+      try {
+        await s.memberGone(project, other);
+      } catch (e) {
+        console.error(`telling project ${project} that ${other} left it failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      return respond({ status: 204 });
     }
     if (m === "PATCH") {
       if (role !== "owner") return fail(403, owners);

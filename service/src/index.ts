@@ -5,15 +5,16 @@ import type { Settings } from "../../src/routing.js";
 import { type PasskeyKey, ProjectId, type ServiceKey, type Verdict, asWritten } from "../../src/schema.js";
 import { signedFile } from "../../src/store.js";
 import { type Access, type AccessEnv, NO_ACCESS, type Principal, accessFor, crossSite, isLocal, readGrants } from "./access.js";
-import { Accounts } from "./accounts.js";
+import { Accounts, type Role } from "./accounts.js";
 import { BUILD_AFTER_MS, BuiltTable } from "./built.js";
 import { deleteClosed } from "./deletion.js";
-import { PushLedger, WHEN, countWaiting, decide, pushText } from "./notify.js";
+import { type Decision, type Member, PushLedger, WHEN, countFor, decide, pushText, waitingForAll } from "./notify.js";
 import { migrateObject } from "./object-migrations.js";
 import { PracticeTable } from "./practice-table.js";
 import { RETENTION, RetentionLedger } from "./retention.js";
 import { Vapid, sendPush, topicOf, vapidKey, vapidPublicKey } from "./push.js";
 import { tooOld } from "./release.js";
+import { MemberPresence, SentTo } from "./sent-to.js";
 import { RELEASE_HEADER } from "../../src/version.js";
 import { Usage, routeOf as usageRoute } from "./usage.js";
 import type { GlobusConfig } from "./globus.js";
@@ -204,7 +205,8 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
     case "pushes":
       return reply(await stub.pushes(project));
     case "waiting":
-      return reply(await stub.waiting(project));
+      // Asked by a member, the count is theirs: what waits for them, and how much of it was sent to them (B-tzdjn).
+      return reply(await stub.waiting(project, person && { account: person.account, role: person.role }));
     case "live":
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return fail(426, "live updates are a WebSocket: send Upgrade: websocket");
       return stub.fetch(request);
@@ -212,14 +214,16 @@ export async function handleRequest(request: Request, env: Env, given: Partial<S
       const declared = Number(request.headers.get("content-length") ?? 0);
       if (declared > MAX_FILE) return fail(413, `the relay takes files up to ${MAX_FILE} bytes`);
       const bytes = new Uint8Array(await request.arrayBuffer());
-      return reply(await stub.upload(project, route.path!, bytes, (who as Extract<Principal, { kind: "machine" }>).machine));
+      const from = who as Extract<Principal, { kind: "machine" }>;
+      // A card is sent to the member whose machine filed it (B-2n7s4).
+      return reply(await stub.upload(project, route.path!, bytes, from.machine, from.account));
     }
     case "stop-waiting":
       return reply(await stub.stopWaiting(project, route.path!));
     case "presence": {
       const input = request.headers.get("content-type") ? await readJson(request) : {};
       if (input instanceof Response) return input;
-      return reply(await stub.presence(project, input));
+      return reply(await stub.presence(project, input, person!.account));
     }
     case "batches": {
       const input = await readJson(request);
@@ -266,7 +270,7 @@ async function passkeyOptions(r: Reply, account: string, env: Env, services: Ser
  * challenge; then the relay writes each answer, its proofs beside its files and the passkey's key file, and checks each
  * proof counts. 200, with what became of each answer.
  */
-async function proofRequest(input: unknown, project: string, person: { account: string; handle: string }, stub: DurableObjectStub<ProjectRelay>, env: Env, services: Services): Promise<Response> {
+async function proofRequest(input: unknown, project: string, person: Person, stub: DurableObjectStub<ProjectRelay>, env: Env, services: Services): Promise<Response> {
   const body = typeof input === "object" && input !== null ? (input as { batch?: unknown; response?: unknown }) : {};
   if (typeof body.batch !== "string" || typeof body.response !== "object" || body.response === null) return fail(400, "send { batch, response }: the answers' batch, and the passkey's assertion as the browser returned it");
   const response = body.response as AuthenticationResponseJSON;
@@ -281,7 +285,7 @@ async function proofRequest(input: unknown, project: string, person: { account: 
   }
   const r = response.response;
   const assertion: Assertion = { credential: passkey.credential, authenticator_data: r.authenticatorData, client_data: r.clientDataJSON, signature: r.signature };
-  return reply(await stub.proveBatch(project, body.batch, person.account, assertion, keyFile(passkey, person.account, person.handle)));
+  return reply(await stub.proveBatch(project, body.batch, person.account, assertion, keyFile(passkey, person.account, person.handle), person.role));
 }
 
 /**
@@ -331,6 +335,7 @@ async function accountsRequest(request: Request, url: URL, env: Env, services: S
       const r = (await env.PROJECTS.get(env.PROJECTS.idFromName(project)).putKeys(project, keys)) as Reply;
       if (r.status >= 300) throw new Error(JSON.stringify(r.body));
     },
+    memberGone: async (project, account) => env.PROJECTS.get(env.PROJECTS.idFromName(project)).memberGone(project, account),
     vapidPublicKey: vapidPublicKey(env.VAPID_KEY),
     testPush: isLocal(env),
     usage: new Usage(services.accounts.db),
@@ -346,7 +351,8 @@ async function accountsRequest(request: Request, url: URL, env: Env, services: S
 export async function housekeeping(env: Env, now: number = Date.now()): Promise<string[]> {
   if (!env.ACCOUNTS) return [];
   const accounts = new Accounts(env.ACCOUNTS);
-  const deleted = await deleteClosed(accounts, async (project) => env.PROJECTS.get(env.PROJECTS.idFromName(project)).erase(project), now);
+  const relay = (project: string) => env.PROJECTS.get(env.PROJECTS.idFromName(project));
+  const deleted = await deleteClosed(accounts, async (project) => relay(project).erase(project), now, async (project, account) => relay(project).memberGone(project, account));
   await accounts.clearEnded();
   return deleted;
 }
@@ -379,6 +385,9 @@ const SWEEP_AT = "retention_next";
 /** What a live update says (B-bv49e): the state changed, and its version now. The client reads the state again. */
 export const changedMessage = (version: number) => JSON.stringify({ type: "changed", version });
 
+/** The kind of screen a heartbeat is from: a phone, or anything else. */
+const clientOf = (input: unknown): "phone" | "desktop" => (typeof input === "object" && input !== null && (input as { client?: unknown }).client === "hosted-phone" ? "phone" : "desktop");
+
 /**
  * One project's relay: its files in SQLite, and the sockets of the pages and agents listening (D140). It learns its
  * project on first use, and answers for no other. Everything it does goes through `Relay`; this is the glue.
@@ -402,6 +411,9 @@ export class ProjectRelay extends DurableObject<Env> {
   private practice!: PracticeTable;
   /** The state as last built (B-evrec): kept until a write empties it. */
   private built!: BuiltTable;
+  /** Whom each card was sent to, and which members are at the desk (P20, B-tzdjn). */
+  private sentTo!: SentTo;
+  private presenceOf!: MemberPresence;
   /** The timer that builds the state again after a change (`ProjectRelay.buildSoon`). */
   private building: ReturnType<typeof setTimeout> | undefined;
 
@@ -431,6 +443,8 @@ export class ProjectRelay extends DurableObject<Env> {
     this.retention = new RetentionLedger(this.ctx.storage.sql);
     this.practice = new PracticeTable(this.ctx.storage.sql);
     this.built = new BuiltTable(this.ctx.storage);
+    this.sentTo = new SentTo(this.ctx.storage.sql);
+    this.presenceOf = new MemberPresence(this.ctx.storage.sql);
     this.files = new SqlFileStorage(this.ctx.storage, {
       sign: (path, bytes) => {
         if (!signedFile(path)) return undefined;
@@ -479,7 +493,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const known = this.files.meta("project");
     if (known === undefined) this.files.setMeta("project", project);
     else if (known !== project) throw new Error(`this object holds project ${known}, not ${project}`);
-    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention, this.built);
+    return new Relay(this.files, this.signer, this.keyProblem, project, this.env.SERVICE_ORIGIN, this.started, this.retention, this.built, this.sentTo);
   }
 
   /** Run one address's work, and tell every listener if it changed anything. */
@@ -538,13 +552,19 @@ export class ProjectRelay extends DurableObject<Env> {
     return this.run(project, (r) => r.presets());
   }
 
-  async upload(project: string, path: string, bytes: Uint8Array, machine: string): Promise<Reply> {
+  /**
+   * A machine uploads a file. `account` is the account the machine is signed in as: a card revision it files is sent to
+   * that member (P20, B-2n7s4), unless only owners answer it.
+   */
+  async upload(project: string, path: string, bytes: Uint8Array, machine: string, account?: string): Promise<Reply> {
     const out = this.run(project, (r) => r.upload(path, bytes, machine));
     // A card revision that arrives may start a notification (M9e step 2): noted now, decided at the object's alarm, at
     // most `WHEN.soonMs` from now, so a burst of filings is decided once.
     const m = out.status === 201 ? REVISION.exec(path) : null;
     if (m) {
       const now = Date.now();
+      // Whom it's sent to is noted in the same step as the upload, before anything else can read the project.
+      this.sentTo.note(m[1]!, Number(m[2]), account !== undefined && !this.relay(project).forOwners(m[1]!) ? account : undefined, now);
       this.ledger.arrive(m[1]!, Number(m[2]), machine, now);
       const at = await this.ctx.storage.getAlarm();
       if (at === null || at > now + WHEN.soonMs) await this.ctx.storage.setAlarm(now + WHEN.soonMs);
@@ -556,11 +576,12 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   /**
-   * How many cards wait for the reviewer, and at which levels (B-wgbdh): what the desk's queue holds and a notification
-   * counts, for the projects page, which asks each project as it opens. Counts only, never a card's text.
+   * How many cards wait, and at which levels (B-wgbdh): what the desk's queue holds and a notification counts, for the
+   * projects page, which asks each project as it opens. Counts only, never a card's text. Asked by a member, they're the
+   * cards waiting for that member, with how many of them were sent to them (`yours`, P20, B-tzdjn).
    */
-  async waiting(project: string): Promise<Reply> {
-    return this.run(project, (r) => ({ status: 200, body: countWaiting(r.waiting()) }));
+  async waiting(project: string, who?: Member): Promise<Reply> {
+    return this.run(project, (r) => ({ status: 200, body: countFor(r.waiting(), who) }));
   }
 
   /** The machines whose cards don't notify now (a burst, B-advkh), for the project's page to say so. */
@@ -575,23 +596,19 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   /**
-   * The object's alarm: decide whether a notification goes now (`decide()`, B-advkh), send it to every browser of the
-   * project's owner that turned them on, settle what it told, and set the alarm for the next time anything's due.
+   * The object's alarm: decide who is notified now (`ProjectRelay.notify`), and set the alarm for the next time
+   * anything's due.
    */
   async alarm(): Promise<void> {
     if (this.erased) return;
     const project = this.files.meta("project");
     if (project === undefined) return;
     const now = Date.now();
-    const relay = this.relay(project);
-    const d = decide({ now, arrivals: this.ledger.arrivals(), waiting: relay.waiting(), present: relay.present(now), sent: this.ledger.sent(now), pauses: this.ledger.pauses(now) });
-    this.ledger.settle(d.settle, now);
-    if (d.send) {
-      try {
-        if (await this.send(project, d.send)) this.ledger.markSent(now);
-      } catch (e) {
-        console.error(`notifying project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
+    let next: number | undefined;
+    try {
+      next = await this.notify(project, now);
+    } catch (e) {
+      console.error(`notifying project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     // Retention (M9f): once a day, the text of cards whose time has come is removed.
     let sweep = Number(this.files.meta(SWEEP_AT) ?? 0);
@@ -604,7 +621,84 @@ export class ProjectRelay extends DurableObject<Env> {
       sweep = now + RETENTION.everyMs;
       this.files.setMeta(SWEEP_AT, String(sweep));
     }
-    await this.ctx.storage.setAlarm(Math.max(Math.min(d.next ?? Number.POSITIVE_INFINITY, sweep), Date.now() + 1000));
+    await this.ctx.storage.setAlarm(Math.max(Math.min(next ?? Number.POSITIVE_INFINITY, sweep), Date.now() + 1000));
+  }
+
+  /**
+   * Who is notified now (B-advkh, B-tzdjn): `decide()` for each member of the project, over the arrivals they haven't
+   * been told of, the cards waiting for them, whether they're at the desk, and what they were sent in the last hour; one
+   * notification to each member it says to tell, to every browser of theirs that turned them on. What a member is told
+   * of, sees while present, or is never to be told of is settled for them; an arrival waiting for nobody any more, for
+   * the project. With no members known (no accounts database, or a project it doesn't have), it's decided once, as it
+   * was before there were members. Returns when to look again, if anything will be due.
+   */
+  private async notify(project: string, now: number): Promise<number | undefined> {
+    const relay = this.relay(project);
+    // Read first: nothing is awaited between reading what arrived and settling it.
+    const members: Member[] = this.env.ACCOUNTS && this.ledger.arrivals().length ? await new Accounts(this.env.ACCOUNTS).toNotify(project) : [];
+    const waiting = relay.waiting(now);
+    const pauses = this.ledger.pauses(now);
+    const sends: { to?: string; send: NonNullable<Decision["send"]> }[] = [];
+    let next: number | undefined;
+    const sooner = (t: number | undefined) => {
+      if (t !== undefined) next = Math.min(next ?? Number.POSITIVE_INFINITY, t);
+    };
+    if (!members.length) {
+      const d = decide({ now, arrivals: this.ledger.arrivals(), waiting: waitingForAll(waiting), present: relay.present(now), sent: this.ledger.sent(now), pauses });
+      this.ledger.settle(d.settle, now);
+      if (d.send) sends.push({ send: d.send });
+      sooner(d.next);
+    } else {
+      const still = new Set(waiting.map((w) => `${w.card}/r${w.revision}`));
+      this.ledger.settle(this.ledger.arrivals().filter((a) => !still.has(`${a.card}/r${a.revision}`)), now);
+      const there = this.presenceOf.present(now);
+      for (const m of members) {
+        const d = decide({ now, arrivals: this.ledger.arrivals(m.account), waiting, present: there.has(m.account), sent: this.ledger.sent(now, m.account), pauses, who: m });
+        this.ledger.told(d.settle, m.account, now);
+        if (d.send) sends.push({ to: m.account, send: d.send });
+        sooner(d.next);
+      }
+    }
+    for (const s of sends) {
+      try {
+        if (await this.send(project, s.send, s.to)) this.ledger.markSent(now, s.to);
+      } catch (e) {
+        console.error(`notifying ${s.to ?? "the owner"} of project ${project} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return next;
+  }
+
+  /**
+   * A member passed a card on ("it's outside my expertise"). From the member it was sent to, or from an owner when it was
+   * sent to nobody in particular, that tells the others now (B-tzdjn): it's an arrival again, for everyone but them.
+   */
+  private async passedOn(v: Verdict | undefined, role: Role | undefined): Promise<void> {
+    if (!v || v.response !== "not_my_area" || v.account === undefined) return;
+    const to = this.sentTo.of(v.card, v.revision)?.account;
+    if (to === undefined ? role !== "owner" : to !== v.account) return;
+    const now = Date.now();
+    this.ledger.handOn(v.card, v.revision, v.account, now);
+    const at = await this.ctx.storage.getAlarm();
+    if (at === null || at > now + WHEN.soonMs) await this.ctx.storage.setAlarm(now + WHEN.soonMs);
+  }
+
+  /**
+   * A member left the project, was removed from it, or their account was deleted (P20): the cards sent to them are sent
+   * to nobody in particular, the project's owners, who are told of them as of any card of theirs; and what the relay
+   * noted of that member (their heartbeat, what they were told) goes.
+   */
+  async memberGone(project: string, account: string): Promise<void> {
+    this.relay(project);
+    this.presenceOf.forget(account);
+    this.ledger.forget(account);
+    if (!this.sentTo.release(account)) return;
+    this.files.touch();
+    this.announce(this.files.version());
+    this.buildSoon(project);
+    const now = Date.now();
+    const at = await this.ctx.storage.getAlarm();
+    if (at === null || at > now + WHEN.soonMs) await this.ctx.storage.setAlarm(now + WHEN.soonMs);
   }
 
   /**
@@ -631,15 +725,15 @@ export class ProjectRelay extends DurableObject<Env> {
   }
 
   /**
-   * One notification, to every browser of the project's owner that gets them (B-ytdt2), saying how many cards wait and
+   * One notification, to every browser of a member that gets them (B-ytdt2), saying how many cards wait for them and
    * their levels, with the project's name (B-mjf3g, B-zqkwk); a browser whose push service says it's gone (404 or 410)
-   * is deleted. Returns whether any was sent.
+   * is deleted. With no member named, it's the account that holds the project. Returns whether any was sent.
    */
-  private async send(project: string, counts: { urgency: "high" | "normal"; reason: "at once" | "digest"; total: number; hard: number; blocking: number }): Promise<boolean> {
+  private async send(project: string, counts: { urgency: "high" | "normal"; reason: "at once" | "digest"; total: number; hard: number; blocking: number }, to?: string): Promise<boolean> {
     if (!this.env.ACCOUNTS || !this.env.VAPID_KEY || counts.total === 0) return false;
     const accounts = new Accounts(this.env.ACCOUNTS);
     const p = await accounts.project(project);
-    const subs = p ? await accounts.subscriptions(p.owner) : [];
+    const subs = p ? await accounts.subscriptions(to ?? p.owner) : [];
     if (!p || !subs.length) return false;
     this.vapid ??= new Vapid(await vapidKey(this.env.VAPID_KEY), this.env.SERVICE_ORIGIN);
     const { title, body } = pushText(counts, p.name);
@@ -666,6 +760,7 @@ export class ProjectRelay extends DurableObject<Env> {
     const before = this.relay(project).settings();
     const out = this.run(project, (r) => (kind === "verdicts" ? r.verdict(input, who) : kind === "aliases" ? r.alias(input, who) : r.preferences(input, who)));
     if (out.status === 201) await this.countAnswer(project, who.account, kind === "verdicts" ? "verdict" : kind === "aliases" ? "alias" : "preferences", out, before);
+    if (out.status === 201 && kind === "verdicts") await this.passedOn((out.body as { verdict?: Verdict }).verdict, who.role);
     if (out.status === 201) await this.keepAlarm();
     return out;
   }
@@ -692,12 +787,13 @@ export class ProjectRelay extends DurableObject<Env> {
     return this.relay(project).batchOf(id, account);
   }
 
-  /** One tap's assertion over a batch: each answer written, and each one written counted (B-7nq85). */
-  async proveBatch(project: string, id: string, account: string, assertion: Assertion, key: PasskeyKey): Promise<Reply> {
+  /** One tap's assertion over a batch: each answer written, and each one written counted (B-7nq85). `role` is the asker's. */
+  async proveBatch(project: string, id: string, account: string, assertion: Assertion, key: PasskeyKey, role?: Role): Promise<Reply> {
     const before = this.relay(project).settings();
     const out = this.run(project, (r) => r.proveBatch(id, account, assertion, key));
     const written = out.status === 200 ? (out.body as { answers: Outcome[] }).answers.filter((a) => a.status === 201 && a.kind) : [];
     for (const a of written) await this.countAnswer(project, account, a.kind!, { status: a.status, body: a.body }, before);
+    for (const a of written) if (a.kind === "verdict") await this.passedOn((a.body as { verdict?: Verdict }).verdict, role);
     if (written.length) await this.keepAlarm();
     return out;
   }
@@ -720,11 +816,16 @@ export class ProjectRelay extends DurableObject<Env> {
     return this.run(project, (r) => r.putKeys(keys));
   }
 
-  async presence(project: string, input: unknown): Promise<Reply> {
+  /**
+   * The desk's heartbeat (D41). The project's own presence says whether anyone is there, which an agent's wait reads; the
+   * member whose desk it is is noted too (`MemberPresence`), so a notification isn't sent to someone looking at the desk.
+   */
+  async presence(project: string, input: unknown, account?: string): Promise<Reply> {
     const out = this.run(project, (r) => r.presence(input));
+    if (out.status === 204 && account !== undefined) this.presenceOf.beat(account, clientOf(input), Date.now());
     // The day's first visit on each kind of screen is counted (B-7nq85); the heartbeats after it, never.
     if (out.status === 204 && this.usage) {
-      const client = typeof input === "object" && input !== null && (input as { client?: unknown }).client === "hosted-phone" ? "phone" : "desktop";
+      const client = clientOf(input);
       const today = `${new Date().toISOString().slice(0, 10)}:${client}`;
       if (!this.visited.has(today)) {
         this.visited.add(today);

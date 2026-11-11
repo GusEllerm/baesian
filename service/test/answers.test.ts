@@ -1,3 +1,4 @@
+import { BAESIAN } from "../../src/routing.js";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
@@ -175,11 +176,15 @@ describe("the state, as baesian serve gives it (B-17wn9)", () => {
     expect(relay.project).toEqual({ name: "proj-a", branch: RELAY_BRANCH });
     expect(relay.problems).toEqual([]);
 
-    // The same files, in memory, under a store as the relay's: the same state, field for field.
+    // The same files, in memory, under a store as the relay's: the same state, field for field, but for whom each card
+    // was sent to, which is the relay's own note and in no file (P20, B-2n7s4): the account whose machine filed it.
+    // A card the relay filed itself, or one only owners answer, is sent to nobody in particular.
+    for (const c of relay.cards) expect(c.sent_to).toBe(c.meta.source_agent === BAESIAN || c.meta.rule || c.meta.convention || c.meta.pref_row ? undefined : "acct-gus");
+    expect(relay.cards.find((c) => c.meta.id === id)!.sent_to).toBe("acct-gus");
     const files = await relayFiles();
     const mine = Store.over(files, { branch: RELAY_BRANCH, config: { service: ORIGIN, project: "proj-a" }, trust: { pinned: pinFrom(await pullLog()) } });
     const local = snapshot(mine, { version: relay.version, server: { started: relay.server.started, watch: "events" }, project: relay.project, now: Date.parse(relay.server.now) });
-    expect(JSON.parse(JSON.stringify(local))).toEqual(relay);
+    expect(JSON.parse(JSON.stringify(local))).toEqual({ ...relay, cards: relay.cards.map(({ sent_to: _, ...c }) => c) });
 
     // And a machine that pulled the log sees each card as the website does: status, verdicts, briefs and gate.
     const pulledView = await machineView();

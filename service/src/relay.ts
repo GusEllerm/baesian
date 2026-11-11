@@ -19,6 +19,7 @@ import type { Built, BuiltTable } from "./built.js";
 import type { Waiting } from "./notify.js";
 import { RETENTION, type Retention, type RetentionLedger, cardOfPath, delivered, due, isLedgerPath } from "./retention.js";
 import { harnessOf } from "./usage.js";
+import type { SentTo } from "./sent-to.js";
 import type { ServiceSigner } from "./signer.js";
 import { NoKey } from "./signer.js";
 import type { SqlFileStorage } from "./sql-storage.js";
@@ -161,16 +162,39 @@ export const keyFileName = (credential: string) => `trust/passkey-${createHash("
 const receipt = (e: RelayEntry | undefined) => e && { seq: e.seq, path: e.path, format: e.format, size: e.size, digest: e.digest, ...(e.machine ? { machine: e.machine } : {}), ...(e.before_linking ? { before_linking: true } : {}), at: e.at };
 
 /**
- * The cards waiting for the reviewer among a state's cards, as the desk's queue has them: open cards, and audits (held,
+ * The cards waiting for a reviewer among a state's cards, as the desk's queue has them: open cards, and audits (held,
  * drawn, unanswered), each at its level in force, as `Store.levelOf` gives it: the card's own, raised in a hosted repo by
- * the relay's gate record, which is the gate record a state carries there.
+ * the relay's gate record, which is the gate record a state carries there. With several members (P20): each says whom it
+ * was sent to (B-tzdjn); and a card a member passed on ("it's outside my expertise") still waits, for everyone but those
+ * who passed it.
  */
 export function waitingOf(cards: readonly ApiCard[], hosted: boolean): Waiting[] {
-  return cards.flatMap((c) =>
-    c.status === "open" || c.audit
-      ? [{ card: c.meta.id, revision: c.meta.revision, level: hosted && c.gate?.outcome === "shown" && c.gate.level ? higherLevel(c.meta.level, c.gate.level) : c.meta.level }]
-      : [],
-  );
+  return cards.flatMap((c) => {
+    const passed = c.status === "rerouted" ? passedBy(c) : undefined;
+    if (c.status !== "open" && !c.audit && !passed) return [];
+    return [
+      {
+        card: c.meta.id,
+        revision: c.meta.revision,
+        level: hosted && c.gate?.outcome === "shown" && c.gate.level ? higherLevel(c.meta.level, c.gate.level) : c.meta.level,
+        ...(c.sent_to !== undefined ? { to: c.sent_to } : {}),
+        ...(passed ? { passed } : {}),
+      },
+    ];
+  });
+}
+
+/**
+ * The accounts that passed a card on: those whose latest answer on its latest revision is "it's outside my expertise".
+ * Nothing when one of those answers names no account (it's from before linking): the card then waits for nobody, as it
+ * did before there were members.
+ */
+function passedBy(c: ApiCard): string[] | undefined {
+  const latest = new Map<string | undefined, Verdict>();
+  for (const v of c.verdicts) if (v.revision === c.meta.revision) latest.set(v.account, v);
+  const passing = [...latest.values()].filter((v) => v.response === "not_my_area");
+  if (!passing.length || passing.some((v) => v.account === undefined)) return undefined;
+  return passing.map((v) => v.account!);
 }
 
 export class Relay {
@@ -187,6 +211,8 @@ export class Relay {
     private readonly retention?: RetentionLedger,
     /** Where the state is kept once built (B-evrec); without it, every read builds it. */
     private readonly kept?: BuiltTable,
+    /** Whom each card was sent to (P20, B-tzdjn): the relay's own note of whose machine filed it. */
+    private readonly sent?: SentTo,
   ) {}
 
   /**
@@ -304,14 +330,21 @@ export class Relay {
     const store = this.store();
     const state = snapshot(store, { version, server: { started: this.started, watch: "events" }, project: { name: this.project, branch: RELAY_BRANCH }, now });
     // Left out, and added as the state is sent: the clock, this object's start, and the heartbeat, which moves no version.
-    const { server: _server, presence: _presence, ...rest } = state;
+    const { server: _server, presence: _presence, cards: plain, ...others } = state;
+    // Each card says whom its latest revision was sent to (P20, B-tzdjn): noted as it was uploaded, in the same step.
+    const sent = this.sent?.all();
+    const cards = plain.map((c) => {
+      const to = sent?.get(c.meta.id)?.find((s) => s.revision === c.meta.revision)?.account;
+      return to === undefined ? c : { ...c, sent_to: to };
+    });
+    const rest = { ...others, cards };
     // The cards whose text retention removed: listed without it (B-ec3kj), and never answerable.
     const removed = this.retention?.removedCards() ?? [];
     // A marker goes stale by the clock alone (D90): what's built says "waiting" only until the first fresh one would.
-    const fresh = state.cards.flatMap((c) => c.waiting.filter((w) => !w.stale).map((w) => Date.parse(w.at) + WAITING_STALE_MS)).filter(Number.isFinite);
+    const fresh = cards.flatMap((c) => c.waiting.filter((w) => !w.stale).map((w) => Date.parse(w.at) + WAITING_STALE_MS)).filter(Number.isFinite);
     const built: Built = {
       rest: JSON.stringify(removed.length ? { ...rest, removed } : rest),
-      waiting: waitingOf(state.cards, store.hosted() !== undefined),
+      waiting: waitingOf(cards, store.hosted() !== undefined),
       ...(fresh.length ? { until: Math.min(...fresh) } : {}),
     };
     try {
@@ -332,6 +365,15 @@ export class Relay {
   }
 
   // ---------------------------------------------------------------- what's counted (D141, B-7nq85)
+
+  /**
+   * Whether a card is one only the project's owners answer (B-rxbss): a rule's draft, a pattern to make a rule of, or a
+   * proposed move of one of the gate's settings. Such a card is sent to nobody in particular, whoever's machine filed it.
+   */
+  forOwners(id: string): boolean {
+    const meta = this.store().card(id)?.meta;
+    return meta !== undefined && (meta.rule !== undefined || meta.convention !== undefined || meta.pref_row !== undefined);
+  }
 
   /** The preferences in force: what a change is counted against. */
   settings(): Settings {
@@ -613,6 +655,8 @@ export class Relay {
           // The commits its ledger entries named, read before they go: a merge listing them goes once they all have (B-15v62).
           const commits = x.paths.filter(isLedgerPath).flatMap((p) => this.ledgerCommit(p) ?? []);
           this.files.dropCard(x.row.id, x.paths);
+          // Whom it was sent to goes with its text: nothing waits to be told of it any more.
+          this.sent?.forget(x.row.id);
           ledger.removed(x.row);
           ledger.commitsGone(commits);
         }

@@ -463,6 +463,26 @@ export class Accounts {
     ).results;
   }
 
+  /**
+   * The members a project's notifications may go to (B-tzdjn), each with its role: those whose own account is open, in a
+   * project whose holder's is. Nobody, for a project that's closed with its holder's account (B-b46z3).
+   */
+  async toNotify(project: string): Promise<{ account: string; role: Role }[]> {
+    return (
+      await this.db
+        .prepare(
+          "SELECT m.account, m.role FROM members m JOIN accounts a ON a.id = m.account JOIN projects p ON p.id = m.project JOIN accounts h ON h.id = p.owner WHERE m.project = ? AND a.closed IS NULL AND h.closed IS NULL ORDER BY (m.account = p.owner) DESC, m.joined, m.account",
+        )
+        .bind(project)
+        .all<{ account: string; role: Role }>()
+    ).results;
+  }
+
+  /** Every project an account is a member of and doesn't hold, whoever holds it and whether or not it's closed: what leaves with the account. */
+  async memberOnlyOf(account: string): Promise<string[]> {
+    return (await this.db.prepare("SELECT m.project FROM members m JOIN projects p ON p.id = m.project WHERE m.account = ? AND p.owner != ? ORDER BY m.project").bind(account, account).all<{ project: string }>()).results.map((r) => r.project);
+  }
+
   // ---------------------------------------------------------------- joining and leaving a project (P20, B-jsady, B-rxbss)
 
   /**

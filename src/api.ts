@@ -75,6 +75,13 @@ export interface ApiCard {
    * before linking (B-45xz8), not by the service's signature.
    */
   before_linking?: true;
+  /**
+   * On the hosted service, the account the card's latest revision was sent to (P20, B-2n7s4, B-tzdjn): the member whose
+   * machine filed it, who is told of it first. Every member can still answer it (B-r51ts). Absent when it was sent to
+   * nobody in particular, which means the project's owners: a card only owners answer, one from a machine whose account
+   * isn't known, or one that arrived before cards were sent to anyone. Only the relay sets it.
+   */
+  sent_to?: string;
 }
 
 /**

@@ -238,14 +238,15 @@ describe("what's waiting, for the projects page (B-wgbdh)", () => {
       expect(r.status, JSON.stringify(r.body)).toBe(200);
       return r.body;
     };
-    expect(await waiting()).toEqual({ total: 0, hard: 0, blocking: 0 });
+    expect(await waiting()).toEqual({ total: 0, hard: 0, blocking: 0, yours: { total: 0, hard: 0, blocking: 0 } });
     await file(o, { level: "hard" });
     const blocking = await file(o, { level: "blocking" });
     await file(o, { level: "provisional" });
-    expect(await waiting()).toEqual({ total: 3, hard: 1, blocking: 1 });
+    // A project of one: every waiting card was sent to its one member (B-tzdjn).
+    expect(await waiting()).toEqual({ total: 3, hard: 1, blocking: 1, yours: { total: 3, hard: 1, blocking: 1 } });
     const answered = await o.person.browser.post(`/v1/projects/${o.project}/verdicts`, { card: blocking, revision: 1, response: "accept" });
     expect(answered.status, JSON.stringify(answered.body)).toBe(201);
-    expect(await waiting()).toEqual({ total: 2, hard: 1, blocking: 0 });
+    expect(await waiting()).toEqual({ total: 2, hard: 1, blocking: 0, yours: { total: 2, hard: 1, blocking: 0 } });
     // A machine signed in to the project reads it, as it reads the state; it's read with GET only.
     const machine = await call("GET", "waiting", { as: asMachine(o), project: o.project });
     expect(machine.status).toBe(200);

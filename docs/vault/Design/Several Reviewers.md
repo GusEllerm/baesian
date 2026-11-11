@@ -10,7 +10,7 @@ tags: [baesian, design, hosted, reviewers]
 
 # Several Reviewers
 
-> **Status: a proposal (P20), partly decided (2026-11-11). Nothing is built.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
+> **Status: a proposal (P20), decided by nine cards (2026-11-11), and being built: steps 1 and 2 of "The build" are done, in the service; nothing of it is released.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
 >
 > **The first five cards (deck `reviewers`) were answered the same day,** four with the proposal and one against it:
 > - **B-j032t**, "A few developers on one repo": built first for developers who each run their own agents; the map from kinds of decision to people comes second.
@@ -27,7 +27,9 @@ tags: [baesian, design, hosted, reviewers]
 > - **B-jsady**, "A link the owner sends": good once, for seven days; no address is kept.
 > - **B-rxbss**, "Only its owners": owners change the gate's settings, accept rules, add and remove members, and settle a difference two members can't; a project can have several.
 >
-> **Next:** stage 1 is built, in the steps under "The build".
+> **A tenth, B-aaj69 (deck `reviewers-joining`), is with the user:** how long a blocking or hard card waits before the members it wasn't sent to are told, ten minutes or half an hour. Until it's answered the service tells them of such a card only when it's passed on.
+>
+> **Next:** step 3 of "The build", the website.
 
 ## In brief
 
@@ -134,8 +136,14 @@ Stage 1, in steps, each tested and committed by itself. Found while planning it:
 - **A raised difference is a conflict card naming one card** (`conflict_of`, D35): Baesian files it with the standing answer and the other as its two options. Answered with the other, it supersedes the first card, and the work built on it gets a rework brief; answered with the standing one, the first card stands. That's what the store already does for two decisions on one topic.
 - **Whom a card was sent to is the relay's own note,** in a table beside its notification state, not in the signed gate record: nothing about who may answer rests on it, so CI has nothing to check.
 
-1. **Members on the service.** The accounts database's `members` and `invites`; an owner's link, good once for seven days; joining, leaving, removing; a member's machine signing in to the project; only owners changing the settings and accepting rules; a second member's answer on a decided card refused.
-2. **Sent to, and who's told.** The relay notes whom each card was sent to; a notification goes to them at once, to the others after a while; the counts say what was sent to you.
+1. **Members on the service.** *Built (2026-11-11), [[service#Who answers what (P20, B-r51ts, B-rxbss, B-v43z8)]].* The accounts database's `members` and `invites`; an owner's link, good once for seven days; joining, leaving, removing; a member's machine signing in to the project; only owners changing the settings and accepting rules; a second member's answer on a decided card refused.
+2. **Sent to, and who's told.** The relay notes whom each card was sent to; a notification goes to them at once, to the others after a while; the counts say what was sent to you. *Built (2026-11-11), [[service#Whom a card is sent to (P20, B-2n7s4, B-tzdjn; service/src/sent-to.ts)]]; decided by the agent while building it, each in the [[Decision Log]]:*
+   - A card only owners answer (a rule's draft, a proposed move of a setting) is sent to nobody in particular, whoever's machine filed it.
+   - "It's outside my expertise" tells the others at once only from whoever the card was sent to (its member, or an owner when it was sent to nobody in particular). From anyone else it puts the card aside for them alone. Either way it stops waiting for whoever passed it, and still waits for everyone else; once every member has passed it, it waits for nobody, as now.
+   - A passed-on card stays marked as sent to its member: it's among nobody's own.
+   - A member who leaves, or whose account is deleted: the cards sent to them are the owners' from then, and an owner is told. While an account is closed and can still be restored, its cards stay sent to it.
+   - Each member is told at most four times an hour from a project, and isn't told while they're at the desk, whoever else is.
+   - A notification counts every card waiting for the member it goes to, not only those sent to them: its words don't change (B-mjf3g).
 3. **The website.** The projects you're a member of; a members page, with the link; the desk's queue, yours first, each card marked with whom it was sent to; what the desk says when someone else answers first.
 4. **The CLI and the plugin.** `baesian login` for a member; who answered, in `baesian inbox` and `baesian wait`; the instructions' wording; `baesian verify`'s message for a member's passkey that isn't pinned.
 5. **A different answer.** Answering a decided card yourself, blind; raising a difference; the card it becomes, and who may settle it.

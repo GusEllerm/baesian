@@ -222,6 +222,14 @@ export class SqlFileStorage implements Storage {
     this.sql.exec("DELETE FROM built");
   }
 
+  /**
+   * Something the state says changed that isn't a file (whom a card was sent to, when a member leaves): the version moves
+   * and what was built goes, as after a write, so pages listening read the state again.
+   */
+  touch(): void {
+    this.bump();
+  }
+
   /** A value the relay keeps for itself, apart from the live layer. */
   meta(key: string): string | undefined {
     return this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = ?", key).toArray()[0]?.value;
