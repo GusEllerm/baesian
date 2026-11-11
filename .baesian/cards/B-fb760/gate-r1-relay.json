@@ -1,0 +1,19 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-fb760",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T211332.205Z-cy56q.json",
+  "reverse": "moderate",
+  "source": "baesian",
+  "row": "other",
+  "position": "tell-me",
+  "outcome": "shown",
+  "level": "provisional",
+  "reason": "row",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-11T16:37:14.153Z"
+}
