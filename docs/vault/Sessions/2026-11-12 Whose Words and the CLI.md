@@ -41,11 +41,17 @@ The website step, reported done the day before, wasn't: the decisions by branch 
 
 - **Unit:** 1,055 passing, 2 skipped. One run in five had 6 failures, in `test/relay.test.ts`, `test/style.test.ts` and two other files; the four runs after it passed, and the cause wasn't found. It ran straight after a browser run on the same machine.
 - **The service:** 216 in workerd, 68 of the store.
-- **Browser:** see the commit; `e2e/site-team.spec.ts` now also checks an owner's drawer and each member's calibration.
+- **Browser:** 175 passing. `e2e/site-team.spec.ts` now also checks an owner's drawer and each member's calibration; it caught the drawer capitalising a member's handle.
 
 ## Not done
 
-- **The privacy policy's lines** (step 6), as a card. Read for it: members see each other's handles, answers (the blind choice included), whom a card was sent to, and that someone is at the desk; a member's answers in someone else's project go with their cards' text, on the same schedule; the policy promises account holders an email before a change to what's kept takes effect.
+- **The privacy policy's lines** (step 6), as a card. Read for it, from the code:
+  - Members see each other's handles, roles and when they joined; every answer with who gave it, what they chose before seeing the agent's pick, what they wrote, and whether on a phone or a desktop; whom each card was sent to; and that someone is at the desk, not who.
+  - Each member's machines are sent the log, whose entries name the machine that uploaded each file: a hostname, unless its person chose another name.
+  - The service keeps, per project: who is a member, their role, when they joined and whose link they joined by; for a link, a hash of its code, who made it and when it expires, until a day after it's used or it expires; whom each card was sent to, until the card's text goes; each member's last heartbeat, for a day; and which member was told of which card.
+  - A member who leaves, or deletes their account: their answers in someone else's project stay with their handle, and go with each card's text on the usual schedule; a rule or a preference file they wrote stays while the project does.
+  - Deleting an account deletes the projects it made, for every member; the ones it only joined stay.
+  - The policy says "every project you own" and "unless its owner asks"; and it promises account holders an email before a change to what's kept takes effect, so the release needs that email first.
 - **The setup survey's words** still say "you" of what its settings let reach every member; only an owner sees it.
 - **Nothing is pushed** since `eed187b`. The user was asked whether to push `v1/next`; no answer yet.
 
