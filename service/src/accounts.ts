@@ -823,6 +823,8 @@ export class Accounts {
       this.db.prepare("DELETE FROM grants WHERE revoked <= ? OR last_used <= ?").bind(dayAgo, this.ago(LIMITS.grantIdleMs + DAY)),
       this.db.prepare("DELETE FROM flows WHERE expires <= ?").bind(dayAgo),
       this.db.prepare("DELETE FROM device_codes WHERE expires <= ?").bind(dayAgo),
+      // A link to a project (P20, B-jsady) that was used, or that expired, a day ago: nothing more rests on it.
+      this.db.prepare("DELETE FROM invites WHERE expires <= ? OR used <= ?").bind(dayAgo, dayAgo),
     ]);
   }
 

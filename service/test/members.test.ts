@@ -184,6 +184,27 @@ describe("joining a project (B-jsady: a link the owner sends)", () => {
   });
 });
 
+describe("a link, once it's used or expired", () => {
+  it("is forgotten a day later by the daily job; one that still works is kept", async () => {
+    const t = await team();
+    await joined(t);
+    const unused = await link(t);
+    const links = async () => (await env.ACCOUNTS!.prepare("SELECT COUNT(*) AS n, SUM(used_by IS NOT NULL) AS used FROM invites WHERE project = ?").bind(t.project).first<{ n: number; used: number | null }>())!;
+    expect(await links()).toEqual({ n: 2, used: 1 });
+    // A day on: the used one is gone, and the one nobody has used still works.
+    at(now + DAY + MINUTE);
+    await housekeeping(env as never, now);
+    expect(await links()).toEqual({ n: 1, used: 0 });
+    const someone = await signUp();
+    expect((await someone.browser.post("/v1/account/invites/look", { code: unused })).status).toBe(200);
+    // A day after it expires, it's gone too.
+    at(now + LIMITS.inviteMs + DAY);
+    await housekeeping(env as never, now);
+    expect(await links()).toEqual({ n: 0, used: null });
+    expect((await someone.browser.post("/v1/account/invites/look", { code: unused })).status).toBe(404);
+  });
+});
+
 describe("what a member may do (B-r51ts, B-rxbss)", () => {
   it("answers any card, as an owner does; the answer names them", async () => {
     const t = await team();

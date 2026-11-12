@@ -1303,7 +1303,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "service/src/accounts.ts#Accounts"
-sig = "f87263871c96b3bb"
+sig = "39178f05e9c66a96"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -1948,7 +1948,7 @@ sig = "f8bccc1c08b15d2b"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/accounts.ts#Accounts"
-sig = "f87263871c96b3bb"
+sig = "39178f05e9c66a96"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -4998,7 +4998,7 @@ sig = "7c61f04e8b3c7ba0"
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
 target = "service/src/accounts.ts#Accounts"
-sig = "f87263871c96b3bb"
+sig = "39178f05e9c66a96"
 
 [[bindings]]
 doc = "docs/vault/Design/Release v1.md"
@@ -5378,7 +5378,7 @@ sig = "e3b2293e4667d9d7"
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
 target = "service/src/accounts.ts#Accounts"
-sig = "f87263871c96b3bb"
+sig = "39178f05e9c66a96"
 
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
@@ -5933,7 +5933,7 @@ sig = "f8bccc1c08b15d2b"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/accounts.ts#Accounts"
-sig = "f87263871c96b3bb"
+sig = "39178f05e9c66a96"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
