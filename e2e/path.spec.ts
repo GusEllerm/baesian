@@ -163,6 +163,86 @@ test("answering glides the path into its new places, and with reduced motion it 
   await expect(page.locator(".path .row.past")).toHaveText(/Run file layout/);
 });
 
+/** Where the path's lines are drawn and where its nodes are, down the desk: both from the lines' own origin. */
+const linesAndNodes = (page: Page) =>
+  page.evaluate(() => {
+    const svg = document.querySelector(".path-lines")!.getBoundingClientRect();
+    const mid = (el: Element | null) => {
+      const r = el?.getBoundingClientRect();
+      return r ? r.top + r.height / 2 - svg.top : NaN;
+    };
+    const join = /M ([\d.-]+) ([\d.-]+)/.exec(document.querySelector(".path-lines .join")?.getAttribute("d") ?? "");
+    const ahead = /M ([\d.-]+) ([\d.-]+) V ([\d.-]+)/.exec(document.querySelector(".path-lines .spine.ahead")?.getAttribute("d") ?? "");
+    return {
+      now: mid(document.querySelector(".path .row.now .node")),
+      next: mid(document.querySelector(".path .row.next .node")),
+      join: join ? Number(join[2]) : NaN,
+      aheadFrom: ahead ? Number(ahead[2]) : NaN,
+      aheadTo: ahead ? Number(ahead[3]) : NaN,
+    };
+  });
+
+test("the lines come to rest on the nodes they join, though the glide itself is held up", async ({ page }) => {
+  // The setup offer is on the desk, with both cards under "Next". An agent stops for the first: the offer gives way to
+  // it, and the path glides into a new arrangement. Here every animation is held at its start, as in a window that isn't
+  // being drawn, for longer than the glide lasts: the lines mustn't stay where the glide began.
+  const r = repo();
+  const first = file(r.store, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+  file(r.store, { title: "Keeping real file names out of a development build", question: "Should real names be kept out?", topic: "alpha/b" });
+  server = await startServer(r.store, { reviewer: "tester", writeServerFile: false, debounceMs: 20 });
+  await page.goto(server.url);
+  await expect(page.getByRole("heading", { name: "How much should reach you?" })).toBeVisible();
+  await expect(page.locator(".path .row.next")).toHaveCount(2);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Animation.enable");
+  await cdp.send("Animation.setPlaybackRate", { playbackRate: 0 });
+  r.store.startWaiting(first, "claude-code");
+  await expect(page.locator(CARD)).toHaveAttribute("aria-label", "Which store?");
+  await page.waitForTimeout(1200);
+  const held = await linesAndNodes(page);
+  // Let go, the glide runs to its end: the nodes come to where the lines already are.
+  await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 });
+  await expect.poll(() => pathAnimations(page)).toBe(0);
+  await page.waitForTimeout(600);
+  const rest = await linesAndNodes(page);
+  expect(rest.now).toBeGreaterThan(held.now + 40); // it did glide: the card's node has come down to the card's question
+  for (const lines of [held, rest]) {
+    expect(Math.abs(lines.join - rest.now)).toBeLessThan(1.5);
+    expect(Math.abs(lines.aheadFrom - (rest.now + 19))).toBeLessThan(1.5);
+    expect(lines.aheadTo).toBeGreaterThan(rest.now + 30);
+    expect(lines.aheadTo).toBeLessThan(rest.next);
+  }
+});
+
+test("the lines stay on their nodes when the desk is scrolled", async ({ page }) => {
+  // A short window: the card is taller than the desk, which scrolls. The lines are drawn in the desk's own space, so they
+  // move with what they join, and measuring them again while it's scrolled doesn't shift them.
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await open(page, (s) => {
+    file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });
+    file(s, { title: "Run file layout", question: "Where do files go?", topic: "alpha/b" });
+  });
+  await page.clock.runFor(1000);
+  const scrolled = await page.evaluate(() => {
+    const desk = document.querySelector(".desk")!;
+    desk.scrollTop = 60;
+    return desk.scrollTop;
+  });
+  expect(scrolled).toBeGreaterThan(20);
+  // Measured again, as after any change: here, the window's width.
+  await page.setViewportSize({ width: 1400, height: 420 });
+  await page.clock.runFor(1000);
+  // The desk's own change of size is heard a frame later: give it one, then the clock its turn.
+  await page.waitForTimeout(300);
+  await page.clock.runFor(1000);
+  const at = await linesAndNodes(page);
+  expect(Math.abs(at.join - at.now)).toBeLessThan(1.5);
+  expect(Math.abs(at.aheadFrom - (at.now + 19))).toBeLessThan(1.5);
+  // And the line into the card still meets the card.
+  const joined = await joinAndCard(page);
+  expect(Math.abs(joined.end - joined.card - 2)).toBeLessThan(1.5);
+});
+
 test("going to a card from the path moves the focus to it, and the path's rows show a focus ring", async ({ page }) => {
   await open(page, (s) => {
     file(s, { title: "The run store", question: "Which store?", topic: "alpha/a" });

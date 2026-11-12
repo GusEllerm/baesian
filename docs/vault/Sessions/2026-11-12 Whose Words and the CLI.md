@@ -37,11 +37,17 @@ The website step, reported done the day before, wasn't: the decisions by branch 
 - **A link is forgotten a day after it's used or it expires** (`753ce9f`): found while reading what the privacy policy will have to say.
 - **The aside:** the steps to set Baesian up in the user's Chorus repo, an organisation's, with the choice between `baesian init --personal` and `baesian init`. Nothing was run there.
 
+## The path's lines, off their nodes
+
+The user sent a screenshot from their own desk: the line into the card and the dotted spine drawn well above the nodes they join. Read from it: every line sat the same distance above its node, the dotted one hidden where it passed behind the node. That's what the desk being scrolled does: the desk is a scroll container, and the lines were measured from the top of what's on screen, so any measure taken while it was scrolled drew them that far up. Fixed by measuring in the desk's own space ([[Client Build]], the path's glide).
+
+Found on the way, by holding every animation at its start: a glide that runs late left the lines where it began, since they were only measured again while the clock said the path was gliding. The lines now go by the layout once a glide's time is over. It wasn't the user's case, as far as the screenshot shows; it couldn't be made to happen in a real hidden window, which the test browser won't allow.
+
 ## Tests
 
 - **Unit:** 1,055 passing, 2 skipped. One run in five had 6 failures, in `test/relay.test.ts`, `test/style.test.ts` and two other files; the four runs after it passed, and the cause wasn't found. It ran straight after a browser run on the same machine.
 - **The service:** 216 in workerd, 68 of the store.
-- **Browser:** 175 passing. `e2e/site-team.spec.ts` now also checks an owner's drawer and each member's calibration; it caught the drawer capitalising a member's handle.
+- **Browser:** 177 passing, two of them new for the path's lines. `e2e/site-team.spec.ts` now also checks an owner's drawer and each member's calibration; it caught the drawer capitalising a member's handle.
 
 ## Not done
 

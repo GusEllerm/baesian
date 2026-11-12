@@ -118,7 +118,7 @@ sig = "7f88a7128cccd97b"
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
 target = "client/src/Path.tsx"
-sig = "bb6002eef48610a3"
+sig = "a89eddc1377806ba"
 
 [[bindings]]
 doc = "docs/vault/Design/Client Build.md"
@@ -5373,7 +5373,7 @@ sig = "fe6629d2f01883d9"
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
 target = "client/src/Path.tsx"
-sig = "bb6002eef48610a3"
+sig = "a89eddc1377806ba"
 
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
@@ -5748,7 +5748,7 @@ sig = "c9a0b8db17227b70"
 [[bindings]]
 doc = "docs/vault/Home.md"
 target = "client/src/Path.tsx"
-sig = "bb6002eef48610a3"
+sig = "a89eddc1377806ba"
 
 [[bindings]]
 doc = "docs/vault/Home.md"

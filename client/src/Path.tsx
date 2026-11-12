@@ -135,7 +135,8 @@ export function Path(p: PathProps) {
       return;
     }
     // The arrangement has settled: rows that moved glide from where they were, new ones fade in, and the shift
-    // eases (style.css). The lines are measured from where things are on screen, so they're redrawn as it glides.
+    // eases (style.css). While it glides, the lines are measured from where things are on screen, so they're redrawn
+    // as it goes; once the glide's time is over, from where the layout puts things, whatever is still moving.
     const flips = [...el.querySelectorAll<HTMLElement>("[data-flip]")];
     const settled = new Map(flips.map((r) => [r.dataset.flip!, offsetIn(r, h).top] as const));
     const glides: Animation[] = [];
@@ -152,7 +153,11 @@ export function Path(p: PathProps) {
     tops.current = settled;
     if (!reduced && (glides.length || shift !== lastShift.current)) glide(glides);
     lastShift.current = shift;
-    const measured = measure(root, el, card ?? undefined);
+    // Following a glide on screen is only for show. A glide that's late or held up, in a window that isn't being
+    // drawn, or one whose rows a browser reports where they started, must never leave the lines behind: so past the
+    // glide's own time they go by the layout alone, which no animation moves.
+    const following = !reduced && performance.now() < glideUntil.current;
+    const measured = measure(root, el, card ?? undefined, following ? undefined : shift);
     if (JSON.stringify(measured) !== JSON.stringify(lines)) setLines(measured);
     if (p.fly) {
       const row = el.querySelector<HTMLElement>(`.row.past[data-key="${CSS.escape(p.fly.key)}"]`);
@@ -160,12 +165,16 @@ export function Path(p: PathProps) {
       p.onFlown?.();
     }
   });
-  // While the path glides, measure it again every frame, and once more when the glide is over.
+  // While the path glides, measure it again every frame, and once more when the glide is over: when its animations
+  // finish, and, by a timer that needs no frame to be drawn, once its time has passed.
   const glideUntil = useRef(0);
   const glideFrame = useRef(0);
+  const glideOver = useRef<ReturnType<typeof setTimeout>>(undefined);
   const glide = (animations: Animation[]) => {
     glideUntil.current = Math.max(glideUntil.current, performance.now() + GLIDE_MS + 40);
     void Promise.allSettled(animations.map((a) => a.finished)).then(() => setTick((t) => t + 1));
+    clearTimeout(glideOver.current);
+    glideOver.current = setTimeout(() => setTick((t) => t + 1), GLIDE_MS + 60);
     if (glideFrame.current) return;
     const step = () => {
       setTick((t) => t + 1);
@@ -173,18 +182,36 @@ export function Path(p: PathProps) {
     };
     glideFrame.current = requestAnimationFrame(step);
   };
-  useEffect(() => () => cancelAnimationFrame(glideFrame.current), []);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(glideFrame.current);
+      clearTimeout(glideOver.current);
+    },
+    [],
+  );
   useLayoutEffect(() => {
     const root = hood.current?.parentElement;
-    if (!root) return;
+    const el = path.current;
+    if (!root || !el) return;
     const again = () => setTick((t) => t + 1);
+    // The desk's size, and the path's own: its rows grow and shrink as their words wrap.
     const ro = new ResizeObserver(() => requestAnimationFrame(again));
     ro.observe(root);
+    ro.observe(el);
     addEventListener("resize", again);
+    // The page shown again, after a time in the background when nothing was drawn.
+    document.addEventListener("visibilitychange", again);
+    addEventListener("pageshow", again);
+    // The fonts: those loading as the page opens, and any that start loading later, which `ready` at this moment
+    // wouldn't wait for.
     void document.fonts?.ready.then(again);
+    document.fonts?.addEventListener?.("loadingdone", again);
     return () => {
       ro.disconnect();
       removeEventListener("resize", again);
+      document.removeEventListener("visibilitychange", again);
+      removeEventListener("pageshow", again);
+      document.fonts?.removeEventListener?.("loadingdone", again);
     };
   }, []);
   // A new card: start again from the full trail.
@@ -415,12 +442,23 @@ export function joinPath(g: Join, dx: number, dy: number, deg: number): string {
   return end > g.x1 + 1 ? `M ${g.x1.toFixed(1)} ${g.y.toFixed(1)} H ${end.toFixed(1)}` : "";
 }
 
-/** The spine (solid through your answers, dotted through what's next), the line into the card, and the arcs. */
-function measure(root: HTMLElement, path: HTMLElement, card: HTMLElement | undefined): Lines {
+/**
+ * The spine (solid through your answers, dotted through what's next), the line into the card, and the arcs, in the
+ * coordinates the lines are drawn in: from the top left of what holds the path (`root`), inside its border, moving with
+ * what it holds when that scrolls.
+ *
+ * With `rest`, the path's shift once it has eased, everything is where the layout puts it: where the rows come to rest,
+ * whatever is gliding. Without, where things are on screen now, to follow a glide.
+ */
+function measure(root: HTMLElement, path: HTMLElement, card: HTMLElement | undefined, rest?: number): Lines {
   const base = root.getBoundingClientRect();
-  const at = (el: Element) => {
+  const at = (el: HTMLElement) => {
+    if (rest !== undefined) {
+      const o = offsetIn(el, root);
+      return { x: o.left + el.offsetWidth / 2, y: o.top + el.offsetHeight / 2 + rest };
+    }
     const r = el.getBoundingClientRect();
-    return { x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2 };
+    return { x: r.left - base.left - root.clientLeft + root.scrollLeft + r.width / 2, y: r.top - base.top - root.clientTop + root.scrollTop + r.height / 2 };
   };
   const nodes = (sel: string) => [...path.querySelectorAll<HTMLElement>(sel)];
   const past = nodes(".row.past .node"), now = path.querySelector<HTMLElement>(".row.now .node"), ahead = nodes(".row.next .node");
@@ -438,9 +476,10 @@ function measure(root: HTMLElement, path: HTMLElement, card: HTMLElement | undef
   if (now) {
     const n = at(now);
     if (card) {
-      const c = restRect(card);
+      // Where the card rests, by layout: its motion is added as the line is drawn (`joinPath()`).
+      const c = offsetIn(card, root);
       const r1 = (v: number) => Math.round(v * 10) / 10;
-      lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left - base.left + c.width / 2), cy: r1(c.top - base.top + c.height / 2), w: c.width };
+      lines.join = { x1: r1(n.x + 15), y: r1(n.y), cx: r1(c.left + card.offsetWidth / 2), cy: r1(c.top + card.offsetHeight / 2), w: card.offsetWidth };
     }
     // A link back to an earlier answer: an arc to the right of the spine, into this card's ring from above.
     for (const row of path.querySelectorAll<HTMLElement>(".row.past")) {
