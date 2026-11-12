@@ -10,7 +10,7 @@ tags: [baesian, design, hosted, reviewers]
 
 # Several Reviewers
 
-> **Status: a proposal (P20), decided by ten cards (2026-11-11), and being built: steps 1 to 3 of "The build" are done, the service and the website; nothing of it is released.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
+> **Status: a proposal (P20), decided by twelve cards (2026-11-11 and 12), and being built: steps 1 to 4 of "The build" are done, the service, the website and the CLI; nothing of it is released.** The user asked for it after 1.0.2, saying it "is going to take some intelligent design around how interactions take place" and that "we also need to strongly identify the goals of the design and how collaboration works". The research is [[Several Reviewers - Research]], from three strands kept in full.
 >
 > **The first five cards (deck `reviewers`) were answered the same day,** four with the proposal and one against it:
 > - **B-j032t**, "A few developers on one repo": built first for developers who each run their own agents; the map from kinds of decision to people comes second.
@@ -31,7 +31,9 @@ tags: [baesian, design, hosted, reviewers]
 >
 > **An eleventh, B-av0wb, answered 2026-11-12 with the proposal:** "Once the CLI and privacy policy are done": the first release with members goes out after steps 4 and 6 of "The build"; raising a different answer (step 5) follows in a release of its own. Until then a member whose answer comes second is told who decided and what they chose, and takes it up with them outside Baesian.
 >
-> **Next:** step 4 of "The build", the CLI and the plugin; then the privacy policy's lines as a card (6); then a release; then a different answer raised and settled (5).
+> **A twelfth, B-4mt91, answered 2026-11-12 with the proposal:** "Your own answers": in a project with members, each member's calibration counts the cards they answered; what a row needs before its setting moves stays the project's.
+>
+> **Next:** the privacy policy's lines as a card (step 6); then a release; then a different answer raised and settled (step 5).
 
 ## In brief
 
@@ -153,6 +155,7 @@ Stage 1, in steps, each tested and committed by itself. Found while planning it:
    - An inbox counts every card on your desk, and says how many were sent to you when that isn't all of them.
    - A member sees the project's preferences as they are, with nothing to change, and is never offered the setup survey. A card only owners answer isn't on a member's desk.
    - Removing a member, and leaving, ask first; whoever made the project has nothing to press.
+   - *Put right the next day:* the desk said "you" for whatever another member did, in the decisions by branch, on cards answered in chat, in the calibration panel and in practice cards. Each now names who, or is each member's own ([[Client Build]] item 31, "Whose words"); Baesian's own cards name who chose once a project has answers from more than one person ([[src-routing]]).
 4. **The CLI and the plugin.** `baesian login` for a member; who answered, in `baesian inbox` and `baesian wait`; the instructions' wording; `baesian verify`'s message for a member's passkey that isn't pinned. *Built (2026-11-12), and smaller than planned, [[src-sync]], [[src-trust]]:*
    - **Already true, so unchanged:** `baesian wait` and `baesian inbox` name who answered; a card someone passed on keeps its agent waiting, since another reviewer is still to answer; a member's machine signs in from a clone of the linked repo.
    - **The instructions keep "the reviewer"** as the name of whoever answers. Nothing they say is untrue of a team, and changing the block would rewrite every repo's `AGENTS.md` at its next upgrade (B-amxkp) for no change in meaning. The plugin's skill is unchanged for the same reason.
@@ -196,6 +199,7 @@ Each line is a later card or an agent's decision, once the cards above are answe
 | B-rxbss | Who changes a project's settings and rules | Only its owners |
 | B-aaj69 | How long before the others are told | After half an hour (the alternative) |
 | B-av0wb | What the first release with members includes | Once the CLI and privacy policy are done (2026-11-12) |
+| B-4mt91 | What "Your calibration" shows in a project with members | Your own answers (2026-11-12) |
 
 **Later, each its own card:** what the privacy policy says; the map (stage 2); what an owner sees of a member's calibration.
 

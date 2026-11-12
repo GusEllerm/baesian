@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiState, RowReport } from "../../src/api";
-import { SCALE_MIN, barOf, laterSuperseded, leftOut, median, needsWords, notCounted, recap, ruleWords, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
+import { TODAY } from "../../src/routing";
+import { SCALE_MIN, barOf, laterSuperseded, leftOut, median, needsWords, notCounted, ownReport, recap, ruleWords, scaleOf, seconds, segmentWords, summaryWords, timeSpent } from "./calibration";
 
 // The calibration panel and the recap (M4 step 5e), and your answers row by row (D180).
 
@@ -32,6 +33,65 @@ describe("later superseded (Client Data Contract: partial)", () => {
     const waiting = { meta: { title: "Waiting", answered_in_chat: "Postgres." }, status: "open", verdicts: [] };
     const state = { cards: [chat("Said in chat", "superseded"), chat("Kept from chat", "resolved"), blind, waiting] } as unknown as ApiState;
     expect(laterSuperseded(state)).toEqual({ names: ["Blind"], inChat: 2 });
+  });
+});
+
+describe("your own answers, in a project with members (B-4mt91)", () => {
+  const handles = new Map([
+    ["acct-ana", "ana"],
+    ["acct-ben", "ben"],
+  ]);
+  const ana = { me: "acct-ana", role: "owner" as const, handles };
+  const ben = { me: "acct-ben", role: "member" as const, handles };
+  const v = (account: string, response: string, first_choice?: string, over: Record<string, unknown> = {}) => ({ account, reviewer: handles.get(account), client: "hosted-desktop", response, at: "2026-11-11T10:00:00.000Z", ...(first_choice ? { first_choice } : {}), ...over });
+  const card = (title: string, verdicts: unknown[], over: Record<string, unknown> = {}, status = "resolved") => ({ meta: { title, touches: ["schema"], source_agent: "claude-code", ...over }, status, verdicts, gate: { row: "schema", source: "agent" } });
+  const blank = { shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0 };
+  const test = { answers: 30, misses: 0, toLoosen: 12, waiting: false };
+  const state = {
+    cards: [
+      card("Ana agreed", [v("acct-ana", "accept", "proposal")]),
+      card("Ana came round", [v("acct-ana", "accept", "alternative")]),
+      card("Ben overturned", [v("acct-ben", "alternative", "alternative")]),
+      card("Ben agreed", [v("acct-ben", "accept", "proposal")]),
+      // Ben asked a question, then Ana settled it: hers alone to count.
+      card("Asked, then settled", [v("acct-ben", "question"), v("acct-ana", "accept", "proposal")]),
+      card("Ana, in chat", [v("acct-ana", "accept", undefined, { seen: true })], { answered_in_chat: "A." }),
+      card("Ana, no blind choice", [v("acct-ana", "accept")]),
+      card("Nobody yet", [], {}, "open"),
+      card("Baesian's own", [v("acct-ana", "accept", "proposal")], { source_agent: "baesian" }),
+      card("Withdrawn", [v("acct-ana", "accept", "proposal")], {}, "withdrawn"),
+    ],
+    routing: { settings: TODAY, history: [], report: { rows: { schema: { ...blank, position: "stop-and-ask", agreed: 3, cameRound: 1, misses: 1, test } }, pooled: { ...blank, agreed: 3, cameRound: 1, misses: 1 }, beforeGate: 0 } },
+  } as unknown as ApiState;
+
+  it("counts each member's own answers, once a card, and nobody else's", () => {
+    const hers = ownReport(state, ana);
+    expect(barOf(hers.pooled)).toEqual({ agreed: 2, cameRound: 1, missed: 0, total: 3 });
+    expect(hers.pooled).toMatchObject({ answered: 4, unblind: 1, inChat: 1, unanswered: 0 });
+    expect(barOf(hers.rows.schema!)).toEqual({ agreed: 2, cameRound: 1, missed: 0, total: 3 });
+    const his = ownReport(state, ben);
+    expect(barOf(his.pooled)).toEqual({ agreed: 1, cameRound: 0, missed: 1, total: 2 });
+    // A new member's bars start empty.
+    expect(barOf(ownReport(state, { me: "acct-cat", role: "member", handles }).pooled).total).toBe(0);
+  });
+
+  it("keeps each row's stop, and what the project needs before it moves, named as the project's", () => {
+    const his = ownReport(state, ben);
+    expect(his.rows.schema).toMatchObject({ position: "stop-and-ask", test });
+    expect(needsWords(test, ben)).toBe("The project needs 12 more without a miss for a lower stop");
+    expect(needsWords({ ...test, toLoosen: 0 }, ben)).toBe("The project has enough for a lower stop");
+    expect(needsWords({ ...test, waiting: true }, ben)).toBe("A move for this row waits for an owner");
+    expect(needsWords({ ...test, waiting: true }, ana)).toBe("A move for this row waits for you or another owner");
+    // Where one person answers, as ever.
+    expect(needsWords(test)).toBe("12 more without a miss for a lower stop");
+    expect(needsWords({ ...test, waiting: true }, { me: "acct-ana", role: "owner", handles: new Map([["acct-ana", "ana"]]) })).toBe("A move for this row waits for you");
+  });
+
+  it("names only the decisions you settled yourself as later superseded", () => {
+    const sup = { cards: [card("Ana's", [v("acct-ana", "accept", "proposal")], {}, "superseded"), card("Ben's", [v("acct-ben", "accept", "proposal")], {}, "superseded")] } as unknown as ApiState;
+    expect(laterSuperseded(sup, ana).names).toEqual(["Ana's"]);
+    expect(laterSuperseded(sup, ben).names).toEqual(["Ben's"]);
+    expect(laterSuperseded(sup).names).toEqual(["Ana's", "Ben's"]);
   });
 });
 

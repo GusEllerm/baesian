@@ -1,6 +1,7 @@
 import type { ApiCard, ApiVerdictInput } from "../../src/api";
 import type { OptionKind } from "../../src/schema";
 import { type Rarity, isSeen, quoted } from "./model";
+import { type Team, chatWhose } from "./team";
 
 // M4 step 5c: what the reviewer answered, turned into the verdict the server records (D96). Pure, so it's tested
 // on its own (answer.test.ts).
@@ -60,9 +61,10 @@ export function verdictFor(card: ApiCard, answer: Answer): { verdict: ApiVerdict
 }
 
 /** The short words for an answer, for the toast and, later, the path. A held card's agent went ahead: you keep it or overturn it (D151). */
-export function describeAnswer(card: ApiCard, answer: Answer): string {
+export function describeAnswer(card: ApiCard, answer: Answer, team?: Team): string {
   if (answer.kind === "choose" && card.status === "held") return answer.option === "proposal" ? `You kept ${quoted(card.meta.proposal)}.` : `You overturned it, for ${quoted(card.meta.alternative)}.`;
-  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `You confirmed ${quoted(card.meta.proposal)}, your answer in chat.`;
+  // A card answered in chat carries the answer of whoever the agent asked: you, or the member it was sent to (P20).
+  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `You confirmed ${quoted(card.meta.proposal)}, ${chatWhose(card, team)} answer in chat.`;
   if (answer.kind === "choose") return `You chose ${quoted(card.meta[answer.option])}.`;
   if (answer.kind === "write") return answer.reason === "question" ? "You asked a question." : answer.reason === "correction" ? "You gave your own answer." : "You rejected it.";
   return answer.reason === "see_it_run" ? "You asked to see it run." : answer.reason === "not_my_area" ? "You passed it on." : "You asked for more context.";

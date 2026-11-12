@@ -115,12 +115,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * What a setting would have held of past cards, in words: "Would have held back 2 of your 56 past cards.", or with a
  * subject, "These settings would have…". Held cards you answered against the agent are the misses it would have hidden.
  */
-export function heldWords(r: { held: number; cards: number; heldMissed: number }, subject?: string): string {
+export function heldWords(r: { held: number; cards: number; heldMissed: number }, subject?: string, ours = false): string {
   const would = subject ? `${subject} would` : "Would";
   if (!r.cards) return "No past cards to try it on yet.";
-  if (!r.held) return `${would} have shown you ${r.cards === 1 ? "your one past card" : `all ${r.cards} of your past cards`}.`;
-  const missed = r.heldMissed ? ` You answered ${r.heldMissed} of ${r.held === 1 ? "it" : "those"} against the agent.` : "";
-  return `${would} have held back ${r.held} of your ${plural(r.cards, "past card")}.${missed}`;
+  // `ours`, in a project with other members (P20): the past cards and their answers are everyone's.
+  const whose = ours ? "the project's" : "your";
+  if (!r.held) return `${would} have shown you ${r.cards === 1 ? `${whose} one past card` : `all ${r.cards} of ${whose} past cards`}.`;
+  const missed = r.heldMissed ? (ours ? ` ${r.heldMissed} of ${r.held === 1 ? "it" : "those"} ${r.heldMissed === 1 ? "was" : "were"} answered against the agent.` : ` You answered ${r.heldMissed} of ${r.held === 1 ? "it" : "those"} against the agent.`) : "";
+  return `${would} have held back ${r.held} of ${whose} ${plural(r.cards, "past card")}.${missed}`;
 }
 
 // ---------------------------------------------------------------- what each stop does, in words (D180)
@@ -193,10 +195,11 @@ export function stopRows(s: Pick<Settings, "rate_agent_decides" | "rate_sample" 
 }
 
 /** The Holding back switch, in two sentences: what the mode does now, and what to know about it. */
-export function holdingWords(mode: Mode, hosted: boolean): { now: string; more: string } {
+export function holdingWords(mode: Mode, hosted: boolean, ours = false): { now: string; more: string } {
   if (mode === "shadow") {
     return {
-      now: "Shadow: your settings are tried out, not applied. Every card still reaches you.",
+      // `ours`, in a project with other members (P20): the settings are the project's.
+      now: `Shadow: ${ours ? "the project's" : "your"} settings are tried out, not applied. Every card still reaches you.`,
       more: "Baesian notes which cards the two lowest stops would have held back, so a row set to one of them shows what holding back would have cost you before you turn it on.",
     };
   }

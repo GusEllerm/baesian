@@ -8,6 +8,7 @@ import { Mark } from "./Mark";
 import { Prose, inline } from "./Prose";
 import { RARITY, type Rarity, type WaitState, agentOf, chatWords, isHeld, isSeen, quoted, replyOf, ruleName } from "./model";
 import { POSITION_NAMES, type Position, rowInSentence } from "./prefs";
+import { asSentence, chatBy, chatWhose, decisionsName, shared, useTeam, whoGave } from "./team";
 
 // M4 step 5c: the card, as round 5 draws it (design/explorations/round5/app.js, renderCard), over a real card.
 // Presentational: the desk (Desk.tsx) owns what's chosen, the timers and the keys. M8b: a held card is answered blind
@@ -195,12 +196,14 @@ function Crux({ card }: { card: ApiCard }) {
 
 /** The agent's one reply to your answer against its pick (D89, D104): the card is back, with a fact or a check. */
 function Reply({ card }: { card: ApiCard }) {
+  const team = useTeam();
   const r = replyOf(card);
   if (!r) return null;
   return (
     <p className="facet reply">
       <b>{agentOf(card)} replied</b>
-      {r.to ? <>You chose “{r.to}”. </> : null}
+      {/* Whoever gave the answer it replies to: you, or in a project with members, the member who did (P20). */}
+      {r.to ? <>{asSentence(`${whoGave(r.by, team)} chose`, team)} “{r.to}”. </> : null}
       {r.reply}
     </p>
   );
@@ -208,6 +211,7 @@ function Reply({ card }: { card: ApiCard }) {
 
 function OptionButton(p: CardProps & { side: Side }) {
   const { card, mode, side } = p;
+  const team = useTeam();
   const m = card.meta;
   const kind = p.sides[side];
   // A card answered in chat is answered from its options too: its pick, your answer, confirms it (B-hswmx).
@@ -216,7 +220,7 @@ function OptionButton(p: CardProps & { side: Side }) {
   // A settled card, opened to look at, shows its pick and the option chosen, if one was. On a card answered in chat,
   // you've seen the pick: it was your answer.
   const showPick = kind === "proposal" && (mode.kind === "reveal" || mode.kind === "past" || mode.kind === "seen");
-  const pickWords = isSeen(card) ? "Your answer in chat" : isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
+  const pickWords = isSeen(card) ? asSentence(`${chatWhose(card, team)} answer in chat`, undefined) : isHeld(card) ? `${agentOf(card)} went ahead with this` : `${agentOf(card)}'s pick${m.serves ? `, for ${m.serves}` : ""}`;
   const chosen = mode.kind === "reveal" ? mode.option : mode.kind === "past" ? p.past?.chosen : undefined;
   const cls = (chosen ? (chosen === kind ? " chosen" : " unchosen") : "") + (p.armed === side ? " armed" : "");
   return (
@@ -275,11 +279,13 @@ function Acted({ card }: { card: ApiCard }) {
 /** What the gate did with a held card, once you've chosen: why it was held back, and what's built (D151). */
 function HeldFacts({ card }: { card: ApiCard }) {
   const g = card.gate;
+  // The gate's settings are one set for the project: its own, where other members answer too (P20).
+  const whose = shared(useTeam()) ? "The project's" : "Your";
   return (
     <>
       {g && (
         <p className="facet held">
-          <b>Held back</b> Your setting for {rowInSentence(g.row)} is “{POSITION_NAMES[g.position as Position]}”, so {agentOf(card)} went ahead without asking.
+          <b>Held back</b> {whose} setting for {rowInSentence(g.row)} is “{POSITION_NAMES[g.position as Position]}”, so {agentOf(card)} went ahead without asking.
           {card.audit ? " This one came back to you as a sample." : ""}
         </p>
       )}
@@ -294,6 +300,7 @@ function HeldFacts({ card }: { card: ApiCard }) {
  */
 function AskedToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undefined; onChange: (on: boolean) => void }) {
   const g = card.gate;
+  const whose = shared(useTeam()) ? "the project's" : "your";
   if (g?.outcome !== "held") return null;
   const enforced = g.mode === "enforce";
   return (
@@ -304,7 +311,7 @@ function AskedToggle({ card, on, onChange }: { card: ApiCard; on: boolean | unde
         <span className="soft">
           {enforced
             ? "Whatever you choose, it counts against that setting, and Baesian may propose showing you more like it."
-            : `In shadow, your setting for ${rowInSentence(g.row)}, “${POSITION_NAMES[g.position as Position]}”, would have held this back. Ticked, it counts against that setting.`}
+            : `In shadow, ${whose} setting for ${rowInSentence(g.row)}, “${POSITION_NAMES[g.position as Position]}”, would have held this back. Ticked, it counts against that setting.`}
         </span>
       </span>
     </label>
@@ -349,6 +356,7 @@ function Foot(p: CardProps) {
  */
 function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const { card, mode } = p;
+  const team = useTeam();
   const m = card.meta;
   const agent = agentOf(card);
   // Who picked it, with the model it ran on when the card records one (B-k0w7d): named here, with its pick, once you've
@@ -363,18 +371,20 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
   const confirmWords = held ? (same ? `Keep ${quoted(m.proposal)}` : `Overturn it: ${quoted(m.alternative)}`) : `Confirm ${quoted(m[mode.option])}`;
   const overturn = held && !same ? `Overturning it sends ${agent} a brief of what to redo.` : "";
   // On a touch screen, Esc's way back is a button.
-  const small = p.touch ? overturn : `${overturn ? `${overturn} ` : ""}Esc goes back to ${chat ? "your answer in chat" : "the choice"}.`;
+  // A card answered in chat carries the answer of whoever the agent asked: you, or the member it was sent to (P20).
+  const inChat = `${chatWhose(card, team)} answer in chat`;
+  const small = p.touch ? overturn : `${overturn ? `${overturn} ` : ""}Esc goes back to ${chat ? inChat : "the choice"}.`;
   return (
     <div className="panel-in">
       <p className="verdict">
         {chat ? (
           same ? (
             <>
-              You chose <b>{m.proposal}</b>, your answer in chat.
+              You chose <b>{m.proposal}</b>, {inChat}.
             </>
           ) : (
             <>
-              You chose <b>{m[mode.option]}</b>, not your answer in chat, <b>{m.proposal}</b>.
+              You chose <b>{m[mode.option]}</b>, not {inChat}, <b>{m.proposal}</b>.
             </>
           )
         ) : held ? (
@@ -469,7 +479,7 @@ function Reveal(p: CardProps & { mode: Extract<Mode, { kind: "reveal" }> }) {
         <ConfirmButton {...p} words={confirmWords} side={mode.side} />
         {!same && (
           <button type="button" className="switch" onClick={p.onSwitch}>
-            {chat ? "Back to your answer in chat" : held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
+            {chat ? `Back to ${inChat}` : held ? `Keep ${agent}'s pick` : `Switch to ${agent}'s pick`}
           </button>
         )}
         {/* Esc's way back, where there's no Esc key. */}
@@ -520,20 +530,22 @@ function Seen(p: CardProps & { mode: Extract<Mode, { kind: "seen" }> }) {
   const { card, mode } = p;
   const m = card.meta;
   const agent = agentOf(card);
+  // Whoever the agent asked in chat: you, or in a project with members the member the card was sent to (P20).
+  const by = chatBy(card, useTeam());
   return (
     <div className="panel-in seen">
       <div className="said">
-        <span className="lbl">You answered this in chat</span>
+        <span className="lbl">{by === "you" ? "You answered this in chat" : by ? `${by} answered this in chat` : "Answered in chat"}</span>
         <q>{chatWords(m.answered_in_chat ?? "")}</q>
       </div>
       <p className="verdict">
-        {agent} filed your answer as its pick: <b>{m.proposal}</b>.
+        {agent} filed {by === "you" ? "your" : by ? "their" : "that"} answer as its pick: <b>{m.proposal}</b>.
       </p>
       <RuleToggle card={card} on={mode.rule} onChange={(rule) => p.onMode({ ...mode, rule })} />
       <div className="reveal-row">
         <ConfirmButton {...p} words={`Confirm ${quoted(m.proposal)}`} side={sideOfKind(p.sides, "proposal")} />
       </div>
-      <p className="small">You'd seen the pick, so your calibration leaves this card out.</p>
+      <p className="small">{by === "you" ? "You'd seen the pick, so your calibration leaves this card out." : "The pick is shown here, so calibration leaves this card out."}</p>
     </div>
   );
 }
@@ -582,17 +594,18 @@ function Review(p: CardProps) {
 
 /** A settled card opened from your decisions, by branch (B-v8jzy): what was said, and the ways back. Nothing to answer. */
 function Past(p: CardProps) {
+  const team = useTeam();
   const words = p.past?.words ?? "";
   return (
     <div className="panel-in">
       <div className="result">
         <p>
-          <b>{words.charAt(0).toUpperCase() + words.slice(1)}.</b> Opened from your decisions, by branch: it's settled, so there's nothing to answer here.
+          <b>{asSentence(words, team)}.</b> Opened from {decisionsName(team)}: it's settled, so there's nothing to answer here.
         </p>
       </div>
       <div className="row">
         <button type="button" className="send" onClick={p.past?.onBranches}>
-          Back to your decisions, by branch <kbd>B</kbd>
+          Back to {decisionsName(team)} <kbd>B</kbd>
         </button>
         <button type="button" className="cancel" onClick={p.onBack}>
           Back to the next card <kbd>Esc</kbd>
@@ -638,12 +651,14 @@ function retirable(card: ApiCard, option: OptionKind, rules: ApiState["rules"] =
  * as a card to confirm (D109, D110). Not on a rule draft itself.
  */
 function RuleToggle({ card, on, onChange }: { card: ApiCard; on: boolean | undefined; onChange: (on: boolean) => void }) {
+  // A rule's draft is the project's owners' to confirm (B-rxbss): a member may ask for one.
+  const member = useTeam()?.role === "member";
   if (card.meta.rule !== undefined) return null;
   return (
     <label className="rule-toggle">
       <input type="checkbox" checked={on ?? false} onChange={(e) => onChange(e.target.checked)} />
       <span>
-        Make this a rule <span className="soft">{agentOf(card)} drafts it for you to confirm, so decisions like this one go the same way.</span>
+        Make this a rule <span className="soft">{agentOf(card)} drafts it for {member ? "an owner" : "you"} to confirm, so decisions like this one go the same way.</span>
       </span>
     </label>
   );

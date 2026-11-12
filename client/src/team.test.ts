@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
 import { parked, queue } from "./model";
-import { type Team, ago, decidedByAnother, passedBy, sentToMe, sentWords, waitsForMe } from "./team";
+import { type Team, ago, asSentence, chatBy, chatWhose, decidedByAnother, decisionsName, gaveIt, passedBy, sentToMe, sentWords, shared, waitsForMe, whoGave } from "./team";
 
 // Several reviewers on the desk (P20): whose a card is, what waits for you, and what the queue leads with (B-tzdjn),
 // against hand-built snapshots. The relay's own tests (service/test/sent-to.test.ts) cover the same rules where it counts.
@@ -158,6 +158,74 @@ describe("the queue, in a team (B-tzdjn: sent to one, open to all)", () => {
     expect(ids(queue(s, T0, ana))).toEqual(ids([draft]));
     expect(queue(s, T0, ben)).toEqual([]);
     expect(parked(s, ben)).toEqual([]);
+  });
+});
+
+describe("who gave an answer, and what's the project's", () => {
+  const by = (account: string | undefined, reviewer: string) => ({ ...(account ? { account } : {}), reviewer });
+
+  it("is you for your own answers, and for every answer where one person answers", () => {
+    expect(whoGave(by(ANA, "ana"), ana)).toBe("you");
+    expect(whoGave(by(BEN, "ben"), ana)).toBe("ben");
+    expect(gaveIt(by(BEN, "ben"), ana)).toBe(false);
+    // No team (`baesian serve`): whoever signed it, it's you.
+    expect(whoGave(by(undefined, "gus"), undefined)).toBe("you");
+    expect(gaveIt(by(BEN, "ben"), undefined)).toBe(true);
+    // Someone who has left: by the name the answer was signed with.
+    expect(whoGave(by("acct-gone", "dee"), ana)).toBe("dee");
+    // From before the repo was linked, naming no account: yours while you're the only member; else as it was signed.
+    expect(whoGave(by(undefined, "gus"), alone)).toBe("you");
+    expect(whoGave(by(undefined, "gus"), ana)).toBe("gus");
+    // Alone in a project, another member's old answer still isn't yours.
+    expect(whoGave(by(BEN, "ben"), alone)).toBe("ben");
+  });
+
+  it("calls the project's things the project's only where other members answer too", () => {
+    expect(shared(ana)).toBe(true);
+    expect(shared(alone)).toBe(false);
+    expect(shared(undefined)).toBe(false);
+    expect(decisionsName(ana)).toBe("the project's decisions, by branch");
+    expect(decisionsName(alone)).toBe("your decisions, by branch");
+    expect(decisionsName(undefined)).toBe("your decisions, by branch");
+  });
+
+  it("starts a sentence with a capital, but never changes a member's handle", () => {
+    expect(asSentence("you chose “A”", ana)).toBe("You chose “A”");
+    expect(asSentence("ben chose “A”", ana)).toBe("ben chose “A”");
+    expect(asSentence("waiting for you", ana)).toBe("Waiting for you");
+    expect(asSentence("your decisions, by branch", undefined)).toBe("Your decisions, by branch");
+  });
+
+  it("says whose answer in chat a card carries: the member's it was sent to", () => {
+    const anas = card({ answered_in_chat: "SQLite." }, { sent_to: ANA });
+    expect(chatBy(anas, ana)).toBe("you");
+    expect(chatBy(anas, ben)).toBe("ana");
+    expect(chatWhose(anas, ana)).toBe("your");
+    expect(chatWhose(anas, ben)).toBe("ana's");
+    // Ana confirming her own, read by Ben: "ana confirmed …, their answer in chat".
+    expect(chatWhose(anas, ben, "ana")).toBe("their");
+    // Sent to nobody in particular, in a project with other members: nobody can say whose.
+    expect(chatBy(card({ answered_in_chat: "SQLite." }), ana)).toBeUndefined();
+    expect(chatWhose(card({ answered_in_chat: "SQLite." }), ana)).toBe("the");
+    // Where one person answers, it's theirs.
+    expect(chatWhose(card({ answered_in_chat: "SQLite." }), alone)).toBe("your");
+    expect(chatWhose(card({ answered_in_chat: "SQLite." }), undefined)).toBe("your");
+  });
+});
+
+describe("what you put aside", () => {
+  it("holds the cards you passed on or deferred, never another member's", () => {
+    const c = card({}, { sent_to: BEN });
+    const deferredBy = (account: string) => ({ ...c, meta: { ...c.meta, id: `B-d${account.slice(-3)}` }, status: "deferred" as const, verdicts: [verdict(c, account, "defer")] });
+    const s = snapshot([deferredBy(ANA), deferredBy(BEN)]);
+    expect(parked(s, ana).map((x) => x.verdicts[0]!.account)).toEqual([ANA]);
+    expect(parked(s, ben).map((x) => x.verdicts[0]!.account)).toEqual([BEN]);
+    expect(parked(s)).toHaveLength(2);
+    // Passed on before the repo was linked, naming nobody: yours while you're the only member, nobody's in a team.
+    const old = snapshot([passed(card(), undefined)]);
+    expect(parked(old, alone)).toHaveLength(1);
+    expect(parked(old, ana)).toEqual([]);
+    expect(parked(old)).toHaveLength(1);
   });
 });
 

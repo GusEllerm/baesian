@@ -4,6 +4,7 @@ import { GatePathsSection } from "./GatePaths";
 import type { ApiPreferenceFile, ApiPresets, ApiRouting, RowReport } from "../../src/api";
 import type { Replay, ReplayCard, Settings } from "../../src/routing";
 import { Panel } from "./Panels";
+import { shared, useTeam } from "./team";
 import {
   type AnyRow,
   type Draft,
@@ -96,6 +97,10 @@ export function PreferencesPanel(p: {
   ownersOnly?: boolean;
 }) {
   const { routing } = p;
+  // In a project with other members (P20), the past cards a setting is tried on are everyone's.
+  const ours = shared(useTeam());
+  /** One set for the project (D131): yours where you alone answer, the project's where other members do too. */
+  const whose = ours || p.ownersOnly ? "The project's" : "Your";
   const endpoints = useEndpoints();
   const hosted = !!endpoints.hosted;
   const [base, setBase] = useState<{ name: string | undefined; settings: Settings }>(() => ({ name: replacesOf(routing), settings: routing.settings }));
@@ -127,7 +132,7 @@ export function PreferencesPanel(p: {
       setDraft(draftOf({ ...base.settings, mode: draft.mode, rows: draft.rows }));
       setReason("");
       setStatus({ kind: "saved" });
-      p.onSaved(draft.mode === "shadow" ? "Your preferences are saved, in shadow: nothing is held back yet." : "Your preferences are saved. They apply to the next cards agents file.");
+      p.onSaved(draft.mode === "shadow" ? `${whose} preferences are saved, in shadow: nothing is held back yet.` : `${whose} preferences are saved. They apply to the next cards agents file.`);
     } else if ("stale" in result) {
       // Someone saved first, or you accepted a slider proposal: start again from the file in force now.
       setBase({ name: replacesOf(routing), settings: routing.settings });
@@ -142,7 +147,7 @@ export function PreferencesPanel(p: {
   const matching = presetOf(draft.rows)?.id;
   const file = routing.preferences?.file;
   const s = routing.settings;
-  const holding = holdingWords(draft.mode, hosted);
+  const holding = holdingWords(draft.mode, hosted, ours || !!p.ownersOnly);
   const rowProps = (row: AnyRow, position: Position) => ({
     row,
     value: position,
@@ -154,7 +159,7 @@ export function PreferencesPanel(p: {
   });
 
   return (
-    <Panel label={p.ownersOnly ? "The project's preferences" : "Your preferences"} onClose={p.onClose} id="prefs-panel" wide>
+    <Panel label={`${whose} preferences`} onClose={p.onClose} id="prefs-panel" wide>
       {p.ownersOnly && (
         <p className="owners-note" role="note">
           Only this project's owners change these settings. They're shown as they are now.
@@ -185,7 +190,7 @@ export function PreferencesPanel(p: {
       </div>
       {routing.problem && (
         <p className="problem" role="alert">
-          Your preferences can't be read, so “Today” applies, in shadow. Saving writes new ones.
+          {whose} preferences can't be read, so “Today” applies, in shadow. Saving writes new ones.
         </p>
       )}
 
@@ -228,13 +233,13 @@ export function PreferencesPanel(p: {
             >
               <b>{preset.name}</b>
               <span>{preset.summary}</span>
-              <span className="soft">{replay ? heldWords(replay.total) : "Trying it on your past cards…"}</span>
+              <span className="soft">{replay ? heldWords(replay.total, undefined, ours) : `Trying it on ${ours ? "the project's" : "your"} past cards…`}</span>
             </button>
           );
         })}
       </div>
 
-      <h5>Your rows</h5>
+      <h5>{whose} rows</h5>
       <div className="pref-rows">
         {ROWS.map((row) => (
           <PrefRow key={row} {...rowProps(row, draft.rows[row])} note={ROW_FLOOR[row] ? `No lower than “${POSITION_NAMES[ROW_FLOOR[row]!]}”.` : undefined} onChange={(pos) => setRow(row, pos)} />
@@ -245,7 +250,7 @@ export function PreferencesPanel(p: {
       </div>
 
       <div className="pref-foot">
-        <p className="pref-total">{heldWords(replayed.total, "These settings")}</p>
+        <p className="pref-total">{heldWords(replayed.total, "These settings", ours)}</p>
         <label className="why-line" hidden={!!p.ownersOnly}>
           <span className="lbl">
             Why? <span className="soft">Optional. It's kept with the change.</span>
@@ -265,7 +270,7 @@ export function PreferencesPanel(p: {
         </div>
         {status.kind === "stale" && (
           <p className="problem" role="alert">
-            Your preferences changed while this was open, so nothing was saved. They're shown as they are now: make your change again.
+            {whose} preferences changed while this was open, so nothing was saved. They're shown as they are now: make your change again.
           </p>
         )}
         {status.kind === "error" && (

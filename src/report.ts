@@ -11,6 +11,7 @@ import {
   type Row,
   TODAY,
   answeredInChat,
+  calibrationOf,
   isOwnCard,
   outcomeOf,
   rank,
@@ -233,18 +234,8 @@ export const blankRow = (): RowReport => ({
   inChat: 0,
 });
 
-/**
- * Where a card falls in your calibration's bar (D180), by its answers: a miss (overturned, should have been asked, or on
- * a crux of preference chosen against blind, B-ab06a), came round (switched, on a crux of fact), chose as the agent did
- * (a final accept whose blind choice was its pick); or, left out of the bar, a final accept with no blind choice, or no
- * final answer at all. Each card falls in exactly one.
- */
-export function calibrationOf(answers: Outcome): "agreed" | "cameRound" | "missed" | "unblind" | "unanswered" {
-  if (answers.miss) return "missed";
-  if (answers.switched) return "cameRound";
-  if (!answers.final) return "unanswered";
-  return answers.final.response === "accept" && answers.final.first_choice === "proposal" ? "agreed" : "unblind";
-}
+// `calibrationOf()`, where a card falls in a calibration bar, is in src/routing.ts, where the client can reach it.
+export { calibrationOf };
 
 /** The report (P14 section 3): per row, and pooled first, as the client shows it. */
 export function routingReport(store: Store, force: InForce = store.inForce()): RoutingReport {

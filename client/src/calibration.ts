@@ -1,8 +1,9 @@
-import type { ApiCard, ApiState, RowReport, RowTest } from "../../src/api";
-import { answeredInChat, loosenAfter, oneMissWithin, tightenAt } from "../../src/routing";
+import type { ApiCard, ApiState, RoutingReport, RowReport, RowTest } from "../../src/api";
+import { FINAL, TODAY, answeredInChat, calibrationOf, isOwnCard, loosenAfter, oneMissWithin, outcomeOf, rowOf, tightenAt } from "../../src/routing";
 import type { Answer } from "./answer";
 import type { Rarity } from "./model";
 import { listWords } from "./prefs";
+import { type Team, gaveIt, shared } from "./team";
 
 // M4 step 5e: the calibration panel and the recap, from what can be stood behind (D71, Client Data Contract):
 // time spent comes from this browser's own log; "later reversed" from the store, worded as superseded, never
@@ -40,8 +41,9 @@ export const seconds = (ms: number | undefined) => (ms === undefined ? "none yet
  * 'superseded', not 'wrong'"). By name, never by ID (D69). Those you answered in chat first are left out, as from every
  * measure here (B-hswmx), and counted, so the panel can say how many: `inChat`, of the decisions you settled here.
  */
-export function laterSuperseded(state: ApiState): { names: string[]; inChat: number } {
-  const settled = (c: ApiCard) => c.verdicts.some((v) => CLIENTS.has(v.client) && (v.response === "accept" || v.response === "alternative" || v.response === "correction"));
+export function laterSuperseded(state: ApiState, team?: Team): { names: string[]; inChat: number } {
+  // In a project with members (P20), the ones you settled: an answer of another member's isn't yours.
+  const settled = (c: ApiCard) => c.verdicts.some((v) => CLIENTS.has(v.client) && gaveIt(v, team) && (v.response === "accept" || v.response === "alternative" || v.response === "correction"));
   return {
     names: state.cards.filter((c) => c.status === "superseded" && settled(c) && !answeredInChat(c)).map((c) => c.meta.title),
     inChat: state.cards.filter((c) => (c.status === "superseded" || c.status === "resolved") && settled(c) && answeredInChat(c)).length,
@@ -83,12 +85,52 @@ export const scaleOf = (bars: readonly Bar[]): number => Math.max(SCALE_MIN, ...
  * without a miss, counted since the row last moved, the agents' model changed, or you kept it where it was. Nothing for
  * a fixed row, or "All rows".
  */
-export function needsWords(t: RowTest | undefined): string | undefined {
+export function needsWords(t: RowTest | undefined, team?: Team): string | undefined {
   if (!t) return undefined;
-  if (t.waiting) return "A move for this row waits for you";
+  // In a project with other members (P20), a row moves on everyone's answers together, and a move is its owners' to answer.
+  const ours = shared(team);
+  if (t.waiting) return ours ? `A move for this row waits for ${team.role === "owner" ? "you or another owner" : "an owner"}` : "A move for this row waits for you";
   if (t.toLoosen === undefined) return "As low as it can go";
-  if (t.toLoosen === 0) return "Enough for a lower stop";
-  return `${t.toLoosen} more without a miss for a lower stop`;
+  if (t.toLoosen === 0) return ours ? "The project has enough for a lower stop" : "Enough for a lower stop";
+  return ours ? `The project needs ${t.toLoosen} more without a miss for a lower stop` : `${t.toLoosen} more without a miss for a lower stop`;
+}
+
+/** A row of a report with nothing counted yet. */
+const blankRow = (): RowReport => ({ shown: 0, held: 0, wouldHold: 0, drawn: 0, auditsAnswered: 0, auditsUnanswered: 0, answered: 0, misses: 0, switched: 0, blind: 0, matched: 0, agreed: 0, cameRound: 0, unblind: 0, unanswered: 0, heldWaiting: 0, inChat: 0 });
+
+/**
+ * Your own answers, row by row, in a project with other members (B-4mt91, "Your own answers"): each agent's card you
+ * gave an answer on, once, by your own answers on it, as the project's report counts every member's (`calibrationOf()`,
+ * `outcomeOf()`). A card you only asked a question on isn't counted; one answered in chat is counted as left out, as
+ * ever (B-hswmx). Each row keeps the project's stop and what the project needs before it moves (`RowReport.test`): those
+ * rest on every member's answers together, and the panel says so.
+ */
+export function ownReport(state: ApiState, team: Team): RoutingReport {
+  const project = state.routing.report;
+  const rows: Record<string, RowReport> = {};
+  for (const [row, r] of Object.entries(project.rows)) rows[row] = { ...blankRow(), ...(r.position !== undefined ? { position: r.position } : {}), ...(r.test ? { test: r.test } : {}) };
+  const pooled = blankRow();
+  for (const c of state.cards) {
+    if (isOwnCard(c.meta) || c.gate?.source === "baesian" || c.status === "withdrawn") continue;
+    const mine = c.verdicts.filter((v) => gaveIt(v, team));
+    if (!mine.length) continue;
+    const r = (rows[c.gate?.row ?? rowOf(c.meta.touches, TODAY).row] ??= blankRow());
+    if (answeredInChat(c)) {
+      if (mine.some((v) => FINAL.has(v.response))) for (const t of [r, pooled]) t.inChat++;
+      continue;
+    }
+    const answers = outcomeOf(mine, { preference: c.meta.crux_preference });
+    const where = calibrationOf(answers);
+    if (where === "unanswered") continue;
+    for (const t of [r, pooled]) {
+      if (answers.final) t.answered++;
+      if (where === "missed") t.misses++;
+      else if (where === "cameRound") t.cameRound++;
+      else if (where === "agreed") t.agreed++;
+      else t.unblind++;
+    }
+  }
+  return { rows, pooled, beforeGate: 0 };
 }
 
 /** The rule, in the reading notes' words: the answers loosening takes, and the misses tightening takes. */

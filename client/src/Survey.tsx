@@ -3,6 +3,7 @@ import { type Row, type SurveyItem, suggestPreset } from "../../src/routing";
 import { ARROW, type Side } from "./Card";
 import { LIFT_HINT } from "./Lift";
 import { type Answers, type Mode, ROW_NAMES, countWords, heldRows, heldWords, listWords, rowInSentence, surveyAnswersOf } from "./prefs";
+import { shared, useTeam } from "./team";
 
 // M8b: the setup survey (B-5na1k), in Baesian's own card format: offered once, when a repo has no preference file; then
 // the survey's example decisions as cards you answer with the card's gestures (← "Show me ones like it", → "Fine not
@@ -129,6 +130,8 @@ export function ResultFace(p: {
   onAdjust: () => void;
   onAway: () => void;
 }) {
+  // The survey sets the project's preferences: an owner's, and in a project with other members (P20), tried on everyone's past cards.
+  const ours = shared(useTeam());
   const preset = suggestPreset(surveyAnswersOf(p.answers));
   const replay = p.presets.presets.find((x) => x.id === preset.id)?.replay;
   const { sample, agent } = heldRows(preset.rows);
@@ -155,7 +158,7 @@ export function ResultFace(p: {
           <b>{sample.length || agent.length ? "Everything else reaches you" : "Every kind reaches you"}</b>, and security and privacy never go ahead without you.
         </li>
       </ul>
-      <p className="setup-text">{replay ? heldWords(replay.total, "It") : "Trying it on your past cards…"}</p>
+      <p className="setup-text">{replay ? heldWords(replay.total, "It", ours) : `Trying it on ${ours ? "the project's" : "your"} past cards…`}</p>
       <p className="setup-text soft">
         {p.mode === "shadow" ? "It starts in shadow: nothing is held back until you turn that on, in your preferences." : "Holding back is on, so it applies to the next cards agents file."}
       </p>

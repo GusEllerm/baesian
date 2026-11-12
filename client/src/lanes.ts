@@ -1,5 +1,6 @@
 import type { ApiCard, ApiCommit, ApiMerge, ApiState } from "../../src/api";
 import { agentOf, isHard } from "./model";
+import { type Team, chatWhose, passedBy, shared, waitsForMe, whoGave } from "./team";
 
 // D181, redrawn (B-v8jzy, B-vfdhz, B-tgq5p): a project's decisions by branch, as a list, newest first, with each branch a
 // line in a gutter of fixed columns beside it. Pure: what happened, and the rows that show it, for `<BranchesDrawer />`
@@ -67,31 +68,47 @@ export function chosenOf(c: ApiCard): "proposal" | "alternative" | undefined {
   return last?.response === "accept" ? "proposal" : last?.response === "alternative" ? "alternative" : undefined;
 }
 
-/** What happened to a card, in a few words. */
-export function saidOf(c: ApiCard, nowMs: number): { words: string; tone: MarkState } {
+/**
+ * What happened to a card, in a few words. In a project with members (`team`, P20), an answer is named for whoever gave
+ * it, "you" only when it was you; and a card another member passed on is waiting for you.
+ */
+export function saidOf(c: ApiCard, nowMs: number, team?: Team): { words: string; tone: MarkState } {
   const st = markState(c);
   const last = c.verdicts.filter((v) => v.revision === c.meta.revision).at(-1);
+  const who = whoGave(last, team);
   switch (c.status) {
     case "withdrawn":
       return { words: "withdrawn by its agent", tone: st };
     case "superseded":
       return { words: "superseded by a later decision", tone: st };
     case "held":
-      return { words: `held back by your settings: ${agentOf(c)} went ahead`, tone: st };
+      return { words: `held back by ${shared(team) ? "the project's" : "your"} settings: ${agentOf(c)} went ahead`, tone: st };
     case "deferred":
-      return { words: "you deferred it", tone: st };
+      return { words: `${who} deferred it`, tone: st };
     case "returned":
-      return { words: last?.response === "reject" ? "you rejected it: returned to its agent" : "returned to its agent", tone: st };
-    case "rerouted":
-      return { words: "you passed it on: waiting for someone else", tone: st };
+      return { words: last?.response === "reject" ? `${who} rejected it: returned to its agent` : "returned to its agent", tone: st };
+    case "rerouted": {
+      if (!team) return { words: "you passed it on: waiting for someone else", tone: st };
+      const passed = passedBy(c);
+      if (passed.includes(team.me)) return { words: "you passed it on: waiting for someone else", tone: st };
+      // Whoever it was sent to comes first; else whoever passed it. Nobody named, from before the repo was linked.
+      const by = c.sent_to !== undefined && passed.includes(c.sent_to) ? c.sent_to : passed[0];
+      const name = by === undefined ? undefined : (team.handles.get(by) ?? "someone who has left");
+      if (waitsForMe(c, team)) return { words: `${name} passed it on: waiting for you`, tone: st };
+      // Passed on before the repo was linked, by the one reviewer there was: you, if you're still the only member.
+      if (!name && !shared(team)) return { words: "you passed it on: waiting for someone else", tone: st };
+      return { words: name ? `${name} passed it on` : "passed on", tone: st };
+    }
     case "open":
+      // A card only owners answer isn't a member's to answer (B-rxbss).
+      if (!waitsForMe(c, team)) return { words: "waiting for an owner", tone: st };
       return { words: c.waiting.some((w) => nowMs - Date.parse(w.at) <= 90_000) ? `${agentOf(c)} has stopped: waiting for you` : "waiting for you", tone: st };
     default:
-      // A choice you answered in chat, confirmed here (B-hswmx): the pick was your answer.
-      if (st === "with" && last?.seen) return { words: `you confirmed “${c.meta.proposal}”, your answer in chat`, tone: st };
-      if (st === "with") return { words: `you chose “${c.meta.proposal}”, the agent's pick${last?.first_choice === "alternative" ? ", after reading its case" : ""}`, tone: st };
-      if (last?.response === "alternative") return { words: `you chose “${c.meta.alternative}”, not the agent's pick`, tone: st };
-      return { words: `you answered “${last?.choice ?? c.decision ?? last?.response ?? "otherwise"}”`, tone: st };
+      // A choice answered in chat, confirmed here (B-hswmx): the pick was that answer.
+      if (st === "with" && last?.seen) return { words: `${who} confirmed “${c.meta.proposal}”, ${chatWhose(c, team, who)} answer in chat`, tone: st };
+      if (st === "with") return { words: `${who} chose “${c.meta.proposal}”, the agent's pick${last?.first_choice === "alternative" ? ", after reading its case" : ""}`, tone: st };
+      if (last?.response === "alternative") return { words: `${who} chose “${c.meta.alternative}”, not the agent's pick`, tone: st };
+      return { words: `${who} answered “${last?.choice ?? c.decision ?? last?.response ?? "otherwise"}”`, tone: st };
   }
 }
 
@@ -328,8 +345,11 @@ export function trunkOf(lanes: Map<string, Pick<Lane, "name" | "in" | "out" | "f
   return { name: into[0]?.name ?? null, known: false };
 }
 
-/** What happened, by branch. */
-export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?: number }): Model {
+/**
+ * What happened, by branch. In a project with members (`team`, P20), a card is "for you" when it waits for you
+ * (`waitsForMe()`): one another member passed on is, and one only owners answer isn't, unless you're one.
+ */
+export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?: number; team?: Team | undefined }): Model {
   const idleMs = opts.idleMs ?? IDLE_MS;
   // Now is never before the last thing that happened: a clock a few seconds behind the machine that made a commit (or a
   // model built a minute ago) mustn't leave a branch that's still open short of the top.
@@ -338,7 +358,7 @@ export function branchModel(state: BranchesState, opts: { nowMs: number; idleMs?
   const offLane = state.cards.filter((c) => noLane(c.meta.source_branch)).length;
   const cards: BCard[] = state.cards
     .filter((c) => !noLane(c.meta.source_branch))
-    .map((c) => ({ id: c.meta.id, card: c, title: c.meta.title, branch: c.meta.source_branch, agent: agentOf(c), t: Date.parse(c.meta.created), state: markState(c), forYou: c.status === "open", hard: isHard(c) }))
+    .map((c) => ({ id: c.meta.id, card: c, title: c.meta.title, branch: c.meta.source_branch, agent: agentOf(c), t: Date.parse(c.meta.created), state: markState(c), forYou: waitsForMe(c, opts.team), hard: isHard(c) }))
     .sort((a, b) => a.t - b.t || a.id.localeCompare(b.id));
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const commits = commitsOf(state.commits ?? []);
@@ -910,14 +930,27 @@ export function endWords(L: Lane): string {
   return `${none} · ${st}${e.idleSince !== null ? ` · idle since ${dayWords(e.idleSince)}` : ""}`;
 }
 
-/** The opening words: what needs you first (lead), then the counts (body), the branches with no merge, and the commits. */
-export function statusOf(model: Model): { lead: string; body: string; open: Lane[]; cites: string } {
+/**
+ * The opening words: what needs you first (lead), then the counts (body), the branches with no merge, and the commits.
+ * In a project with other members (`team`), the counts are of everyone's answers, and say so.
+ */
+export function statusOf(model: Model, team?: Team): { lead: string; body: string; open: Lane[]; cites: string } {
   const c = model.counts;
   if (!c.cards) return { lead: "No cards yet.", body: "A branch appears here once an agent files a card on it.", open: [], cites: "" };
   // The branches a card waiting for you holds from merging (one returned to its agent holds it too, but not for you).
   const held = c.held.filter((L) => L.cards.some((x) => x.forYou)).map((L) => L.short);
   const first = c.waiting ? `${c.waiting === 1 ? "One card is" : `${lead(c.waiting)} cards are`} waiting for you${held.length ? `, holding ${listOf(held)} from merging` : ""}.` : "Nothing is waiting for you.";
-  const answered = c.against ? `you chose otherwise than the agent on ${c.against}` : c.with ? "you chose the agent's pick on every one you answered" : "none answered yet";
+  const answered = shared(team)
+    ? c.against
+      ? `${c.against} ${c.against === 1 ? "was" : "were"} answered otherwise than the agent chose`
+      : c.with
+        ? "the agent's pick was chosen on every one answered"
+        : "none answered yet"
+    : c.against
+      ? `you chose otherwise than the agent on ${c.against}`
+      : c.with
+        ? "you chose the agent's pick on every one you answered"
+        : "none answered yet";
   // The branches merged count every branch drawn, those with commits but no cards too, and say so (B-zshw5).
   const bare = !c.mergedBare ? "" : c.mergedBare < c.merged ? `, ${c.mergedBare} of them with commits but no cards` : `, ${c.merged === 1 ? "" : c.merged === 2 ? "both " : "all "}with commits but no cards`;
   const body = [

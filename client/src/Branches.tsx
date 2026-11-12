@@ -1,5 +1,6 @@
 import { type CSSProperties, Fragment, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ApiCard } from "../../src/api";
+import { type Team, asSentence, decisionsName, gaveIt, shared, useTeam, whoGave } from "./team";
 import { type BCard, type BranchesState, CHILD_Y, type Commit, FORK_Y, type Lane, type Live, MARK_Y, type Merge, type Model, type Row, SOURCE_Y, type Stroke, TARGET_Y, branchModel, columnsOf, dayKey, daysOf, endWords, gutterOf, linkedKeys, listRows, openingKey, plural, reachOf, saidOf, statusOf, strokesOf } from "./lanes";
 
 /** What a merge brought, in words: its cards, and the commits citing cards that came with it (B-w41p7). */
@@ -33,21 +34,27 @@ const WIDTH_KEY = "baesian:drawer-width";
 /** The one row detail open at a time, which the row that opened it names (`aria-controls`). */
 const DETAIL_ID = "br-detail";
 
-const FILTERS: [key: string, label: string, test: (c: BCard) => boolean][] = [
+/** `shared`, a filter's name in a project with other members (P20), where the answers are anyone's. */
+const FILTERS: [key: string, label: string, test: (c: BCard) => boolean, shared?: string][] = [
   ["all", "Every card", () => true],
-  ["against", "You chose otherwise", (c) => c.state === "against"],
+  ["against", "You chose otherwise", (c) => c.state === "against", "Chosen otherwise"],
   ["waiting", "Waiting for you", (c) => c.forYou],
   ["hard", "Hard", (c) => c.hard],
   ["gone", "Withdrawn", (c) => c.state === "gone"],
 ];
 
-/** A card's state in a row's few words: coloured by its mark, never by colour alone. */
-function stateWords(c: ApiCard, st: BCard["state"]): string {
+/**
+ * A card's state in a row's few words: coloured by its mark, never by colour alone. In a project with members (P20),
+ * an answer that wasn't yours names who gave it, and a card another member passed on is waiting for you.
+ */
+function stateWords(c: ApiCard, st: BCard["state"], forYou: boolean, team: Team | undefined): string {
+  const last = c.verdicts.filter((v) => v.revision === c.meta.revision).at(-1);
+  const mine = !last || gaveIt(last, team);
   switch (c.status) {
     case "returned":
       return "Returned to its agent";
     case "rerouted":
-      return "Passed on";
+      return forYou ? "Passed on: waiting for you" : "Passed on";
     case "superseded":
       return "Superseded";
     case "deferred":
@@ -55,7 +62,7 @@ function stateWords(c: ApiCard, st: BCard["state"]): string {
     case "held":
       return "Held back: settled at merge";
     default:
-      return { with: "Agent's pick", against: "You chose otherwise", waiting: "Waiting for you", aside: "Held back: settled at merge", gone: "Withdrawn" }[st];
+      return { with: "Agent's pick", against: mine ? "You chose otherwise" : `${whoGave(last, team)} chose otherwise`, waiting: forYou ? "Waiting for you" : "Waiting for an owner", aside: "Held back: settled at merge", gone: "Withdrawn" }[st];
   }
 }
 
@@ -129,6 +136,7 @@ export interface DrawerProps {
 }
 
 export function BranchesDrawer(p: DrawerProps) {
+  const team = useTeam();
   const vw = useWindowWidth();
   const [stored, setStored] = useState(readWidth);
   const width = Math.round(Math.max(MIN_W, Math.min(maxW(vw), stored)));
@@ -220,7 +228,7 @@ export function BranchesDrawer(p: DrawerProps) {
   }, []);
   const toggleWide = () => {
     setWidth(wide ? NARROW_W : wideW(vw));
-    say(wide ? "Narrower." : "Wider: a row's time, title and what you chose on one line.");
+    say(wide ? "Narrower." : "Wider: a row's time, title and answer on one line.");
   };
 
   return (
@@ -249,7 +257,7 @@ export function BranchesDrawer(p: DrawerProps) {
           />
         )}
         <div className="drawer-head">
-          <h2 id="drawer-h">Your decisions, by branch</h2>
+          <h2 id="drawer-h">{asSentence(decisionsName(team), undefined)}</h2>
           {!p.phone && (
             <button type="button" className="drawer-wider" aria-pressed={wide} disabled={!wide && wideW(vw) < WIDE_AT} onClick={toggleWide}>
               <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
@@ -299,7 +307,9 @@ function fitMargin(el: HTMLElement) {
 function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
   // Built again when the state changes, and once a minute: what's idle, and the "Now" row, don't need the clock finer.
   const minute = Math.floor(p.nowMs / 60_000);
-  const model = useMemo(() => branchModel(p.state, { nowMs: p.nowMs }), [p.state.cards, p.state.commits, p.state.merges, p.state.defaultBranch, minute]);
+  // In a project with members (P20): what waits for you, and who gave each answer.
+  const team = useTeam();
+  const model = useMemo(() => branchModel(p.state, { nowMs: p.nowMs, team }), [p.state.cards, p.state.commits, p.state.merges, p.state.defaultBranch, minute, team]);
   const columns = useMemo(() => columnsOf(model), [model]);
   const first = useMemo(() => openingKey(model), []);
   const firstWaiting = !!first && !!model.cardById.get(first.slice(5))?.forYou;
@@ -510,13 +520,14 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     return endWords(Ln).replace(/^No merge recorded/, "has no merge recorded");
   };
   const said = (c: BCard) => {
-    const s = saidOf(c.card, p.nowMs);
+    const s = saidOf(c.card, p.nowMs, team);
     return (
       <span className={`br-said ${c.state}`}>
         <Sw w={22} h={22}>
           <CardMark c={c} />
         </Sw>
-        <span>{cap1(s.words)}</span>
+        {/* A member's handle is written as its owner chose it: never capitalised to start the sentence. */}
+        <span>{asSentence(s.words, team)}</span>
       </span>
     );
   };
@@ -772,7 +783,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     }
     if (r.kind === "fold") {
       const g = draw(strokesOf(r, P, model), r.t);
-      const bits = [plural(r.cards, "card") + (r.against ? `, ${r.against} you chose otherwise` : "") + (r.gone ? `, ${r.gone} withdrawn` : "")];
+      const bits = [plural(r.cards, "card") + (r.against ? `, ${r.against} ${shared(team) ? "chosen otherwise" : "you chose otherwise"}` : "") + (r.gone ? `, ${r.gone} withdrawn` : "")];
       if (r.began.length) bits.push(`${plural(r.began.length, "branch", "branches")} began${r.merged ? ` and ${r.merged} merged` : ""} (${r.began.slice(0, 3).join(", ")}${r.began.length > 3 ? ", …" : ""})`);
       else if (r.merged) bits.push(`${plural(r.merged, "branch", "branches")} merged`);
       return (
@@ -866,7 +877,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
         </>
       );
       const n = model.citedBy.get(c.id)?.length ?? 0;
-      const words = stateWords(c.card, c.state);
+      const words = stateWords(c.card, c.state, c.forYou, team);
       text = (
         <>
           <span className="br-tm">{hm(c.t)}</span>
@@ -972,7 +983,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
     if (r.kind === "day") groups.push({ head: r, rows: [] });
     else groups.at(-1)!.rows.push(r);
   }
-  const st = statusOf(model);
+  const st = statusOf(model, team);
   const waiting = model.cards.filter((c) => c.forYou).sort((a, b) => a.t - b.t);
   const touch = p.touch;
 
@@ -994,7 +1005,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       </p>
       <div className="br-controls">
         <div className="br-chips" role="group" aria-label="Show">
-          {FILTERS.map(([k, label, f]) => {
+          {FILTERS.map(([k, mine, f, others]) => {
+            const label = shared(team) ? (others ?? mine) : mine;
             const n = model.cards.filter(f).length;
             return (
               <button key={k} type="button" className="br-chip" aria-pressed={filter === k} disabled={!n && filter !== k} onClick={() => setFilterTo(k)}>
@@ -1011,7 +1023,8 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
         <label className="br-ctl br-fsel">
           Show
           <select value={filter} onChange={(e) => setFilterTo(e.target.value)}>
-            {FILTERS.map(([k, label, f]) => {
+            {FILTERS.map(([k, mine, f, others]) => {
+              const label = shared(team) ? (others ?? mine) : mine;
               const n = model.cards.filter(f).length;
               return (
                 <option key={k} value={k} disabled={!n && filter !== k}>
@@ -1056,9 +1069,9 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
         <div className="br-key-grid">
           {(
             [
-              [<CardMark key="k" c={{ state: "with", hard: false }} />, "You chose the agent's pick"],
-              [<CardMark key="k" c={{ state: "against", hard: false }} />, "You chose otherwise"],
-              [<CardMark key="k" c={{ state: "waiting", hard: false }} />, "Waiting for you"],
+              [<CardMark key="k" c={{ state: "with", hard: false }} />, shared(team) ? "The agent's pick was chosen" : "You chose the agent's pick"],
+              [<CardMark key="k" c={{ state: "against", hard: false }} />, shared(team) ? "Something else was chosen" : "You chose otherwise"],
+              [<CardMark key="k" c={{ state: "waiting", hard: false }} />, shared(team) ? "Waiting for an answer" : "Waiting for you"],
               [<CardMark key="k" c={{ state: "aside", hard: false }} />, <>Held back or deferred <span className="fine">(settled at merge)</span></>],
               [<CardMark key="k" c={{ state: "gone", hard: false }} />, "Withdrawn by its agent"],
               [<CardMark key="k" c={{ state: "with", hard: true }} />, <>A hard card <span className="fine">(the outer ring)</span></>],
@@ -1099,7 +1112,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       {model.lanes.size === 0 ? (
         <p className="br-empty">No branches yet: a branch appears here once an agent files a card on it.</p>
       ) : (
-        <ol className="br-list" ref={list} aria-label="Your decisions by branch, newest first" style={{ "--gw": `${gw}px`, "--pad": `${gw + 4}px` } as CSSProperties} onKeyDown={onKey}>
+        <ol className="br-list" ref={list} aria-label={shared(team) ? "The project's decisions by branch, newest first" : "Your decisions by branch, newest first"} style={{ "--gw": `${gw}px`, "--pad": `${gw + 4}px` } as CSSProperties} onKeyDown={onKey}>
           {groups.map((grp, gi) =>
             grp.head ? (
               <li key={grp.head.key} className="br-day" aria-label={dayW(grp.head.t)} style={widened(Math.max(...[grp.head, ...grp.rows].map((r) => reachOf(strokesOf(r, P, model)))))}>
@@ -1127,7 +1140,7 @@ function History(p: DrawerProps & { wide: boolean; say: (s: string) => void }) {
       <p className="br-foot">
         {st.cites ? `${st.cites} ` : ""}
         Merges are found by Baesian's command line on the machine where they happen: at a merge, a pull, a squash's commit or a rebase; one made on GitHub shows once a machine with Baesian pulls it. Git doesn't record where a branch began, so each one starts, dashed, just before its first card
-        or commit: from the branch it merged into, or, if it hasn't merged, the branch busiest in the hours before. One brought up to another branch before any work of its own starts there, from that branch. The commits shown are those whose messages cite a card; their messages never leave your machine.
+        or commit: from the branch it merged into, or, if it hasn't merged, the branch busiest in the hours before. One brought up to another branch before any work of its own starts there, from that branch. The commits shown are those whose messages cite a card; their messages never leave the machine they were made on.
         {model.offLane ? ` ${plural(model.offLane, "card")} filed on Baesian's own branch or a detached HEAD ${model.offLane === 1 ? "isn't" : "aren't"} shown.` : ""}
       </p>
     </>

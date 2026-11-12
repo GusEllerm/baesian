@@ -1,11 +1,12 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import type { ApiCard, ApiRemovedCard, ApiRouting, ApiState } from "../../src/api";
+import type { ApiCard, ApiRemovedCard, ApiRouting, ApiState, RoutingReport } from "../../src/api";
 import { AnswerBars } from "./AnswerBars";
 import { type Spent, seconds, timeSpent } from "./calibration";
 import { agentOf, dayOf } from "./model";
 import type { NotifyStatus } from "./notify";
 import { type PracticeProps, PracticeSection } from "./PracticePanel";
 import { rowInSentence } from "./prefs";
+import { asSentence, decisionsName, shared, useTeam } from "./team";
 import { Prose } from "./Prose";
 
 // M4 step 5e: the menu in the header, its two panels (your calibration, and the keys), and the empty desk.
@@ -32,6 +33,9 @@ export function MoreMenu(p: {
   onNotify: () => void;
 }) {
   const menu = useRef<HTMLDivElement>(null);
+  // In a project with other members (P20), the decisions by branch and the preferences are the project's.
+  const team = useTeam();
+  const drawer = asSentence(decisionsName(team), undefined);
   useEffect(() => {
     if (!p.open) return;
     menu.current?.querySelector<HTMLElement>("button")?.focus();
@@ -55,15 +59,15 @@ export function MoreMenu(p: {
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("branches"))}>
             {p.touch ? (
-              "Your decisions, by branch"
+              drawer
             ) : (
               <>
-                Your decisions, by branch <kbd>B</kbd>
+                {drawer} <kbd>B</kbd>
               </>
             )}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("preferences"))}>
-            {p.member ? "The project's preferences" : "Your preferences"}
+            {p.member || shared(team) ? "The project's preferences" : "Your preferences"}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => p.onPanel("held"))}>
             Held back <span className="state">{p.held || "none"}</span>
@@ -124,6 +128,7 @@ export function Panel({ label, onClose, children, id, wide, className }: { label
  * it, or by a tap. The path's sheet is named only where there is one, on a phone.
  */
 export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: boolean; onClose: () => void }) {
+  const drawer = asSentence(decisionsName(useTeam()), undefined);
   // B-yfehp: a drag scrolls, a hold lifts the card, and a lifted card is dragged to an answer.
   if (touch) {
     return (
@@ -185,7 +190,7 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
         <dt>
           <kbd>B</kbd>
         </dt>
-        <dd>Your decisions, by branch: opens them beside the desk, and closes them</dd>
+        <dd>{drawer}: opens them beside the desk, and closes them</dd>
         <dt>
           <kbd>Esc</kbd>
         </dt>
@@ -206,13 +211,28 @@ export function KeysPanel({ touch, phone, onClose }: { touch: boolean; phone: bo
  * spend by stakes, and the decisions you settled that were later superseded. Choices you answered in chat are left out of
  * each, and said (B-hswmx).
  */
-export function CalibrationPanel({ spent, superseded: s, routing, practice, onClose }: { spent: Spent[]; superseded: { names: string[]; inChat: number }; routing: ApiRouting; practice?: PracticeProps; onClose: () => void }) {
+export function CalibrationPanel({
+  spent,
+  superseded: s,
+  routing,
+  own,
+  practice,
+  onClose,
+}: {
+  spent: Spent[];
+  superseded: { names: string[]; inChat: number };
+  routing: ApiRouting;
+  /** In a project with other members (P20, B-4mt91): your own answers' report, shown in place of the project's. */
+  own?: RoutingReport;
+  practice?: PracticeProps;
+  onClose: () => void;
+}) {
   const t = timeSpent(spent);
   const superseded = s.names;
   const chat = s.inChat ? `; ${s.inChat} you answered in chat ${s.inChat === 1 ? "isn't" : "aren't"} counted` : "";
   return (
     <Panel label="Your calibration" onClose={onClose} id="calibration-panel" wide>
-      <AnswerBars routing={routing} />
+      <AnswerBars routing={routing} own={own} />
       {practice && <PracticeSection {...practice} />}
       <div className="cal-time">
         <span>
@@ -241,11 +261,13 @@ export function CalibrationPanel({ spent, superseded: s, routing, practice, onCl
  * first, like an audit (D151). Newest first.
  */
 export function HeldPanel({ held, gone = [], mode, onOpen, onClose }: { held: ApiCard[]; gone?: ApiRemovedCard[]; mode: ApiRouting["settings"]["mode"]; onOpen: (id: string) => void; onClose: () => void }) {
+  // The gate's settings are one set for the project: its own, where other members answer too (P20).
+  const whose = shared(useTeam()) ? "The project's" : "Your";
   return (
     <Panel label="Held back" onClose={onClose} id="held-panel">
       <p className="sub">
         {held.length
-          ? "Your settings held these back, and their agents went ahead. Any can be answered: you choose first, then see what was done."
+          ? `${whose} settings held these back, and their agents went ahead. Any can be answered: you choose first, then see what was done.`
           : gone.length
             ? "Nothing held back is waiting to be answered."
             : mode === "shadow"

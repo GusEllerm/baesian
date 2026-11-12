@@ -19,6 +19,50 @@ export interface Team {
 export const TeamContext = createContext<Team | undefined>(undefined);
 export const useTeam = () => useContext(TeamContext);
 
+/** Whether the project has members besides you: what's the project's is then called the project's, not yours. */
+export const shared = (team: Team | undefined): team is Team => !!team && team.handles.size > 1;
+
+/**
+ * Who gave an answer, as the desk names them: "you" for your own, and for every answer where one person answers (no
+ * team); else their handle. An answer from before the repo was linked names no account: it's yours when you're the only
+ * member, and otherwise goes by the name it was signed with.
+ */
+export function whoGave(v: { account?: string | undefined; reviewer: string } | undefined, team: Team | undefined): string {
+  if (!v || gaveIt(v, team)) return "you";
+  return (v.account !== undefined && team?.handles.get(v.account)) || v.reviewer;
+}
+
+/** Whether an answer is yours: any answer where one person answers; else one that names your account, or, while you're the only member, none. */
+export const gaveIt = (v: { account?: string | undefined }, team: Team | undefined): boolean => !team || v.account === team.me || (v.account === undefined && team.handles.size < 2);
+
+/**
+ * Whose answer in chat a card carries (B-hswmx): the member it was sent to, in whose conversation the agent asked. "you"
+ * where one person answers, or it was sent to you; a handle; or nothing, when it was sent to nobody in particular and
+ * the project has other members, so nobody can say whose.
+ */
+export function chatBy(card: ApiCard, team: Team | undefined): string | undefined {
+  if (!shared(team) || card.sent_to === team.me) return "you";
+  return card.sent_to === undefined ? undefined : (team.handles.get(card.sent_to) ?? "someone who has left");
+}
+
+/** Whose, before "answer in chat": "your", "ana's", or "the" when nobody can say; "their", when the one confirming it gave it. */
+export function chatWhose(card: ApiCard, team: Team | undefined, confirmedBy?: string): string {
+  const by = chatBy(card, team);
+  return by === "you" ? "your" : by === undefined ? "the" : by === confirmedBy ? "their" : `${by}'s`;
+}
+
+/**
+ * A few words as a sentence's start: its first letter a capital, unless it opens with a member's handle, which is
+ * written as its owner chose it.
+ */
+export function asSentence(words: string, team: Team | undefined): string {
+  if (team && [...team.handles.values()].some((h) => words.startsWith(`${h} `))) return words;
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** What the drawer of decisions by branch is called: yours, where you alone answer; the project's, where others do too. */
+export const decisionsName = (team: Team | undefined): string => (shared(team) ? "the project's decisions, by branch" : "your decisions, by branch");
+
 /** Whether a card is one only the project's owners answer (B-rxbss): a rule's draft, a pattern to make a rule of, or a proposed move of a setting. */
 export const ownersOnly = (card: ApiCard): boolean => card.meta.rule !== undefined || card.meta.convention !== undefined || card.meta.pref_row !== undefined;
 

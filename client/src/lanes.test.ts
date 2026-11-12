@@ -220,6 +220,49 @@ describe("the ledger and names", () => {
     chat.verdicts = chat.verdicts.map((v) => ({ ...v, seen: true as const }));
     expect(saidOf(chat, now)).toEqual({ words: "you confirmed “A”, your answer in chat", tone: "with" });
   });
+
+  it("in a project with members, names whoever gave each answer, and says what waits for you (P20)", () => {
+    const now = T0;
+    const handles = new Map([
+      ["acct-ana", "ana"],
+      ["acct-ben", "ben"],
+    ]);
+    const ana = { me: "acct-ana", role: "owner" as const, handles };
+    const ben = { me: "acct-ben", role: "member" as const, handles };
+    const by = (c: ApiCard, account: string, over: Record<string, unknown> = {}): ApiCard => ({ ...c, verdicts: c.verdicts.map((v) => ({ ...v, account, reviewer: handles.get(account)!, ...over })) }) as ApiCard;
+    const bens = by(card("main", 0, "against"), "acct-ben");
+    expect(saidOf(bens, now, ana).words).toBe("ben chose “B”, not the agent's pick");
+    expect(saidOf(bens, now, ben).words).toBe("you chose “B”, not the agent's pick");
+    expect(saidOf(by(card("main", 0), "acct-ben"), now, ana).words).toBe("ben chose “A”, the agent's pick");
+    expect(saidOf(by(card("main", 0, "returned"), "acct-ben"), now, ana).words).toBe("ben rejected it: returned to its agent");
+    // A card answered in chat by the member it was sent to, and confirmed by them.
+    const chat = { ...by(card("main", 0, "with", { answered_in_chat: "A, please" }), "acct-ben", { seen: true }), sent_to: "acct-ben" } as ApiCard;
+    expect(saidOf(chat, now, ana).words).toBe("ben confirmed “A”, their answer in chat");
+    expect(saidOf(chat, now, ben).words).toBe("you confirmed “A”, your answer in chat");
+    // Passed on: by you, it waits for someone else; by another member, it waits for you.
+    const passed = { ...card("main", 0, "rerouted"), sent_to: "acct-ben", verdicts: [{ type: "verdict", format: 1, card: "x", revision: 1, response: "not_my_area", reviewer: "ben", account: "acct-ben", client: "hosted-desktop", at: at(1) }] } as unknown as ApiCard;
+    expect(saidOf(passed, now, ben).words).toBe("you passed it on: waiting for someone else");
+    expect(saidOf(passed, now, ana).words).toBe("ben passed it on: waiting for you");
+    // A card only owners answer isn't a member's to answer. Held back: by the project's settings.
+    const draft = card("main", 0, "waiting", { rule: "No card for small dev dependencies." });
+    expect(saidOf(draft, now, ben).words).toBe("waiting for an owner");
+    expect(saidOf(draft, now, ana).words).toBe("waiting for you");
+    expect(saidOf(card("main", 0, "held"), now, ana).words).toBe("held back by the project's settings: claude-code went ahead");
+    expect(saidOf(card("main", 0, "held"), now).words).toBe("held back by your settings: claude-code went ahead");
+
+    // The drawer's model: what's for you is what waits for you, and the counts are said as the project's.
+    const m0 = card("main", 0);
+    const forBen = branchModel({ cards: [m0, passed, draft, bens], commits: [], merges: [] }, { nowMs: T0 + 60_000, team: ben });
+    expect(forBen.cards.filter((c) => c.forYou).map((c) => c.id)).toEqual([]);
+    const forAna = branchModel({ cards: [m0, passed, draft, bens], commits: [], merges: [] }, { nowMs: T0 + 60_000, team: ana });
+    expect(forAna.cards.filter((c) => c.forYou).map((c) => c.id).sort()).toEqual([passed.meta.id, draft.meta.id].sort());
+    expect(statusOf(forAna, ana).lead).toBe("Two cards are waiting for you.");
+    expect(statusOf(forAna, ana).body).toContain("1 was answered otherwise than the agent chose");
+    expect(statusOf(forBen, ben).lead).toBe("Nothing is waiting for you.");
+    // With no team, as ever: an open card is for you, a passed-on one isn't.
+    const alone = branchModel({ cards: [m0, passed, draft], commits: [], merges: [] }, { nowMs: T0 + 60_000 });
+    expect(alone.cards.filter((c) => c.forYou).map((c) => c.id)).toEqual([draft.meta.id]);
+  });
 });
 
 describe("what happened, by branch", () => {

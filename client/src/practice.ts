@@ -3,6 +3,7 @@ import { FINAL, answeredInChat, isOwnCard } from "../../src/routing";
 import type { OptionKind, PracticeEntry, PracticeMark } from "../../src/schema";
 import type { Answer } from "./answer";
 import { type DeskCard, type Practice, agentOf, dayOf, isHard, quoted } from "./model";
+import { type Team, gaveIt } from "./team";
 
 // Practice cards with planted picks (B-kb5yt, D83, docs/vault/Design/Practice Cards.md): a past card rebuilt with its
 // options swapped, so the option its agent didn't pick is shown as the pick, with the case the agent wrote for it when
@@ -25,10 +26,10 @@ export const MAX_AGE_MS = 30 * DAY;
 const SPEAKS_OF_PICK = /\b(?:the proposal|proposals?|proposed|propose|the alternative|alternative's|my pick|our pick|its pick|the pick|i pick|i'd pick|i would pick|i chose|i'd choose|i would choose|i'd go with|i recommend|recommend(?:ed|s)?)\b/i;
 
 /** A card's final answer, when it's a choice of one of its options: the option, when, and the blind choice before it. */
-export function finalChoice(card: ApiCard): { option: OptionKind; at: string; first?: OptionKind } | undefined {
+export function finalChoice(card: ApiCard): { option: OptionKind; at: string; first?: OptionKind; by: ApiCard["verdicts"][number] } | undefined {
   const last = [...card.verdicts].reverse().find((v) => FINAL.has(v.response));
   if (!last || (last.response !== "accept" && last.response !== "alternative")) return undefined;
-  return { option: last.response === "accept" ? "proposal" : "alternative", at: last.at, ...(last.first_choice ? { first: last.first_choice } : {}) };
+  return { option: last.response === "accept" ? "proposal" : "alternative", at: last.at, ...(last.first_choice ? { first: last.first_choice } : {}), by: last };
 }
 
 /**
@@ -44,10 +45,12 @@ export function finalChoice(card: ApiCard): { option: OptionKind; at: string; fi
  * - it was answered from a week to a month ago (B-j583c);
  * - it hasn't come back before: each card once.
  */
-export function whyNot(card: ApiCard, state: ApiState, nowMs: number, practised: ReadonlySet<string>): string | undefined {
+export function whyNot(card: ApiCard, state: ApiState, nowMs: number, practised: ReadonlySet<string>, team?: Team): string | undefined {
   const m = card.meta;
   if (card.status !== "resolved") return "it isn't settled";
   const final = finalChoice(card);
+  // In a project with members (P20): a card comes back to whoever answered it, and to nobody else.
+  if (final && !gaveIt(final.by, team)) return "another member answered it";
   if (!final) return "its final answer isn't a choice of one option";
   if (!final.first) return "it has no blind choice";
   if (isOwnCard(m)) return "it's Baesian's own card";
@@ -71,9 +74,9 @@ export function whyNot(card: ApiCard, state: ApiState, nowMs: number, practised:
 }
 
 /** The past cards that can come back as practice now, oldest answer first. */
-export function sources(state: ApiState, nowMs: number, practised: ReadonlySet<string>): ApiCard[] {
+export function sources(state: ApiState, nowMs: number, practised: ReadonlySet<string>, team?: Team): ApiCard[] {
   return state.cards
-    .filter((c) => whyNot(c, state, nowMs, practised) === undefined)
+    .filter((c) => whyNot(c, state, nowMs, practised, team) === undefined)
     .sort((a, b) => finalChoice(a)!.at.localeCompare(finalChoice(b)!.at));
 }
 
@@ -283,14 +286,15 @@ export function practiceBar(entries: readonly PracticeEntry[]): PracticeBar {
  * you came round to (`planted`); and of real cards practice could have come from (an agent's, not hard, not answered in
  * chat), settled by a choice after a blind choice against the agent's pick, how many ended on its pick (`real`).
  */
-export function cameRound(entries: readonly PracticeEntry[], state: ApiState): { planted: { came: number; of: number }; real: { came: number; of: number } } {
+export function cameRound(entries: readonly PracticeEntry[], state: ApiState, team?: Team): { planted: { came: number; of: number }; real: { came: number; of: number } } {
   const bar = practiceBar(entries);
   let came = 0;
   let of = 0;
   for (const c of state.cards) {
     if ((c.status !== "resolved" && c.status !== "superseded") || isOwnCard(c.meta) || answeredInChat(c) || isHard(c)) continue;
     const f = finalChoice(c);
-    if (!f || f.first !== "alternative") continue;
+    // Your own answers on real cards, beside your own on practice ones.
+    if (!f || f.first !== "alternative" || !gaveIt(f.by, team)) continue;
     of += 1;
     if (f.option === "proposal") came += 1;
   }

@@ -5,6 +5,7 @@ import { uncovered } from "../../src/globs";
 import { postAnswer, useEndpoints } from "./endpoints";
 import { replacesOf } from "./prefs";
 import { NotConfirmed } from "./proof";
+import { shared, useTeam } from "./team";
 
 // B-qkek1: what the commit gate looks for, in your preferences. The gate's built-in detectors, and four lists of globs a
 // person changes here and nowhere else: agents edit the committed config, so the gate no longer reads it. A change goes
@@ -79,6 +80,7 @@ function lessWords(before: GatePaths, after: GatePaths): ReactNode[] {
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "done" } | { kind: "stale" } | { kind: "unconfirmed" } | { kind: "error"; message: string };
 
 export function GatePathsSection(p: { routing: ApiRouting; onSaved: (text: string) => void }) {
+  const team = useTeam();
   const endpoints = useEndpoints();
   const hosted = !!endpoints.hosted;
   const inForce = { name: replacesOf(p.routing), paths: p.routing.settings.paths ?? {} };
@@ -136,7 +138,8 @@ export function GatePathsSection(p: { routing: ApiRouting; onSaved: (text: strin
       <h5 id="gate-paths-h">What the gate looks for</h5>
       <p className="gate-intro">
         When an agent commits, Baesian's gate reads the change for decisions it can spot on its own, and holds the commit until a card or an acknowledgement covers each one. Some of
-        what it looks for is built in; these lists say where else to look, and where never to. Only you change them, here: {hosted ? "anything that makes the gate see less asks for your passkey." : "agents can't."}
+        what it looks for is built in; these lists say where else to look, and where never to. {!team ? "Only you change them" : team.role === "member" ? "Only the project's owners change them" : shared(team) ? "Only you and the project's other owners change them" : "Only you change them"}, here:{" "}
+        {hosted ? "anything that makes the gate see less asks for your passkey." : "agents can't."}
       </p>
       <ul className="gate-fixed" aria-label="Always looked for">
         <li>

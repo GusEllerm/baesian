@@ -5,14 +5,14 @@ import { isOwnCard, suggestPreset } from "../../src/routing";
 import { nearTopics } from "../../src/similarity";
 import type { OptionKind } from "../../src/schema";
 import { type Answer, HOLD_MS, READ_FIRST_MS, UNDO_MS, describeAnswer, verdictFor } from "./answer";
-import { laterSuperseded, recap } from "./calibration";
+import { laterSuperseded, ownReport, recap } from "./calibration";
 import { ARROW, Card, type CardProps, type Mode, type Side, sideOfKind } from "./Card";
 import { usePractice, usePresence } from "./live";
 import { addSpent, loadSpent, useBriefed, useSeen, useSetupOffered } from "./local";
 import { type DeskCard, type Practice, type Rarity, agentOf, areaOf, byId, heldBack, heldRemoved, isHard, isHeld, isSeen, keyOf, liveDependents, ownText, parked, practiceOf, queue, quoted, rarityOf, relationsOf, serverNow, sidesFor, stakesLine, waitState } from "./model";
 import { useNotifications } from "./notify";
 import { type Outgoing, Outbox, decidedIn, decidedWords, postPractice, postVerdictTo } from "./outbox";
-import { ago, decidedByAnother, sentWords as sentToWords, useTeam } from "./team";
+import { type Team, ago, chatWhose, decidedByAnother, sentWords as sentToWords, shared, useTeam } from "./team";
 import { MARKS, TEST_SIZE, draws, markOf, phaseOf, practiceAnswer, practicePath, practiceWords, practised, rebuild, sources, statusOf } from "./practice";
 import type { PracticeMark } from "../../src/schema";
 import { PracticeResultPanel } from "./PracticePanel";
@@ -124,10 +124,10 @@ interface Fly {
 }
 
 /** Your answer, as the path says it. A held card's agent went ahead, so you kept it or overturned it (D151). */
-function pathState(card: ApiCard, answer: Answer): string {
+function pathState(card: ApiCard, answer: Answer, team?: Team): string {
   const { proposal, alternative } = card.meta;
   if (answer.kind === "choose" && isHeld(card)) return answer.option === "proposal" ? `you kept ${quoted(proposal)}` : `you overturned it, for ${quoted(alternative)}`;
-  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `you confirmed ${quoted(proposal)}, your answer in chat`;
+  if (answer.kind === "choose" && isSeen(card) && answer.option === "proposal") return `you confirmed ${quoted(proposal)}, ${chatWhose(card, team)} answer in chat`;
   if (answer.kind === "choose") return answer.option === "proposal" ? `you chose ${quoted(proposal)}` : `you chose ${quoted(alternative)}, not ${agentOf(card)}'s pick`;
   return answer.kind === "write" ? "you wrote an answer" : "you couldn't judge it";
 }
@@ -166,8 +166,17 @@ function sentWords(card: DeskCard, answer: Answer, test: boolean): string {
   return isOwnCard(m) ? "Recorded." : `Sent to ${m.source_agent}.`;
 }
 
-/** Baesian may have proposed something from your answers (D161, B-y6jn6): it's in the queue now. */
-const filedWords = (n: number) => (n ? ` Baesian has ${n === 1 ? "a proposal" : `${NUMBER[n]?.toLowerCase() ?? n} proposals`} from your answers, in your queue.` : "");
+/**
+ * Baesian may have proposed something from your answers (D161, B-y6jn6): it's in the queue now. In a project with other
+ * members (P20), it's made from everyone's answers and is the owners' to answer (B-rxbss): in an owner's queue, not a
+ * member's.
+ */
+const filedWords = (n: number, team?: Team) => {
+  if (!n) return "";
+  const what = n === 1 ? "a proposal" : `${NUMBER[n]?.toLowerCase() ?? n} proposals`;
+  if (!shared(team)) return ` Baesian has ${what} from your answers, in your queue.`;
+  return ` Baesian has ${what} from the project's answers, ${team.role === "owner" ? "in your queue" : "for its owners"}.`;
+};
 
 /** Baesian's own cards, for people: its card IDs and references become words (D69). An agent's own words are left as they are. */
 function forPeople(card: ApiCard, cards: Map<string, ApiCard>): ApiCard {
@@ -258,6 +267,9 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
   const cards = byId(state);
   // On the website, in a project with members (P20): the cards sent to you lead the queue, and the rest follow (B-tzdjn).
   const team = useTeam();
+  /** For what runs later than this render: an answer's toast, said once it's sent. */
+  const teamRef = useRef(team);
+  teamRef.current = team;
   const ordered = queue(state, now, team).filter((c) => !answered.has(keyOf(c)));
   const aside = parked(state, team).filter((c) => !answered.has(keyOf(c)));
   const held = heldBack(state).filter((c) => !answered.has(keyOf(c)));
@@ -356,7 +368,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
         // Outside the blind test, a practice card says it was practice once it's recorded (B-kb5yt); in it, nothing does,
         // and no card says Baesian proposed something from it, which a practice card never could (B-xx49m).
         if (a?.practice && !a.test) setPracticeNote(practiceWords(a.practice.card, a.practice.stopped));
-        if (!quiet) say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0)}`);
+        if (!quiet) say(`${a?.sent ?? "Sent."}${a?.test ? "" : filedWords(posted?.filed?.length ?? 0, teamRef.current)}`);
       },
       failed: (k, error, decided) => {
         setAnswered((m) => {
@@ -465,7 +477,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     else if (refused.length) {
       const one = refused.length === 1;
       say(`${one ? "That answer wasn't" : `${NUMBER[refused.length] ?? refused.length} answers weren't`} recorded: ${refused[0]!.why}. ${one ? "The card is" : "Their cards are"} back.`);
-    } else if (written.length) say(`${confirmedLine(written.length, names.get(written[0]!)?.sent)}${filedWords(filed)}`);
+    } else if (written.length) say(`${confirmedLine(written.length, names.get(written[0]!)?.sent)}${filedWords(filed, team)}`);
   };
 
   /** Ask your passkey to confirm every answer waiting, with one tap: by the button, or by the desk's own rule. */
@@ -532,7 +544,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     // A practice card's guess is kept before the next card comes (B-9prve), so the test's count is up to date here.
     if (planted) return;
     if (pStatus.kind === "test" && pStatus.practice >= TEST_SIZE) return;
-    const pool = sources(state, now, new Set([...practised(practice.entries), ...drawnHere.current]));
+    const pool = sources(state, now, new Set([...practised(practice.entries), ...drawnHere.current]), team);
     const realLeft = ordered.filter((c) => keyOf(c) !== keyOf(answeredCard)).length;
     if (!draws({ phase, since: sinceLast.current, realLeft, pool: pool.length, roll: Math.random() })) return;
     const from = pool[Math.floor(Math.random() * pool.length)]!;
@@ -552,7 +564,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     // you answered in chat, which you'd know was real.
     const test = testing && !isSeen(current);
     const pr = practiceOf(current);
-    const words = describeAnswer(current, answer);
+    const words = describeAnswer(current, answer, team);
     // How long the card was in front of you, for your calibration: first answers only, not changes, and never a card
     // answered in chat, which calibration leaves out (B-hswmx), nor a practice card, which isn't one of your real cards.
     if (!reviewing && !isSeen(current) && !pr) addSpent(project, { rarity: r!.rarity, ms: Math.round(performance.now() - shownAt), at: new Date().toISOString() });
@@ -577,7 +589,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
         name: current.meta.title,
         rarity: r!.rarity,
         // A practice card says so on the path at once, or in the blind test once the test ends.
-        state: pr && !test ? practicePath(current, answer) : pathState(current, answer),
+        state: pr && !test ? practicePath(current, answer) : pathState(current, answer, team),
         ...(endpoints.hosted ? { hard: isHard(current) } : {}),
         ...(test ? { test: true } : {}),
         ...(pr ? { practice: { card: current as DeskCard & { practice: Practice }, stopped, said: practicePath(current, answer) } } : {}),
@@ -1031,7 +1043,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
     const who = decidedByAnother(card, team);
     if (who && ![...answeredRef.current.keys()].some((k) => k.startsWith(`${was}@`))) say(`${who} answered “${card!.meta.title}”, so it's off your desk.`);
   });
-  const relations = inPlay ? relationsOf(inPlay, state) : [];
+  const relations = inPlay ? relationsOf(inPlay, state, team) : [];
   const relById = new Map(relations.map((x) => [x.id, x]));
   const trail = [...answered.entries()]
     .filter(([k]) => k !== key)
@@ -1188,8 +1200,9 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
       {panel === "calibration" && (
         <CalibrationPanel
           spent={loadSpent(project)}
-          superseded={laterSuperseded(state)}
+          superseded={laterSuperseded(state, team)}
           routing={state.routing}
+          {...(shared(team) ? { own: ownReport(state, team) } : {})}
           practice={{ status: pStatus, entries: practice.entries, ready: practice.ready, state, now, starting, onStart: () => void startTest(), onResult: () => setPanel("practice") }}
           onClose={() => setPanel(undefined)}
         />
@@ -1376,7 +1389,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
                   card={{
                     card: forPeople(current, cards),
                     rarity: r.rarity,
-                    stakes: stakesLine(current, deps),
+                    stakes: stakesLine(current, deps, team),
                     wait: waitOf(current),
                     ...(sentLine ? { sent: sentLine } : {}),
                     ...((team?.handles.size ?? 0) > 1 ? { others: true } : {}),
@@ -1388,7 +1401,7 @@ export function Desk({ state, fetchedAt, notice, refreshing = false }: { state: 
                     ...(hold !== undefined ? { hold } : {}),
                     ...(problem ? { problem } : {}),
                     ...(reviewing && answered.get(reviewing) ? { review: reviewOf(answered.get(reviewing)!, testing) } : {}),
-                    ...(pastCard ? { past: { words: saidOf(pastCard, now).words, chosen: chosenOf(pastCard), onBranches: () => setPanel("branches") } } : {}),
+                    ...(pastCard ? { past: { words: saidOf(pastCard, now, team).words, chosen: chosenOf(pastCard), onBranches: () => setPanel("branches") } } : {}),
                     ...(near.length && !pastCard ? { near, onMerge: (into: string) => void merge(into) } : {}),
                     onReach: reach,
                     onMode: (m) => {

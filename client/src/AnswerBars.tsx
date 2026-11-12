@@ -1,8 +1,9 @@
 import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
-import type { ApiRouting, RowReport } from "../../src/api";
+import type { ApiRouting, RoutingReport, RowReport } from "../../src/api";
 import { isFixed } from "../../src/routing";
 import { type Bar, THIN, barOf, leftOut, needsWords, notCounted, ruleWords, scaleOf, segmentWords, summaryWords } from "./calibration";
 import { ALL_ROWS, type AnyRow, POSITION_NAMES, type Position, ROW_NAMES } from "./prefs";
+import { type Team, useTeam } from "./team";
 
 // Your calibration, row by row (D180): how your answers compare with the agents' picks, as one stacked bar per row at
 // its true length, all rows on one scale, with what each row now needs for a lower stop beside it (B-jtsfh), and the
@@ -25,8 +26,13 @@ interface Line {
 
 const pct = (x: number) => `${Math.round(x * 10000) / 100}%`;
 
-export function AnswerBars({ routing }: { routing: ApiRouting }) {
-  const report = routing.report;
+/**
+ * `own`, in a project with other members (P20, B-4mt91): your own answers' report (`ownReport()`), shown in place of the
+ * project's, which counts every member's.
+ */
+export function AnswerBars({ routing, own }: { routing: ApiRouting; own?: RoutingReport | undefined }) {
+  const team = useTeam();
+  const report = own ?? routing.report;
   const lines: Line[] = ALL_ROWS.map((row) => {
     // The report has every row the repo sets, and a fixed row once it has cards.
     const r = report.rows[row];
@@ -71,9 +77,9 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
           if (!(e.target instanceof Element && e.target.closest(".seg"))) setTip(undefined);
         }}
       >
-        <BarRow line={all} scale={all.bar.total} onTip={setTip} />
+        <BarRow line={all} scale={all.bar.total} onTip={setTip} team={team} />
         {lines.map((line) => (
-          <BarRow key={line.row} line={line} scale={scale} onTip={setTip} />
+          <BarRow key={line.row} line={line} scale={scale} onTip={setTip} team={team} />
         ))}
       </div>
       <TipBox tip={tip} />
@@ -117,8 +123,8 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
       <div className="cal-reading">
         <div>
           <b>Mostly indigo</b>
-          You and the agents agree here. Baesian suggests a lower stop once it's 95% sure a row's misses are under 1 in 10, from its answers since it last moved: {ruleWords.down}.
-          Each row says how many more it needs.
+          You and the agents agree here. Baesian suggests a lower stop once it's 95% sure a row's misses are under 1 in 10, from {own ? "every member's answers on it" : "its answers"} since it last moved:{" "}
+          {ruleWords.down}. Each row says how many more {own ? "the project" : "it"} needs.
         </div>
         <div>
           <b>Any rose</b>
@@ -139,14 +145,14 @@ export function AnswerBars({ routing }: { routing: ApiRouting }) {
  * leaves out and what the row now needs for a lower stop beside it. Hover a segment, or tap it, for its count; focus the
  * row and the arrows step through them.
  */
-function BarRow(p: { line: Line; scale: number; onTip: (t: Tip | undefined) => void }) {
+function BarRow(p: { line: Line; scale: number; onTip: (t: Tip | undefined) => void; team: Team | undefined }) {
   const { line } = p;
   const { bar } = line;
   const [at, setAt] = useState(0);
   const row = useRef<HTMLDivElement>(null);
   const kinds = KINDS.filter((k) => bar[k] > 0);
   const left = line.report ? leftOut(line.report) : [];
-  const needs = needsWords(line.report?.test);
+  const needs = needsWords(line.report?.test, p.team);
   const show = (i: number) => {
     const el = row.current?.querySelectorAll(".seg")[i];
     if (!el) return;

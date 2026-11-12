@@ -1,7 +1,7 @@
 import { type ApiCard, type ApiRemovedCard, type ApiState, type Status, WAITING_STALE_MS } from "../../src/api";
 import { BAESIAN } from "../../src/routing";
 import type { OptionKind } from "../../src/schema";
-import { type Team, ownersOnly, sentToMe, waitsForMe } from "./team";
+import { type Team, gaveIt, ownersOnly, passedBy, sentToMe, shared, waitsForMe, whoGave } from "./team";
 
 // M4 step 5b: what the client works out from the server's snapshot (D96). Pure functions, ported from the round 5
 // prototype's data.js and app.js (design/explorations/round5/), now over real cards. Nothing here is inferred by
@@ -30,10 +30,10 @@ export const byId = (state: ApiState): Map<string, ApiCard> => new Map(state.car
  * The agent's reply (D89, D104), on the revision that carries it: the fact or check, and the answer it replied to,
  * which went against its pick.
  */
-export function replyOf(card: ApiCard): { reply: string; to: string | undefined } | undefined {
+export function replyOf(card: ApiCard): { reply: string; to: string | undefined; by: ApiCard["verdicts"][number] | undefined } | undefined {
   if (card.meta.reply === undefined) return undefined;
   const to = card.verdicts.filter((v) => v.revision === card.meta.revision - 1 && (v.response === "alternative" || v.response === "correction")).at(-1);
-  return { reply: card.meta.reply, to: to?.choice };
+  return { reply: card.meta.reply, to: to?.choice, by: to };
 }
 
 /** A card's identity for the client: a revised card is a new question, so it comes back. */
@@ -100,14 +100,14 @@ export function rarityOf(card: ApiCard, dependents: number): { rarity: Rarity; t
 const listJoin = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 /** The stakes in a few words: how hard it is to undo, then what it touches or what rests on it. Never the tier's name. */
-export function stakesLine(card: ApiCard, dependents: number): string {
+export function stakesLine(card: ApiCard, dependents: number, team?: Team): string {
   const m = card.meta;
   const undo = { "one-way": "Hard to undo", moderate: "Costly to undo", cheap: "Easy to undo" }[m.reverse];
   const parts: string[] = [];
   const hard = m.touches.filter((f) => HARD_FACTS.has(f));
   if (hard.length) parts.push(`touches ${listJoin(hard.map((f) => f.replace("-", " ")))}`);
   if ((m.conflict_of?.length ?? 0) > 0) parts.push("two settled decisions disagree");
-  if (m.pref_row) parts.push("a change to your preferences");
+  if (m.pref_row) parts.push(shared(team) ? "a change to the project's preferences" : "a change to your preferences");
   if (dependents) parts.push(`${dependents} decision${dependents === 1 ? " rests" : "s rest"} on it`);
   return [undo, ...parts].join(", ");
 }
@@ -208,10 +208,22 @@ export function spaceOut(cards: ApiCard[], audits: ApiCard[], every = AUDIT_EVER
 }
 
 /**
- * Cards that need the reviewer, but not now: passed on, or deferred. In a project with members (`team`, P20), a card
- * someone else passed on isn't parked for you: it's in your queue.
+ * Cards that need the reviewer, but not now: passed on, or deferred. In a project with members (`team`, P20), only the
+ * ones you put aside yourself: a card someone else passed on is in your queue, and one another member deferred isn't
+ * yours to pick up here. One put aside before the repo was linked names nobody: it's yours while you're the only member.
  */
-export const parked = (state: ApiState, team?: Team): ApiCard[] => state.cards.filter((c) => (c.status === "rerouted" && !waitsForMe(c, team)) || c.status === "deferred");
+export function parked(state: ApiState, team?: Team): ApiCard[] {
+  const aside = state.cards.filter((c) => c.status === "rerouted" || c.status === "deferred");
+  if (!team) return aside;
+  return aside.filter((c) => {
+    if (c.status === "deferred") {
+      const last = c.verdicts.filter((v) => v.revision === c.meta.revision).at(-1);
+      return !last || gaveIt(last, team);
+    }
+    const passed = passedBy(c);
+    return passed.length ? passed.includes(team.me) : !shared(team);
+  });
+}
 
 /**
  * Cards the gate held back, whose agents went ahead (D150): out of the queue, and in the "Held back" list, where any
@@ -296,7 +308,7 @@ export const ruleName = (body: string): string => body.split("\n").map((l) => l.
  * Everything a card is connected to, in the order the path shows them: what it builds on, what it conflicts
  * with, the rules it bears on, what relies on it, and its precedent. Each from a field a card or rule states.
  */
-export function relationsOf(card: DeskCard, state: ApiState): Relation[] {
+export function relationsOf(card: DeskCard, state: ApiState, team?: Team): Relation[] {
   const cards = byId(state);
   const rules = new Map(state.rules.map((r) => [r.meta.id, r]));
   const removed = new Map((state.removed ?? []).map((r) => [r.id, r]));
@@ -309,7 +321,8 @@ export function relationsOf(card: DeskCard, state: ApiState): Relation[] {
     // Decided in the repo before it was linked to the service (B-3zjjx): the website says so.
     if (c) return { name: c.meta.title, state: c.before_linking ? "settled before linking" : STATE_WORDS[c.status] };
     const r = rules.get(id);
-    if (r) return { name: ruleName(r.body), state: r.retired ? "retired rule" : "your rule" };
+    // A rule is the project's: yours where you alone answer, the project's where other members do too (P20).
+    if (r) return { name: ruleName(r.body), state: r.retired ? "retired rule" : shared(team) ? "the project's rule" : "your rule" };
     // Its text was removed from the relay (M9f): named by how it ended, never by its ID (D69).
     const gone = removed.get(id);
     if (gone) return removedWords(gone);
@@ -356,7 +369,9 @@ export function relationsOf(card: DeskCard, state: ApiState): Relation[] {
   const precedent = state.cards
     .filter((c) => c.status === "resolved" && c.canonicalTopic === card.canonicalTopic && c.meta.id !== m.id && c.meta.id !== original && !out.has(c.meta.id))
     .sort((a, b) => b.meta.created.localeCompare(a.meta.created))[0];
-  if (precedent) add(precedent.meta.id, { kind: "precedent", label: "your precedent, on the same topic", where: "down" });
+  // Yours when you gave its answer; in a project with members (P20), named for whoever did.
+  const gave = precedent?.verdicts.filter((v) => v.revision === precedent.meta.revision).at(-1);
+  if (precedent) add(precedent.meta.id, { kind: "precedent", label: `${!gave || gaveIt(gave, team) ? "your" : `${whoGave(gave, team)}'s`} precedent, on the same topic`, where: "down" });
 
   return [...out.values()];
 }

@@ -1,0 +1,9 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261112T145808.060Z-B-4mt91-r1-apkj4.json",
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaEQ0dlZNTDBobDZ2TkN5Y2ZRZHNmSDY0dVBZTTNDM01EMWdsQzhZWGdubyIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEQCIHZUOGciPpPb2QoIPI_zuW-MYzlViZi_trvC94QnIV3WAiAPnPhYmyqZ14fDqgm4Q5XE9vokwu2ppAylMfNvJirnLA"
+}

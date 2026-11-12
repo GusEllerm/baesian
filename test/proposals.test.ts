@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ApiPresets, ApiState } from "../src/api.js";
 import { inboxOp } from "../src/ops.js";
-import { afterVerdict, proposeConvention, proposeSliderMoves, sliderBody } from "../src/proposals.js";
+import { afterVerdict, proposeConvention, proposeSliderMoves, sliderBody, voiceOf } from "../src/proposals.js";
 import { modelChange, routingReport } from "../src/report.js";
 import { chanceUnder, loosenAfter, rowTest, tightenAt, toLoosen } from "../src/routing.js";
 import { type RunningServer, startServer } from "../src/server.js";
@@ -210,6 +210,17 @@ describe("one test, both ways (B-jtsfh)", () => {
     expect(proposeSliderMoves(two)).toEqual([]);
   });
 
+  it("speaks of the project's answers once the record holds more than one person's (P20)", () => {
+    const { store } = repo();
+    run(store, 5, [3], { reviewer: "ana", account: "acct-ana" });
+    run(store, 5, [1, 4], { reviewer: "ben", account: "acct-ben" });
+    const [up] = proposeSliderMoves(store);
+    expect(up?.meta.doing).toBe("reading the record of the project's answers, row by row");
+    expect(up?.meta.crux_fact).toMatch(/the final answer went against the agent's pick\. Of the project's 10 final answers on it so far, 3 were misses: Baesian is 98\.1% sure the row's misses are over 1 in 10\.$/);
+    expect(up?.meta.alternative_then).toBe("nothing changes, and Baesian proposes this move again only once the project's answers from now on pass the same test on their own");
+    expect(store.deck("preferences")?.meta.title).toBe("The project's preferences");
+  });
+
   it("after you keep a row where it is, proposes that move again only once the answers since pass the test on their own", () => {
     const { store } = repo();
     run(store, 28);
@@ -280,6 +291,24 @@ describe("convention cards (D161, P16 section 6)", () => {
     expect(item).toMatchObject({ card: card!.meta.id, ruleAsked: true });
     const draftCard = other.store.draftRule(card!.meta.id, "Keep local state in SQLite.", ["dep:sqlite*"], AGENT);
     expect(draftCard.meta.depends_on).toEqual([card!.meta.id]);
+  });
+
+  it("name who chose, and call the answers the project's, once the record holds more than one person's (P20)", () => {
+    const { store } = repo();
+    const a = store.fileCard(draft({ title: "The run store", topic: "storage/runs" }), BODY, AGENT).card.meta.id;
+    const b = store.fileCard(draft({ title: "The cache's home", topic: "storage/cache" }), BODY, AGENT).card.meta.id;
+    // One person's answers, signed by their account: still "you chose".
+    answer(store, a, { reviewer: "ana", account: "acct-ana" });
+    expect(voiceOf(store)).toMatchObject({ several: false, your: "your" });
+    // A second member answers: a card filed from now is read by any owner, so it says who.
+    answer(store, b, { reviewer: "ben", account: "acct-ben" });
+    expect(voiceOf(store)).toMatchObject({ several: true, your: "the project's" });
+    const [card] = proposeConvention(store, b);
+    expect(card?.meta.title).toBe("A pattern in the project's answers on storage");
+    expect(card?.meta.doing).toBe("reading the project's answers for patterns");
+    expect(card?.meta.crux_fact).toBe(`${a}, “The run store”: ana chose “SQLite (WAL mode)”; ${b}, “The cache's home”: ben chose “SQLite (WAL mode)”`);
+    expect(store.deck("conventions")?.meta.title).toBe("Patterns in the project's answers");
+    expect(store.deck("conventions")?.body).toContain("when the project's answers show a pattern");
   });
 
   it("come from decisions in one area whose chosen answers are alike, each used once", () => {

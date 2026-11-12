@@ -20,6 +20,29 @@ export const PREFERENCES_DECK = {
   brief: "Baesian files these itself from each row's record: one stop down once it's 95% sure the row's misses are under 1 in 10, one stop up once it's as sure they're over. Accepting one writes a new preference file; Baesian never moves a row on its own.\n",
 };
 
+/**
+ * Whose answers Baesian's own cards speak of. Where one person answers, they're "yours", and "you chose". In a project
+ * with members (P20), a card filed here is read by any of its owners, and the answers it's made from may be anyone's: so
+ * once the record holds answers from more than one account, it names who chose, and calls the answers the project's.
+ */
+export interface Voice {
+  several: boolean;
+  /** "you chose", or "ben chose". */
+  chose: (v: { reviewer: string } | undefined) => string;
+  /** "your", or "the project's". */
+  your: string;
+}
+
+export function voiceOf(store: Store): Voice {
+  const accounts = new Set(store.view(() => store.cards().flatMap((c) => store.verdicts(c.meta.id).flatMap((v) => (v.account ? [v.account] : [])))));
+  const several = accounts.size > 1;
+  return { several, chose: (v) => (several && v ? `${v.reviewer} chose` : "you chose"), your: several ? "the project's" : "your" };
+}
+
+/** A deck Baesian files into, named for whose answers it reads: made when first used, so it keeps the name it was made with. */
+const deckFor = (deck: { id: string; title: string; brief: string }, voice: Voice) =>
+  voice.several ? { ...deck, title: deck.title.replace(/\byour\b/, voice.your).replace(/^Your\b/, "The project's"), brief: deck.brief.replace(/\byour answers\b/g, "the project's answers") } : deck;
+
 /** A comment that states a rule (P16 section 6). The word list is a guess, to tune while dogfooding. */
 export const RULE_WORDS = /\b(always|never|from now on|in general)\b/i;
 
@@ -45,6 +68,7 @@ const areaOf = (store: Store, card: Card) => store.canonicalTopic(card.meta.topi
  * from new decisions.
  */
 export function proposeConvention(store: Store, id: string): Card[] {
+  const voice = voiceOf(store);
   const plan = store.view(() => {
     const card = store.card(id);
     if (!card) return undefined;
@@ -56,8 +80,9 @@ export function proposeConvention(store: Store, id: string): Card[] {
     if (verdict?.make_rule) return undefined;
     const area = areaOf(store, card);
     const decided = (c: Card) => store.decision(c.meta.id) ?? "";
+    const chose = (c: Card) => voice.chose(store.verdicts(c.meta.id).filter((v) => v.revision === c.meta.revision).at(-1));
     if (verdict?.comment && RULE_WORDS.test(verdict.comment)) {
-      return { signal: "rule-words" as const, area, cards: [card], fact: `On ${id}, “${card.meta.title}”, you chose “${decided(card)}”, and wrote: “${verdict.comment}”` };
+      return { signal: "rule-words" as const, area, cards: [card], fact: `On ${id}, “${card.meta.title}”, ${voice.chose(verdict)} “${decided(card)}”, and wrote: “${verdict.comment}”` };
     }
     const mine = tokens(decided(card));
     const alike = store
@@ -66,14 +91,14 @@ export function proposeConvention(store: Store, id: string): Card[] {
       .sort((a, b) => a.meta.created.localeCompare(b.meta.created));
     if (!alike.length) return undefined;
     const cards = [...alike, card];
-    return { signal: "same-choice" as const, area, cards, fact: cards.map((c) => `${c.meta.id}, “${c.meta.title}”: you chose “${decided(c)}”`).join("; ") };
+    return { signal: "same-choice" as const, area, cards, fact: cards.map((c) => `${c.meta.id}, “${c.meta.title}”: ${chose(c)} “${decided(c)}”`).join("; ") };
   });
   if (!plan) return [];
   const one = plan.cards.length === 1;
   const draft = {
-    title: `A pattern in your answers on ${plan.area}`,
+    title: `A pattern in ${voice.your} answers on ${plan.area}`,
     question: one ? "Should this decision become a rule?" : `Should these ${plan.cards.length} decisions become one rule?`,
-    doing: "reading your answers for patterns",
+    doing: `reading ${voice.your} answers for patterns`,
     topic: `conventions/${plan.area}/${plan.cards[0]!.meta.id.toLowerCase()}`,
     level: "provisional",
     touches: [],
@@ -90,7 +115,7 @@ export function proposeConvention(store: Store, id: string): Card[] {
     convention: plan.signal,
   };
   const body = `Baesian found this pattern itself, with no model (D161): ${plan.signal === "rule-words" ? "a comment that states a rule" : "decisions in one area whose chosen answers are alike"}.\n`;
-  return [store.fileOwn(draft, body, CONVENTIONS_DECK)];
+  return [store.fileOwn(draft, body, deckFor(CONVENTIONS_DECK, voice))];
 }
 
 // ---------------------------------------------------------------- slider proposals (B-y6jn6, B-jtsfh)
@@ -125,6 +150,7 @@ const named = (p: Position) => `“${POSITION_NAMES[p]}”`;
  * lets more decisions past you; tightening is provisional.
  */
 export function proposeSliderMoves(store: Store): Card[] {
+  const voice = voiceOf(store);
   const plans = store.view(() => {
     const force = store.inForce();
     const counted = countedCards(store);
@@ -139,7 +165,7 @@ export function proposeSliderMoves(store: Store): Card[] {
       return [];
     });
   });
-  return plans.map((p) => store.fileOwn(sliderDraft(p.row, p.from, p.to, p.dir, p.evidence, p.counted, p.settings), sliderBody(p.dir), PREFERENCES_DECK));
+  return plans.map((p) => store.fileOwn(sliderDraft(p.row, p.from, p.to, p.dir, p.evidence, p.counted, p.settings, voice), sliderBody(p.dir), deckFor(PREFERENCES_DECK, voice)));
 }
 
 /** What made a card a miss, in the words of a slider card's evidence (B-87tkc, B-ab06a). */
@@ -148,22 +174,28 @@ const MISSED_BY: Record<MissBy, string> = {
   asked: "you kept the agent's pick, and marked that you should have been asked",
   blind: "a question of what you value, you chose against the agent's pick before seeing its case",
 };
+/** The same, where the answer may be any member's (`Voice.several`). */
+const MISSED_BY_SOMEONE: Record<MissBy, string> = {
+  overturn: "the final answer went against the agent's pick",
+  asked: "the agent's pick was kept, and marked as one that should have been asked",
+  blind: "a question of what's valued, the choice before seeing the agent's case went against its pick",
+};
 
 /** What a miss is, as a slider card says it (B-87tkc, B-ab06a). */
 export const MISS_WORDS =
   "A miss is a final answer that overturns the agent's pick, or one marked “you should have asked me” (B-87tkc); and on a question of what you value, a blind choice against the agent's pick, whatever you answer after its case (B-ab06a).";
 
 /** Since when a row's answers are counted, as a slider card says it: "since it last moved". */
-function sinceWords(since: CountStart | undefined): string {
+function sinceWords(since: CountStart | undefined, voice?: Voice): string {
   if (!since) return "so far";
   if (since.why === "moved") return "since it last moved";
-  if (since.why === "kept") return "since you last kept it here";
+  if (since.why === "kept") return voice?.several ? "since it was last kept here" : "since you last kept it here";
   return `since the agents' model changed to ${since.model}`;
 }
 
 const percent = (x: number) => `${(Math.floor(x * 1000) / 10).toFixed(1)}%`;
 
-function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down", evidence: Evidence, counted: Counted[], settings: Settings) {
+function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down", evidence: Evidence, counted: Counted[], settings: Settings, voice: Voice) {
   const name = ROW_NAMES[row];
   const lower = name.charAt(0).toLowerCase() + name.slice(1);
   const n = evidence.answered.length;
@@ -174,16 +206,16 @@ function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down",
   const cards = (c: number) => `${c} ${c === 1 ? "card" : "cards"}`;
   // What the move would have held of past cards, when it moves to a stop that holds any back.
   const history = after && !LEVEL_AT[to] ? ` Of the ${cards(after.cards)} on this row so far, ${after.held} would have been held back at ${named(to)}.` : "";
-  const record = `Of your ${n} final ${n === 1 ? "answer" : "answers"} on it ${sinceWords(evidence.since)}, ${k === 0 ? "none was a miss" : k === 1 ? "1 was a miss" : `${k} were misses`}`;
+  const record = `Of ${voice.your} ${n} final ${n === 1 ? "answer" : "answers"} on it ${sinceWords(evidence.since, voice)}, ${k === 0 ? "none was a miss" : k === 1 ? "1 was a miss" : `${k} were misses`}`;
   const under = chanceUnder(n, k);
   const fact =
     dir === "up"
-      ? `“${name}” is at ${named(from)}. On ${last.card.meta.id}, “${last.card.meta.title}”, ${MISSED_BY[last.answers.missBy ?? "overturn"]}. ${record}: Baesian is ${percent(1 - under)} sure the row's misses are over 1 in 10.${history}`
+      ? `“${name}” is at ${named(from)}. On ${last.card.meta.id}, “${last.card.meta.title}”, ${(voice.several ? MISSED_BY_SOMEONE : MISSED_BY)[last.answers.missBy ?? "overturn"]}. ${record}: Baesian is ${percent(1 - under)} sure the row's misses are over 1 in 10.${history}`
       : `“${name}” is at ${named(from)}. ${record}: Baesian is ${percent(under)} sure the row's misses are under 1 in 10.${history}`;
   return {
     title: `The setting for ${lower}`,
     question: `Where should the setting for ${lower} be now?`,
-    doing: "reading the record of your answers, row by row",
+    doing: `reading the record of ${voice.your} answers, row by row`,
     topic: `preferences/${row.replace(/_/g, "-")}/${last.card.meta.id.toLowerCase()}`,
     level: dir === "up" ? "provisional" : "hard",
     touches: [],
@@ -192,7 +224,7 @@ function sliderDraft(row: Row, from: Position, to: Position, dir: "up" | "down",
     proposal_then: `a new preference file moves it: ${effect(to, settings)}${settings.mode === "shadow" && !["tell-me", "stop-and-ask", "never-without-me"].includes(to) ? " (in shadow, nothing is held back yet)" : ""}`,
     alternative: `Keep it at ${named(from)}`,
     // B-jtsfh: a move you decline is proposed again only once the answers after it pass the test on their own.
-    alternative_then: "nothing changes, and Baesian proposes this move again only once your answers from now on pass the same test on their own",
+    alternative_then: `nothing changes, and Baesian proposes this move again only once ${voice.your} answers from now on pass the same test on their own`,
     crux: dir === "up" ? "Are these misses a sign of this kind of decision, or chance?" : "Can agents take this kind of decision with less of your attention?",
     crux_proposal: dir === "up" ? "A sign of the kind" : "If they can",
     crux_alternative: dir === "up" ? "Chance" : "Not yet",

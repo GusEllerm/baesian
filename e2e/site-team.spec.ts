@@ -250,6 +250,25 @@ test("an owner's link adds a member, who signs up to use it; each desk leads wit
     await expect(page.locator(`${CARD}[aria-label="Which cache?"]`)).toHaveCount(0);
     await expect(next(page, "Which cache")).toHaveCount(0);
     expect(Store.open(dir).verdicts(cache).map((v) => v.reviewer)).toEqual([ben.who.handle]);
+
+    // Ana's desk doesn't call Ben's answers hers. The decisions by branch are the project's, and say who chose.
+    await page.keyboard.press("b");
+    const drawer = page.getByRole("dialog", { name: "The project's decisions, by branch" });
+    await expect(drawer.getByRole("heading", { name: "The project's decisions, by branch" })).toBeVisible();
+    // A row, opened: who chose, and what.
+    await drawer.locator(".br-row.is-card", { hasText: "Which cache" }).click();
+    await expect(drawer.locator(".br-row.is-detail")).toContainText(`${ben.who.handle} chose “${proposal}”, the agent's pick`);
+    await expect(drawer).not.toContainText("you chose");
+    await expect(drawer).toContainText("the agent's pick was chosen on every one answered");
+    await page.keyboard.press("b");
+    // Her calibration is her own (B-4mt91): she has answered nothing that was recorded, and Ben has answered two.
+    await page.getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: "Your calibration" }).click();
+    await expect(page.getByRole("complementary", { name: "Your calibration" }).locator(".cal-summary")).toHaveText("No answers yet: each row's bar fills in as you answer its cards.");
+    await page.keyboard.press("Escape");
+    await ben.page.getByRole("button", { name: "More" }).click();
+    await ben.page.getByRole("menuitem", { name: "Your calibration" }).click();
+    await expect(ben.page.getByRole("complementary", { name: "Your calibration" }).locator(".cal-summary")).toHaveText("Of 2 cards, you chose as the agent did 2 times without seeing its pick and came round to it 0 times after reading its case; 0 were misses.");
   } finally {
     rmSync(bensDir, { recursive: true, force: true });
   }

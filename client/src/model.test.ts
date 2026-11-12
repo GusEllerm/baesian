@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiCard, ApiState } from "../../src/api";
 import { TODAY } from "../../src/routing";
+import type { Team } from "./team";
 import { agentOf, areaOf, byId, chatWords, heldBack, heldRemoved, isHeld, isSeen, liveDependents, ownText, parked, queue, quoted, rarityOf, relationsOf, replyOf, sidesFor, spaceOut, stakesLine, waitState } from "./model";
 
 // The client's model (M4 step 5b), against hand-built snapshots.
@@ -254,11 +255,38 @@ describe("a choice answered in chat (B-hswmx)", () => {
   });
 });
 
+describe("in a project with members (P20)", () => {
+  const handles = new Map([
+    ["acct-ana", "ana"],
+    ["acct-ben", "ben"],
+  ]);
+  const ana = { me: "acct-ana", role: "owner" as const, handles };
+  const ben = { me: "acct-ben", role: "member" as const, handles };
+
+  it("names a precedent for whoever settled it, and a rule as the project's", () => {
+    const settled = card({ topic: "store/runs" }, { status: "resolved", verdicts: [{ card: "x", revision: 1, response: "accept", reviewer: "ben", account: "acct-ben", client: "hosted-desktop", at: at(5) }] as unknown as ApiCard["verdicts"] });
+    const open = card({ topic: "store/runs", rules: ["R-aaaaa"] });
+    const s = snapshot([settled, open], [rule("R-aaaaa", "Runs go in one file.")]);
+    const precedent = (team?: Team) => relationsOf(open, s, team).find((r) => r.kind === "precedent")!.label;
+    expect(precedent(ana)).toBe("ben's precedent, on the same topic");
+    expect(precedent(ben)).toBe("your precedent, on the same topic");
+    expect(precedent()).toBe("your precedent, on the same topic");
+    expect(relationsOf(open, s, ana).find((r) => r.id === "R-aaaaa")!.state).toBe("the project's rule");
+    expect(relationsOf(open, s).find((r) => r.id === "R-aaaaa")!.state).toBe("your rule");
+  });
+
+  it("calls a change to the settings the project's", () => {
+    const move = card({ pref_row: "schema" } as Partial<ApiCard["meta"]>);
+    expect(stakesLine(move, 0, ana)).toBe("Easy to undo, a change to the project's preferences");
+    expect(stakesLine(move, 0)).toBe("Easy to undo, a change to your preferences");
+  });
+});
+
 describe("the agent's reply (D89, D104)", () => {
   it("is on the revision that carries it, with the answer it replied to", () => {
     const v = (revision: number, response: string, choice?: string) => ({ card: "B-00001", revision, response, ...(choice ? { choice } : {}), reviewer: "gus", client: "web", at: at(revision) });
     const verdicts = [v(1, "question"), v(1, "alternative", "Option B"), v(2, "alternative", "Option C")] as unknown as ApiCard["verdicts"];
-    expect(replyOf(card({ revision: 2, reply: "Only CI writes runs." }, { verdicts }))).toEqual({ reply: "Only CI writes runs.", to: "Option B" });
+    expect(replyOf(card({ revision: 2, reply: "Only CI writes runs." }, { verdicts }))).toEqual({ reply: "Only CI writes runs.", to: "Option B", by: verdicts[1] });
     expect(replyOf(card({}, { verdicts }))).toBeUndefined();
   });
 });

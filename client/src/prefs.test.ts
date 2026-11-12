@@ -118,6 +118,9 @@ describe("what a draft would have held", () => {
     expect(heldWords({ cards: 4, held: 1, heldMissed: 0 }, "It")).toBe("It would have held back 1 of your 4 past cards.");
     expect(heldWords({ cards: 4, held: 0, heldMissed: 0 }, "These settings")).toBe("These settings would have shown you all 4 of your past cards.");
     expect(heldWords({ cards: 0, held: 0, heldMissed: 0 })).toBe("No past cards to try it on yet.");
+    // In a project with other members (P20), the past cards and their answers are everyone's.
+    expect(heldWords({ cards: 4, held: 2, heldMissed: 1 }, "These settings", true)).toBe("These settings would have held back 2 of the project's 4 past cards. 1 of those was answered against the agent.");
+    expect(heldWords({ cards: 4, held: 0, heldMissed: 0 }, "It", true)).toBe("It would have shown you all 4 of the project's past cards.");
   });
 });
 

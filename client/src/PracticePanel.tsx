@@ -4,6 +4,7 @@ import { THIN } from "./calibration";
 import { dayOf } from "./model";
 import { Panel } from "./Panels";
 import { type PracticeStatus, TEST_SIZE, cameRound, daysBetween, practiceBar, practised, resultNote, resultWords, sources } from "./practice";
+import { useTeam } from "./team";
 
 // Practice cards in your calibration (B-kb5yt, docs/vault/Design/Practice Cards.md sections 6 and 7): before the blind
 // test, what it is and the way to start it; during it, how far it has come; after it, its result, and, if practice cards
@@ -63,7 +64,8 @@ function ResultLink({ onResult }: { onResult: () => void }) {
 
 /** Before the blind test (B-xx49m): what practice cards are, what the test asks of you, and the way to start it. */
 function Before(p: PracticeProps) {
-  const ready = sources(p.state, p.now, practised(p.entries)).length;
+  // In a project with members (P20), a card comes back only to whoever answered it.
+  const ready = sources(p.state, p.now, practised(p.entries), useTeam()).length;
   const enough = ready >= TEST_SIZE;
   return (
     <>
@@ -91,7 +93,7 @@ function Before(p: PracticeProps) {
  */
 export function PracticeRow({ entries, state }: { entries: PracticeEntry[]; state: ApiState }) {
   const bar = practiceBar(entries);
-  const round = cameRound(entries, state);
+  const round = cameRound(entries, state, useTeam());
   const segs = [
     { k: "a", n: bar.planted, what: "chose the planted pick without seeing it" },
     { k: "r", n: bar.cameRound, what: "came round to it after its case" },

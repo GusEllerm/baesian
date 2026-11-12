@@ -196,8 +196,38 @@ describe("when one comes (Practice Cards section 4, B-xx49m)", () => {
   });
 
   it("reads a card's final choice: the latest final answer, when it chose an option", () => {
-    expect(finalChoice(past({}, { verdicts: [verdict({ response: "accept", first_choice: "alternative", at: ago(3) })] }))).toEqual({ option: "proposal", at: ago(3), first: "alternative" });
+    expect(finalChoice(past({}, { verdicts: [verdict({ response: "accept", first_choice: "alternative", at: ago(3) })] }))).toMatchObject({ option: "proposal", at: ago(3), first: "alternative", by: { reviewer: "gus" } });
     expect(finalChoice(past({}, { verdicts: [verdict({ response: "reject", comment: "no" })] }))).toBeUndefined();
+  });
+});
+
+describe("in a project with members (P20)", () => {
+  const handles = new Map([
+    ["acct-ana", "ana"],
+    ["acct-ben", "ben"],
+  ]);
+  const ana = { me: "acct-ana", role: "owner" as const, handles };
+  const ben = { me: "acct-ben", role: "member" as const, handles };
+  const anas = past({}, { verdicts: [verdict({ account: "acct-ana", reviewer: "ana" })] });
+  const bens = past({}, { verdicts: [verdict({ account: "acct-ben", reviewer: "ben", first_choice: "alternative", response: "accept" })] });
+  const state = snapshot([anas, bens]);
+
+  it("a card comes back only to whoever answered it, so \"a card you answered\" is true", () => {
+    expect(whyNot(anas, state, NOW, none, ben)).toBe("another member answered it");
+    expect(whyNot(anas, state, NOW, none, ana)).toBeUndefined();
+    expect(sources(state, NOW, none, ana).map((c) => c.meta.id)).toEqual([anas.meta.id]);
+    expect(sources(state, NOW, none, ben).map((c) => c.meta.id)).toEqual([bens.meta.id]);
+    // With no team, every settled card can, as ever.
+    expect(sources(state, NOW, none)).toHaveLength(2);
+    // A new member, who has answered nothing, has none.
+    expect(sources(state, NOW, none, { me: "acct-cat", role: "member", handles })).toEqual([]);
+  });
+
+  it("compares your practice answers with your own real ones, not the project's", () => {
+    // Both real cards were settled after a blind choice against the pick, each coming round to it: one each.
+    expect(cameRound([], state, ana).real).toEqual({ came: 1, of: 1 });
+    expect(cameRound([], state, ben).real).toEqual({ came: 1, of: 1 });
+    expect(cameRound([], state).real).toEqual({ came: 2, of: 2 });
   });
 });
 
