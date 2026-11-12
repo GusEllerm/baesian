@@ -1,7 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
-import { Told, cite } from "./cite.js";
+import { type Step, Told, cite } from "./cite.js";
 import { CONFIG_PATH } from "./facts.js";
 import { isShallow, rootCommits } from "./git.js";
 import { randomSuffix } from "./ids.js";
@@ -36,8 +36,17 @@ export class Offline extends Told {}
 /** This machine has no grant that works for the project: never signed in, revoked, lapsed, or signed out. */
 export class SignedOut extends Told {}
 
-/** Signing in didn't finish: the person refused, the code expired, or the service said no. */
-export class SignInFailed extends Told {}
+/** Signing in didn't finish: the person refused (`refused`), the code expired, or the service said no. */
+export class SignInFailed extends Told {
+  constructor(
+    message: string,
+    steps: readonly Step[] = [],
+    /** The person refused the machine on the website's page. */
+    readonly refused = false,
+  ) {
+    super(message, steps);
+  }
+}
 
 // ---------------------------------------------------------------- the grant file (B-gq8j1, P16 section 8)
 
@@ -241,7 +250,7 @@ export async function signInMachine(o: SignInOptions): Promise<MachineGrant> {
       every += 5000;
       continue;
     }
-    if (error === "access_denied") throw new SignInFailed("the person refused this machine: nothing was signed in");
+    if (error === "access_denied") throw new SignInFailed("the person refused this machine: nothing was signed in", [], true);
     if (error === "expired_token") throw new SignInFailed("the code expired before anyone approved it: run `baesian login` again");
     throw new SignInFailed(`the service refused the sign-in: ${oauthWords(t.body, t.status)}`);
   }

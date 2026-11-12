@@ -569,7 +569,11 @@ describe("baesian verify, with the keys pinned in CI (D142)", () => {
     const passkey = new TestPasskey();
     service.enrol(store, passkey);
     commit(dir, store, "Enrol a passkey");
-    expect(cited(verify(repo, "main", { merge: false, pinned: service.pinned() }).commits[0]?.trust)).toEqual([expect.stringContaining("gus's passkey, isn't pinned in CI, or differs from the pinned copy (D159)")]);
+    expect(cited(verify(repo, "main", { merge: false, pinned: service.pinned() }).commits[0]?.trust)).toEqual([
+      expect.stringContaining(
+        "gus's passkey, isn't pinned in CI, or differs from the pinned copy (D159). If it's yours, or that of someone you added to the project (B-9e7cn), add its line to BAESIAN_TRUST (`baesian ci` prints them all); if it's nobody's you know, someone else added it: remove it and find out how.",
+      ),
+    ]);
     expect(verify(repo, "main", { merge: false, pinned: service.pinned(passkey) }).ok).toBe(true);
   });
 

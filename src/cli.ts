@@ -41,6 +41,7 @@ import {
   DEFAULT_SERVICE,
   type Http,
   Offline,
+  SignInFailed,
   firstCommitToLink,
   linkAck,
   linkRepo,
@@ -421,6 +422,15 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
             text(dim("waiting for it to be approved…")),
           ]);
         },
+      }).catch((e: unknown) => {
+        // A repo that's linked already, to a project the person isn't a member of (P20): the page refuses the machine,
+        // and says why; so does this.
+        if (e instanceof SignInFailed && !fresh && e.refused) {
+          throw new SignInFailed(`${e.marked}. If this repo's project is someone else's, you join it first: one of its owners makes you a link on the project's members page`, [
+            { command: "baesian login", why: "again, once you've opened the link and joined" },
+          ]);
+        }
+        throw e;
       });
       writeGrant(grant);
       if (link) linkRepo(s, link);
@@ -552,8 +562,17 @@ export function buildProgram(io: Io = defaultIo, state: RunState = { code: 0 }, 
         ];
         if (pin.passkeys.length) {
           const whose = pin.passkeys.map((p) => `${p.handle}'s, added ${p.enrolled.slice(0, 10)}`).join("; ");
+          // A project with members (P20) holds each member's passkeys: each gets a line, added by hand (B-9e7cn).
+          const several = new Set(pin.passkeys.map((p) => p.account)).size > 1;
           lines.push(
-            indent(3, text(`Check ${pin.passkeys.length === 1 ? "the passkey is" : "each passkey is"} yours (${whose}): compare its line with the one the website showed when you added it, and with your account page, ${page}. Leave out a line that isn't yours.`)),
+            indent(
+              3,
+              text(
+                several
+                  ? `Check each passkey is yours or a member's of the project${cite("B-9e7cn")} (${whose}): each of you compares your own line with your account page, ${page}. Leave out a line that's nobody's you know.`
+                  : `Check ${pin.passkeys.length === 1 ? "the passkey is" : "each passkey is"} yours (${whose}): compare its line with the one the website showed when you added it, and with your account page, ${page}. Leave out a line that isn't yours.`,
+              ),
+            ),
           );
         } else {
           lines.push(indent(3, warning(`no passkey yet: CI counts an answer on a hard card only with a passkey it pins${cite("D139", "D159")}. Add one on your account page, ${page}, and run `, cmd("baesian ci"), " again.")));

@@ -149,8 +149,20 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       const { dir, store } = repo();
       const r = await run(dir, ["login", "--service", relay.url], { approve: "no" });
       expect(r.code).toBe(1);
-      expect(r.err).toContain("the person refused this machine");
+      expect(r.err).toBe("the person refused this machine: nothing was signed in");
       expect(store.config().project).toBeUndefined();
+    });
+
+    it("says how to join, when a machine is refused in a repo that's linked to a project already (P20)", async () => {
+      // A clone on someone else's machine: its config names the project, and nobody has signed this machine in to it. The
+      // website's page refuses a machine for a project its person isn't a member of.
+      const { dir } = linkedRepo("proj-someone-elses");
+      const r = await run(dir, ["login"], { approve: "no" });
+      expect(r.code).toBe(1);
+      expect(r.err).toBe(
+        "the person refused this machine: nothing was signed in. If this repo's project is someone else's, you join it first: one of its owners makes you a link on the project's members page\nnext: baesian login  # again, once you've opened the link and joined",
+      );
+      expect(readGrant("proj-someone-elses")).toBeUndefined();
     });
 
     it("refreshes a token that expired, writing the new pair first; a refresh token used twice revokes the grant", async () => {
@@ -877,6 +889,21 @@ describe.skipIf(!relayAvailable)("the CLI against the real relay (M9d)", () => {
       // With --json, the same lines.
       const j = await run(dir, ["ci", "--json"]);
       expect(JSON.parse(j.out)).toMatchObject({ service: relay.url, project: "proj-ci", lines, spare: ["relay-2"], passkeys: [{ handle: "gus" }] });
+      // A member's passkey (P20), which the relay put in the project when they joined: its line is printed with the
+      // rest, and each person is asked to check their own (B-9e7cn).
+      const bens = new TestPasskey("acct-ben", "ben");
+      const bensFile = Buffer.from(`${JSON.stringify(bens.keyFile("2026-11-12T09:00:00.000Z"), null, 2)}\n`);
+      store.storage.create("trust/passkey-cccccccccccc.json.sig", Buffer.from(signMessage(relay.signingKey, bensFile, NAMESPACE)));
+      store.storage.create("trust/passkey-cccccccccccc.json", bensFile);
+      const team = await run(dir, ["ci"]);
+      expect(team.code, team.err).toBe(0);
+      expect(team.out.split("\n").filter((l) => l.startsWith("{"))).toEqual([...lines, JSON.stringify(bens.keyFile("2026-11-12T09:00:00.000Z"))]);
+      expect(team.out).toContain("and 2 passkeys");
+      expect(team.out).toContain(
+        "Check each passkey is yours or a member's of the project (gus's, added 2026-11-04; ben's, added 2026-11-12): each of you compares your own line with your account page, https://baesian.test/account. Leave out a line that's nobody's you know.",
+      );
+      store.storage.remove("trust/passkey-cccccccccccc.json");
+      store.storage.remove("trust/passkey-cccccccccccc.json.sig");
       // gh not on PATH: the lines are printed, and it says the variable wasn't set.
       const missing = await run(dir, ["ci", "--github"], { exec: () => ({ status: null, stdout: "", stderr: "spawn gh ENOENT", missing: true }) });
       expect(missing.code).toBe(1);

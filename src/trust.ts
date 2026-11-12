@@ -190,7 +190,7 @@ export function pinProblems(pinned: TrustRoot, record: { file: string; key: Serv
     .map(({ file, key }) =>
       key.type === "service-key"
         ? `${file} isn't pinned in CI, or differs from the pinned copy${cite("D142")}. If the service rotated its key, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`
-        : `${file}, ${key.handle}'s passkey, isn't pinned in CI, or differs from the pinned copy${cite("D159")}. If you enrolled it, add its line to ${TRUST_ENV}; if not, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`,
+        : `${file}, ${key.handle}'s passkey, isn't pinned in CI, or differs from the pinned copy${cite("D159")}. If it's yours, or that of someone you added to the project${cite("B-9e7cn")}, add its line to ${TRUST_ENV} (\`baesian ci\` prints them all); if it's nobody's you know, someone else added it: remove it and find out how. Its line: ${JSON.stringify(key)}`,
     );
 }
 
