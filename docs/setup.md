@@ -1,8 +1,8 @@
 # Setting up Baesian
 
-The [README](../README.md#set-it-up) has the short version. This guide has the rest: each step in full, CI, updating,
-what each release keeps working, what a public repo shows, using Baesian without an account or in a repo you share, and
-what your agents see.
+The [README](../README.md#set-it-up) has the short version. This guide has the rest: each step in full, CI, answering
+with others, updating, what each release keeps working, what a public repo shows, using Baesian without an account or
+in a repo you share, and what your agents see.
 
 You need Node 22 or later, git, and Claude Code or Codex. Any agent that reads `AGENTS.md` can file cards with the CLI;
 the plugin adds the skill and the checks.
@@ -150,6 +150,63 @@ merge until every card on the branch is answered or deferred. It also holds a br
 differently from the branch it merges into, until a card settles which answer stands; `--file-conflicts` files that
 card for you.
 
+## Answering with others
+
+A project on baesian.dev can have several members: everyone who sees its cards and can answer them. A project you make
+starts with one, you, and you add the others.
+
+### Adding someone
+
+1. On https://baesian.dev, open **Members** beside the project, on your projects page.
+2. Under **Add someone**, make a link. It asks for your passkey. Send the link to them yourself: it adds one person,
+   once, and stops working after seven days, and Baesian keeps no address for them. The page says how many links
+   haven't been used, and can cancel them.
+3. They open it, sign up or sign in, and join. Then, in their own clone of the repo, with the CLI and the plugin
+   installed ([steps 1](#1-install-the-cli) and [4](#4-install-the-plugin)):
+
+   ```sh
+   baesian init
+   baesian login
+   ```
+
+   `init` turns the commit gate on in their clone, and `login` signs their machine in to the project. Before they've
+   joined, `login` is refused, and says to ask an owner for a link.
+
+### Who answers what
+
+- **Any member can answer any card, and the first answer decides.** A second answer on a card someone has decided is
+  refused, and the desk says who answered first and what they chose.
+- **Each card is sent to someone:** the member whose machine filed it, which is whoever runs its agent. It leads their
+  queue; everyone else sees it after their own, marked with whom it was sent to ("sent to ana"). A card only owners
+  answer, such as a rule's draft, is sent to the owners.
+- **Notifications** go first to the member a card was sent to. The others hear of a blocking or hard card if it's
+  still waiting half an hour after it arrived, and never of a provisional one on its own. Nobody is told while they're
+  at the desk.
+- **"It's outside my expertise"** passes a card on. From the member it was sent to, it tells the others at once; from
+  anyone else, it puts the card aside for them alone.
+- **Your calibration and practice are your own:** "Your calibration" counts only the cards you answered, and practice
+  cards come only from those.
+
+### Owners
+
+Owners change the project's settings and rules, and add and remove members; a rule your answers suggest is theirs to
+accept. On the members page, an owner can make someone else an owner, or a member again. The account that made the
+project is always an owner and can't leave it: deleting that account deletes the project for everyone.
+
+### Leaving
+
+Any member can leave a project on its members page, but for the account that made it, and an owner can remove one. Their machines are signed out of it
+at once. Their answers on its cards stay, with their handle; their practice answers in it are deleted; the cards sent
+to them become the owners'; and the links they made, if they were an owner, stop working. To come back, they need a
+new link.
+
+### CI with several members
+
+Each member's passkeys go into the project as they join, and CI must pin them to check their answers on hard cards.
+After someone joins, or adds a passkey, run `baesian ci --github` again: it prints every member's passkey line, and
+each member checks their own against their account page. Until then, CI fails once a new key reaches the repo's record
+of decisions, and `baesian verify` says which, and how to add its line.
+
 ## Updating
 
 Update the CLI and the plugin together, to the same release. First the CLI:
@@ -209,8 +266,9 @@ committed and not to paste secrets into a card, and `baesian file` warns when a 
 
 Linking the repo to baesian.dev adds, beside them:
 
-- your handle and account ID on each answer, with the project's ID;
-- each passkey's public key and credential ID, in `.baesian/trust/`, which CI checks answers on hard cards against;
+- the handle and account ID of whoever gave each answer, with the project's ID;
+- the public key and credential ID of each passkey of each member, in `.baesian/trust/`, which CI checks answers on
+  hard cards against;
 - the model each card's agent ran on.
 
 None of these is a secret: a passkey's public key checks your signatures, and can't make one. What the service itself

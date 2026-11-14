@@ -81,6 +81,16 @@ the old one. In CI, `baesian verify` checks each commit's decisions, and holds a
 <p align="center"><sub>Each commit carries the decisions as they stood. When an answer changes, the commits that built on
 the old one are named.</sub></p>
 
+## Answering with others
+
+A project can have several people answering its cards: the developers on one repo, say, or a developer and the
+statistician whose call some decisions are. Any of them can answer any card, and the first answer decides. Each card
+is sent to whoever runs the agent that filed it, so it leads their queue and they're the one told of it; the others
+see it too, marked with whom it was sent to, and hear of a blocking or hard one if it's still waiting half an hour
+later. Each person's record of how often they'd have picked what the agent picked is their own. An owner adds someone
+by a link from the project's members page;
+[the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#answering-with-others) has the rest.
+
 ## Set it up
 
 You need Node 22 or later, git, and Claude Code or Codex. The
@@ -146,6 +156,22 @@ Update the CLI and the plugin together, to the same release: `npm install -g bae
 `codex plugin add baesian@baesian`). When they differ, the plugin tells your agent to ask you to update. Each release's
 notes say what else to run again; [the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#updating)
 has the details.
+</details>
+
+<details>
+<summary><b>Adding someone to your project</b></summary>
+
+On baesian.dev, open **Members** beside the project, make a link, and send it to them yourself: it adds one person,
+once, within seven days. They sign up, open it and join. Then, in their own clone of the repo, with the CLI and the
+plugin installed:
+
+```sh
+baesian init
+baesian login
+```
+
+If your CI checks decisions, run `baesian ci --github` again once they've joined, so it knows their passkey. See
+[the setup guide](https://github.com/GusEllerm/baesian/blob/main/docs/setup.md#answering-with-others).
 </details>
 
 <details>

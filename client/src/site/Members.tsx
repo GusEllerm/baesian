@@ -150,11 +150,11 @@ export function Members({ id, account, reload }: { id: string; account: Account;
                 <p>
                   {m.you ? (
                     <>
-                      <b>Leave {name}?</b> You'll stop seeing its cards, and your machines are signed out of it. Your answers stay. To come back, an owner sends you a new link.
+                      <b>Leave {name}?</b> You'll stop seeing its cards, and your machines are signed out of it. Your answers on its cards stay; your practice answers here are deleted. To come back, an owner sends you a new link.
                     </>
                   ) : (
                     <>
-                      <b>Remove {m.handle}?</b> They'll stop seeing this project's cards, and their machines are signed out of it. Their answers stay, and the cards sent to them become the owners'.
+                      <b>Remove {m.handle}?</b> They'll stop seeing this project's cards, and their machines are signed out of it. Their answers on its cards stay, their practice answers here are deleted, and the cards sent to them become the owners'.
                     </>
                   )}
                 </p>
