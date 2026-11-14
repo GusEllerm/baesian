@@ -6,7 +6,8 @@ import type { Reply } from "./relay.js";
 // docs/vault/Design/Practice Cards.md section 5): a table of the project's own object, beside its retention and
 // notification tables, never in its files or its log (`SqlFileStorage`). So no machine is ever sent one, they're not in
 // the state a machine may read, and nothing is announced when one is written. Its address, `practice`, is for a person
-// signed in in a browser only (index.ts). They go when the project is deleted (`ProjectRelay.erase`), with everything else.
+// signed in in a browser only (index.ts). They go when the project is deleted (`ProjectRelay.erase`), with everything else,
+// and a member's go when they leave it, are removed, or their account is deleted (`ProjectRelay.memberGone`, B-wfw7a).
 
 /** The hosted clients a practice answer comes from (D130), as an answer's do. */
 const CLIENTS = ["hosted-desktop", "hosted-phone"] as const;
@@ -35,8 +36,9 @@ export class PracticeTable {
   }
 
   /**
-   * Delete one account's entries (B-b46z3): its account is deleted, and this is a project it only joined, which stays.
-   * A row this service can't read is left, since whose it is can't be told. Returns how many went.
+   * Delete one account's entries: it has left the project or been removed (B-wfw7a, "They go at once"), or its account is
+   * deleted and this is a project it only joined, which stays (B-b46z3). A row this service can't read is left, since
+   * whose it is can't be told. Returns how many went.
    */
   forget(account: string): number {
     let gone = 0;

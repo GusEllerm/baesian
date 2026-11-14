@@ -806,6 +806,8 @@ export class Accounts {
       this.db.prepare("DELETE FROM emails WHERE account = ?").bind(account),
       this.db.prepare(`DELETE FROM invites WHERE created_by = ? OR project IN (${owned})`).bind(account, account),
       this.db.prepare(`DELETE FROM members WHERE account = ? OR project IN (${owned})`).bind(account, account),
+      // The members of projects it didn't make who joined by its link stay; that it was its link is forgotten.
+      this.db.prepare("UPDATE members SET added_by = NULL WHERE added_by = ?").bind(account),
       this.db.prepare("DELETE FROM projects WHERE owner = ?").bind(account),
       this.db.prepare("DELETE FROM accounts WHERE id = ?").bind(account),
     ]);

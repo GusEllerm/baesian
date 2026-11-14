@@ -368,6 +368,24 @@ describe("leaving a project, and removing a member (B-rxbss)", () => {
     expect(s.cards[0]!.verdicts.at(-1)).toMatchObject({ reviewer: b.handle, account: b.account });
   });
 
+  it("deletes a leaver's practice answers there, and a removed member's, and only theirs (B-wfw7a: they go at once)", async () => {
+    const t = await team();
+    const b = await joined(t);
+    const c = await joined(t);
+    const practice = async (account: string) => ((await inObject(t, (relay) => relay.practiceRead(t.project, account))).body as { entries: unknown[] }).entries;
+    for (const who of [t.owner, b, c]) expect((await who.browser.post(at_(t, "practice"), { kind: "test-start" })).status).toBe(201);
+    // b leaves by themselves; c is removed by the owner.
+    expect((await b.browser.del(`${members(t)}/${b.account}`)).status).toBe(204);
+    expect((await t.owner.browser.del(`${members(t)}/${c.account}`)).status).toBe(204);
+    expect(await practice(b.account)).toEqual([]);
+    expect(await practice(c.account)).toEqual([]);
+    expect(await practice(t.owner.account)).toMatchObject([{ kind: "test-start", account: t.owner.account }]);
+    // Back by a new link, b starts the blind test afresh.
+    expect((await b.browser.post("/v1/account/invites/accept", { code: await link(t) })).status).toBe(200);
+    expect((await b.browser.get(at_(t, "practice"))).body.entries).toEqual([]);
+    expect((await b.browser.post(at_(t, "practice"), { kind: "test-start" })).status).toBe(201);
+  });
+
   it("makes a member an owner, with the passkey afresh: they then change settings and make links; the holder stays an owner", async () => {
     const t = await team();
     const b = await joined(t);
@@ -424,6 +442,22 @@ describe("accounts that close (B-b46z3), with members", () => {
     expect(await housekeeping(env as never, now)).toEqual([b.account]);
     expect(((await inObject(t, (relay) => relay.practiceRead(t.project, b.account))).body as { entries: unknown[] }).entries).toEqual([]);
     expect((await t.owner.browser.get(at_(t, "practice"))).body.entries).toMatchObject([{ kind: "test-start", account: t.owner.account }]);
+  });
+
+  it("deleting an owner's account forgets that the members they added joined by their link (B-b46z3)", async () => {
+    const t = await team();
+    const b = await joined(t);
+    await reauth(t.owner);
+    expect((await t.owner.browser.request("PATCH", `${members(t)}/${b.account}`, { json: { role: "owner" } })).status).toBe(200);
+    const c = await signUp();
+    expect((await c.browser.post("/v1/account/invites/accept", { code: await link(t, b) })).status).toBe(200);
+    const addedBy = async () => (await env.ACCOUNTS!.prepare("SELECT added_by FROM members WHERE project = ? AND account = ?").bind(t.project, c.account).first<{ added_by: string | null }>())?.added_by;
+    expect(await addedBy()).toBe(b.account);
+    await close(b);
+    at(now + DELETION.graceMs + MINUTE);
+    expect(await housekeeping(env as never, now)).toEqual([b.account]);
+    // c stays a member; nothing names the account that's gone.
+    expect(await addedBy()).toBeNull();
   });
 
   it("closing the account that holds a project closes it for every member, and deleting it deletes the project", async () => {

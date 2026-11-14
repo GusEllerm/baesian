@@ -1,0 +1,13 @@
+{
+  "type": "passkey-proof",
+  "format": 1,
+  "file": "20261114T143511.226Z-B-hr2g2-r1-srcc6.json",
+  "batch": [
+    "9786ca41292bbc567b87414582ac4e3e68f5951e1afda1141103266f44b2975d",
+    "f459ecce203e1f336ca0d9064e65554cdb3ec0fb020ff4b499ae566053ac4e89"
+  ],
+  "credential": "kJzi_9z4mZJICt7o1HMHj54HgJc",
+  "authenticator_data": "C3AkNidDKm7Ua1bf4SbBf3oPWLoJkJkH3NgZGhNgpP8dAAAAAA",
+  "client_data": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2pjNlNDUDc1R1hxNlpDN3J6SjV0OGhNVHVZN2I4ck9hbklFZ0xmMHJvQSIsIm9yaWdpbiI6Imh0dHBzOi8vYmFlc2lhbi5kZXYiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+  "signature": "MEUCIQCVacKx26G6hgKJonHhr9j2HsHZxpYlmu0szsdWg_LzWgIgZwoCbFXaQAK5-vnlBmB6C5NLbydN8UbmNnonJMUW8o8"
+}

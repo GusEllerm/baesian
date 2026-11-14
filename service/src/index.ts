@@ -352,7 +352,7 @@ export async function housekeeping(env: Env, now: number = Date.now()): Promise<
   if (!env.ACCOUNTS) return [];
   const accounts = new Accounts(env.ACCOUNTS);
   const relay = (project: string) => env.PROJECTS.get(env.PROJECTS.idFromName(project));
-  const deleted = await deleteClosed(accounts, async (project) => relay(project).erase(project), now, async (project, account) => relay(project).accountDeleted(project, account));
+  const deleted = await deleteClosed(accounts, async (project) => relay(project).erase(project), now, async (project, account) => relay(project).memberGone(project, account));
   await accounts.clearEnded();
   return deleted;
 }
@@ -685,13 +685,16 @@ export class ProjectRelay extends DurableObject<Env> {
 
   /**
    * A member left the project, was removed from it, or their account was deleted (P20): the cards sent to them are sent
-   * to nobody in particular, the project's owners, who are told of them as of any card of theirs; and what the relay
-   * noted of that member (their heartbeat, what they were told) goes.
+   * to nobody in particular, the project's owners, who are told of them as of any card of theirs; and what's theirs alone
+   * here goes: their heartbeat, what they were told, and their practice answers and blind-test marks (B-wfw7a, "They go
+   * at once"; B-b46z3 for a deleted account). Their answers on the project's cards stay, as every member's do, until each
+   * card's text goes.
    */
   async memberGone(project: string, account: string): Promise<void> {
     this.relay(project);
     this.presenceOf.forget(account);
     this.ledger.forget(account);
+    this.practice.forget(account);
     if (!this.sentTo.release(account)) return;
     this.files.touch();
     this.announce(this.files.version());
@@ -699,16 +702,6 @@ export class ProjectRelay extends DurableObject<Env> {
     const now = Date.now();
     const at = await this.ctx.storage.getAlarm();
     if (at === null || at > now + WHEN.soonMs) await this.ctx.storage.setAlarm(now + WHEN.soonMs);
-  }
-
-  /**
-   * A member's account is deleted for good, and this is a project it only joined (B-b46z3): it's gone as a member who
-   * leaves is (`memberGone`), and its practice answers here go too, as the privacy policy says every one of an account's
-   * does. Its answers on the project's cards stay, as every member's do, until each card's text goes.
-   */
-  async accountDeleted(project: string, account: string): Promise<void> {
-    await this.memberGone(project, account);
-    this.practice.forget(account);
   }
 
   /**
