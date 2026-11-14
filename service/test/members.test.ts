@@ -412,6 +412,20 @@ describe("accounts that close (B-b46z3), with members", () => {
     expect(await new Accounts(env.ACCOUNTS!).project(t.project)).not.toBeNull();
   });
 
+  it("deleting a member's account deletes their practice answers in the project, and only theirs (B-b46z3)", async () => {
+    const t = await team();
+    const b = await joined(t);
+    expect((await t.owner.browser.post(at_(t, "practice"), { kind: "test-start" })).status).toBe(201);
+    expect((await b.browser.post(at_(t, "practice"), { kind: "test-start" })).status).toBe(201);
+    await close(b);
+    // Closed, it can still be restored, so they're kept.
+    expect(((await inObject(t, (relay) => relay.practiceRead(t.project, b.account))).body as { entries: unknown[] }).entries).toHaveLength(1);
+    at(now + DELETION.graceMs + MINUTE);
+    expect(await housekeeping(env as never, now)).toEqual([b.account]);
+    expect(((await inObject(t, (relay) => relay.practiceRead(t.project, b.account))).body as { entries: unknown[] }).entries).toEqual([]);
+    expect((await t.owner.browser.get(at_(t, "practice"))).body.entries).toMatchObject([{ kind: "test-start", account: t.owner.account }]);
+  });
+
   it("closing the account that holds a project closes it for every member, and deleting it deletes the project", async () => {
     const t = await team();
     const b = await joined(t);

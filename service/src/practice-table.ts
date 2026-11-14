@@ -34,6 +34,26 @@ export class PracticeTable {
       });
   }
 
+  /**
+   * Delete one account's entries (B-b46z3): its account is deleted, and this is a project it only joined, which stays.
+   * A row this service can't read is left, since whose it is can't be told. Returns how many went.
+   */
+  forget(account: string): number {
+    let gone = 0;
+    for (const r of this.sql.exec<{ seq: number; entry: string }>("SELECT seq, entry FROM practice").toArray()) {
+      let whose: string | undefined;
+      try {
+        whose = PracticeEntry.parse(upgradeFile("practice", JSON.parse(r.entry), "a practice row")).account;
+      } catch {
+        continue;
+      }
+      if (whose !== account) continue;
+      this.sql.exec("DELETE FROM practice WHERE seq = ?", r.seq);
+      gone++;
+    }
+    return gone;
+  }
+
   /** `GET .../practice`: every entry of the asker's, oldest first. */
   read(account: string): Reply {
     return { status: 200, body: { entries: this.entries(account) } };

@@ -2058,7 +2058,7 @@ sig = "c96dc974039c26ee"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2113,7 +2113,7 @@ sig = "27c33947b22fa6ec"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/practice-table.ts#PracticeTable"
-sig = "2599fece8665cdee"
+sig = "8dfe1a060c522613"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3798,7 +3798,7 @@ sig = "2569989a080d0106"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -5458,7 +5458,7 @@ sig = "eccfe5de591bc61e"
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
@@ -5473,7 +5473,7 @@ sig = "27c33947b22fa6ec"
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
 target = "service/src/practice-table.ts#PracticeTable"
-sig = "2599fece8665cdee"
+sig = "8dfe1a060c522613"
 
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
@@ -6148,7 +6148,7 @@ sig = "2569989a080d0106"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6173,7 +6173,7 @@ sig = "4e502e0229bbc9f7"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#housekeeping"
-sig = "ffc9653c4f8b6f7b"
+sig = "2209aba3ed3332fe"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6328,12 +6328,12 @@ sig = "9d91aaf820d1f901"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/practice-table.ts"
-sig = "853a15b5ea0e2b4e"
+sig = "a7f0c24d8483905e"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/practice-table.ts#PracticeTable"
-sig = "2599fece8665cdee"
+sig = "8dfe1a060c522613"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -7798,7 +7798,7 @@ sig = "07800ec790ce3e63"
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
 target = "service/src/practice-table.ts#PracticeTable"
-sig = "2599fece8665cdee"
+sig = "8dfe1a060c522613"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-gate.md"
@@ -8768,7 +8768,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -10148,7 +10148,7 @@ sig = "049a7a3fc9bfdb0d"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -10638,7 +10638,7 @@ sig = "98b11bf098cb7694"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "6b368b2ab468b2cf"
+sig = "ff4d37aea9ac17a0"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
