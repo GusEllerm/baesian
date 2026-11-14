@@ -402,6 +402,18 @@ describe("a member who leaves (P20)", () => {
     expect(await inObject(t, (_i, s) => s.storage.sql.exec("SELECT COUNT(*) AS n FROM presence_of").one().n)).toBe(0);
   });
 
+  it("a member's heartbeat is kept a day: the daily look forgets an older one, though no card has come since", async () => {
+    const t = await team();
+    await beat(t, t.ben);
+    const beats = () => inObject(t, (_i, s) => s.storage.sql.exec("SELECT COUNT(*) AS n FROM presence_of").one().n);
+    later(23 * HOUR);
+    await inObject(t, (relay) => relay.sweep(t.project, now));
+    expect(await beats()).toBe(1);
+    later(2 * HOUR);
+    await inObject(t, (relay) => relay.sweep(t.project, now));
+    expect(await beats()).toBe(0);
+  });
+
   it("nobody is told of a card in a project whose holder closed their account", async () => {
     const t = await team();
     await file(t, t.ben, { level: "hard" });

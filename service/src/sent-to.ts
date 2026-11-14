@@ -72,9 +72,14 @@ export class MemberPresence {
     this.sql.exec("DELETE FROM presence_of WHERE account = ?", account);
   }
 
-  /** The accounts there now: a heartbeat in the last 90 seconds. Older rows are dropped. */
-  present(now: number): Set<string> {
+  /** Forget every heartbeat more than a day old: the privacy policy keeps one a day. Retention's daily look calls it too. */
+  clearStale(now: number): void {
     this.sql.exec("DELETE FROM presence_of WHERE at < ?", now - 24 * 3600_000);
+  }
+
+  /** The accounts there now: a heartbeat in the last 90 seconds. Rows more than a day old are dropped. */
+  present(now: number): Set<string> {
+    this.clearStale(now);
     return new Set(this.sql.exec<{ account: string }>("SELECT account FROM presence_of WHERE at >= ?", now - MEMBER_PRESENT_MS).toArray().map((r) => r.account));
   }
 }

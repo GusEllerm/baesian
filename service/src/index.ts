@@ -706,9 +706,11 @@ export class ProjectRelay extends DurableObject<Env> {
 
   /**
    * Retention's daily look (M9f, B-9jqt4, B-ec3kj): the machines signed in to the project now, from the accounts database
-   * (and, locally and in tests, the stand-in's for it), then `Relay.sweep`. Listeners hear of what changed.
+   * (and, locally and in tests, the stand-in's for it), then `Relay.sweep`. Listeners hear of what changed. Members'
+   * heartbeats more than a day old go too (`MemberPresence.clearStale`), though no card has come to read them.
    */
   async sweep(project: string, now: number = Date.now()): Promise<string[]> {
+    this.presenceOf.clearStale(now);
     const live = new Set<string>();
     if (this.env.ACCOUNTS) for (const g of await new Accounts(this.env.ACCOUNTS).liveGrants(project)) live.add(g);
     if (isLocal(this.env) && this.env.BAESIAN_DEV_ACCESS) for (const m of readGrants(this.env.BAESIAN_DEV_ACCESS).machines) if (m.project === project) live.add(`dev:${m.machine}`);

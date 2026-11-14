@@ -2058,7 +2058,7 @@ sig = "c96dc974039c26ee"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -2168,7 +2168,7 @@ sig = "53be3d91d6787922"
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
 target = "service/src/sent-to.ts#MemberPresence"
-sig = "bec192ddfccd7ff2"
+sig = "13a526ee6cedac0e"
 
 [[bindings]]
 doc = "docs/vault/Design/File Formats.md"
@@ -3798,7 +3798,7 @@ sig = "2569989a080d0106"
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Design/Implementation Plan.md"
@@ -4678,7 +4678,7 @@ sig = "9f56b6fd6dde3ffc"
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Design/Practice Cards.md"
@@ -5458,7 +5458,7 @@ sig = "eccfe5de591bc61e"
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Design/Several Reviewers.md"
@@ -6148,7 +6148,7 @@ sig = "2569989a080d0106"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -6558,7 +6558,7 @@ sig = "d3eadd637da03119"
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
 target = "service/src/sent-to.ts#MemberPresence"
-sig = "bec192ddfccd7ff2"
+sig = "13a526ee6cedac0e"
 
 [[bindings]]
 doc = "docs/vault/Modules/service.md"
@@ -8768,7 +8768,7 @@ sig = "fc5af5be6c7add33"
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-routing.md"
@@ -10148,7 +10148,7 @@ sig = "049a7a3fc9bfdb0d"
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-sync.md"
@@ -10638,7 +10638,7 @@ sig = "98b11bf098cb7694"
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
 target = "service/src/index.ts#ProjectRelay"
-sig = "8d06630f86d969b4"
+sig = "f82e58568fb08d88"
 
 [[bindings]]
 doc = "docs/vault/Modules/src-trust.md"
