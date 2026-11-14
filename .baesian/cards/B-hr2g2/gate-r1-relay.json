@@ -1,0 +1,24 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-hr2g2",
+  "revision": 1,
+  "by": "relay",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T211332.205Z-cy56q.json",
+  "touches": [
+    "privacy",
+    "publishes",
+    "user-facing"
+  ],
+  "reverse": "one-way",
+  "source": "agent",
+  "row": "publishes",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "project": "p-c81yx9gdvfr9yjsfdsrp",
+  "at": "2026-11-14T05:04:38.922Z"
+}

@@ -1,0 +1,23 @@
+{
+  "type": "gate",
+  "format": 1,
+  "card": "B-wfw7a",
+  "revision": 1,
+  "by": "cli",
+  "gate": "rules-1",
+  "mode": "shadow",
+  "preferences": "20261110T211332.205Z-cy56q.json",
+  "touches": [
+    "privacy",
+    "data-loss"
+  ],
+  "reverse": "one-way",
+  "asked": "hard",
+  "source": "agent",
+  "row": "data_loss",
+  "position": "never-without-me",
+  "outcome": "shown",
+  "level": "hard",
+  "reason": "floor",
+  "at": "2026-11-14T05:04:45.965Z"
+}
