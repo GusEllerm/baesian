@@ -4,7 +4,7 @@ status: draft
 authority: proposes
 summary: "The hosted service's privacy policy, which Hosted Service section 6 puts before anything is published: who runs it (Gus Ellerm, as an individual, B-mkryw), what it keeps and why, the lawful basis, how long (B-9jqt4, B-ec3kj, B-dsqyd), who else handles it, deleting an account (B-b46z3), people's rights, and where to write (privacy@baesian.dev, forwarded, B-8xxrc). The website's /privacy page carries this text. Not legal advice; what needs a lawyer is listed at the end."
 created: 2026-11-04
-updated: 2026-11-10
+updated: 2026-11-14
 reviewed: 2026-11-04
 tags: [baesian, design, hosted, privacy]
 ---
@@ -15,7 +15,9 @@ tags: [baesian, design, hosted, privacy]
 
 ## The policy, as the page says it
 
-*Last changed 10 November 2026* (`POLICY_CHANGED`). Changed for B-rehdw ("On the service, for every device", decided by the user) and B-j583c ("From a week to a month old"): your answers on practice cards, and your marks in their blind test ([[Practice Cards]]), are kept on the service in a table of the project's own, apart from its cards and log, so no machine or agent is ever sent them; they name a card only by its ID and keep none of its text, never what you wrote on a practice card, and stay while the project exists, going with it when it's deleted. Practice cards come only from cards the relay still holds, so nothing is kept longer for them. The date is the day of the change; if the release that ships it comes later, move it to that day.
+*Last changed 14 November 2026* (`POLICY_CHANGED`). Changed for projects with members (P20, [[Several Reviewers]]), with the lines B-hr2g2's background drafted and B-wfw7a ("They go at once", decided by the user): a project's members, links to join, whom each card was sent to, each member's latest heartbeat for a day, and who was told of which card; a new section, "Projects you share", on what the other members see of you and what goes when you leave; the lawful basis for showing it to them; "Nobody else, beyond the members of a project you share"; deleting the account that made a project deletes it for every member, and in a project you only joined what's yours alone goes; "unless one of its owners asks"; and the join link's code kept in the tab. Account holders are emailed the day before the release that ships it (B-hr2g2, "The day before", decided by the user); the date is then moved to the release's day.
+
+*Before that, 10 November 2026.* Changed for B-rehdw ("On the service, for every device", decided by the user) and B-j583c ("From a week to a month old"): your answers on practice cards, and your marks in their blind test ([[Practice Cards]]), are kept on the service in a table of the project's own, apart from its cards and log, so no machine or agent is ever sent them; they name a card only by its ID and keep none of its text, never what you wrote on a practice card, and stay while the project exists, going with it when it's deleted. Practice cards come only from cards the relay still holds, so nothing is kept longer for them. The date is the day of the change; if the release that ships it comes later, move it to that day.
 
 *Earlier the same day:* changed for B-ew5e8 ("Name it beside the agent", decided by the user): a card records the model its agent ran on (`source_model`, B-k0w7d), a name like "claude-opus-5-5" the plugin writes from what the harness says, so the list of what your agents file names it beside the agent; it travels and is deleted with the card's text, and was already under "each card's full text". The date is the day of the change; if the release that ships it comes later, move it to that day.
 
@@ -31,6 +33,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 
 - The service keeps what it needs to sign you in and to pass cards and answers between your machines and you.
 - It can read what your cards say, so it can show them to you and hold some back under your settings. It deletes that text on a schedule, below. Your repository keeps its own record, which the service never sees.
+- In a project you share, its other members see your handle and what you answer in it, as you see theirs.
 - There are no passwords, no advertising, no selling of data, and no tracking across other sites. The service never stores your network address or where you are.
 - It counts how the service is used, never what a card says, unless you turn that off.
 - Your account page shows what's kept about your account, and you can delete the account there.
@@ -46,14 +49,18 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 
 **Your projects, to pass cards and answers between your machines and you:**
 - Each project's name, as you typed it, and its random ID.
+- Who a project's members are: each one's account, whether they're an owner, when they joined, and which owner's link they joined by.
+- A link to join a project: only a one-way hash of its code, who made it, when, when it expires, and who used it and when. No address is kept: an owner sends the link however they like.
 - Each machine you approve with `baesian login`: the name it gave (its hostname, unless you chose another), its project, and when it was approved and last used.
 - What your agents file: each card's full text and its revisions, withdrawals, attachments and decks, the agent that filed it and the model it ran on, the machine it came from, the name of the branch it was filed on, and when. The branch name is kept with the card's text, and deleted with it; a branch's deck, which is named for the branch, is kept while the project is.
 - What Baesian's command line finds in your repository's history, to show your decisions by branch: for each commit that cites a card, its ID, when it was made, its branch and the card; for each merge of a branch with cards, or with commits citing them, into another, the two branches, when, the ID of the merge's commit and of the branch's commit that landed, the cards it brought, and the IDs of the commits citing cards it brought; and the name of your repository's default branch, to show it as the trunk. A commit's subject and message, and what it changed, never reach the service.
 - What you answer: your choice and anything you wrote, your handle, whether you answered on a phone or a desktop, and, on a hard card, your passkey's signature over the answer. Also your rules, topic merges and gate settings.
 - Your answers on practice cards: past cards brought back with the other option shown as the agent's pick, to see how often you come round to a pick an agent didn't make. For each, the card it was rebuilt from, when you answered that card, which option you chose before seeing the pick shown and which after, or that you answered another way, your handle, whether you answered on a phone or a desktop, and when. In the blind test that comes first, also whether you thought each card you answered was rebuilt, and when you started it. Never what you wrote on a practice card. They're kept apart from your cards: no machine or agent is ever sent them.
 - While a project's page is open, that you're there: the time of its latest heartbeat, and whether it's a phone or a desktop, so waiting agents know. While an agent waits for a card, that it's waiting. Either counts for 90 seconds after its latest heartbeat.
+- Each member's latest heartbeat at the desk, kept a day, so each is told of their own cards only while they're away.
+- Whom each card was sent to, and who passed one on.
 
-**Notifications, if you turn them on:** for each browser, the address its push service gives for it, the keys a notification is encrypted to, and the browser's name. A notification says how many cards are waiting, at which levels, in which project. Never what a card says.
+**Notifications, if you turn them on:** for each browser, the address its push service gives for it, the keys a notification is encrypted to, and the browser's name. A notification says how many cards are waiting, at which levels, in which project. Never what a card says. Also which member was told of which card, until no one is still to be told of it.
 
 **Usage counts:** counts and timings of how the service is used, such as how many cards are answered and how long they waited. Never what a card says, nor anyone's name. Every field is listed at /counts. Every account is counted unless it turns this off on the account page.
 
@@ -65,10 +72,21 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 **In your browser:**
 - The sign-in cookie while you're signed in, and a second cookie for ten minutes during a Globus sign-in. No other cookies.
 - On a project's page, which cards you've seen and how long you spent on each, to show what's new. That stays in your browser.
+- While you sign up or sign in from a link to join a project, the link's code is kept in that tab until you join, choose not to, or close the tab.
+
+### Projects you share
+
+An owner of a project can add people to it, each by a link that works once, for seven days. Everything above about a project is then about all its members.
+
+- What the other members see of you: your handle, whether you're an owner, and when you joined; every answer you give on its cards, with what you chose before seeing the agent's pick, anything you wrote, and whether you answered on a phone or a desktop; which cards were sent to you; and that someone is at the desk, not who. Never your email address, or your practice answers.
+- Their machines are sent the project's cards and answers, with the name of the machine that uploaded each, and keep them in their repository's record, as yours do.
+- Its owners also see the links to join it that haven't been used, with who made each.
+- An owner can remove you, and you can leave. What's yours alone in the project then goes at once: your practice answers and blind-test marks, your latest heartbeat, and which cards you were told of. The cards sent to you are its owners' from then. Your answers on its cards stay, with your handle, until each card's text goes, as everyone's do.
+- The account that made a project holds it, and can't leave it. Deleting that account deletes the project for every member.
 
 ### Why it's allowed to
 
-- **To provide the service you signed up for:** your account, signing in, passing cards and answers, and the notifications you turn on. This is necessary to perform the contract with you (GDPR Article 6(1)(b)).
+- **To provide the service you signed up for:** your account, signing in, passing cards and answers, showing what you do in a project you share to its other members, and the notifications you turn on. This is necessary to perform the contract with you (GDPR Article 6(1)(b)).
 - **To keep it safe and to know how it's used:** the limits on sign-in, the bot check at sign-up, and the usage counts. These are legitimate interests (Article 6(1)(f)): the interest in a service that works and can be paid for, weighed against yours, with the counts limited to fixed values and a way to turn them off.
 
 ### How long it's kept
@@ -83,7 +101,12 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 | Your repository's default branch: its name | While the project exists. |
 | Your decks, each a branch's or a piece of work's, with its name | While the project exists. |
 | Your rules, topic merges and gate settings | While the project exists. |
-| Your answers on practice cards, and your marks in the blind test | While the project exists. They name a card only by its ID, so they keep none of its text. |
+| Your answers on practice cards, and your marks in the blind test | While the project exists and you're a member of it. They name a card only by its ID, so they keep none of its text. |
+| A project's members: who they are, their roles, when they joined, and by whose link | Until they leave or are removed, or the project is deleted. |
+| A link to join a project | Until a day after it's used or expires, or until an owner cancels it. |
+| Whom a card was sent to | As long as that card's text: removed with it. |
+| A member's latest heartbeat at the desk | A day. |
+| Which member was told of which card | Until no one is still to be told of it. |
 | Usage events | 90 days, then only daily totals, with no ID. |
 | A sign-in | Until you sign out, or 30 days unused, or 90 days in all. |
 | A machine | Until you sign it out, or 30 days unused. |
@@ -96,7 +119,7 @@ Gus Ellerm runs the service, as an individual, and decides what it keeps, which 
 - **Globus**, run by the University of Chicago, if you sign in through it: you sign in at Globus, which tells the service your Globus identifier and email address. Globus's own privacy policy covers your Globus account.
 - **Your browser's push service** (Google's, Mozilla's, Apple's or Microsoft's), if you turn on notifications: it carries each one to your browser, encrypted so it can't read it.
 
-Nobody else. Your data isn't sold, shared for advertising, or used to train models.
+Nobody else, beyond the members of a project you share. Your data isn't sold, shared for advertising, or used to train models.
 
 ### Where it's kept
 
@@ -110,9 +133,9 @@ Much of it you can do yourself, on your account page: see your account, passkeys
 
 ### Deleting your account
 
-Deleting it, on your account page, asks for your passkey and your handle. The account is closed at once: every sign-in and machine is signed out, nothing more is relayed or counted, and a notice is emailed to you.
+Deleting it, on your account page, asks for your passkey and your handle. The account is closed at once: every sign-in and machine is signed out, nothing more is relayed or counted, the projects you made are closed for every member of them, and a notice is emailed to you.
 
-For 14 days, signing in with your passkey can restore it as it was. Then everything goes for good: your account, email addresses, passkeys, recovery code, Globus link, sign-ins, machines, notifications and raw usage events, and every project you own, with all its cards and answers on the service, practice answers included. Daily usage totals, which name no one, stay. Your repositories keep their own record.
+For 14 days, signing in with your passkey can restore it as it was. Then everything goes for good: your account, email addresses, passkeys, recovery code, Globus link, sign-ins, machines, notifications and raw usage events, the links to join you made, and every project you made, for every member of it, with all its cards and answers on the service, practice answers included. In a project you only joined, what's yours alone goes, as when you leave it, and your answers on its cards stay, with your handle, until each card's text goes. Daily usage totals, which name no one, stay. Your repositories keep their own record.
 
 ### Security
 
@@ -120,7 +143,7 @@ For 14 days, signing in with your passkey can restore it as it was. Then everyth
 - Sign-in tokens, emailed codes and recovery codes are kept only as hashes.
 - Signing in takes a passkey, and adding a way in, approving a machine or deleting the account asks for it again.
 - Baesian's command line refuses to send a card that looks like it holds a password or key, unless the agent gives a reason.
-- The service can read what cards say, so its operator technically could. The operator doesn't look at a project's cards unless its owner asks for help with them, or to deal with abuse or a security problem.
+- The service can read what cards say, so its operator technically could. The operator doesn't look at a project's cards unless one of its owners asks for help with them, or to deal with abuse or a security problem.
 
 ### Changes
 
@@ -137,7 +160,10 @@ When this policy changes, the date at the top changes. If a change affects what'
 - **The default branch (B-jr8mk):** `default-branch.json` in `AGENT_KINDS`, read through `DefaultBranch`, whose only field is `branch`, a name as git allows one (`BranchName`): no spaces or other text can ride in it. Mutable state on the relay, replaced by the next one sent, never logged, and gone with the project (`ProjectRelay`'s storage deleted whole).
 - **Retention:** `RETENTION` in `service/src/retention.ts` (B-9jqt4, B-ec3kj, B-dsqyd); usage events, `USAGE_RAW_DAYS`.
 - **Practice answers (B-rehdw):** `PracticeEntry`, whose fields are the card's ID and revision, when its original was answered, the blind choice and the final answer's kind against the planted pick, and whether it came in the blind test; or in the test a guess, an entry of its own naming its card and whether it was practice; with who, which client and when; a field it doesn't list is refused (`PRACTICE_FIELDS`, `practiceEntry()`). Kept in the project's object by `PracticeTable`, apart from `SqlFileStorage` and its log, at an address a machine's token is refused at (the Worker's `person` routes), and deleted with the project (`ProjectRelay.erase`). Practice comes only from cards the relay still holds (`MAX_AGE_MS`, B-j583c), so `RETENTION` is unchanged.
-- **Deleting an account:** B-b46z3, [[service#Deleting an account (service/src/deletion.ts)]].
+- **Deleting an account:** B-b46z3, [[service#Deleting an account (service/src/deletion.ts)]]. The projects it made closed with it for every member (`Accounts.projectsHeldBy`) and deleted after 14 days; in one it only joined, `ProjectRelay.memberGone`, as when a member leaves; the links it made and its memberships go, and which members joined by its link is forgotten (`Accounts.erase`).
+- **Members and links (P20):** the accounts database's `members` (`account`, `role`, `joined`, `added_by`) and `invites` (the code's hash by `hashOf()`, `created_by`, `created`, `expires`, `used_by`, `used`; no address), [[File Formats#Accounts (M9c)]]. A link is good once for seven days (B-jsady); used or expired ones go a day later (`Accounts.clearEnded`), unused ones when an owner cancels them (`Accounts.cancelInvites`). What other members see: the members route lists each one's account, handle, role and when they joined, never an email address; owners alone see the unused links, with who made each (`Accounts.invites`). Leaving or being removed: `Accounts.removeMember`, then `ProjectRelay.memberGone`, which forgets the member's heartbeat, what they were told and their practice answers (B-wfw7a) and sends their cards to the owners (`SentTo.release`).
+- **Whom a card was sent to, heartbeats, who was told (P20):** `SentTo` (`sent_to`, removed with the card's text), `MemberPresence` (`presence_of`, a day: `MemberPresence.clearStale`), `PushLedger` (`push_told`, gone with the arrival it was told of once nobody is still to be told). [[service#Whom a card is sent to (P20, B-2n7s4, B-tzdjn; service/src/sent-to.ts)]].
+- **The join link in the tab:** `keepJoinCode()`, in `sessionStorage`, which a tab keeps only while it's open; cleared once the link is used, doesn't work, or is declined (`dropJoinCode()`); the code is after the `#`, which a browser never sends.
 - **Notifications:** `pushText()` (counts and levels only, B-mjf3g), `encrypt()` (RFC 8291), `pushServiceAllowed()` (the four push services).
 - **Usage counts:** `USAGE_KINDS` and `NEVER_COUNTED`, which `/counts` shows.
 - **In the browser:** the client's `storageKey()` (seen cards, time spent, notifications), never sent.

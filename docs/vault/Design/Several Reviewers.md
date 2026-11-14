@@ -162,7 +162,7 @@ Stage 1, in steps, each tested and committed by itself. Found while planning it:
    - **Changed:** `baesian ci` asks each member to check their own passkey's line when the project holds more than one person's; `baesian verify` says a passkey that isn't pinned may be a member's, and that `baesian ci` prints its line (B-9e7cn); `baesian login`, refused in a repo that's linked already, says how to join the project.
    - **Not built:** the CLI saying whom a card was sent to. That's the relay's own note, in no file a machine reads, and a card is sent to whoever's machine filed it unless only owners answer it.
 5. **A different answer.** Answering a decided card yourself, blind; raising a difference; the card it becomes, and who may settle it.
-6. **The privacy policy,** as a card, then the docs.
+6. **The privacy policy,** as a card, then the docs. *Policy written (2026-11-14), [[Privacy Policy]]:* its lines for members as B-hr2g2's background drafted them; account holders are emailed the day before the release (B-hr2g2, "The day before", decided by the user); a member's practice answers go when they leave or are removed (B-wfw7a, "They go at once", decided by the user, `ProjectRelay.memberGone`). Made true while writing it, by the agent: a member's heartbeat is cleared by the daily look after a day, and deleting an account forgets which members joined by its link. The docs are next.
 
 ## What changes where
 
