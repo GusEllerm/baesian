@@ -41,7 +41,7 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   await expect(who.getByRole("link", { name: "privacy@baesian.dev" })).toHaveAttribute("href", "mailto:privacy@baesian.dev");
   // B-ew5e8: what your agents file names the model each ran on, beside the agent (B-k0w7d).
   await expect(page.getByRole("region", { name: "What it keeps, and why" })).toContainText("the agent that filed it and the model it ran on, the machine it came from");
-  await expect(page.getByText("Last changed 10 November 2026.")).toBeVisible();
+  await expect(page.getByText("Last changed 14 November 2026.")).toBeVisible();
   const kept = page.getByRole("region", { name: "How long it's kept" });
   await expect(kept.getByRole("listitem").filter({ hasText: "once answered or withdrawn" })).toContainText("30 days after every machine signed in to the project has the answer or the withdrawal");
   await expect(kept.getByRole("listitem").filter({ hasText: "held back by your settings" })).toContainText("90 days after it arrived");
@@ -55,7 +55,14 @@ test("the policy is open to anyone, from every page's footer, sign-up and /count
   // B-rehdw: practice answers are kept on the service, apart from the cards, while the project exists; never what you wrote.
   const practice = page.getByRole("region", { name: "What it keeps, and why" }).getByRole("listitem").filter({ hasText: "Your answers on practice cards" });
   await expect(practice).toContainText("Never what you wrote on a practice card. They're kept apart from your cards: no machine or agent is ever sent them.");
-  await expect(kept.getByRole("listitem").filter({ hasText: "Your answers on practice cards" })).toContainText("While the project exists. They name a card only by its ID, so they keep none of its text.");
+  await expect(kept.getByRole("listitem").filter({ hasText: "Your answers on practice cards" })).toContainText("While the project exists and you're a member of it. They name a card only by its ID, so they keep none of its text.");
+  // P20: projects with members (B-hr2g2's lines), and what goes when a member leaves (B-wfw7a, "They go at once").
+  const shared = page.getByRole("region", { name: "Projects you share" });
+  await expect(shared).toContainText("Never your email address, or your practice answers.");
+  await expect(shared).toContainText("What's yours alone in the project then goes at once: your practice answers and blind-test marks");
+  await expect(kept.getByRole("listitem").filter({ hasText: "A member's latest heartbeat at the desk" })).toContainText("A day.");
+  await expect(kept.getByRole("listitem").filter({ hasText: "A link to join a project" })).toContainText("whoever made it is no longer an owner");
+  await expect(page.getByRole("region", { name: "Who else handles it" })).toContainText("Nobody else, beyond the members of a project you share.");
   await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("with all its cards and answers on the service, practice answers included.");
   await expect(page.getByRole("region", { name: "Deleting your account" })).toContainText("For 14 days, signing in with your passkey can restore it");
   for (const name of ["Cloudflare, Inc.", "Globus"]) await expect(page.getByRole("region", { name: "Who else handles it" }).getByText(name, { exact: true })).toBeVisible();

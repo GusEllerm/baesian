@@ -5,7 +5,7 @@
 // together, with the service's and the plugin's versions.
 
 /** This release, as package.json names it. */
-export const VERSION = "1.0.2";
+export const VERSION = "1.1.0";
 
 /**
  * The first release whose files, relay protocol and agents' commands every later release keeps working (B-h0vyy,

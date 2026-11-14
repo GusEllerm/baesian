@@ -26,18 +26,27 @@ The lead, on `v1/next`, after [[2026-11-12 Whose Words and the CLI]]. The user a
 
 What the cards left open is in the [[Decision Log]] (2026-11-14).
 
+## The docs, and the release commit
+
+The user then asked to push, write the docs, and release.
+
+- **Pushed** `v1/next` to `d8afd6f`.
+- **`7b3ec2b`, the docs:** the README gains "Answering with others" and, beside the other setup details, "Adding someone to your project"; the setup guide gains "Answering with others" (adding someone, who answers what, owners, leaving, CI with several members' passkeys), and "What a public repo shows" names every member's handle and passkeys (B-3fgyc: a front page, and a setup guide). The members page's prompts to leave or remove someone now say practice answers there are deleted (B-wfw7a).
+- **The release commit, 1.1.0:** the version set as B-3femd says, and `docs/release-notes/1.1.0.md`. No format changed, and the service still serves 1.0.0 to 1.0.2. The browser test of the privacy page pinned its old date and practice row; it now checks the members lines too.
+- **`main` not moved yet:** B-hr2g2's background promised the user the whole policy page before the release.
+
 ## Tests
 
-- **The service:** 221 in workerd, 68 of the store; the typecheck, and the client's.
+- **Unit:** 1,055 passing, 2 skipped; the typecheck, and the client's.
+- **The service:** 221 in workerd, 68 of the store.
+- **Browser:** 177 passing, after the privacy page's test was brought up to date.
 
 ## Not done
 
 - **The email** B-hr2g2 promises: not needed. The user is the only account holder (the user, in chat, 2026-11-14), so no email is needed; if anyone else signs up before the release, it is. The draft is in B-hr2g2's background.
 - **`POLICY_CHANGED`** moves to the release's day.
-- **The docs** for members: the README and `docs/setup.md`.
 - **The setup survey's words** still say "you" of what its settings let reach every member.
-- **Pushed** up to `fbdf27a`; the commits after it aren't.
 
 ## Next
 
-- The docs, then the release (1.1.0 proposed; the user tags it), then step 5.
+- The user reads the policy page; then `main` is fast-forwarded to the release commit and pushed, and the user tags `v1.1.0` on `origin/main`. Then step 5.
