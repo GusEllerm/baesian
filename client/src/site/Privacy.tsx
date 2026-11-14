@@ -38,7 +38,7 @@ const KEPT: [string, string][] = [
   ["Your rules, topic merges and gate settings", "While the project exists."],
   ["Your answers on practice cards, and your marks in the blind test", "While the project exists and you're a member of it. They name a card only by its ID, so they keep none of its text."],
   ["A project's members: who they are, their roles, when they joined, and by whose link", "Until they leave or are removed, or the project is deleted."],
-  ["A link to join a project", "Until a day after it's used or expires, or until an owner cancels it."],
+  ["A link to join a project", "Until a day after it's used or expires. One that isn't used: until an owner cancels it, or whoever made it is no longer an owner."],
   ["Whom a card was sent to", "As long as that card's text: removed with it."],
   ["A member's latest heartbeat at the desk", "A day."],
   ["Which member was told of which card", "Until no one is still to be told of it."],

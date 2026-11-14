@@ -386,6 +386,29 @@ describe("leaving a project, and removing a member (B-rxbss)", () => {
     expect((await b.browser.post(at_(t, "practice"), { kind: "test-start" })).status).toBe(201);
   });
 
+  it("cancels the unused links of someone who stops being an owner: removed, leaving, or made a member (B-rxbss: owners add members)", async () => {
+    const t = await team();
+    const owner = async (p: Person) => {
+      await reauth(t.owner);
+      expect((await t.owner.browser.request("PATCH", `${members(t)}/${p.account}`, { json: { role: "owner" } })).status).toBe(200);
+    };
+    const b = await joined(t);
+    const c = await joined(t);
+    const d = await joined(t);
+    for (const p of [b, c, d]) await owner(p);
+    const [fromB, fromC, fromD, fromOwner] = [await link(t, b), await link(t, c), await link(t, d), await link(t)];
+    expect((await t.owner.browser.get(members(t))).body.invites).toHaveLength(4);
+    // b is removed, c leaves, d is made a member again.
+    expect((await t.owner.browser.del(`${members(t)}/${b.account}`)).status).toBe(204);
+    expect((await c.browser.del(`${members(t)}/${c.account}`)).status).toBe(204);
+    await reauth(t.owner);
+    expect((await t.owner.browser.request("PATCH", `${members(t)}/${d.account}`, { json: { role: "member" } })).status).toBe(200);
+    expect((await t.owner.browser.get(members(t))).body.invites.map((i: { by: string }) => i.by)).toEqual([t.owner.handle]);
+    const someone = await signUp();
+    for (const code of [fromB, fromC, fromD]) expect((await someone.browser.post("/v1/account/invites/accept", { code })).status).toBe(404);
+    expect((await someone.browser.post("/v1/account/invites/accept", { code: fromOwner })).status).toBe(200);
+  });
+
   it("makes a member an owner, with the passkey afresh: they then change settings and make links; the holder stays an owner", async () => {
     const t = await team();
     const b = await joined(t);

@@ -544,8 +544,10 @@ export class Accounts {
   }
 
   /**
-   * Remove a member from a project, or leave it: the membership goes, and that account's machines are signed out of the
-   * project, in one batch. The account that holds the project can't leave it or be removed. Returns whether a member went.
+   * Remove a member from a project, or leave it: the membership goes, that account's machines are signed out of the
+   * project, and the links to join it that it made and that haven't been used are cancelled, since only owners add
+   * members (B-rxbss); in one batch. The account that holds the project can't leave it or be removed. Returns whether a
+   * member went.
    */
   async removeMember(project: string, account: string): Promise<boolean | { problem: string }> {
     const p = await this.project(project);
@@ -555,16 +557,24 @@ export class Accounts {
     const [gone] = await this.db.batch([
       this.db.prepare("DELETE FROM members WHERE project = ? AND account = ?").bind(project, account),
       this.db.prepare("UPDATE grants SET revoked = ? WHERE project = ? AND account = ? AND revoked IS NULL").bind(now, project, account),
+      this.db.prepare("DELETE FROM invites WHERE project = ? AND created_by = ? AND used_by IS NULL").bind(project, account),
     ]);
     return (gone?.meta.changes ?? 0) > 0;
   }
 
-  /** Make a member an owner, or an owner a member (B-rxbss). The account that holds the project stays an owner. */
+  /**
+   * Make a member an owner, or an owner a member (B-rxbss). The account that holds the project stays an owner. An owner
+   * made a member no longer adds members, so the links to join it that it made and that haven't been used are cancelled.
+   */
   async setRole(project: string, account: string, role: Role): Promise<boolean | { problem: string }> {
     const p = await this.project(project);
     if (!p) return false;
     if (p.owner === account && role !== "owner") return { problem: "the account that made a project holds it, and stays an owner" };
-    return (await this.db.prepare("UPDATE members SET role = ? WHERE project = ? AND account = ?").bind(role, project, account).run()).meta.changes > 0;
+    const [set] = await this.db.batch([
+      this.db.prepare("UPDATE members SET role = ? WHERE project = ? AND account = ?").bind(role, project, account),
+      ...(role === "owner" ? [] : [this.db.prepare("DELETE FROM invites WHERE project = ? AND created_by = ? AND used_by IS NULL").bind(project, account)]),
+    ]);
+    return (set?.meta.changes ?? 0) > 0;
   }
 
   // ---------------------------------------------------------------- push subscriptions (M9e step 2, B-nk97q)
