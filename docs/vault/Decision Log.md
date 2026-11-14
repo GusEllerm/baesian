@@ -5,7 +5,7 @@ authority: log
 livedocs: snapshot
 summary: "Every Baesian decision, with who made it: the user's decisions, agent proposals awaiting the user, and agent two-way-door choices the user can overturn."
 created: 2026-10-23
-updated: 2026-11-11
+updated: 2026-11-14
 reviewed: 2026-10-23
 tags: [baesian, decisions]
 ---
@@ -279,6 +279,13 @@ views:
 | ~~P11~~ | 2026-10-23 | **Withdrawn; replaced by D33.** The commit gate is built in D20 step 2, alongside the hooks. Detectors are built in this order: dependencies → schema and migrations → CI, infra and deploy → exported signatures. The signature detector uses drift when it's installed and is off without it, which keeps Baesian standalone (D8). | [[Baesian Design#Where cards come from]] |
 
 ## Agent decisions (two-way doors; the user may overturn)
+
+- 2026-11-14 `[agent decision]` **The privacy policy for members, as written** (P20 stage 1, step 6; B-hr2g2, B-wfw7a, B-b46z3, B-rxbss; [[Privacy Policy]], [[service]]), by the lead agent. The lines are those B-hr2g2's background drafted, each checked against the code; what the cards left open:
+  - **Added while checking, as facts of the code:** closing the account that made a project closes it for every member; deleting an account deletes the links to join it made; owners see the unused links, with who made each; other members never see your email address or practice answers; the join link's code goes when the tab closes or the link is declined, not only once used.
+  - **Made true rather than worded round** (each a commit of its own, with a test that failed first): a deleted member's practice answers in projects they only joined now go (`f2f62cb`, restoring B-b46z3); deleting an account forgets which members joined by its link (`added_by` cleared, B-b46z3); a member's heartbeat is cleared by the daily look after a day, not only when a card arrives (`a4f527d`); someone who stops being an owner has their unused links cancelled (`259674f`, restoring B-rxbss: only owners add members).
+  - **`ProjectRelay.accountDeleted` removed:** with B-wfw7a, `memberGone` forgets practice answers on leaving too, so the daily job calls it for a deleted member as well.
+  - **Dated 2026-11-14** (`POLICY_CHANGED`), to move to the release's day once the email has gone (B-hr2g2: the day before).
+  - **Left for later:** handing a project on when the account that made it is deleted (today the project goes for every member, and the policy says so).
 
 - 2026-11-12 `[agent decision]` **Whose words the desk uses, in a project with members** (P20, the website; B-r51ts, B-4mt91; [[Client Build]] item 31), by the lead agent. The website step had left the desk saying "you" for whatever another member did: found by reading the whole client for it (68 places looked at, 26 wrong, 27 the project's called yours). What the cards left open:
   - **An answer is named for whoever gave it,** "you" only when it was you; where one person answers, nothing changes. A handle is never capitalised to start a sentence.

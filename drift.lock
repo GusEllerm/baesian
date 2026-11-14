@@ -5802,6 +5802,11 @@ sig = "49cd702a4ad61103"
 
 [[bindings]]
 doc = "docs/vault/Home.md"
+target = "client/src/site/Privacy.tsx"
+sig = "38b73f9e47c12102"
+
+[[bindings]]
+doc = "docs/vault/Home.md"
 target = "client/src/site/app.ts#PushRow"
 sig = "d441be56dc7c82bb"
 
