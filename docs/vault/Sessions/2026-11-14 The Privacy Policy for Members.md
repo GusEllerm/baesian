@@ -32,7 +32,7 @@ What the cards left open is in the [[Decision Log]] (2026-11-14).
 
 ## Not done
 
-- **The email** B-hr2g2 promises, sent by the user, the day before the release, if there are account holders other than the user to send it to. The draft is in B-hr2g2's background; its date and link to fill in.
+- **The email** B-hr2g2 promises: not needed. The user is the only account holder (the user, in chat, 2026-11-14), so no email is needed; if anyone else signs up before the release, it is. The draft is in B-hr2g2's background.
 - **`POLICY_CHANGED`** moves to the release's day.
 - **The docs** for members: the README and `docs/setup.md`.
 - **The setup survey's words** still say "you" of what its settings let reach every member.
@@ -40,4 +40,4 @@ What the cards left open is in the [[Decision Log]] (2026-11-14).
 
 ## Next
 
-- The docs, then the release (1.1.0 proposed; the user tags it, after the email), then step 5.
+- The docs, then the release (1.1.0 proposed; the user tags it), then step 5.
